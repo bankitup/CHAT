@@ -17,34 +17,27 @@ export default async function HomePage() {
             ? 'Your conversations and settings are ready.'
             : 'Log in or create an account to start a direct message or group.'}
         </p>
-      </section>
-
-      <section className="cluster public-home-actions">
-        {user ? (
-          <>
-            <Link className="pill pill-accent" href="/inbox">
-              Open chats
-            </Link>
-            <Link className="pill" href="/settings">
-              Open settings
-            </Link>
-          </>
-        ) : (
-          <>
-            <Link className="pill pill-accent" href="/login">
-              Log in
-            </Link>
-            <Link className="pill" href="/signup">
-              Create account
-            </Link>
-          </>
-        )}
-      </section>
-
-      <section className="stack public-home-note" aria-label={user ? 'Welcome back' : 'Get started'}>
-        <p className="muted public-home-note-copy">
-          {user ? 'Welcome back.' : 'Create an account or log in to continue.'}
-        </p>
+        <section className="public-home-actions" aria-label={user ? 'Primary actions' : 'Get started'}>
+          {user ? (
+            <>
+              <Link className="pill pill-accent public-home-action-primary" href="/inbox">
+                Open chats
+              </Link>
+              <Link className="pill public-home-action-secondary" href="/settings">
+                Open settings
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link className="pill pill-accent public-home-action-primary" href="/login">
+                Log in
+              </Link>
+              <Link className="pill public-home-action-secondary" href="/signup">
+                Create account
+              </Link>
+            </>
+          )}
+        </section>
       </section>
 
       <p className="public-home-watermark">Chat by Build With Care</p>
