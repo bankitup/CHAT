@@ -12,6 +12,7 @@ import {
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   editMessage,
+  hideConversationForUser,
   isSupportedChatAttachmentType,
   leaveGroupConversation,
   markConversationRead,
@@ -21,6 +22,7 @@ import {
   sendMessageWithAttachment,
   sendTextMessage,
   toggleMessageReaction,
+  updateConversationNotificationLevel,
   updateConversationTitle,
 } from '@/modules/messaging/data/server';
 
@@ -64,17 +66,11 @@ export async function sendMessageAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirectWithError(
-      conversationId,
-      'Message sending debug: no authenticated user found.',
-    );
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   if (!user.id) {
-    redirectWithError(
-      conversationId,
-      'Message sending debug: authenticated user is missing an ID.',
-    );
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   const userId = user.id;
@@ -82,19 +78,13 @@ export async function sendMessageAction(formData: FormData) {
   const conversationExists = await assertConversationExists(conversationId);
 
   if (!conversationExists) {
-    redirectWithError(
-      conversationId,
-      'Message sending debug: conversation does not exist or is not readable.',
-    );
+    redirectWithError(conversationId, 'This chat is no longer available.');
   }
 
   const isMember = await assertConversationMembership(conversationId, userId);
 
   if (!isMember) {
-    redirectWithError(
-      conversationId,
-      'Message sending debug: authenticated user is not an active member of this conversation.',
-    );
+    redirectWithError(conversationId, 'You can no longer send messages in this chat.');
   }
 
   if (replyToMessageId) {
@@ -214,7 +204,7 @@ export async function editMessageAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(conversationId, 'Message edit debug: no authenticated user found.');
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -273,10 +263,7 @@ export async function deleteMessageAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(
-      conversationId,
-      'Message delete debug: no authenticated user found.',
-    );
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -329,10 +316,7 @@ export async function updateConversationTitleAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(
-      conversationId,
-      'Conversation settings debug: no authenticated user found.',
-    );
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -355,6 +339,95 @@ export async function updateConversationTitleAction(formData: FormData) {
   }
 
   revalidatePath('/inbox');
+  revalidatePath(`/chat/${conversationId}`);
+  redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
+}
+
+export async function hideConversationAction(formData: FormData) {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+
+  if (!conversationId) {
+    redirect('/inbox');
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    redirect('/login');
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    redirect('/inbox');
+  }
+
+  try {
+    await hideConversationForUser({
+      conversationId,
+      userId: user.id,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unable to hide this chat.';
+
+    redirectWithError(conversationId, message);
+  }
+
+  revalidatePath('/inbox');
+  revalidatePath(`/chat/${conversationId}`);
+  redirect('/inbox');
+}
+
+export async function updateConversationNotificationLevelAction(
+  formData: FormData,
+) {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const notificationLevel = String(
+    formData.get('notificationLevel') ?? '',
+  ).trim();
+
+  if (!conversationId) {
+    redirect('/inbox');
+  }
+
+  if (notificationLevel !== 'default' && notificationLevel !== 'muted') {
+    redirectWithError(conversationId, 'Choose a valid notification setting.');
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    redirect('/login');
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    redirect('/inbox');
+  }
+
+  try {
+    await updateConversationNotificationLevel({
+      conversationId,
+      userId: user.id,
+      notificationLevel,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unable to update notification settings.';
+
+    redirectWithError(conversationId, message);
+  }
+
   revalidatePath(`/chat/${conversationId}`);
   redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
 }
@@ -419,10 +492,7 @@ export async function addGroupParticipantsAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(
-      conversationId,
-      'Group management debug: no authenticated user found.',
-    );
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -463,10 +533,7 @@ export async function removeGroupParticipantAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(
-      conversationId,
-      'Group management debug: no authenticated user found.',
-    );
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -506,10 +573,7 @@ export async function leaveGroupAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(
-      conversationId,
-      'Group leave debug: no authenticated user found.',
-    );
+    redirectWithError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);

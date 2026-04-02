@@ -8,23 +8,28 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   return (
-    <main className="page stack">
-      <section className="stack">
-        <p className="eyebrow">CHAT</p>
-        <h1 className="title">Web-first messenger foundation</h1>
+    <main className="page stack public-home">
+      <section className="stack public-home-hero">
+        <div className="public-home-brand">
+          <div className="auth-brand-mark public-home-brand-mark" aria-hidden="true">
+            C
+          </div>
+          <div className="stack public-home-brand-copy">
+            <p className="public-home-name">Chat</p>
+            <p className="public-home-line">Chat by Build With Care</p>
+          </div>
+        </div>
+        <h1 className="title public-home-title">A calm place for everyday conversation.</h1>
         <p className="subtitle">
-          CHAT is being built as a reusable messaging-core with a web shell on
-          top, not as a one-off chat UI. Phase 1 is focused on auth, schema,
-          RLS, and a clean application structure that can later support
-          embedded and native clients.
+          Direct messages, groups, and a mobile-first messenger that stays out of the way.
         </p>
       </section>
 
-      <section className="cluster">
+      <section className="cluster public-home-actions">
         {user ? (
           <>
             <Link className="pill pill-accent" href="/inbox">
-              Open inbox
+              Open chats
             </Link>
             <Link className="pill" href="/settings">
               Open settings
@@ -33,47 +38,21 @@ export default async function HomePage() {
         ) : (
           <>
             <Link className="pill pill-accent" href="/login">
-              Go to login
+              Log in
             </Link>
             <Link className="pill" href="/signup">
-              Go to signup
-            </Link>
-            <Link className="pill" href="/inbox">
-              Protected inbox
+              Create account
             </Link>
           </>
         )}
       </section>
 
-      <section className="card stack">
-        <h2>Session status</h2>
-        {user ? (
-          <p className="muted">
-            You are signed in as <span className="mono">{user.email ?? user.id}</span>.
-          </p>
-        ) : (
-          <p className="muted">
-            You are currently signed out. Use email/password auth to enter the
-            protected app shell.
-          </p>
-        )}
-      </section>
-
-      <section className="card stack">
-        <h2>Current foundation priorities</h2>
-        <ul className="list">
-          <li>Supabase-backed auth and server/browser client boundaries.</li>
-          <li>Protected route groups for the authenticated app shell.</li>
-          <li>Messaging module scaffolding with reusable long-term boundaries.</li>
-          <li>Minimal placeholder surfaces for inbox, chat, and settings.</li>
-        </ul>
-      </section>
-
-      <section className="card card-muted stack">
-        <h2>Planned next, not implemented yet</h2>
+      <section className="card card-muted stack public-home-note">
+        <h2 className="card-title">{user ? 'Welcome back' : 'Get started'}</h2>
         <p className="muted">
-          Realtime, attachments, richer messaging flows, and deeper product
-          behavior come after the base foundation is stable.
+          {user
+            ? 'Your chats and settings are ready.'
+            : 'Create an account or log in to start chatting.'}
         </p>
       </section>
     </main>

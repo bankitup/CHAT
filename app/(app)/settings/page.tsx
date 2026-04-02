@@ -7,6 +7,7 @@ import {
   PROFILE_AVATAR_ACCEPT,
 } from '@/modules/messaging/data/server';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import Link from 'next/link';
 
 type SettingsPageProps = {
   searchParams: Promise<{
@@ -43,6 +44,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
   return (
     <section className="stack settings-screen">
+      <div className="settings-topbar">
+        <Link className="pill settings-back-link" href="/inbox">
+          Chats
+        </Link>
+      </div>
+
       <section className="card stack settings-card profile-settings-hero">
         <div className="profile-settings-summary">
           <IdentityAvatar
@@ -56,10 +63,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           />
 
           <div className="stack profile-settings-copy">
-            <p className="eyebrow">You</p>
+            <p className="eyebrow">Account</p>
             <h1 className="section-title">{profileLabel}</h1>
             <p className="muted profile-settings-email">
-              {profile.email ?? 'Your account'}
+              {profile.email ?? 'Your profile'}
             </p>
           </div>
         </div>
@@ -70,16 +77,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
       <section className="card stack settings-card">
         <div className="stack settings-card-copy">
-          <p className="eyebrow">Account</p>
           <h2 className="section-title">Profile</h2>
-          <p className="muted">
-            Update the name and photo people see in your chats.
-          </p>
+          <p className="muted">Photo and display name</p>
         </div>
 
         <form action={updateProfileAction} className="stack profile-settings-form">
           <label className="field profile-avatar-field">
-            <span>Avatar</span>
+            <span>Profile photo</span>
             <input
               className="input profile-file-input"
               name="avatar"
@@ -87,7 +91,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               type="file"
             />
             <span className="muted profile-field-note">
-              JPG, PNG, WEBP, or GIF up to 5 MB.
+              JPG, PNG, WEBP, or GIF, up to 5 MB.
             </span>
           </label>
 
@@ -103,7 +107,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           </label>
 
           <button className="button" type="submit">
-            Save profile
+            Save changes
           </button>
         </form>
       </section>
@@ -112,11 +116,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
       <section className="card stack settings-card">
         <div className="stack settings-card-copy">
-          <p className="eyebrow">Session</p>
-          <h2 className="section-title">Account</h2>
-          <p className="muted">
-            You can sign out on this device any time.
-          </p>
+          <h2 className="section-title">Log out</h2>
+          <p className="muted">Sign out on this device.</p>
         </div>
 
         <form action={logoutAction}>

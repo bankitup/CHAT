@@ -13,6 +13,9 @@ type ConversationRecord = {
 
 type ConversationMemberRow = {
   conversation_id: string;
+  state?: string | null;
+  hidden_at?: string | null;
+  notification_level?: string | null;
   last_read_message_seq?: number | null;
   last_read_at?: string | null;
   conversations: ConversationRecord | ConversationRecord[] | null;
@@ -30,11 +33,14 @@ export type InboxConversation = {
   lastMessageAt: string | null;
   createdAt: string | null;
   kind?: string | null;
+  hiddenAt: string | null;
   lastReadMessageSeq: number | null;
   lastReadAt: string | null;
   latestMessageSeq: number | null;
   unreadCount: number;
 };
+
+export type ConversationNotificationLevel = 'default' | 'muted';
 
 export type ConversationMessage = {
   id: string;
@@ -223,14 +229,22 @@ export function getConversationParticipantSummary(
   return `${preview.join(', ')} +${remaining}`;
 }
 
-export async function getInboxConversations(userId: string) {
+async function getConversationsByVisibility(
+  userId: string,
+  archived: boolean,
+) {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('conversation_members')
     .select(
-      'conversation_id, last_read_message_seq, last_read_at, conversations(id, kind, title, created_by, last_message_at, created_at)',
+      'conversation_id, state, hidden_at, last_read_message_seq, last_read_at, conversations(id, kind, title, created_by, last_message_at, created_at)',
     )
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .eq('state', 'active');
+
+  query = archived ? query.not('hidden_at', 'is', null) : query.is('hidden_at', null);
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -313,6 +327,7 @@ export async function getInboxConversations(userId: string) {
         createdBy: conversation?.created_by ?? null,
         lastMessageAt: conversation?.last_message_at ?? null,
         createdAt: conversation?.created_at ?? null,
+        hiddenAt: row.hidden_at ?? null,
         lastReadMessageSeq,
         lastReadAt: row.last_read_at ?? null,
         latestMessageSeq,
@@ -327,6 +342,14 @@ export async function getInboxConversations(userId: string) {
     });
 }
 
+export async function getInboxConversations(userId: string) {
+  return getConversationsByVisibility(userId, false);
+}
+
+export async function getArchivedConversations(userId: string) {
+  return getConversationsByVisibility(userId, true);
+}
+
 export async function getConversationForUser(
   conversationId: string,
   userId: string,
@@ -334,9 +357,12 @@ export async function getConversationForUser(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('conversation_members')
-    .select('conversation_id, conversations(id, kind, title, created_by, last_message_at, created_at)')
+    .select(
+      'conversation_id, notification_level, conversations(id, kind, title, created_by, last_message_at, created_at)',
+    )
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
+    .eq('state', 'active')
     .maybeSingle();
 
   if (error) {
@@ -361,6 +387,8 @@ export async function getConversationForUser(
     createdBy: conversation.created_by ?? null,
     lastMessageAt: conversation.last_message_at,
     createdAt: conversation.created_at,
+    notificationLevel:
+      row.notification_level === 'muted' ? 'muted' : 'default',
   };
 }
 
@@ -1252,6 +1280,199 @@ export async function markConversationRead(input: {
     updated: true,
     lastReadMessageSeq: nextReadSeq,
   };
+}
+
+export async function hideConversationForUser(input: {
+  conversationId: string;
+  userId: string;
+}) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Conversation archive debug: authenticated user is required.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Conversation archive debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Conversation archive debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const { data: membershipRow, error: membershipError } = await supabase
+    .from('conversation_members')
+    .select('hidden_at')
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active')
+    .maybeSingle();
+
+  if (membershipError) {
+    throw new Error(membershipError.message);
+  }
+
+  if (!membershipRow) {
+    throw new Error('Only an active participant can hide this chat.');
+  }
+
+  if (membershipRow.hidden_at) {
+    return { updated: false };
+  }
+
+  const { error: updateError } = await supabase
+    .from('conversation_members')
+    .update({ hidden_at: new Date().toISOString() })
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active');
+
+  if (updateError) {
+    if (updateError.message.includes('row-level security policy')) {
+      throw new Error(
+        'Conversation archive debug: update blocked by conversation_members RLS.',
+      );
+    }
+
+    throw new Error(updateError.message);
+  }
+
+  return { updated: true };
+}
+
+export async function restoreConversationForUser(input: {
+  conversationId: string;
+  userId: string;
+}) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Conversation archive debug: authenticated user is required.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Conversation archive debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Conversation archive debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const { data: membershipRow, error: membershipError } = await supabase
+    .from('conversation_members')
+    .select('hidden_at')
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active')
+    .maybeSingle();
+
+  if (membershipError) {
+    throw new Error(membershipError.message);
+  }
+
+  if (!membershipRow) {
+    throw new Error('Only an active participant can restore this chat.');
+  }
+
+  if (!membershipRow.hidden_at) {
+    return { updated: false };
+  }
+
+  const { error: updateError } = await supabase
+    .from('conversation_members')
+    .update({ hidden_at: null })
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active');
+
+  if (updateError) {
+    if (updateError.message.includes('row-level security policy')) {
+      throw new Error(
+        'Conversation archive debug: update blocked by conversation_members RLS.',
+      );
+    }
+
+    throw new Error(updateError.message);
+  }
+
+  return { updated: true };
+}
+
+export async function updateConversationNotificationLevel(input: {
+  conversationId: string;
+  userId: string;
+  notificationLevel: ConversationNotificationLevel;
+}) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Conversation notifications debug: authenticated user is required.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Conversation notifications debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Conversation notifications debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  if (input.notificationLevel !== 'default' && input.notificationLevel !== 'muted') {
+    throw new Error('Choose a valid notification preference.');
+  }
+
+  const { data: membershipRow, error: membershipError } = await supabase
+    .from('conversation_members')
+    .select('conversation_id')
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active')
+    .maybeSingle();
+
+  if (membershipError) {
+    throw new Error(membershipError.message);
+  }
+
+  if (!membershipRow) {
+    throw new Error('Only an active participant can change this setting.');
+  }
+
+  const { error: updateError } = await supabase
+    .from('conversation_members')
+    .update({ notification_level: input.notificationLevel })
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active');
+
+  if (updateError) {
+    if (updateError.message.includes('row-level security policy')) {
+      throw new Error(
+        'Conversation notifications debug: update blocked by conversation_members RLS.',
+      );
+    }
+
+    throw new Error(updateError.message);
+  }
+
+  return { updated: true };
 }
 
 export async function assertConversationExists(conversationId: string) {

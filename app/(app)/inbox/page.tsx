@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getAvailableUsers,
+  getArchivedConversations,
   getConversationDisplayName,
   getConversationParticipantIdentities,
   getConversationParticipantSummary,
@@ -13,7 +14,11 @@ import {
 } from '@/modules/messaging/ui/identity';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import Link from 'next/link';
-import { createDmAction, createGroupAction } from './actions';
+import {
+  createDmAction,
+  createGroupAction,
+  restoreConversationAction,
+} from './actions';
 
 type InboxPageProps = {
   searchParams: Promise<{
@@ -21,16 +26,19 @@ type InboxPageProps = {
     error?: string;
     filter?: string;
     q?: string;
+    view?: string;
   }>;
 };
 
 type InboxFilter = 'all' | 'dm' | 'groups';
+type InboxView = 'main' | 'archived';
 
 type ConversationListItem = {
   conversationId: string;
   isGroupConversation: boolean;
   title: string;
   preview: string;
+  kindLabel: string;
   readStateLabel: string;
   recencyLabel: string;
   timestampLabel: string;
@@ -43,6 +51,10 @@ type ConversationListItem = {
   hasUnread: boolean;
 };
 
+function formatSearchResultLabel(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 function normalizeSearchTerm(value: string | undefined) {
   return value?.trim().toLowerCase() ?? '';
 }
@@ -53,6 +65,10 @@ function normalizeFilter(value: string | undefined): InboxFilter {
   }
 
   return 'all';
+}
+
+function normalizeView(value: string | undefined): InboxView {
+  return value === 'archived' ? 'archived' : 'main';
 }
 
 function formatTimestamp(value: string | null) {
@@ -127,11 +143,19 @@ function getFallbackIdentityLabel(
   return nextLabel;
 }
 
-function buildFilterHref(filter: InboxFilter, query?: string) {
+function buildFilterHref(
+  filter: InboxFilter,
+  query?: string,
+  view?: InboxView,
+) {
   const params = new URLSearchParams();
 
   if (filter !== 'all') {
     params.set('filter', filter);
+  }
+
+  if (view === 'archived') {
+    params.set('view', 'archived');
   }
 
   if (query?.trim()) {
@@ -146,10 +170,12 @@ function buildInboxHref({
   filter,
   query,
   create,
+  view,
 }: {
   filter: InboxFilter;
   query?: string;
   create?: boolean;
+  view?: InboxView;
 }) {
   const params = new URLSearchParams();
 
@@ -159,6 +185,10 @@ function buildInboxHref({
 
   if (query?.trim()) {
     params.set('q', query.trim());
+  }
+
+  if (view === 'archived') {
+    params.set('view', 'archived');
   }
 
   if (create) {
@@ -173,6 +203,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const query = await searchParams;
   const searchTerm = normalizeSearchTerm(query.q);
   const activeFilter = normalizeFilter(query.filter);
+  const activeView = normalizeView(query.view);
   const isCreateOpen = query.create === 'open';
   const supabase = await createSupabaseServerClient();
   const {
@@ -183,12 +214,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     return null;
   }
 
-  const [conversations, availableUsers] = await Promise.all([
+  const [conversations, archivedConversations, availableUsers] = await Promise.all([
     getInboxConversations(user.id),
+    getArchivedConversations(user.id),
     getAvailableUsers(user.id),
   ]);
+  const visibleConversations =
+    activeView === 'archived' ? archivedConversations : conversations;
   const participantIdentities = await getConversationParticipantIdentities(
-    conversations.map((conversation) => conversation.conversationId),
+    visibleConversations.map((conversation) => conversation.conversationId),
   );
   const participantIdentitiesByConversation = participantIdentities.reduce(
     (map, identity) => {
@@ -220,7 +254,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       return availableUser.label.toLowerCase().includes(searchTerm);
     },
   );
-  const conversationItems = conversations.map((conversation) => {
+  const conversationItems = visibleConversations.map((conversation) => {
     const participantOptions =
       participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
     const otherParticipants = participantOptions.filter(
@@ -252,16 +286,17 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
     const hasUnread = conversation.unreadCount > 0;
     const readStateLabel = hasUnread
-      ? 'New activity'
+      ? 'New'
       : conversation.lastMessageAt
-        ? 'Up to date'
-        : 'Ready to start';
+        ? 'Read'
+        : 'Start';
 
     return {
       conversationId: conversation.conversationId,
       isGroupConversation,
       title,
       preview,
+      kindLabel: isGroupConversation ? 'Group' : 'DM',
       readStateLabel,
       recencyLabel: formatRecency(lastActivityAt),
       timestampLabel: formatTimestamp(lastActivityAt),
@@ -299,11 +334,20 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const unreadConversationCount = conversationItems.filter(
     (conversation) => conversation.hasUnread,
   ).length;
+  const archivedConversationCount = archivedConversations.length;
+  const searchScopeSummary = searchTerm
+    ? [
+        formatSearchResultLabel(filteredConversationItems.length, 'chat', 'chats'),
+        formatSearchResultLabel(filteredAvailableUserEntries.length, 'person', 'people'),
+      ].join(' · ')
+    : activeView === 'archived'
+      ? 'Search archived chats and people'
+      : 'Search chats and people';
 
   return (
     <section className="stack inbox-screen inbox-screen-minimal">
       <InboxRealtimeSync
-        conversationIds={conversations.map((conversation) => conversation.conversationId)}
+        conversationIds={visibleConversations.map((conversation) => conversation.conversationId)}
         userId={user.id}
       />
 
@@ -312,11 +356,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           <div className="stack inbox-topbar-copy">
             <h1 className="inbox-home-title">Chats</h1>
             <p className="muted inbox-home-subtitle">
-              {unreadConversationCount > 0
-                ? `${unreadConversationCount} new`
-                : conversationItems.length > 0
-                  ? 'Caught up'
-                  : 'Start a chat'}
+              {activeView === 'archived'
+                ? archivedConversationCount > 0
+                  ? `${archivedConversationCount} archived`
+                  : 'Archived chats live here'
+                : unreadConversationCount > 0
+                  ? `${unreadConversationCount} new`
+                  : conversationItems.length > 0
+                    ? 'All caught up'
+                    : 'Start a chat'}
             </p>
           </div>
           <div className="inbox-topbar-actions">
@@ -334,6 +382,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 filter: activeFilter,
                 query: query.q,
                 create: true,
+                view: activeView,
               })}
             >
               <span aria-hidden="true">+</span>
@@ -347,26 +396,25 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             className="inbox-search-form inbox-search-form-minimal"
             role="search"
           >
-            <label className="field inbox-search-field">
+            <label className="field inbox-search-field inbox-search-shell">
               <span className="sr-only">Search chats</span>
+              <span aria-hidden="true" className="inbox-search-icon">
+                ⌕
+              </span>
               <input
                 className="input inbox-search-input"
                 defaultValue={query.q ?? ''}
+                enterKeyHint="search"
                 name="q"
-                placeholder="Search"
+                placeholder="Search chats or people"
                 type="search"
               />
             </label>
             {activeFilter !== 'all' ? (
               <input name="filter" type="hidden" value={activeFilter} />
             ) : null}
-            {searchTerm ? (
-              <Link
-                className="pill inbox-search-clear"
-                href={buildFilterHref(activeFilter)}
-              >
-                Clear
-              </Link>
+            {activeView === 'archived' ? (
+              <input name="view" type="hidden" value="archived" />
             ) : null}
           </form>
 
@@ -378,7 +426,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   ? 'inbox-filter-pill inbox-filter-pill-active'
                   : 'inbox-filter-pill'
               }
-              href={buildFilterHref('all', query.q)}
+              href={buildFilterHref('all', query.q, activeView)}
             >
               All
             </Link>
@@ -389,7 +437,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   ? 'inbox-filter-pill inbox-filter-pill-active'
                   : 'inbox-filter-pill'
               }
-              href={buildFilterHref('dm', query.q)}
+              href={buildFilterHref('dm', query.q, activeView)}
             >
               DM
             </Link>
@@ -400,10 +448,49 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   ? 'inbox-filter-pill inbox-filter-pill-active'
                   : 'inbox-filter-pill'
               }
-              href={buildFilterHref('groups', query.q)}
+              href={buildFilterHref('groups', query.q, activeView)}
             >
               Groups
             </Link>
+          </div>
+
+          <div className="inbox-search-meta">
+            <p className="muted inbox-search-scope">{searchScopeSummary}</p>
+            <div className="inbox-search-meta-actions">
+              {(archivedConversationCount > 0 || activeView === 'archived') ? (
+                <Link
+                  className={
+                    activeView === 'archived'
+                      ? 'inbox-archive-link inbox-archive-link-active'
+                      : 'inbox-archive-link'
+                  }
+                  href={
+                    activeView === 'archived'
+                      ? buildInboxHref({
+                          filter: activeFilter,
+                          query: query.q,
+                        })
+                      : buildInboxHref({
+                          filter: activeFilter,
+                          query: query.q,
+                          view: 'archived',
+                        })
+                  }
+                >
+                  {activeView === 'archived'
+                    ? 'Back to chats'
+                    : `Archived${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
+                </Link>
+              ) : null}
+              {searchTerm ? (
+                <Link
+                  className="inbox-search-clear"
+                  href={buildFilterHref(activeFilter, undefined, activeView)}
+                >
+                  Clear
+                </Link>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>
@@ -412,14 +499,22 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
       {conversationItems.length === 0 ? (
           <section className="card stack empty-card inbox-empty-state">
-          <h2 className="card-title">No chats yet</h2>
+          <h2 className="card-title">
+            {activeView === 'archived' ? 'No archived chats' : 'No chats here'}
+          </h2>
           <p className="muted">
-            Start one from the + button.
+            {activeView === 'archived'
+              ? 'Hidden chats will appear here.'
+              : 'Start one from the + button.'}
           </p>
         </section>
       ) : filteredConversationItems.length === 0 ? (
         <section className="card stack empty-card inbox-empty-state">
-          <h2 className="card-title">No matching chats</h2>
+          <h2 className="card-title">
+            {activeView === 'archived'
+              ? 'No matching archived chats'
+              : 'No matching chats'}
+          </h2>
           <p className="muted">
             Try a different filter or clear the search.
           </p>
@@ -427,73 +522,117 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       ) : (
         <section className="stack conversation-list conversation-list-minimal">
           {filteredConversationItems.map((conversation) => (
-            <Link
+            <article
               key={conversation.conversationId}
               className={
                 conversation.hasUnread
                   ? 'conversation-card conversation-card-unread conversation-card-minimal'
                   : 'conversation-card conversation-card-minimal'
               }
-              href={`/chat/${conversation.conversationId}`}
             >
-              <div className="conversation-row">
-                {conversation.isGroupConversation ? (
-                  <GroupIdentityAvatar
-                    label={conversation.title}
-                    size="md"
-                  />
-                ) : (
-                  <IdentityAvatar
-                    identity={conversation.participants[0]}
-                    label={conversation.title}
-                    size="md"
-                  />
-                )}
+              <div
+                className={
+                  activeView === 'archived'
+                    ? 'conversation-row conversation-row-with-action'
+                    : 'conversation-row'
+                }
+              >
+                <Link
+                  className="conversation-row-link"
+                  href={`/chat/${conversation.conversationId}`}
+                >
+                  {conversation.isGroupConversation ? (
+                    <GroupIdentityAvatar
+                      label={conversation.title}
+                      size="sm"
+                    />
+                  ) : (
+                    <IdentityAvatar
+                      identity={conversation.participants[0]}
+                      label={conversation.title}
+                      size="sm"
+                    />
+                  )}
 
-                <div className="stack conversation-card-copy">
-                  <div className="stack conversation-main-copy">
-                    <div className="conversation-title-row">
-                      <h3 className="conversation-title">{conversation.title}</h3>
-                      <div className="conversation-title-meta">
-                        <span className="conversation-recency">
-                          {conversation.recencyLabel}
-                        </span>
-                        {conversation.hasUnread ? (
+                  <div className="stack conversation-card-copy">
+                    <div className="stack conversation-main-copy">
+                      <div className="conversation-title-row">
+                        <h3
+                          className={
+                            conversation.hasUnread
+                              ? 'conversation-title conversation-title-unread'
+                              : 'conversation-title'
+                          }
+                        >
+                          {conversation.title}
+                        </h3>
+                        <div className="conversation-title-meta">
                           <span
-                            className="conversation-unread-dot"
-                            aria-label="Unread messages"
-                          />
-                        ) : null}
+                            className={
+                              conversation.hasUnread
+                                ? 'conversation-recency conversation-recency-unread'
+                                : 'conversation-recency'
+                            }
+                          >
+                            {conversation.recencyLabel}
+                          </span>
+                          {conversation.hasUnread ? (
+                            <span
+                              className="conversation-unread-dot"
+                              aria-label="Unread messages"
+                            />
+                          ) : null}
+                        </div>
                       </div>
+                      <p
+                        className={
+                          conversation.hasUnread
+                            ? 'muted conversation-preview conversation-preview-unread'
+                            : 'muted conversation-preview'
+                        }
+                      >
+                        {conversation.preview}
+                      </p>
                     </div>
-                    <p
-                      className={
-                        conversation.hasUnread
-                          ? 'muted conversation-preview conversation-preview-unread'
-                          : 'muted conversation-preview'
-                      }
-                    >
-                      {conversation.preview}
-                    </p>
-                  </div>
 
-                  <div className="conversation-footer">
-                    <span
-                      className={
-                        conversation.hasUnread
-                          ? 'conversation-read-state conversation-read-state-unread'
-                          : 'muted conversation-read-state'
-                      }
-                    >
-                      {conversation.readStateLabel}
-                    </span>
-                    <p className="muted conversation-timestamp">
-                      {conversation.timestampLabel}
-                    </p>
+                    <div className="conversation-footer">
+                      <div className="conversation-footer-meta">
+                        <span className="conversation-kind-label">
+                          {conversation.kindLabel}
+                        </span>
+                        <span
+                          className={
+                            conversation.hasUnread
+                              ? 'conversation-read-state conversation-read-state-unread'
+                              : 'muted conversation-read-state'
+                          }
+                        >
+                          {conversation.readStateLabel}
+                        </span>
+                      </div>
+                      <p className="muted conversation-timestamp">
+                        {conversation.timestampLabel}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                </Link>
+                {activeView === 'archived' ? (
+                  <form action={restoreConversationAction}>
+                    <input
+                      name="conversationId"
+                      type="hidden"
+                      value={conversation.conversationId}
+                    />
+                    <button
+                      className="button button-compact button-secondary conversation-restore-button"
+                      type="submit"
+                    >
+                      Restore
+                    </button>
+                  </form>
+                ) : null}
               </div>
-            </Link>
+            </article>
           ))}
         </section>
       )}
@@ -506,6 +645,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             href={buildInboxHref({
               filter: activeFilter,
               query: query.q,
+              view: activeView,
             })}
           />
 
@@ -521,6 +661,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 href={buildInboxHref({
                   filter: activeFilter,
                   query: query.q,
+                  view: activeView,
                 })}
               >
                 Close

@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   createConversationWithMembers,
   findExistingActiveDmConversation,
+  restoreConversationForUser,
 } from '@/modules/messaging/data/server';
 
 function redirectWithError(message: string): never {
@@ -111,5 +112,34 @@ export async function createGroupAction(formData: FormData) {
     redirectWithError(
       error instanceof Error ? error.message : 'Unable to create group.',
     );
+  }
+}
+
+export async function restoreConversationAction(formData: FormData) {
+  try {
+    const userId = await getAuthenticatedUserId();
+    const conversationId = readText(formData, 'conversationId');
+
+    if (!conversationId) {
+      redirectWithError('Choose a chat to restore.');
+    }
+
+    await restoreConversationForUser({
+      conversationId,
+      userId,
+    });
+
+    redirect('/inbox?view=archived');
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    const params = new URLSearchParams({
+      view: 'archived',
+      error:
+        error instanceof Error ? error.message : 'Unable to restore this chat.',
+    });
+    redirect(`/inbox?${params.toString()}`);
   }
 }

@@ -60,35 +60,81 @@ export function ComposerAttachmentPicker({
       className={
         hasSelectedFile
           ? 'attachment-entry attachment-entry-selected'
-          : 'attachment-entry'
+          : errorMessage
+            ? 'attachment-entry attachment-entry-error'
+            : 'attachment-entry'
       }
     >
-      <details className="attachment-entry-details" ref={detailsRef}>
-        <summary
-          className={
-            hasSelectedFile
-              ? 'attachment-trigger attachment-trigger-selected'
-              : 'attachment-trigger'
-          }
-          aria-label="Attachment options"
-        >
-          +
-        </summary>
-        <div className="attachment-menu" role="menu" aria-label="Attachment options">
-          <button
-            className="attachment-option attachment-option-action"
-            type="button"
-            onClick={() => inputRef.current?.click()}
+      <div
+        className={
+          hasSelectedFile
+            ? 'attachment-entry-row attachment-entry-row-selected'
+            : 'attachment-entry-row'
+        }
+      >
+        <details className="attachment-entry-details" ref={detailsRef}>
+          <summary
+            className={
+              hasSelectedFile
+                ? 'attachment-trigger attachment-trigger-selected'
+                : 'attachment-trigger'
+            }
+            aria-label="Attachment options"
           >
-            <span>Photo or file</span>
-            <span className="attachment-option-note">{maxSizeLabel}</span>
-          </button>
-          <button className="attachment-option" disabled type="button">
-            <span>Camera</span>
-            <span className="attachment-option-note">Soon</span>
-          </button>
-        </div>
-      </details>
+            +
+          </summary>
+          <div className="attachment-menu" role="menu" aria-label="Attachment options">
+            <button
+              className="attachment-option attachment-option-action"
+              type="button"
+              onClick={() => inputRef.current?.click()}
+            >
+              <span>Photo or file</span>
+              <span className="attachment-option-note">{maxSizeLabel}</span>
+            </button>
+            <button className="attachment-option" disabled type="button">
+              <span>Camera</span>
+              <span className="attachment-option-note">Soon</span>
+            </button>
+          </div>
+        </details>
+
+        {selectedFile ? (
+          <div className="attachment-selected-card" aria-live="polite">
+            {previewUrl ? (
+              <span
+                aria-hidden="true"
+                className="attachment-selected-preview"
+                style={{ backgroundImage: `url("${previewUrl}")` }}
+              />
+            ) : (
+              <span aria-hidden="true" className="attachment-selected-file">
+                File
+              </span>
+            )}
+            <span className="attachment-selected-copy">
+              <span className="attachment-selected-name">{selectedFile.name}</span>
+              <span className="attachment-selected-meta">
+                {isImage ? 'Image' : 'Attachment'} · {formatFileSize(selectedFile.size)}
+              </span>
+            </span>
+            <button
+              className="attachment-selected-clear"
+              type="button"
+              onClick={() => {
+                if (inputRef.current) {
+                  inputRef.current.value = '';
+                }
+
+                setSelectedFile(null);
+                setErrorMessage(null);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       <input
         ref={inputRef}
@@ -101,7 +147,6 @@ export function ComposerAttachmentPicker({
 
           if (!nextFile) {
             setSelectedFile(null);
-            setErrorMessage(null);
             return;
           }
 
@@ -133,47 +178,9 @@ export function ComposerAttachmentPicker({
         }}
       />
 
-      {selectedFile ? (
-        <div className="attachment-selected-card" aria-live="polite">
-          {previewUrl ? (
-            <span
-              aria-hidden="true"
-              className="attachment-selected-preview"
-              style={{ backgroundImage: `url("${previewUrl}")` }}
-            />
-          ) : (
-            <span aria-hidden="true" className="attachment-selected-file">
-              File
-            </span>
-          )}
-          <span className="attachment-selected-copy">
-            <span className="attachment-selected-name">{selectedFile.name}</span>
-            <span className="attachment-selected-meta">
-              {isImage ? 'Image' : 'Attachment'} · {formatFileSize(selectedFile.size)}
-            </span>
-          </span>
-          <button
-            className="attachment-selected-clear"
-            type="button"
-            onClick={() => {
-              if (inputRef.current) {
-                inputRef.current.value = '';
-              }
-
-              setSelectedFile(null);
-              setErrorMessage(null);
-            }}
-          >
-            Clear
-          </button>
-        </div>
+      {errorMessage ? (
+        <p className="attachment-helper attachment-helper-error">{errorMessage}</p>
       ) : null}
-
-      <p
-        className={errorMessage ? 'attachment-helper attachment-helper-error' : 'attachment-helper'}
-      >
-        {errorMessage ?? helperText}
-      </p>
     </div>
   );
 }

@@ -42,8 +42,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
 
         <section className="card stack auth-card">
           <div className="stack auth-card-copy">
-            <p className="eyebrow auth-eyebrow">Create account</p>
-            <h1 className="auth-title">Sign up</h1>
+            <h1 className="auth-title">Create account</h1>
             <p className="muted auth-subtitle">
               Start with email and password.
             </p>

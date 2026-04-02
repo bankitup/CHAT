@@ -27,17 +27,22 @@ import {
   addGroupParticipantsAction,
   deleteMessageAction,
   editMessageAction,
+  hideConversationAction,
   leaveGroupAction,
   removeGroupParticipantAction,
   sendMessageAction,
   toggleReactionAction,
+  updateConversationNotificationLevelAction,
   updateConversationTitleAction,
 } from './actions';
 import { AutoGrowTextarea } from './auto-grow-textarea';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
+import { ConversationPresenceStatus } from './conversation-presence-status';
+import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
+import { TypingIndicator } from './typing-indicator';
 
 type ChatPageProps = {
   params: Promise<{
@@ -308,6 +313,10 @@ export default async function ChatPage({
     title: conversation.title,
     participantLabels: otherParticipantLabels,
   });
+  const currentUserDisplayLabel = getIdentityLabel(
+    senderIdentities.get(user.id),
+    'Someone',
+  );
   const groupMemberSummary =
     conversation.kind === 'group'
       ? formatGroupMemberSummary(
@@ -437,7 +446,10 @@ export default async function ChatPage({
 
   return (
     <section className="stack chat-screen">
-      <ActiveChatRealtimeSync conversationId={conversationId} />
+      <ActiveChatRealtimeSync
+        conversationId={conversationId}
+        messageIds={messages.map((message) => message.id)}
+      />
       <ComposerKeyboardOffset />
 
       <section className="stack chat-header-stack">
@@ -468,6 +480,12 @@ export default async function ChatPage({
               </h1>
               {conversation.kind === 'group' ? (
                 <p className="muted chat-member-summary">{groupMemberSummary}</p>
+              ) : otherParticipants[0] ? (
+                <ConversationPresenceStatus
+                  conversationId={conversationId}
+                  currentUserId={user.id}
+                  otherUserId={otherParticipants[0].userId}
+                />
               ) : null}
             </div>
           </div>
@@ -540,60 +558,36 @@ export default async function ChatPage({
             </div>
           </section>
 
-          {conversation.kind === 'group' ? (
-            <section className="conversation-settings-panel stack">
-              <div className="stack conversation-settings-panel-copy">
-                <h3 className="card-title">Name</h3>
-                <p className="conversation-settings-static conversation-settings-title-preview">
-                  {conversationDisplayTitle}
-                </p>
-                {canEditGroupTitle ? null : (
-                  <p className="muted">Only the group owner can change it.</p>
-                )}
+          <dl className="conversation-info-list">
+            <div className="conversation-info-row">
+              <dt className="conversation-info-label">Type</dt>
+              <dd className="conversation-info-value">
+                {conversation.kind === 'group' ? 'Group chat' : 'Direct chat'}
+              </dd>
+            </div>
+            {conversation.kind === 'group' ? (
+              <div className="conversation-info-row">
+                <dt className="conversation-info-label">Members</dt>
+                <dd className="conversation-info-value">
+                  {participants.length} member{participants.length === 1 ? '' : 's'}
+                </dd>
               </div>
-
-              {canEditGroupTitle ? (
-                <form
-                  action={updateConversationTitleAction}
-                  className="stack compact-form"
-                >
-                  <input
-                    name="conversationId"
-                    type="hidden"
-                    value={conversationId}
-                  />
-                  <label className="field">
-                    <span className="sr-only">Group title</span>
-                    <input
-                      className="input"
-                      defaultValue={conversation.title?.trim() || ''}
-                      name="title"
-                      placeholder="Enter a group name"
-                      required
-                    />
-                  </label>
-                  <button className="button button-compact" type="submit">
-                    Save name
-                  </button>
-                </form>
-              ) : null}
-            </section>
-          ) : (
-            <section className="conversation-settings-panel stack">
-              <div className="stack conversation-settings-panel-copy">
-                <h3 className="card-title">About</h3>
-              </div>
-              <p className="conversation-settings-static">
-                This conversation is with {conversationDisplayTitle}.
-              </p>
-            </section>
-          )}
+            ) : null}
+            <div className="conversation-info-row">
+              <dt className="conversation-info-label">Started</dt>
+              <dd className="conversation-info-value">
+                {formatLongDate(conversation.createdAt ?? null)}
+              </dd>
+            </div>
+          </dl>
 
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">Participants</h3>
-              <p className="muted">
-                {participants.length} active member{participants.length === 1 ? '' : 's'}
+              <h3 className="card-title">People</h3>
+              <p className="muted conversation-settings-note">
+                {conversation.kind === 'group'
+                  ? `${participants.length} active member${participants.length === 1 ? '' : 's'}`
+                  : 'The people in this chat'}
               </p>
             </div>
 
@@ -649,18 +643,71 @@ export default async function ChatPage({
                 </div>
               ))}
             </div>
+          </section>
 
-            {conversation.kind === 'group' ? (
-              <div className="conversation-member-actions">
-                {canManageGroupParticipants ? (
-                  <section className="stack conversation-participant-manager">
-                    <div className="stack conversation-settings-panel-copy">
-                      <h4 className="card-title">Add people</h4>
-                      <p className="muted">Choose people to add.</p>
-                    </div>
+          {conversation.kind === 'group' ? (
+            <section className="conversation-settings-panel stack">
+              <div className="stack conversation-settings-panel-copy">
+                <h3 className="card-title">Group</h3>
+                <p className="muted conversation-settings-note">
+                  A few lightweight group actions.
+                </p>
+              </div>
 
-                    {availableParticipantsToAdd.length === 0 ? (
-                      <p className="muted conversation-settings-static">
+              <div className="conversation-group-actions">
+                <section className="stack conversation-settings-subsection">
+                  <div className="stack conversation-settings-panel-copy">
+                    <h4 className="conversation-settings-subtitle">Name</h4>
+                    <p className="conversation-settings-static conversation-settings-title-preview">
+                      {conversationDisplayTitle}
+                    </p>
+                    {!canEditGroupTitle ? (
+                      <p className="muted conversation-settings-note">
+                        Only the owner can change it.
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {canEditGroupTitle ? (
+                    <form
+                      action={updateConversationTitleAction}
+                      className="conversation-title-form"
+                    >
+                      <input
+                        name="conversationId"
+                        type="hidden"
+                        value={conversationId}
+                      />
+                      <label className="field">
+                        <span className="sr-only">Group title</span>
+                        <input
+                          className="input"
+                          defaultValue={conversation.title?.trim() || ''}
+                          name="title"
+                          placeholder="Enter a group name"
+                          required
+                        />
+                      </label>
+                      <button className="button button-compact" type="submit">
+                        Save name
+                      </button>
+                    </form>
+                  ) : null}
+                </section>
+
+                <section className="stack conversation-settings-subsection conversation-participant-manager">
+                  <div className="stack conversation-settings-panel-copy">
+                    <h4 className="conversation-settings-subtitle">Add people</h4>
+                    {!canManageGroupParticipants ? (
+                      <p className="muted conversation-settings-note">
+                        Only the owner can add or remove people.
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {canManageGroupParticipants ? (
+                    availableParticipantsToAdd.length === 0 ? (
+                      <p className="muted conversation-settings-note">
                         Everyone is already here.
                       </p>
                     ) : (
@@ -698,18 +745,13 @@ export default async function ChatPage({
                           Add people
                         </button>
                       </form>
-                    )}
-                  </section>
-                ) : (
-                  <p className="muted conversation-settings-static">
-                    Only the owner can add or remove people.
-                  </p>
-                )}
+                    )
+                  ) : null}
+                </section>
 
-                <section className="stack conversation-leave-panel">
+                <section className="stack conversation-settings-subsection conversation-leave-panel">
                   <div className="stack conversation-settings-panel-copy">
-                    <h4 className="card-title">Leave group</h4>
-                    <p className="muted">Leave this chat.</p>
+                    <h4 className="conversation-settings-subtitle">Leave group</h4>
                   </div>
                   <form action={leaveGroupAction}>
                     <input
@@ -726,7 +768,88 @@ export default async function ChatPage({
                   </form>
                 </section>
               </div>
-            ) : null}
+            </section>
+          ) : null}
+
+          <section className="conversation-settings-panel stack">
+            <div className="stack conversation-settings-panel-copy">
+              <h3 className="card-title">Notifications</h3>
+              <p className="muted conversation-settings-note">
+                Choose how active this chat should feel for you.
+              </p>
+            </div>
+
+            <form
+              action={updateConversationNotificationLevelAction}
+              className="conversation-notification-form"
+            >
+              <input
+                name="conversationId"
+                type="hidden"
+                value={conversationId}
+              />
+
+              <button
+                className={
+                  conversation.notificationLevel === 'default'
+                    ? 'conversation-choice-button conversation-choice-button-active'
+                    : 'conversation-choice-button'
+                }
+                name="notificationLevel"
+                type="submit"
+                value="default"
+              >
+                <span className="conversation-choice-copy">
+                  <span className="conversation-choice-title">Default</span>
+                  <span className="conversation-choice-note">
+                    Follow your normal app setting for this chat.
+                  </span>
+                </span>
+              </button>
+
+              <button
+                className={
+                  conversation.notificationLevel === 'muted'
+                    ? 'conversation-choice-button conversation-choice-button-active'
+                    : 'conversation-choice-button'
+                }
+                name="notificationLevel"
+                type="submit"
+                value="muted"
+              >
+                <span className="conversation-choice-copy">
+                  <span className="conversation-choice-title">Muted</span>
+                  <span className="conversation-choice-note">
+                    Keep this chat quieter when alerts arrive later.
+                  </span>
+                </span>
+              </button>
+            </form>
+          </section>
+
+          <section className="conversation-settings-panel stack">
+            <div className="stack conversation-settings-panel-copy">
+              <h3 className="card-title">Inbox</h3>
+              <p className="muted conversation-settings-note">
+                Hide this chat from your main list without deleting it.
+              </p>
+            </div>
+
+            <div className="conversation-manage-actions">
+              <form action={hideConversationAction}>
+                <input
+                  name="conversationId"
+                  type="hidden"
+                  value={conversationId}
+                />
+                <button
+                  className="button button-compact button-secondary"
+                  type="submit"
+                >
+                  Hide from inbox
+                </button>
+              </form>
+            </div>
           </section>
         </section>
       ) : null}
@@ -740,13 +863,9 @@ export default async function ChatPage({
             targetId="message-thread-scroll"
           />
           {messages.length === 0 ? (
-            <section className="card stack empty-card chat-empty-card">
-              <h2 className="card-title">New chat</h2>
-              <p className="muted">Say hello.</p>
-              <Link className="pill pill-accent chat-empty-cta" href="#message-composer">
-                Write a message
-              </Link>
-            </section>
+            <div className="chat-empty-state" aria-label="No messages yet">
+              <span className="chat-empty-state-label">No messages yet</span>
+            </div>
           ) : (
             timelineItems.map((item) => {
               if (item.type === 'separator') {
@@ -866,7 +985,14 @@ export default async function ChatPage({
                                 }
                                 aria-label={ownMessageStatusLabel}
                               >
-                                {ownMessageStatusLabel}
+                                {showSeenState ? (
+                                  <>
+                                    <span className="message-status-dot" aria-hidden="true" />
+                                    <span>Seen</span>
+                                  </>
+                                ) : (
+                                  'Sent'
+                                )}
                               </span>
                             ) : null}
                           </span>
@@ -1124,7 +1250,11 @@ export default async function ChatPage({
           />
         </section>
 
-        <section className="card stack composer-card" id="message-composer">
+        <section className="stack composer-card" id="message-composer">
+          <TypingIndicator
+            conversationId={conversationId}
+            currentUserId={user.id}
+          />
           {activeReplyTarget ? (
             <div className="composer-reply-preview">
               <div className="stack composer-reply-copy">
@@ -1170,24 +1300,29 @@ export default async function ChatPage({
                 maxSizeLabel="Up to 10 MB"
               />
 
-              <label className="field composer-input-field">
-                <span className="sr-only">Message</span>
-                <AutoGrowTextarea
-                  className="input textarea"
-                  name="body"
-                  placeholder="Message"
-                  rows={2}
-                  maxHeight={160}
-                />
-              </label>
+              <div className="composer-input-shell">
+                <label className="field composer-input-field">
+                  <span className="sr-only">Message</span>
+                  <ComposerTypingTextarea
+                    className="input textarea"
+                    conversationId={conversationId}
+                    currentUserId={user.id}
+                    currentUserLabel={currentUserDisplayLabel}
+                    name="body"
+                    placeholder="Message"
+                    rows={1}
+                    maxHeight={160}
+                  />
+                </label>
 
-              <button
-                aria-label="Send message"
-                className="button composer-button composer-button-icon"
-                type="submit"
-              >
-                <span aria-hidden="true">➤</span>
-              </button>
+                <button
+                  aria-label="Send message"
+                  className="button composer-button composer-button-icon"
+                  type="submit"
+                >
+                  <span aria-hidden="true">➤</span>
+                </button>
+              </div>
             </div>
           </form>
         </section>

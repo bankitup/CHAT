@@ -43,10 +43,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <section className="card stack auth-card">
           <div className="stack auth-card-copy">
-            <p className="eyebrow auth-eyebrow">Welcome back</p>
             <h1 className="auth-title">Log in</h1>
             <p className="muted auth-subtitle">
-              Sign in with your email and password.
+              Pick up where you left off.
             </p>
           </div>
 
@@ -84,7 +83,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </button>
 
             <p className="muted auth-switch-copy">
-              New here?{' '}
+              Don&apos;t have an account?{' '}
               <Link className="auth-switch-link" href="/signup">
                 Create account
               </Link>

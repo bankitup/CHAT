@@ -11,7 +11,7 @@ function getStatusCopy(readiness: NotificationReadiness | null) {
   if (!readiness) {
     return {
       title: 'Notifications',
-      body: 'Checking what’s available on this device.',
+      body: 'Checking this device.',
       badge: 'Checking',
       settingValue: 'Checking',
     };
@@ -21,28 +21,28 @@ function getStatusCopy(readiness: NotificationReadiness | null) {
     case 'unsupported':
       return {
         title: 'Notifications',
-        body: 'Notifications are not available on this device.',
+        body: 'Not available here right now.',
         badge: 'Unsupported',
         settingValue: 'Unavailable',
       };
     case 'blocked':
       return {
         title: 'Notifications',
-        body: 'Notifications are turned off. You can re-enable them in browser settings later.',
-        badge: 'Blocked',
+        body: 'Turned off in your browser settings.',
+        badge: 'Off',
         settingValue: 'Off',
       };
     case 'enabled':
       return {
         title: 'Notifications',
-        body: 'Notifications are enabled. Delivery is still being prepared.',
-        badge: 'Ready',
+        body: 'On for this device.',
+        badge: 'On',
         settingValue: 'On',
       };
     default:
       return {
         title: 'Notifications',
-        body: 'This device can enable notifications for Chat.',
+        body: 'Available for this device.',
         badge: 'Available',
         settingValue: 'Available',
       };
@@ -72,34 +72,26 @@ export function NotificationReadinessPanel() {
   return (
     <section className="card stack settings-card">
       <div className="stack settings-card-copy">
-        <p className="eyebrow">Preferences</p>
         <h2 className="section-title">{statusCopy.title}</h2>
-        <p className="muted">{statusCopy.body}</p>
+        <p className="muted">Choose how this device stays in touch.</p>
       </div>
 
       <div className="cluster settings-summary">
         <span className="summary-pill">{statusCopy.badge}</span>
-        <span className="summary-pill summary-pill-muted">
-          {readiness?.serviceWorkerReady ? 'This device is ready' : 'Still preparing'}
-        </span>
       </div>
 
       <div className="settings-capability-list">
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Notifications</span>
+          <span className="settings-capability-label">Alerts</span>
           <span className="settings-capability-value">{statusCopy.settingValue}</span>
         </div>
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Permission</span>
+          <span className="settings-capability-label">Browser permission</span>
           <span className="settings-capability-value">
             {readiness?.permission === 'unsupported'
               ? 'Unavailable'
               : readiness?.permission ?? 'Checking'}
           </span>
-        </div>
-        <div className="settings-capability-row">
-          <span className="settings-capability-label">Message alerts</span>
-          <span className="settings-capability-value">Coming soon</span>
         </div>
       </div>
 
@@ -116,13 +108,13 @@ export function NotificationReadinessPanel() {
               });
             }}
           >
-            {isPending ? 'Preparing…' : 'Enable notifications'}
+            {isPending ? 'Turning on…' : 'Turn on notifications'}
           </button>
         ) : null}
 
         {readiness?.status === 'blocked' ? (
           <p className="muted settings-note">
-            Turn notifications back on in your browser settings when you’re ready.
+            You can change this later in browser settings.
           </p>
         ) : null}
 
@@ -130,6 +122,16 @@ export function NotificationReadinessPanel() {
           <p className="muted settings-note">
             Message alerts will arrive in a later update.
           </p>
+        ) : null}
+
+        {readiness?.status === 'available' ? (
+          <p className="muted settings-note">
+            You can turn this on now. Message alerts are coming soon.
+          </p>
+        ) : null}
+
+        {readiness?.status === 'unsupported' ? (
+          <p className="muted settings-note">{statusCopy.body}</p>
         ) : null}
       </div>
     </section>
