@@ -1,0 +1,216 @@
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import {
+  getConversationForUser,
+  getConversationMessages,
+  getGroupedReactionsForMessages,
+  STARTER_REACTIONS,
+} from '@/modules/messaging/data/server';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { sendMessageAction, toggleReactionAction } from './actions';
+
+type ChatPageProps = {
+  params: Promise<{
+    conversationId: string;
+  }>;
+  searchParams: Promise<{
+    error?: string;
+  }>;
+};
+
+function formatMessageTimestamp(value: string | null) {
+  if (!value) {
+    return '';
+  }
+
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+export default async function ChatPage({
+  params,
+  searchParams,
+}: ChatPageProps) {
+  const { conversationId } = await params;
+  const query = await searchParams;
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    notFound();
+  }
+
+  const conversation = await getConversationForUser(conversationId, user.id);
+
+  if (!conversation) {
+    notFound();
+  }
+
+  const messages = await getConversationMessages(conversationId);
+  const reactionsByMessage = await getGroupedReactionsForMessages(
+    messages.map((message) => message.id),
+    user.id,
+  );
+
+  return (
+    <section className="stack chat-screen">
+      <section className="stack chat-header-stack">
+        <Link className="pill conversation-back" href="/inbox">
+          Back
+        </Link>
+
+        <section className="card stack chat-header-card">
+          <div className="stack chat-header-copy">
+            <p className="eyebrow">
+              {conversation.kind === 'group' ? 'Group chat' : 'Direct chat'}
+            </p>
+                <h1 className="conversation-screen-title">
+              {conversation.title?.trim() ||
+                (conversation.kind === 'group'
+                  ? 'Untitled group'
+                  : 'Direct message')}
+            </h1>
+            <p className="muted chat-header-subtitle">
+              A simple conversation view built for quick, lightweight messaging.
+            </p>
+          </div>
+
+          <div className="chat-header-meta">
+            <span className="summary-pill">
+              {messages.length} message{messages.length === 1 ? '' : 's'}
+            </span>
+          </div>
+        </section>
+      </section>
+
+      {query.error ? <p className="notice notice-error">{query.error}</p> : null}
+
+      <section className="message-thread">
+        {messages.length === 0 ? (
+          <section className="card stack empty-card chat-empty-card">
+            <h2 className="card-title">No messages yet</h2>
+            <p className="muted">
+              Send the first message to get this conversation started.
+            </p>
+          </section>
+        ) : (
+          messages.map((message) => (
+            <article key={message.id} className="message-card">
+              <div className="message-header">
+                <span className="message-kind">Text message</span>
+                <span className="message-meta">
+                  {formatMessageTimestamp(message.created_at) || 'Just now'}
+                </span>
+              </div>
+              <div className="message-bubble">
+                <p className="message-body">
+                  {message.body?.trim() || 'Empty message'}
+                </p>
+              </div>
+
+              {reactionsByMessage.get(message.id)?.length ? (
+                <div
+                  className="reaction-groups"
+                  aria-label="Message reactions"
+                >
+                  {reactionsByMessage.get(message.id)?.map((reaction) => (
+                    <form
+                      key={`${message.id}-${reaction.emoji}`}
+                      action={toggleReactionAction}
+                    >
+                      <input
+                        name="conversationId"
+                        type="hidden"
+                        value={conversationId}
+                      />
+                      <input name="messageId" type="hidden" value={message.id} />
+                      <input name="emoji" type="hidden" value={reaction.emoji} />
+                      <button
+                        className={
+                          reaction.selectedByCurrentUser
+                            ? 'reaction-pill reaction-pill-selected'
+                            : 'reaction-pill'
+                        }
+                        type="submit"
+                      >
+                        <span>{reaction.emoji}</span>
+                        <span className="reaction-count">{reaction.count}</span>
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="reaction-picker-block stack">
+                <p className="reaction-picker-label">Quick reactions</p>
+                <div className="reaction-picker" aria-label="Add a reaction">
+                {STARTER_REACTIONS.map((emoji) => {
+                  const currentReaction = reactionsByMessage
+                    .get(message.id)
+                    ?.find((reaction) => reaction.emoji === emoji);
+
+                  return (
+                    <form key={`${message.id}-picker-${emoji}`} action={toggleReactionAction}>
+                      <input
+                        name="conversationId"
+                        type="hidden"
+                        value={conversationId}
+                      />
+                      <input name="messageId" type="hidden" value={message.id} />
+                      <input name="emoji" type="hidden" value={emoji} />
+                      <button
+                        className={
+                          currentReaction?.selectedByCurrentUser
+                            ? 'reaction-toggle reaction-toggle-selected'
+                            : 'reaction-toggle'
+                        }
+                        type="submit"
+                      >
+                        <span>{emoji}</span>
+                        {currentReaction ? (
+                          <span className="reaction-count">
+                            {currentReaction.count}
+                          </span>
+                        ) : null}
+                      </button>
+                    </form>
+                  );
+                })}
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </section>
+
+      <section className="card stack composer-card">
+        <div className="stack composer-header">
+          <h2 className="card-title">New message</h2>
+          <p className="muted">Send a simple text message to this chat.</p>
+        </div>
+        <form action={sendMessageAction} className="stack composer-form">
+          <input name="conversationId" type="hidden" value={conversationId} />
+          <label className="field">
+            <span className="sr-only">Message</span>
+            <textarea
+              className="input textarea"
+              name="body"
+              placeholder="Write a message"
+              rows={2}
+              required
+            />
+          </label>
+          <button className="button composer-button" type="submit">
+            Send
+          </button>
+        </form>
+      </section>
+    </section>
+  );
+}
