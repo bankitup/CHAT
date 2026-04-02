@@ -31,6 +31,7 @@ import {
   updateConversationTitleAction,
 } from './actions';
 import { AutoGrowTextarea } from './auto-grow-textarea';
+import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
 
@@ -43,6 +44,7 @@ type ChatPageProps = {
     replyToMessageId?: string;
     editMessageId?: string;
     deleteMessageId?: string;
+    actionMessageId?: string;
     settings?: string;
   }>;
 };
@@ -103,17 +105,6 @@ function formatDaySeparatorLabel(value: string | null) {
     year:
       targetDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
   }).format(targetDate);
-}
-
-function formatConversationCreatedDate(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(value));
 }
 
 function formatLongDate(value: string | null) {
@@ -321,24 +312,16 @@ export default async function ChatPage({
           senderNames,
         )
       : null;
-  const conversationCreatedLabel = formatConversationCreatedDate(
-    conversation.createdAt ?? null,
-  );
-  const introTitle =
-    conversation.kind === 'group' ? 'Conversation info' : 'Start of chat';
-  const introBody =
-    conversation.kind === 'group'
-      ? groupMemberSummary
-        ? `${groupMemberSummary}. Use this space to keep the group moving with quick updates.`
-        : 'This group is ready for quick updates and conversation.'
-      : otherParticipantLabels[0]
-        ? `A direct conversation with ${otherParticipantLabels[0]}. Send a quick update or continue where you left off.`
-        : 'This direct conversation is ready for a first message or a quick follow-up.';
   const activeReplyTarget = query.replyToMessageId
     ? messagesById.get(query.replyToMessageId) ?? null
     : null;
   const activeEditMessageId = query.editMessageId?.trim() || null;
   const activeDeleteMessageId = query.deleteMessageId?.trim() || null;
+  const activeActionMessageId = query.actionMessageId?.trim() || null;
+  const activeActionMessage =
+    activeActionMessageId && !activeEditMessageId && !activeDeleteMessageId
+      ? messagesById.get(activeActionMessageId) ?? null
+      : null;
   const canEditGroupTitle =
     conversation.kind === 'group' && conversation.createdBy === user.id;
   const canManageGroupParticipants =
@@ -375,6 +358,11 @@ export default async function ChatPage({
     messages.length > 0
       ? getMessageSeq(messages[messages.length - 1]?.seq ?? 0)
       : null;
+  const isConversationCaughtUp =
+    latestVisibleMessageSeq !== null &&
+    readState.lastReadMessageSeq !== null &&
+    Number.isFinite(latestVisibleMessageSeq) &&
+    readState.lastReadMessageSeq >= latestVisibleMessageSeq;
   const otherParticipantReadState =
     conversation.kind === 'dm'
       ? memberReadStates.find((state) => state.userId !== user.id) ?? null
@@ -382,6 +370,19 @@ export default async function ChatPage({
   const latestOwnVisibleMessage = [...messages]
     .reverse()
     .find((message) => message.sender_id === user.id && !message.deleted_at);
+  const activeActionMessageSenderLabel = activeActionMessage
+    ? senderNames.get(activeActionMessage.sender_id ?? '') ||
+      createFallbackSenderName(
+        activeActionMessage.sender_id,
+        user.id,
+        fallbackNames,
+      )
+    : null;
+  const activeActionMessageIsOwn =
+    activeActionMessage?.sender_id === user.id && !activeActionMessage.deleted_at;
+  const activeActionReactions = activeActionMessage
+    ? reactionsByMessage.get(activeActionMessage.id) ?? []
+    : [];
   const timelineItems = messages.flatMap((message, index) => {
     const previousMessage = messages[index - 1];
     const currentDayKey = getCalendarDayKey(message.created_at);
@@ -456,9 +457,6 @@ export default async function ChatPage({
             )}
 
             <div className="stack chat-header-copy">
-              <p className="eyebrow">
-                {conversation.kind === 'group' ? 'Group chat' : 'Direct chat'}
-              </p>
               <h1 className="conversation-screen-title">
                 {conversationDisplayTitle}
               </h1>
@@ -466,18 +464,13 @@ export default async function ChatPage({
                 <p className="muted chat-member-summary">{groupMemberSummary}</p>
               ) : (
                 <p className="muted chat-header-subtitle">
-                  {otherParticipantLabels[0]
-                    ? `${otherParticipantLabels[0]} is ready for a quick message.`
-                    : 'A simple conversation view built for quick, lightweight messaging.'}
+                  {otherParticipantLabels[0] || 'Direct conversation'}
                 </p>
               )}
             </div>
           </div>
 
           <div className="chat-header-meta">
-            <span className="summary-pill">
-              {messages.length} message{messages.length === 1 ? '' : 's'}
-            </span>
             <Link
               className="pill conversation-settings-trigger"
               href={
@@ -498,10 +491,7 @@ export default async function ChatPage({
             <div className="stack conversation-settings-copy">
               <p className="eyebrow">Conversation settings</p>
               <h2 className="section-title">Chat details</h2>
-              <p className="muted">
-                A lightweight view of this conversation and a small set of safe
-                settings.
-              </p>
+              <p className="muted">People and conversation details.</p>
             </div>
             <Link className="pill conversation-settings-close" href={`/chat/${conversationId}`}>
               Done
@@ -541,8 +531,8 @@ export default async function ChatPage({
                 <h3 className="card-title">Group title</h3>
                 <p className="muted">
                   {canEditGroupTitle
-                    ? 'You can update the group name here.'
-                    : 'Only the group creator can update the title in this first version.'}
+                    ? 'Rename this group.'
+                    : 'Only the creator can rename this group.'}
                 </p>
               </div>
 
@@ -580,14 +570,12 @@ export default async function ChatPage({
             <section className="conversation-settings-panel stack">
               <div className="stack conversation-settings-panel-copy">
                 <h3 className="card-title">Direct conversation</h3>
-                <p className="muted">
-                  This first version keeps direct chat settings read-only.
-                </p>
+                <p className="muted">Direct chats stay simple here.</p>
               </div>
               <p className="conversation-settings-static">
                 {otherParticipantLabels[0]
-                  ? `You are chatting with ${otherParticipantLabels[0]}.`
-                  : 'This direct conversation is ready for messages.'}
+                  ? `${otherParticipantLabels[0]}`
+                  : 'Direct conversation'}
               </p>
             </section>
           )}
@@ -595,9 +583,7 @@ export default async function ChatPage({
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
               <h3 className="card-title">Participants</h3>
-              <p className="muted">
-                Everyone currently active in this conversation.
-              </p>
+              <p className="muted">Current members.</p>
             </div>
 
             <div className="conversation-member-list">
@@ -664,10 +650,7 @@ export default async function ChatPage({
                   <section className="stack conversation-participant-manager">
                     <div className="stack conversation-settings-panel-copy">
                       <h4 className="card-title">Add participants</h4>
-                      <p className="muted">
-                        Choose people to add to this group. New members join as
-                        active participants.
-                      </p>
+                      <p className="muted">Add more people to this group.</p>
                     </div>
 
                     {availableParticipantsToAdd.length === 0 ? (
@@ -714,8 +697,7 @@ export default async function ChatPage({
                   </section>
                 ) : (
                   <p className="muted conversation-settings-static">
-                    Only the group owner can add or remove participants in this
-                    first version.
+                    Only the owner can manage members.
                   </p>
                 )}
 
@@ -723,9 +705,8 @@ export default async function ChatPage({
                   <div className="stack conversation-settings-panel-copy">
                     <h4 className="card-title">Leave group</h4>
                     <p className="muted">
-                      You can leave this group at any time. If you are the
-                      current owner, the next active member becomes owner
-                      automatically.
+                      Leave this group. If you are the owner, ownership moves to
+                      the next active member.
                     </p>
                   </div>
                   <form action={leaveGroupAction}>
@@ -748,34 +729,18 @@ export default async function ChatPage({
         </section>
       ) : null}
 
-      <section className="card chat-intro-card">
-        <div className="chat-intro-copy">
-          <p className="chat-intro-label">{introTitle}</p>
-          <p className="chat-intro-text">{introBody}</p>
-        </div>
-        <div className="chat-intro-meta">
-          <span className="chat-intro-pill">
-            {conversation.kind === 'group' ? 'Group' : 'Direct'}
-          </span>
-          <span className="chat-intro-meta-text">
-            {messages.length} message{messages.length === 1 ? '' : 's'}
-            {conversationCreatedLabel ? ` · Started ${conversationCreatedLabel}` : ''}
-          </span>
-        </div>
-      </section>
-
       {query.error ? <p className="notice notice-error">{query.error}</p> : null}
 
       <section className="chat-main">
-        <section className="message-thread">
+        <section className="message-thread" id="message-thread-scroll">
+          <AutoScrollToLatest
+            latestVisibleMessageSeq={latestVisibleMessageSeq}
+            targetId="message-thread-scroll"
+          />
           {messages.length === 0 ? (
             <section className="card stack empty-card chat-empty-card">
-              <span className="chat-empty-kicker">New conversation</span>
-              <h2 className="card-title">Say the first hello</h2>
-              <p className="muted">
-                This chat is ready to start. Send a short message below to open
-                the conversation naturally.
-              </p>
+              <h2 className="card-title">Start the conversation</h2>
+              <p className="muted">Send the first message.</p>
               <Link className="pill pill-accent chat-empty-cta" href="#message-composer">
                 Write a message
               </Link>
@@ -834,6 +799,7 @@ export default async function ChatPage({
                 Number.isFinite(messageSeq) &&
                 otherParticipantReadSeq >= messageSeq;
               const ownMessageStatusLabel = showSeenState ? 'Seen' : 'Sent';
+              const isMessageActionActive = activeActionMessage?.id === message.id;
 
               return (
                 <article
@@ -842,70 +808,16 @@ export default async function ChatPage({
                 >
                   <div
                     className={
-                      isOwnMessage
-                        ? 'message-swipe-track message-swipe-track-own'
-                        : 'message-swipe-track'
+                      isDeletedMessage
+                        ? isOwnMessage
+                          ? 'message-card message-card-own message-card-deleted'
+                          : 'message-card message-card-deleted'
+                        : isOwnMessage
+                          ? 'message-card message-card-own'
+                          : 'message-card'
                     }
+                    id={`message-${message.id}`}
                   >
-                    <div
-                      className={
-                        isOwnMessage
-                          ? 'message-action-rail message-action-rail-own'
-                          : 'message-action-rail'
-                      }
-                      aria-label="Message actions"
-                    >
-                      {!isDeletedMessage ? (
-                        <>
-                          <a
-                            className="message-action-chip"
-                            href={`/chat/${conversationId}?replyToMessageId=${message.id}#message-composer`}
-                          >
-                            Reply
-                          </a>
-                          {isOwnMessage ? (
-                            <>
-                              <a
-                                className="message-action-chip"
-                                href={`/chat/${conversationId}?editMessageId=${message.id}#message-${message.id}`}
-                              >
-                                Edit
-                              </a>
-                              <a
-                                className="message-action-chip message-action-chip-danger"
-                                href={`/chat/${conversationId}?deleteMessageId=${message.id}#message-${message.id}`}
-                              >
-                                Delete
-                              </a>
-                            </>
-                          ) : (
-                            <a
-                              className="message-action-chip"
-                              href={`#message-reactions-${message.id}`}
-                            >
-                              React
-                            </a>
-                          )}
-                        </>
-                      ) : (
-                        <span className="message-action-chip message-action-chip-muted">
-                          Archived
-                        </span>
-                      )}
-                    </div>
-
-                      <div
-                        className={
-                          isDeletedMessage
-                            ? isOwnMessage
-                              ? 'message-card message-card-own message-card-deleted'
-                              : 'message-card message-card-deleted'
-                            : isOwnMessage
-                              ? 'message-card message-card-own'
-                              : 'message-card'
-                        }
-                        id={`message-${message.id}`}
-                      >
                       <div
                         className={
                           isOwnMessage
@@ -938,32 +850,47 @@ export default async function ChatPage({
                             </span>
                           </div>
                         </div>
-                        <span
-                          className={
-                            isOwnMessage
-                              ? 'message-meta message-meta-own'
-                              : 'message-meta'
-                          }
-                        >
-                          <span>{formatMessageTimestamp(message.created_at) || 'Just now'}</span>
-                          {isEditedMessage(message) ? (
-                            <span className="message-edited" aria-label="Edited">
-                              Edited
-                            </span>
-                          ) : null}
-                          {isOwnMessage ? (
-                            <span
+                        <div className="message-header-side">
+                          <span
+                            className={
+                              isOwnMessage
+                                ? 'message-meta message-meta-own'
+                                : 'message-meta'
+                            }
+                          >
+                            <span>{formatMessageTimestamp(message.created_at) || 'Just now'}</span>
+                            {isEditedMessage(message) ? (
+                              <span className="message-edited" aria-label="Edited">
+                                Edited
+                              </span>
+                            ) : null}
+                            {isOwnMessage ? (
+                              <span
+                                className={
+                                  showSeenState
+                                    ? 'message-status message-status-seen'
+                                    : 'message-status'
+                                }
+                                aria-label={ownMessageStatusLabel}
+                              >
+                                {ownMessageStatusLabel}
+                              </span>
+                            ) : null}
+                          </span>
+                          {!isDeletedMessage ? (
+                            <Link
+                              aria-label="Open message actions"
                               className={
-                                showSeenState
-                                  ? 'message-status message-status-seen'
-                                  : 'message-status'
+                                isMessageActionActive
+                                  ? 'message-actions-trigger message-actions-trigger-active'
+                                  : 'message-actions-trigger'
                               }
-                              aria-label={ownMessageStatusLabel}
+                              href={`/chat/${conversationId}?actionMessageId=${message.id}#message-${message.id}`}
                             >
-                              {ownMessageStatusLabel}
-                            </span>
+                              <span aria-hidden="true">⋯</span>
+                            </Link>
                           ) : null}
-                        </span>
+                        </div>
                       </div>
                       <div
                         className={
@@ -1155,67 +1082,6 @@ export default async function ChatPage({
                           ))}
                         </div>
                       ) : null}
-
-                      {!isDeletedMessage ? (
-                        <div
-                          id={`message-reactions-${message.id}`}
-                          className={
-                            isOwnMessage
-                              ? 'reaction-picker-block stack reaction-picker-block-own'
-                              : 'reaction-picker-block stack'
-                          }
-                        >
-                          <p className="reaction-picker-label">Quick reactions</p>
-                          <div
-                            className={
-                              isOwnMessage
-                                ? 'reaction-picker reaction-picker-own'
-                                : 'reaction-picker'
-                            }
-                            aria-label="Add a reaction"
-                          >
-                            {STARTER_REACTIONS.map((emoji) => {
-                              const currentReaction = reactionsByMessage
-                                .get(message.id)
-                                ?.find((reaction) => reaction.emoji === emoji);
-
-                              return (
-                                <form
-                                  key={`${message.id}-picker-${emoji}`}
-                                  action={toggleReactionAction}
-                                >
-                                  <input
-                                    name="conversationId"
-                                    type="hidden"
-                                    value={conversationId}
-                                  />
-                                  <input
-                                    name="messageId"
-                                    type="hidden"
-                                    value={message.id}
-                                  />
-                                  <input name="emoji" type="hidden" value={emoji} />
-                                  <button
-                                    className={
-                                      currentReaction?.selectedByCurrentUser
-                                        ? 'reaction-toggle reaction-toggle-selected'
-                                        : 'reaction-toggle'
-                                    }
-                                    type="submit"
-                                  >
-                                    <span>{emoji}</span>
-                                    {currentReaction ? (
-                                      <span className="reaction-count">
-                                        {currentReaction.count}
-                                      </span>
-                                    ) : null}
-                                  </button>
-                                </form>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : null}
                       {isMessageInDeleteMode ? (
                         <form action={deleteMessageAction} className="message-delete-confirm">
                           <input
@@ -1241,12 +1107,16 @@ export default async function ChatPage({
                           </div>
                         </form>
                       ) : null}
-                    </div>
                   </div>
                 </article>
               );
             })
           )}
+          {messages.length > 0 && isConversationCaughtUp ? (
+            <div className="message-caught-up-state" aria-label="Conversation read up to date">
+              <span className="message-caught-up-label">You&apos;re caught up</span>
+            </div>
+          ) : null}
           <MarkConversationRead
             conversationId={conversationId}
             currentReadMessageSeq={readState.lastReadMessageSeq}
@@ -1259,10 +1129,6 @@ export default async function ChatPage({
         </section>
 
         <section className="card stack composer-card" id="message-composer">
-          <div className="stack composer-header">
-            <h2 className="card-title">New message</h2>
-            <p className="muted">Send a simple text message to this chat.</p>
-          </div>
           {activeReplyTarget ? (
             <div className="composer-reply-preview">
               <div className="stack composer-reply-copy">
@@ -1311,20 +1177,160 @@ export default async function ChatPage({
                 <AutoGrowTextarea
                   className="input textarea"
                   name="body"
-                  placeholder="Write a message"
+                  placeholder="Message"
                   rows={2}
                   required
                   maxHeight={160}
                 />
               </label>
 
-              <button className="button composer-button" type="submit">
-                Send
+              <button
+                aria-label="Send message"
+                className="button composer-button composer-button-icon"
+                type="submit"
+              >
+                <span aria-hidden="true">➤</span>
               </button>
             </div>
           </form>
         </section>
       </section>
+
+      {activeActionMessage && !activeActionMessage.deleted_at ? (
+        <section className="message-sheet-overlay" aria-label="Message actions">
+          <Link
+            aria-label="Close message actions"
+            className="message-sheet-backdrop"
+            href={`/chat/${conversationId}#message-${activeActionMessage.id}`}
+          />
+          <section className="message-sheet-card card stack">
+            <div className="message-sheet-header">
+              <div className="stack message-sheet-copy">
+                <span className="message-sheet-title">
+                  {activeActionMessageSenderLabel}
+                </span>
+                <span className="message-sheet-snippet">
+                  {activeActionMessage.body?.trim()
+                    ? getMessageSnippet(activeActionMessage.body, 96)
+                    : activeActionMessage.reply_to_message_id
+                      ? 'Reply message'
+                      : 'Choose an action'}
+                </span>
+              </div>
+              <Link
+                aria-label="Close message actions"
+                className="message-sheet-close"
+                href={`/chat/${conversationId}#message-${activeActionMessage.id}`}
+              >
+                <span aria-hidden="true">×</span>
+              </Link>
+            </div>
+
+            <div className="stack message-sheet-section">
+              <span className="message-sheet-section-label">React</span>
+              <div
+                className={
+                  activeActionMessage.sender_id === user.id
+                    ? 'reaction-picker reaction-picker-own message-sheet-reactions'
+                    : 'reaction-picker message-sheet-reactions'
+                }
+              >
+                {STARTER_REACTIONS.map((emoji) => {
+                  const currentReaction = activeActionReactions.find(
+                    (reaction) => reaction.emoji === emoji,
+                  );
+
+                  return (
+                    <form
+                      key={`${activeActionMessage.id}-sheet-${emoji}`}
+                      action={toggleReactionAction}
+                    >
+                      <input
+                        name="conversationId"
+                        type="hidden"
+                        value={conversationId}
+                      />
+                      <input
+                        name="messageId"
+                        type="hidden"
+                        value={activeActionMessage.id}
+                      />
+                      <input name="emoji" type="hidden" value={emoji} />
+                      <button
+                        className={
+                          currentReaction?.selectedByCurrentUser
+                            ? 'reaction-toggle reaction-toggle-selected'
+                            : 'reaction-toggle'
+                        }
+                        type="submit"
+                      >
+                        <span>{emoji}</span>
+                        {currentReaction ? (
+                          <span className="reaction-count">{currentReaction.count}</span>
+                        ) : null}
+                      </button>
+                    </form>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="stack message-sheet-section">
+              <span className="message-sheet-section-label">Actions</span>
+              <div className="message-sheet-action-list">
+                <Link
+                  className="message-sheet-action"
+                  href={`/chat/${conversationId}?replyToMessageId=${activeActionMessage.id}#message-composer`}
+                >
+                  <span className="message-sheet-action-icon" aria-hidden="true">
+                    ↩
+                  </span>
+                  <span className="message-sheet-action-copy">
+                    <span className="message-sheet-action-label">Reply</span>
+                    <span className="message-sheet-action-hint">
+                      Quote this message in your reply
+                    </span>
+                  </span>
+                </Link>
+
+                {activeActionMessageIsOwn ? (
+                  <>
+                    <Link
+                      className="message-sheet-action"
+                      href={`/chat/${conversationId}?editMessageId=${activeActionMessage.id}#message-${activeActionMessage.id}`}
+                    >
+                      <span className="message-sheet-action-icon" aria-hidden="true">
+                        ✎
+                      </span>
+                      <span className="message-sheet-action-copy">
+                        <span className="message-sheet-action-label">Edit</span>
+                        <span className="message-sheet-action-hint">
+                          Update the text of this message
+                        </span>
+                      </span>
+                    </Link>
+
+                    <Link
+                      className="message-sheet-action message-sheet-action-danger"
+                      href={`/chat/${conversationId}?deleteMessageId=${activeActionMessage.id}#message-${activeActionMessage.id}`}
+                    >
+                      <span className="message-sheet-action-icon" aria-hidden="true">
+                        🗑
+                      </span>
+                      <span className="message-sheet-action-copy">
+                        <span className="message-sheet-action-label">Delete</span>
+                        <span className="message-sheet-action-hint">
+                          Leave a deleted message state in chat
+                        </span>
+                      </span>
+                    </Link>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </section>
+      ) : null}
     </section>
   );
 }
