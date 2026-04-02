@@ -92,11 +92,24 @@ What is not part of deployment yet:
 
 - advanced offline support
 - service worker caching strategy
-- push notifications
+- end-to-end push notification delivery
 - realtime delivery infrastructure
 - native app distribution
 
 Offline and service worker behavior should be added later only when the product clearly benefits from it.
+
+## Push Readiness Notes
+
+The current app now includes a minimal service worker file and a notification
+readiness surface in settings. This prepares the PWA shell for future browser
+push work, but it does not yet include:
+
+- persisted push subscriptions
+- backend-triggered push delivery
+- production notification routing logic
+
+Vercel already serves the app over HTTPS, which is required for browser
+notifications and service workers outside localhost.
 
 ## Recommended Pre-Deploy Check
 

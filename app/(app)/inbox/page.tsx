@@ -1,19 +1,44 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getAvailableUsers,
+  getConversationParticipantIdentities,
   getInboxConversations,
 } from '@/modules/messaging/data/server';
+import {
+  getIdentityLabel,
+  IdentityAvatar,
+  IdentityAvatarStack,
+} from '@/modules/messaging/ui/identity';
 import Link from 'next/link';
 import { createDmAction, createGroupAction } from './actions';
 
 type InboxPageProps = {
   searchParams: Promise<{
     error?: string;
+    q?: string;
   }>;
 };
 
-function getDirectoryLabel(index: number) {
-  return `Person ${index + 1}`;
+type ConversationListItem = {
+  conversationId: string;
+  isGroupConversation: boolean;
+  title: string;
+  preview: string;
+  recencyLabel: string;
+  timestampLabel: string;
+  lastActivityAt: string | null;
+  participants: Array<{
+    userId: string;
+    displayName: string | null;
+    avatarPath?: string | null;
+  }>;
+  participantLabels: string[];
+  unreadCount: number;
+  hasUnread: boolean;
+};
+
+function normalizeSearchTerm(value: string | undefined) {
+  return value?.trim().toLowerCase() ?? '';
 }
 
 function formatTimestamp(value: string | null) {
@@ -71,8 +96,40 @@ function formatRecency(value: string | null) {
   }).format(target);
 }
 
+function getFallbackIdentityLabel(
+  userId: string,
+  fallbackLabels: Map<string, string>,
+  prefix = 'Person',
+) {
+  const existing = fallbackLabels.get(userId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const nextLabel = `${prefix} ${fallbackLabels.size + 1}`;
+  fallbackLabels.set(userId, nextLabel);
+
+  return nextLabel;
+}
+
+function formatConversationIdentitySummary(
+  labels: string[],
+  maxVisible = 2,
+) {
+  if (labels.length === 0) {
+    return null;
+  }
+
+  const preview = labels.slice(0, maxVisible);
+  const remaining = Math.max(0, labels.length - preview.length);
+
+  return `${preview.join(', ')}${remaining > 0 ? ` +${remaining}` : ''}`;
+}
+
 export default async function InboxPage({ searchParams }: InboxPageProps) {
   const query = await searchParams;
+  const searchTerm = normalizeSearchTerm(query.q);
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -86,6 +143,99 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     getInboxConversations(user.id),
     getAvailableUsers(user.id),
   ]);
+  const participantIdentities = await getConversationParticipantIdentities(
+    conversations.map((conversation) => conversation.conversationId),
+  );
+  const participantIdentitiesByConversation = participantIdentities.reduce(
+    (map, identity) => {
+      const existing = map.get(identity.conversationId) ?? [];
+      existing.push(identity);
+      map.set(identity.conversationId, existing);
+      return map;
+    },
+    new Map<string, typeof participantIdentities>(),
+  );
+  const fallbackIdentityLabels = new Map<string, string>();
+  const availableUserLabels = new Map(
+    availableUsers.map((availableUser) => [
+      availableUser.userId,
+      getIdentityLabel(
+        availableUser,
+        getFallbackIdentityLabel(
+          availableUser.userId,
+          fallbackIdentityLabels,
+          'Member',
+        ),
+      ),
+    ]),
+  );
+  const availableUserEntries = availableUsers.map((availableUser) => ({
+    ...availableUser,
+    label: availableUserLabels.get(availableUser.userId) ?? 'Available user',
+  }));
+  const conversationItems = conversations.map((conversation) => {
+    const participantOptions =
+      participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
+    const otherParticipants = participantOptions.filter(
+      (participant) => participant.userId !== user.id,
+    );
+    const otherParticipantLabels = otherParticipants.map((participant) =>
+      getIdentityLabel(
+        participant,
+        getFallbackIdentityLabel(
+          participant.userId,
+          fallbackIdentityLabels,
+        ),
+      ),
+    );
+    const isGroupConversation = conversation.kind === 'group';
+    const title =
+      conversation.title?.trim() ||
+      (isGroupConversation
+        ? formatConversationIdentitySummary(otherParticipantLabels) || 'New group'
+        : otherParticipantLabels[0] || 'Direct message');
+    const preview = isGroupConversation
+      ? formatConversationIdentitySummary(otherParticipantLabels, 3)
+        ? `${formatConversationIdentitySummary(otherParticipantLabels, 3)} in this group`
+        : 'Group conversation ready for updates.'
+      : otherParticipantLabels[0]
+        ? `Direct conversation with ${otherParticipantLabels[0]}`
+        : 'Direct conversation ready for messages.';
+    const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
+
+    return {
+      conversationId: conversation.conversationId,
+      isGroupConversation,
+      title,
+      preview,
+      recencyLabel: formatRecency(lastActivityAt),
+      timestampLabel: formatTimestamp(lastActivityAt),
+      lastActivityAt,
+      participants: otherParticipants,
+      participantLabels: otherParticipantLabels,
+      unreadCount: conversation.unreadCount,
+      hasUnread: conversation.unreadCount > 0,
+    } satisfies ConversationListItem;
+  });
+  const filteredConversationItems = searchTerm
+    ? conversationItems.filter((conversation) => {
+        const haystack = [
+          conversation.title,
+          conversation.preview,
+          ...conversation.participantLabels,
+          conversation.isGroupConversation ? 'group' : 'direct',
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        return haystack.includes(searchTerm);
+      })
+    : conversationItems;
+  const filteredAvailableUsers = searchTerm
+    ? availableUserEntries.filter((availableUser) =>
+        availableUser.label.toLowerCase().includes(searchTerm),
+      )
+    : availableUserEntries;
 
   return (
     <section className="stack inbox-screen">
@@ -107,7 +257,38 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             {availableUsers.length} available user
             {availableUsers.length === 1 ? '' : 's'}
           </span>
+          {searchTerm ? (
+            <span className="summary-pill summary-pill-muted">
+              {filteredConversationItems.length + filteredAvailableUsers.length} matches
+            </span>
+          ) : null}
         </div>
+
+        <form action="/inbox" className="inbox-search-form" role="search">
+          <label className="field inbox-search-field">
+            <span className="sr-only">Search chats and people</span>
+            <input
+              className="input inbox-search-input"
+              defaultValue={query.q ?? ''}
+              name="q"
+              placeholder="Search chats and people"
+              type="search"
+            />
+          </label>
+          <button className="button button-compact" type="submit">
+            Search
+          </button>
+          {searchTerm ? (
+            <Link className="pill inbox-search-clear" href="/inbox">
+              Clear
+            </Link>
+          ) : null}
+        </form>
+
+        <p className="muted inbox-search-note">
+          This first pass filters conversation names and people. Message text
+          search is not included yet.
+        </p>
       </section>
 
       {query.error ? <p className="notice notice-error">{query.error}</p> : null}
@@ -129,46 +310,80 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               inbox.
             </p>
           </section>
+        ) : filteredConversationItems.length === 0 ? (
+          <section className="card stack empty-card">
+            <h3 className="card-title">No matching chats</h3>
+            <p className="muted">
+              Try a different name or clear the search to see all conversations.
+            </p>
+          </section>
         ) : (
           <section className="stack conversation-list">
-            {conversations.map((conversation) => (
+            {filteredConversationItems.map((conversation) => (
               <Link
                 key={conversation.conversationId}
-                className="conversation-card"
+                className={
+                  conversation.hasUnread
+                    ? 'conversation-card conversation-card-unread'
+                    : 'conversation-card'
+                }
                 href={`/chat/${conversation.conversationId}`}
               >
-                <div className="stack conversation-card-copy">
-                  <div className="conversation-row">
+                <div className="conversation-row">
+                  {conversation.isGroupConversation ? (
+                    <IdentityAvatarStack
+                      identities={conversation.participants}
+                      labels={conversation.participantLabels}
+                    />
+                  ) : (
+                    <IdentityAvatar
+                      identity={conversation.participants[0]}
+                      label={conversation.participantLabels[0] || 'Direct message'}
+                      size="md"
+                    />
+                  )}
+
+                  <div className="stack conversation-card-copy">
                     <div className="stack conversation-main-copy">
                       <div className="conversation-title-row">
-                        <h3 className="conversation-title">
-                          {conversation.title?.trim() ||
-                            (conversation.kind === 'dm'
-                              ? 'Direct message'
-                              : 'Untitled group')}
-                        </h3>
-                        <span className="conversation-recency">
-                          {formatRecency(
-                            conversation.lastMessageAt ?? conversation.createdAt,
-                          )}
-                        </span>
+                        <h3 className="conversation-title">{conversation.title}</h3>
+                        <div className="conversation-title-meta">
+                          {conversation.hasUnread ? (
+                            <span className="conversation-unread-badge" aria-label="Unread messages">
+                              New
+                            </span>
+                          ) : null}
+                          <span className="conversation-recency">
+                            {conversation.recencyLabel}
+                          </span>
+                        </div>
                       </div>
-                      <p className="muted conversation-preview">
-                        {conversation.kind === 'group'
-                          ? 'Group conversation ready for updates.'
-                          : 'Direct conversation ready for messages.'}
+                      <p
+                        className={
+                          conversation.hasUnread
+                            ? 'muted conversation-preview conversation-preview-unread'
+                            : 'muted conversation-preview'
+                        }
+                      >
+                        {conversation.preview}
                       </p>
                     </div>
-                  </div>
-                  <div className="conversation-footer">
-                    <span className="conversation-meta">
-                      {conversation.kind === 'group' ? 'Group' : 'Direct'}
-                    </span>
-                    <p className="muted conversation-timestamp">
-                      {formatTimestamp(
-                        conversation.lastMessageAt ?? conversation.createdAt,
-                      )}
-                    </p>
+                    <div className="conversation-footer">
+                      <span
+                        className={
+                          conversation.hasUnread
+                            ? 'conversation-meta conversation-meta-unread'
+                            : 'conversation-meta'
+                        }
+                      >
+                        {conversation.isGroupConversation ? 'Group' : 'Direct'}
+                      </span>
+                      <p className="muted conversation-timestamp">
+                        {conversation.hasUnread
+                          ? `${conversation.timestampLabel} · New activity`
+                          : conversation.timestampLabel}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -195,13 +410,30 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 a direct chat from here.
               </p>
             </section>
+          ) : filteredAvailableUsers.length === 0 ? (
+            <section className="empty-card stack">
+              <h3 className="card-title">No matching people</h3>
+              <p className="muted">
+                Try a different name or clear the search to browse everyone in
+                this workspace.
+              </p>
+            </section>
           ) : (
             <div className="user-list">
-              {availableUsers.map((availableUser, index) => (
+              {filteredAvailableUsers.map((availableUser) => (
                 <div key={availableUser.userId} className="user-card">
-                  <div className="stack user-copy">
-                    <span className="user-label">{getDirectoryLabel(index)}</span>
-                    <span className="muted">Available to message</span>
+                  <div className="user-row">
+                    <IdentityAvatar
+                      identity={availableUser}
+                      label={
+                        availableUser.label
+                      }
+                      size="sm"
+                    />
+                    <div className="stack user-copy">
+                      <span className="user-label">{availableUser.label}</span>
+                      <span className="muted">Available to message</span>
+                    </div>
                   </div>
 
                   <form action={createDmAction}>
@@ -248,7 +480,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 <p className="muted">No other users available to add yet.</p>
               ) : (
                 <div className="checkbox-list">
-                  {availableUsers.map((availableUser, index) => (
+                  {filteredAvailableUsers.map((availableUser) => (
                     <label
                       key={`group-${availableUser.userId}`}
                       className="checkbox-row"
@@ -259,9 +491,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                         value={availableUser.userId}
                       />
                       <span className="checkbox-copy">
-                        <span className="user-label">
-                          {getDirectoryLabel(index)}
+                        <span className="checkbox-identity">
+                          <IdentityAvatar
+                            identity={availableUser}
+                            label={availableUser.label}
+                            size="sm"
+                          />
                         </span>
+                        <span className="user-label">{availableUser.label}</span>
                         <span className="muted">Add to this group</span>
                       </span>
                     </label>
