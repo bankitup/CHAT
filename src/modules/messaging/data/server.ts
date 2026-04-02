@@ -85,6 +85,13 @@ export type AvailableUser = {
   avatarPath?: string | null;
 };
 
+export type CurrentUserProfile = {
+  userId: string;
+  email: string | null;
+  displayName: string | null;
+  avatarPath: string | null;
+};
+
 export type ConversationReadState = {
   lastReadMessageSeq: number | null;
   lastReadAt: string | null;
@@ -133,9 +140,15 @@ export const STARTER_REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '�
 export const CHAT_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const CHAT_ATTACHMENT_ACCEPT =
   'image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain';
+export const CHAT_ATTACHMENT_HELP_TEXT =
+  'Supported files: JPG, PNG, WEBP, GIF, PDF, and TXT up to 10 MB.';
+export const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 
 const CHAT_ATTACHMENT_BUCKET =
   process.env.NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET ?? 'message-attachments';
+const PROFILE_AVATAR_BUCKET =
+  process.env.NEXT_PUBLIC_SUPABASE_AVATARS_BUCKET ?? 'avatars';
 const SUPPORTED_ATTACHMENT_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -144,6 +157,16 @@ const SUPPORTED_ATTACHMENT_TYPES = new Set([
   'application/pdf',
   'text/plain',
 ]);
+const SUPPORTED_PROFILE_AVATAR_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
+export function isSupportedChatAttachmentType(mimeType: string) {
+  return SUPPORTED_ATTACHMENT_TYPES.has(mimeType);
+}
 
 function normalizeConversation(
   value: ConversationRecord | ConversationRecord[] | null,
@@ -438,7 +461,7 @@ export async function getConversationParticipants(conversationId: string) {
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as {
+  const memberships = ((data ?? []) as {
     user_id: string;
     role?: string | null;
     state?: string | null;
@@ -446,7 +469,27 @@ export async function getConversationParticipants(conversationId: string) {
     userId: member.user_id,
     role: member.role ?? null,
     state: member.state ?? null,
-  })) satisfies ConversationParticipant[];
+  }));
+
+  const uniqueMemberships = Array.from(
+    new Map(memberships.map((member) => [member.userId, member])).values(),
+  );
+  const rolePriority = new Map([
+    ['owner', 0],
+    ['admin', 1],
+    ['member', 2],
+  ]);
+
+  return uniqueMemberships.sort((left, right) => {
+    const leftPriority = rolePriority.get(left.role ?? 'member') ?? 99;
+    const rightPriority = rolePriority.get(right.role ?? 'member') ?? 99;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    return left.userId.localeCompare(right.userId);
+  }) satisfies ConversationParticipant[];
 }
 
 async function getActiveGroupMembership(
@@ -485,6 +528,20 @@ function sanitizeAttachmentFileName(value: string) {
 
   if (!trimmed) {
     return 'attachment';
+  }
+
+  return trimmed
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
+
+function sanitizeProfileFileName(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return 'avatar';
   }
 
   return trimmed
@@ -563,6 +620,17 @@ export async function getProfileIdentities(userIds: string[]) {
     displayName: null,
     avatarPath: null,
   }));
+}
+
+export async function getCurrentUserProfile(userId: string, email?: string | null) {
+  const [identity] = await getProfileIdentities([userId]);
+
+  return {
+    userId,
+    email: email?.trim() || null,
+    displayName: identity?.displayName ?? null,
+    avatarPath: identity?.avatarPath ?? null,
+  } satisfies CurrentUserProfile;
 }
 
 export async function getAvailableUsers(currentUserId: string) {
@@ -785,7 +853,128 @@ export async function createConversationWithMembers(input: {
     throw new Error(membershipError.message);
   }
 
+  const expectedMemberIds = dedupeParticipantIds([
+    input.creatorUserId,
+    ...participantUserIds,
+  ]);
+  const { data: insertedMemberships, error: insertedMembershipsError } =
+    await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId)
+      .eq('state', 'active');
+
+  if (insertedMembershipsError) {
+    throw new Error(insertedMembershipsError.message);
+  }
+
+  const activeInsertedMemberIds = Array.from(
+    new Set(
+      ((insertedMemberships ?? []) as { user_id: string }[]).map(
+        (membership) => membership.user_id,
+      ),
+    ),
+  );
+
+  if (
+    activeInsertedMemberIds.length !== expectedMemberIds.length ||
+    expectedMemberIds.some(
+      (expectedMemberId) => !activeInsertedMemberIds.includes(expectedMemberId),
+    )
+  ) {
+    await supabase
+      .from('conversation_members')
+      .delete()
+      .eq('conversation_id', conversationId);
+    await supabase.from('conversations').delete().eq('id', conversationId);
+
+    throw new Error(
+      'Group creation did not persist the full active participant set.',
+    );
+  }
+
   return conversationId;
+}
+
+export async function updateCurrentUserProfile(input: {
+  userId: string;
+  displayName: string | null;
+  avatarFile?: File | null;
+}) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Authenticated user is required to update a profile.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Profile settings debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Profile settings debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const nextDisplayName = input.displayName?.trim() || null;
+
+  if (nextDisplayName && nextDisplayName.length > 40) {
+    throw new Error('Display name can be up to 40 characters.');
+  }
+
+  let nextAvatarPath: string | undefined;
+
+  if (input.avatarFile && input.avatarFile.size > 0) {
+    if (input.avatarFile.size > PROFILE_AVATAR_MAX_SIZE_BYTES) {
+      throw new Error('Avatar images can be up to 5 MB.');
+    }
+
+    if (!SUPPORTED_PROFILE_AVATAR_TYPES.has(input.avatarFile.type)) {
+      throw new Error('Avatar must be a JPG, PNG, WEBP, or GIF image.');
+    }
+
+    const fileName = sanitizeProfileFileName(input.avatarFile.name);
+    const objectPath = `${input.userId}/${crypto.randomUUID()}-${fileName}`;
+    const { error: uploadError } = await supabase.storage
+      .from(PROFILE_AVATAR_BUCKET)
+      .upload(objectPath, input.avatarFile, {
+        upsert: false,
+        contentType: input.avatarFile.type,
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message);
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(objectPath);
+
+    nextAvatarPath = publicUrl;
+  }
+
+  const profilePayload = {
+    user_id: input.userId,
+    display_name: nextDisplayName,
+    ...(nextAvatarPath ? { avatar_path: nextAvatarPath } : {}),
+  };
+
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(profilePayload, { onConflict: 'user_id' });
+
+  if (error) {
+    if (error.message.includes('row-level security policy')) {
+      throw new Error('Profile settings update was blocked by profiles RLS.');
+    }
+
+    throw new Error(error.message);
+  }
 }
 
 export async function getConversationMessages(conversationId: string) {
@@ -1664,10 +1853,8 @@ export async function sendMessageWithAttachment(input: {
     throw new Error('Attachments can be up to 10 MB in this first version.');
   }
 
-  if (!SUPPORTED_ATTACHMENT_TYPES.has(input.file.type)) {
-    throw new Error(
-      'Supported attachments are JPG, PNG, WEBP, GIF, PDF, and plain text files.',
-    );
+  if (!isSupportedChatAttachmentType(input.file.type)) {
+    throw new Error(CHAT_ATTACHMENT_HELP_TEXT);
   }
 
   const supabase = await createSupabaseServerClient();

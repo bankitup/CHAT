@@ -1,19 +1,59 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type ComposerAttachmentPickerProps = {
   accept: string;
+  helperText: string;
+  maxSizeBytes: number;
   maxSizeLabel: string;
 };
 
+function formatFileSize(value: number) {
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function ComposerAttachmentPicker({
   accept,
+  helperText,
+  maxSizeBytes,
   maxSizeLabel,
 }: ComposerAttachmentPickerProps) {
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const hasSelectedFile = Boolean(selectedFileName);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const hasSelectedFile = Boolean(selectedFile);
+  const acceptedTypes = useMemo(
+    () =>
+      new Set(
+        accept
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    [accept],
+  );
+  const isImage = selectedFile?.type.startsWith('image/') ?? false;
+  const previewUrl = useMemo(() => {
+    if (!selectedFile || !isImage) {
+      return null;
+    }
+
+    return URL.createObjectURL(selectedFile);
+  }, [isImage, selectedFile]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   return (
     <div
@@ -23,7 +63,7 @@ export function ComposerAttachmentPicker({
           : 'attachment-entry'
       }
     >
-      <details className="attachment-entry-details">
+      <details className="attachment-entry-details" ref={detailsRef}>
         <summary
           className={
             hasSelectedFile
@@ -58,16 +98,60 @@ export function ComposerAttachmentPicker({
         type="file"
         onChange={(event) => {
           const nextFile = event.target.files?.[0];
-          setSelectedFileName(nextFile?.name ?? null);
+
+          if (!nextFile) {
+            setSelectedFile(null);
+            setErrorMessage(null);
+            return;
+          }
+
+          if (nextFile.size > maxSizeBytes) {
+            if (inputRef.current) {
+              inputRef.current.value = '';
+            }
+
+            setSelectedFile(null);
+            setErrorMessage(`Choose a file up to ${maxSizeLabel.toLowerCase()}.`);
+            detailsRef.current?.removeAttribute('open');
+            return;
+          }
+
+          if (!acceptedTypes.has(nextFile.type)) {
+            if (inputRef.current) {
+              inputRef.current.value = '';
+            }
+
+            setSelectedFile(null);
+            setErrorMessage(helperText);
+            detailsRef.current?.removeAttribute('open');
+            return;
+          }
+
+          setSelectedFile(nextFile);
+          setErrorMessage(null);
+          detailsRef.current?.removeAttribute('open');
         }}
       />
 
-      {selectedFileName ? (
-        <div className="attachment-selected-chip" aria-live="polite">
-          <span aria-hidden="true" className="attachment-selected-indicator">
-            •
+      {selectedFile ? (
+        <div className="attachment-selected-card" aria-live="polite">
+          {previewUrl ? (
+            <span
+              aria-hidden="true"
+              className="attachment-selected-preview"
+              style={{ backgroundImage: `url("${previewUrl}")` }}
+            />
+          ) : (
+            <span aria-hidden="true" className="attachment-selected-file">
+              File
+            </span>
+          )}
+          <span className="attachment-selected-copy">
+            <span className="attachment-selected-name">{selectedFile.name}</span>
+            <span className="attachment-selected-meta">
+              {isImage ? 'Image' : 'Attachment'} · {formatFileSize(selectedFile.size)}
+            </span>
           </span>
-          <span className="attachment-selected-name">{selectedFileName}</span>
           <button
             className="attachment-selected-clear"
             type="button"
@@ -76,13 +160,20 @@ export function ComposerAttachmentPicker({
                 inputRef.current.value = '';
               }
 
-              setSelectedFileName(null);
+              setSelectedFile(null);
+              setErrorMessage(null);
             }}
           >
             Clear
           </button>
         </div>
       ) : null}
+
+      <p
+        className={errorMessage ? 'attachment-helper attachment-helper-error' : 'attachment-helper'}
+      >
+        {errorMessage ?? helperText}
+      </p>
     </div>
   );
 }

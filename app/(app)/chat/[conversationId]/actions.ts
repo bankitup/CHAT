@@ -9,8 +9,10 @@ import {
   assertConversationMembership,
   assertMessageInConversation,
   assertMessageOwnedByUser,
+  CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   editMessage,
+  isSupportedChatAttachmentType,
   leaveGroupConversation,
   markConversationRead,
   removeParticipantFromGroupConversation,
@@ -50,6 +52,10 @@ export async function sendMessageAction(formData: FormData) {
       conversationId,
       'Attachments can be up to 10 MB in this first version.',
     );
+  }
+
+  if (attachment && !isSupportedChatAttachmentType(attachment.type)) {
+    redirectWithError(conversationId, CHAT_ATTACHMENT_HELP_TEXT);
   }
 
   const supabase = await createSupabaseServerClient();

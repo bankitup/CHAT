@@ -2,6 +2,8 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getAvailableUsers,
   CHAT_ATTACHMENT_ACCEPT,
+  CHAT_ATTACHMENT_HELP_TEXT,
+  CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   getConversationDisplayName,
   getConversationForUser,
   getConversationMessages,
@@ -223,16 +225,16 @@ function formatGroupMemberSummary(
   }`;
 }
 
-function formatParticipantRoleLabel(role: string | null, isCurrentUser: boolean) {
+function formatParticipantRoleLabel(role: string | null) {
   if (role === 'owner') {
-    return isCurrentUser ? 'Owner · You' : 'Owner';
+    return 'Owner';
   }
 
   if (role === 'admin') {
-    return isCurrentUser ? 'Admin · You' : 'Admin';
+    return 'Admin';
   }
 
-  return isCurrentUser ? 'Member · You' : 'Member';
+  return 'Member';
 }
 
 export default async function ChatPage({
@@ -344,6 +346,7 @@ export default async function ChatPage({
       label,
       isCurrentUser: participant.userId === user.id,
       role: participant.role ?? 'member',
+      roleLabel: formatParticipantRoleLabel(participant.role ?? 'member'),
     };
   });
   const activeParticipantUserIds = new Set(participants.map((participant) => participant.userId));
@@ -488,46 +491,64 @@ export default async function ChatPage({
         <section className="card stack conversation-settings-card" id="conversation-settings">
           <div className="conversation-settings-header">
             <div className="stack conversation-settings-copy">
-              <h2 className="section-title">Chat info</h2>
+              <h2 className="section-title">Info</h2>
             </div>
             <Link className="pill conversation-settings-close" href={`/chat/${conversationId}`}>
               Done
             </Link>
           </div>
 
-          <div className="conversation-settings-grid">
-            <div className="conversation-settings-item">
-              <span className="conversation-settings-label">Type</span>
-              <span className="conversation-settings-value">
+          <section className="conversation-info-summary">
+            <div className="conversation-info-identity">
+              {conversation.kind === 'group' ? (
+                <IdentityAvatarStack
+                  identities={otherParticipants.map((participant) =>
+                    senderIdentities.get(participant.userId),
+                  )}
+                  labels={otherParticipantLabels}
+                />
+              ) : (
+                <IdentityAvatar
+                  identity={directParticipantIdentity}
+                  label={conversationDisplayTitle}
+                  size="lg"
+                />
+              )}
+
+              <div className="stack conversation-info-copy">
+                <h3 className="conversation-info-title">{conversationDisplayTitle}</h3>
+                <p className="muted conversation-info-subtitle">
+                  {conversation.kind === 'group'
+                    ? groupMemberSummary
+                    : 'Person'}
+                </p>
+              </div>
+            </div>
+
+            <div className="conversation-info-meta">
+              <span className="conversation-info-meta-item">
                 {conversation.kind === 'group' ? 'Group' : 'Person'}
               </span>
-            </div>
-            <div className="conversation-settings-item">
-              <span className="conversation-settings-label">Started</span>
-              <span className="conversation-settings-value">
-                {formatLongDate(conversation.createdAt ?? null)}
+              <span className="conversation-info-meta-item">
+                Started {formatLongDate(conversation.createdAt ?? null)}
               </span>
+              {conversation.kind === 'group' ? (
+                <span className="conversation-info-meta-item">
+                  {participants.length} member{participants.length === 1 ? '' : 's'}
+                </span>
+              ) : null}
             </div>
-            <div className="conversation-settings-item">
-              <span className="conversation-settings-label">Messages</span>
-              <span className="conversation-settings-value">
-                {messages.length}
-              </span>
-            </div>
-            <div className="conversation-settings-item">
-              <span className="conversation-settings-label">Participants</span>
-              <span className="conversation-settings-value">
-                {participants.length}
-              </span>
-            </div>
-          </div>
+          </section>
 
           {conversation.kind === 'group' ? (
             <section className="conversation-settings-panel stack">
               <div className="stack conversation-settings-panel-copy">
-                <h3 className="card-title">Group title</h3>
+                <h3 className="card-title">Name</h3>
+                <p className="conversation-settings-static conversation-settings-title-preview">
+                  {conversationDisplayTitle}
+                </p>
                 {canEditGroupTitle ? null : (
-                  <p className="muted">Only the creator can rename it.</p>
+                  <p className="muted">Only the group owner can change it.</p>
                 )}
               </div>
 
@@ -547,27 +568,23 @@ export default async function ChatPage({
                       className="input"
                       defaultValue={conversation.title?.trim() || ''}
                       name="title"
-                      placeholder="Group title"
+                      placeholder="Enter a group name"
                       required
                     />
                   </label>
                   <button className="button button-compact" type="submit">
-                    Save title
+                    Save name
                   </button>
                 </form>
-              ) : (
-                <p className="conversation-settings-static">
-                  {conversationDisplayTitle}
-                </p>
-              )}
+              ) : null}
             </section>
           ) : (
             <section className="conversation-settings-panel stack">
               <div className="stack conversation-settings-panel-copy">
-                <h3 className="card-title">Person</h3>
+                <h3 className="card-title">About</h3>
               </div>
               <p className="conversation-settings-static">
-                {conversationDisplayTitle}
+                This conversation is with {conversationDisplayTitle}.
               </p>
             </section>
           )}
@@ -575,6 +592,9 @@ export default async function ChatPage({
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
               <h3 className="card-title">Participants</h3>
+              <p className="muted">
+                {participants.length} active member{participants.length === 1 ? '' : 's'}
+              </p>
             </div>
 
             <div className="conversation-member-list">
@@ -595,11 +615,11 @@ export default async function ChatPage({
                       </span>
                       <div className="conversation-member-meta">
                         <span className="conversation-role-chip">
-                          {formatParticipantRoleLabel(
-                            participant.role,
-                            participant.isCurrentUser,
-                          )}
+                          {participant.roleLabel}
                         </span>
+                        {participant.isCurrentUser ? (
+                          <span className="conversation-member-self-chip">You</span>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -635,13 +655,13 @@ export default async function ChatPage({
                 {canManageGroupParticipants ? (
                   <section className="stack conversation-participant-manager">
                     <div className="stack conversation-settings-panel-copy">
-                      <h4 className="card-title">Add participants</h4>
-                      <p className="muted">Add more people.</p>
+                      <h4 className="card-title">Add people</h4>
+                      <p className="muted">Choose people to add.</p>
                     </div>
 
                     {availableParticipantsToAdd.length === 0 ? (
                       <p className="muted conversation-settings-static">
-                        Everyone available is already here.
+                        Everyone is already here.
                       </p>
                     ) : (
                       <form action={addGroupParticipantsAction} className="stack compact-form">
@@ -670,27 +690,26 @@ export default async function ChatPage({
                                   />
                                 </span>
                                 <span className="user-label">{participant.label}</span>
-                                <span className="muted">Ready to add</span>
                               </span>
                             </label>
                           ))}
                         </div>
                         <button className="button button-compact" type="submit">
-                          Add selected people
+                          Add people
                         </button>
                       </form>
                     )}
                   </section>
                 ) : (
                   <p className="muted conversation-settings-static">
-                    Only the owner can manage people.
+                    Only the owner can add or remove people.
                   </p>
                 )}
 
                 <section className="stack conversation-leave-panel">
                   <div className="stack conversation-settings-panel-copy">
                     <h4 className="card-title">Leave group</h4>
-                    <p className="muted">You’ll leave this chat.</p>
+                    <p className="muted">Leave this chat.</p>
                   </div>
                   <form action={leaveGroupAction}>
                     <input
@@ -722,8 +741,8 @@ export default async function ChatPage({
           />
           {messages.length === 0 ? (
             <section className="card stack empty-card chat-empty-card">
-              <h2 className="card-title">Start the conversation</h2>
-              <p className="muted">Send the first message.</p>
+              <h2 className="card-title">New chat</h2>
+              <p className="muted">Say hello.</p>
               <Link className="pill pill-accent chat-empty-cta" href="#message-composer">
                 Write a message
               </Link>
@@ -984,6 +1003,9 @@ export default async function ChatPage({
                                             attachment.sizeBytes,
                                           )}`
                                         : ''}
+                                      {!attachment.signedUrl
+                                        ? ' · Unavailable right now'
+                                        : ''}
                                     </span>
                                   </span>
                                 </>
@@ -993,7 +1015,7 @@ export default async function ChatPage({
                                 return (
                                   <div
                                     key={attachment.id}
-                                    className="message-attachment-card"
+                                    className="message-attachment-card message-attachment-card-unavailable"
                                   >
                                     {attachmentContent}
                                   </div>
@@ -1143,6 +1165,8 @@ export default async function ChatPage({
             <div className="composer-entry-row">
               <ComposerAttachmentPicker
                 accept={CHAT_ATTACHMENT_ACCEPT}
+                helperText={CHAT_ATTACHMENT_HELP_TEXT}
+                maxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
                 maxSizeLabel="Up to 10 MB"
               />
 

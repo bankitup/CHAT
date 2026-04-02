@@ -8,9 +8,10 @@ import {
 } from '@/modules/messaging/data/server';
 import {
   getIdentityLabel,
+  GroupIdentityAvatar,
   IdentityAvatar,
-  IdentityAvatarStack,
 } from '@/modules/messaging/ui/identity';
+import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import Link from 'next/link';
 import { createDmAction, createGroupAction } from './actions';
 
@@ -244,10 +245,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     const preview = isGroupConversation
       ? participantSummary
         ? participantSummary
-        : 'Group conversation'
+        : 'People in this chat'
       : otherParticipantLabels[0]
         ? `${otherParticipantLabels[0]}`
-        : 'Direct conversation';
+        : 'Conversation';
     const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
     const hasUnread = conversation.unreadCount > 0;
     const readStateLabel = hasUnread
@@ -301,92 +302,109 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
   return (
     <section className="stack inbox-screen inbox-screen-minimal">
+      <InboxRealtimeSync
+        conversationIds={conversations.map((conversation) => conversation.conversationId)}
+        userId={user.id}
+      />
+
       <section className="card inbox-home-shell stack">
         <div className="inbox-topbar">
           <div className="stack inbox-topbar-copy">
             <h1 className="inbox-home-title">Chats</h1>
             <p className="muted inbox-home-subtitle">
               {unreadConversationCount > 0
-                ? `${unreadConversationCount} chat${unreadConversationCount === 1 ? '' : 's'} with new activity`
+                ? `${unreadConversationCount} new`
                 : conversationItems.length > 0
-                  ? 'All caught up'
-                  : 'Your conversations'}
+                  ? 'Caught up'
+                  : 'Start a chat'}
             </p>
           </div>
-          <Link
-            aria-label="Start a chat"
-            className="inbox-compose-trigger"
-            href={buildInboxHref({
-              filter: activeFilter,
-              query: query.q,
-              create: true,
-            })}
-          >
-            <span aria-hidden="true">+</span>
-          </Link>
+          <div className="inbox-topbar-actions">
+            <Link
+              aria-label="Open settings"
+              className="inbox-settings-trigger"
+              href="/settings"
+            >
+              <span aria-hidden="true">⚙</span>
+            </Link>
+            <Link
+              aria-label="Start a chat"
+              className="inbox-compose-trigger"
+              href={buildInboxHref({
+                filter: activeFilter,
+                query: query.q,
+                create: true,
+              })}
+            >
+              <span aria-hidden="true">+</span>
+            </Link>
+          </div>
         </div>
 
-        <form action="/inbox" className="inbox-search-form inbox-search-form-minimal" role="search">
-          <label className="field inbox-search-field">
-            <span className="sr-only">Search chats</span>
-            <input
-              className="input inbox-search-input"
-              defaultValue={query.q ?? ''}
-              name="q"
-              placeholder="Search chats"
-              type="search"
-            />
-          </label>
-          {activeFilter !== 'all' ? (
-            <input name="filter" type="hidden" value={activeFilter} />
-          ) : null}
-          <button className="button button-compact" type="submit">
-            Search
-          </button>
-          {searchTerm ? (
-            <Link
-              className="pill inbox-search-clear"
-              href={buildFilterHref(activeFilter)}
-            >
-              Clear
-            </Link>
-          ) : null}
-        </form>
+        <div className="stack inbox-toolbar">
+          <form
+            action="/inbox"
+            className="inbox-search-form inbox-search-form-minimal"
+            role="search"
+          >
+            <label className="field inbox-search-field">
+              <span className="sr-only">Search chats</span>
+              <input
+                className="input inbox-search-input"
+                defaultValue={query.q ?? ''}
+                name="q"
+                placeholder="Search"
+                type="search"
+              />
+            </label>
+            {activeFilter !== 'all' ? (
+              <input name="filter" type="hidden" value={activeFilter} />
+            ) : null}
+            {searchTerm ? (
+              <Link
+                className="pill inbox-search-clear"
+                href={buildFilterHref(activeFilter)}
+              >
+                Clear
+              </Link>
+            ) : null}
+          </form>
 
-        <div className="inbox-filter-row" role="tablist" aria-label="Chat filters">
-          <Link
-            aria-selected={activeFilter === 'all'}
-            className={
-              activeFilter === 'all'
-                ? 'inbox-filter-pill inbox-filter-pill-active'
-                : 'inbox-filter-pill'
-            }
-            href={buildFilterHref('all', query.q)}
-          >
-            All
-          </Link>
-          <Link
-            aria-selected={activeFilter === 'dm'}
-            className={
-              activeFilter === 'dm'
-                ? 'inbox-filter-pill inbox-filter-pill-active'
-                : 'inbox-filter-pill'
-            }
-            href={buildFilterHref('dm', query.q)}
-          >
-            DM
-          </Link>
-          <Link
-            aria-selected={activeFilter === 'groups'}
-            className={
-              activeFilter === 'groups'
-                ? 'inbox-filter-pill inbox-filter-pill-active'
-                : 'inbox-filter-pill'
-            }
-            href={buildFilterHref('groups', query.q)}
-          >
-            Groups
-          </Link>
+          <div className="inbox-filter-row" role="tablist" aria-label="Chat filters">
+            <Link
+              aria-selected={activeFilter === 'all'}
+              className={
+                activeFilter === 'all'
+                  ? 'inbox-filter-pill inbox-filter-pill-active'
+                  : 'inbox-filter-pill'
+              }
+              href={buildFilterHref('all', query.q)}
+            >
+              All
+            </Link>
+            <Link
+              aria-selected={activeFilter === 'dm'}
+              className={
+                activeFilter === 'dm'
+                  ? 'inbox-filter-pill inbox-filter-pill-active'
+                  : 'inbox-filter-pill'
+              }
+              href={buildFilterHref('dm', query.q)}
+            >
+              DM
+            </Link>
+            <Link
+              aria-selected={activeFilter === 'groups'}
+              className={
+                activeFilter === 'groups'
+                  ? 'inbox-filter-pill inbox-filter-pill-active'
+                  : 'inbox-filter-pill'
+              }
+              href={buildFilterHref('groups', query.q)}
+            >
+              Groups
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -420,9 +438,9 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             >
               <div className="conversation-row">
                 {conversation.isGroupConversation ? (
-                  <IdentityAvatarStack
-                    identities={conversation.participants}
-                    labels={conversation.participantLabels}
+                  <GroupIdentityAvatar
+                    label={conversation.title}
+                    size="md"
                   />
                 ) : (
                   <IdentityAvatar
@@ -460,26 +478,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   </div>
 
                   <div className="conversation-footer">
-                    <div className="conversation-supporting-meta">
-                      <span
-                        className={
-                          conversation.hasUnread
-                            ? 'conversation-meta conversation-meta-unread'
-                            : 'conversation-meta'
-                        }
-                      >
-                        {conversation.isGroupConversation ? 'Group' : 'Person'}
-                      </span>
-                      <span
-                        className={
-                          conversation.hasUnread
-                            ? 'conversation-read-state conversation-read-state-unread'
-                            : 'muted conversation-read-state'
-                        }
-                      >
-                        {conversation.readStateLabel}
-                      </span>
-                    </div>
+                    <span
+                      className={
+                        conversation.hasUnread
+                          ? 'conversation-read-state conversation-read-state-unread'
+                          : 'muted conversation-read-state'
+                      }
+                    >
+                      {conversation.readStateLabel}
+                    </span>
                     <p className="muted conversation-timestamp">
                       {conversation.timestampLabel}
                     </p>
@@ -523,7 +530,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             <section className="stack inbox-create-section">
               <div className="stack inbox-create-copy">
                 <h3 className="card-title">People</h3>
-                <p className="muted">Start a chat.</p>
+                <p className="muted">Choose one person.</p>
               </div>
 
               {availableUserEntries.length === 0 ? (

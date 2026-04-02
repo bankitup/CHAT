@@ -17,6 +17,12 @@ type IdentityAvatarStackProps = {
   maxVisible?: number;
 };
 
+type GroupIdentityAvatarProps = {
+  label: string;
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+};
+
 function normalizeClassName(values: Array<string | undefined>) {
   return values.filter(Boolean).join(' ');
 }
@@ -122,5 +128,30 @@ export function IdentityAvatarStack({
         />
       ))}
     </div>
+  );
+}
+
+export function GroupIdentityAvatar({
+  label,
+  size = 'md',
+  className,
+}: GroupIdentityAvatarProps) {
+  const toneClass = getStableTone(`group:${label}`);
+  const initials = getIdentityInitials(label);
+
+  return (
+    <span
+      aria-hidden="true"
+      className={normalizeClassName([
+        'identity-avatar',
+        'identity-avatar-group',
+        `identity-avatar-${size}`,
+        toneClass,
+        className,
+      ])}
+    >
+      <span className="identity-avatar-initials">{initials}</span>
+      <span className="identity-avatar-group-badge">G</span>
+    </span>
   );
 }

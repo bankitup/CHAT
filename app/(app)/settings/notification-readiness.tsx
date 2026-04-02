@@ -10,36 +10,41 @@ import { useEffect, useState, useTransition } from 'react';
 function getStatusCopy(readiness: NotificationReadiness | null) {
   if (!readiness) {
     return {
-      title: 'Checking support',
-      body: 'Reviewing whether this browser can be prepared for future push alerts.',
+      title: 'Notifications',
+      body: 'Checking what’s available on this device.',
       badge: 'Checking',
+      settingValue: 'Checking',
     };
   }
 
   switch (readiness.status) {
     case 'unsupported':
       return {
-        title: 'Notifications not supported here',
-        body: 'This browser or environment does not currently support the notification APIs needed for future web push.',
+        title: 'Notifications',
+        body: 'Notifications are not available on this device.',
         badge: 'Unsupported',
+        settingValue: 'Unavailable',
       };
     case 'blocked':
       return {
-        title: 'Notifications are blocked',
-        body: 'Permission was denied in this browser. Future push delivery cannot be prepared until notifications are re-enabled in browser settings.',
+        title: 'Notifications',
+        body: 'Notifications are turned off. You can re-enable them in browser settings later.',
         badge: 'Blocked',
+        settingValue: 'Off',
       };
     case 'enabled':
       return {
-        title: 'Notifications are ready',
-        body: 'Permission is granted and the app shell is prepared for future push subscription work. Delivery is not wired end to end yet.',
+        title: 'Notifications',
+        body: 'Notifications are enabled. Delivery is still being prepared.',
         badge: 'Ready',
+        settingValue: 'On',
       };
     default:
       return {
-        title: 'Notifications are available',
-        body: 'This app can request notification permission and register its service worker, but live push delivery is not connected yet.',
+        title: 'Notifications',
+        body: 'This device can enable notifications for Chat.',
         badge: 'Available',
+        settingValue: 'Available',
       };
   }
 }
@@ -67,7 +72,7 @@ export function NotificationReadinessPanel() {
   return (
     <section className="card stack settings-card">
       <div className="stack settings-card-copy">
-        <p className="eyebrow">Notifications</p>
+        <p className="eyebrow">Preferences</p>
         <h2 className="section-title">{statusCopy.title}</h2>
         <p className="muted">{statusCopy.body}</p>
       </div>
@@ -75,13 +80,17 @@ export function NotificationReadinessPanel() {
       <div className="cluster settings-summary">
         <span className="summary-pill">{statusCopy.badge}</span>
         <span className="summary-pill summary-pill-muted">
-          {readiness?.serviceWorkerReady ? 'Service worker ready' : 'Service worker pending'}
+          {readiness?.serviceWorkerReady ? 'This device is ready' : 'Still preparing'}
         </span>
       </div>
 
       <div className="settings-capability-list">
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Browser permission</span>
+          <span className="settings-capability-label">Notifications</span>
+          <span className="settings-capability-value">{statusCopy.settingValue}</span>
+        </div>
+        <div className="settings-capability-row">
+          <span className="settings-capability-label">Permission</span>
           <span className="settings-capability-value">
             {readiness?.permission === 'unsupported'
               ? 'Unavailable'
@@ -89,8 +98,8 @@ export function NotificationReadinessPanel() {
           </span>
         </div>
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Push delivery</span>
-          <span className="settings-capability-value">Not connected yet</span>
+          <span className="settings-capability-label">Message alerts</span>
+          <span className="settings-capability-value">Coming soon</span>
         </div>
       </div>
 
@@ -113,13 +122,13 @@ export function NotificationReadinessPanel() {
 
         {readiness?.status === 'blocked' ? (
           <p className="muted settings-note">
-            Re-enable notifications in your browser settings to continue.
+            Turn notifications back on in your browser settings when you’re ready.
           </p>
         ) : null}
 
         {readiness?.status === 'enabled' ? (
           <p className="muted settings-note">
-            This app is ready for future push subscription and delivery wiring.
+            Message alerts will arrive in a later update.
           </p>
         ) : null}
       </div>
