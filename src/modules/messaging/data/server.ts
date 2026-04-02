@@ -32,6 +32,7 @@ export type ConversationMessage = {
   id: string;
   conversation_id: string;
   sender_id: string | null;
+  reply_to_message_id: string | null;
   seq: number | string;
   kind: string;
   client_id: string;
@@ -47,6 +48,14 @@ export type MessageSenderProfile = {
 export type AvailableUser = {
   userId: string;
   label: string;
+};
+
+export type ConversationReadState = {
+  lastReadMessageSeq: number | null;
+};
+
+export type ConversationParticipant = {
+  userId: string;
 };
 
 type MessageReactionRow = {
@@ -142,6 +151,54 @@ export async function getConversationForUser(
     lastMessageAt: conversation.last_message_at,
     createdAt: conversation.created_at,
   };
+}
+
+export async function getConversationReadState(
+  conversationId: string,
+  userId: string,
+) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('conversation_members')
+    .select('last_read_message_seq')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    if (
+      error.message.includes('last_read_message_seq') ||
+      error.message.includes('column')
+    ) {
+      return { lastReadMessageSeq: null } satisfies ConversationReadState;
+    }
+
+    throw new Error(error.message);
+  }
+
+  return {
+    lastReadMessageSeq:
+      typeof data?.last_read_message_seq === 'number'
+        ? data.last_read_message_seq
+        : null,
+  } satisfies ConversationReadState;
+}
+
+export async function getConversationParticipants(conversationId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('conversation_members')
+    .select('user_id')
+    .eq('conversation_id', conversationId)
+    .eq('state', 'active');
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as { user_id: string }[]).map((member) => ({
+    userId: member.user_id,
+  })) satisfies ConversationParticipant[];
 }
 
 function dedupeParticipantIds(ids: string[]) {
@@ -317,7 +374,9 @@ export async function getConversationMessages(conversationId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('messages')
-    .select('id, conversation_id, sender_id, seq, kind, client_id, body, created_at')
+    .select(
+      'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, created_at',
+    )
     .eq('conversation_id', conversationId)
     .order('seq', { ascending: true });
 
@@ -529,6 +588,7 @@ export async function sendTextMessage(input: {
   conversationId: string;
   body: string;
   senderId: string;
+  replyToMessageId?: string | null;
 }) {
   const supabase = await createSupabaseServerClient();
   const timestamp = new Date().toISOString();
@@ -565,6 +625,7 @@ export async function sendTextMessage(input: {
   const { error: insertError } = await supabase.from('messages').insert({
     conversation_id: input.conversationId,
     sender_id: input.senderId,
+    reply_to_message_id: input.replyToMessageId ?? null,
     kind: 'text',
     client_id: clientId,
     body: input.body,

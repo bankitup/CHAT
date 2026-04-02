@@ -20,6 +20,7 @@ function redirectWithError(conversationId: string, message: string): never {
 export async function sendMessageAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
+  const replyToMessageId = String(formData.get('replyToMessageId') ?? '').trim();
 
   if (!conversationId) {
     redirect('/inbox');
@@ -68,11 +69,26 @@ export async function sendMessageAction(formData: FormData) {
     );
   }
 
+  if (replyToMessageId) {
+    const replyTargetExists = await assertMessageInConversation(
+      replyToMessageId,
+      conversationId,
+    );
+
+    if (!replyTargetExists) {
+      redirectWithError(
+        conversationId,
+        'Reply target is not available in this conversation.',
+      );
+    }
+  }
+
   try {
     await sendTextMessage({
       conversationId,
       body,
       senderId: userId,
+      replyToMessageId: replyToMessageId || null,
     });
   } catch (error) {
     const message =

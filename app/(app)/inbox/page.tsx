@@ -27,6 +27,50 @@ function formatTimestamp(value: string | null) {
   }).format(new Date(value));
 }
 
+function formatRecency(value: string | null) {
+  if (!value) {
+    return 'New';
+  }
+
+  const target = new Date(value);
+  const now = new Date();
+  const diffMs = now.getTime() - target.getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours}h`;
+  }
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDay = new Date(
+    target.getFullYear(),
+    target.getMonth(),
+    target.getDate(),
+  );
+  const dayDiff = Math.round(
+    (today.getTime() - targetDay.getTime()) / (1000 * 60 * 60 * 24),
+  );
+
+  if (dayDiff === 1) {
+    return 'Yesterday';
+  }
+
+  if (dayDiff < 7) {
+    return new Intl.DateTimeFormat('en', { weekday: 'short' }).format(target);
+  }
+
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+  }).format(target);
+}
+
 export default async function InboxPage({ searchParams }: InboxPageProps) {
   const query = await searchParams;
   const supabase = await createSupabaseServerClient();
@@ -95,19 +139,37 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               >
                 <div className="stack conversation-card-copy">
                   <div className="conversation-row">
-                    <h3 className="conversation-title">
-                      {conversation.title?.trim() ||
-                        (conversation.kind === 'dm'
-                          ? 'Direct message'
-                          : 'Untitled group')}
-                    </h3>
+                    <div className="stack conversation-main-copy">
+                      <div className="conversation-title-row">
+                        <h3 className="conversation-title">
+                          {conversation.title?.trim() ||
+                            (conversation.kind === 'dm'
+                              ? 'Direct message'
+                              : 'Untitled group')}
+                        </h3>
+                        <span className="conversation-recency">
+                          {formatRecency(
+                            conversation.lastMessageAt ?? conversation.createdAt,
+                          )}
+                        </span>
+                      </div>
+                      <p className="muted conversation-preview">
+                        {conversation.kind === 'group'
+                          ? 'Group conversation ready for updates.'
+                          : 'Direct conversation ready for messages.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="conversation-footer">
                     <span className="conversation-meta">
                       {conversation.kind === 'group' ? 'Group' : 'Direct'}
                     </span>
+                    <p className="muted conversation-timestamp">
+                      {formatTimestamp(
+                        conversation.lastMessageAt ?? conversation.createdAt,
+                      )}
+                    </p>
                   </div>
-                  <p className="muted conversation-timestamp">
-                    Last activity {formatTimestamp(conversation.lastMessageAt)}
-                  </p>
                 </div>
               </Link>
             ))}
