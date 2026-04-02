@@ -31,11 +31,17 @@ export type InboxConversation = {
 export type ConversationMessage = {
   id: string;
   conversation_id: string;
+  sender_id: string | null;
   seq: number | string;
   kind: string;
   client_id: string;
   body: string | null;
   created_at: string | null;
+};
+
+export type MessageSenderProfile = {
+  userId: string;
+  displayName: string | null;
 };
 
 export type AvailableUser = {
@@ -311,7 +317,7 @@ export async function getConversationMessages(conversationId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('messages')
-    .select('id, conversation_id, seq, kind, client_id, body, created_at')
+    .select('id, conversation_id, sender_id, seq, kind, client_id, body, created_at')
     .eq('conversation_id', conversationId)
     .order('seq', { ascending: true });
 
@@ -320,6 +326,44 @@ export async function getConversationMessages(conversationId: string) {
   }
 
   return (data ?? []) as ConversationMessage[];
+}
+
+export async function getMessageSenderProfiles(userIds: string[]) {
+  const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
+
+  if (uniqueUserIds.length === 0) {
+    return [] as MessageSenderProfile[];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const withDisplayNames = await supabase
+    .from('profiles')
+    .select('user_id, display_name')
+    .in('user_id', uniqueUserIds);
+
+  if (!withDisplayNames.error) {
+    return ((withDisplayNames.data ?? []) as {
+      user_id: string;
+      display_name: string | null;
+    }[]).map((profile) => ({
+      userId: profile.user_id,
+      displayName: profile.display_name?.trim() || null,
+    }));
+  }
+
+  const fallback = await supabase
+    .from('profiles')
+    .select('user_id')
+    .in('user_id', uniqueUserIds);
+
+  if (fallback.error) {
+    throw new Error(fallback.error.message);
+  }
+
+  return ((fallback.data ?? []) as { user_id: string }[]).map((profile) => ({
+    userId: profile.user_id,
+    displayName: null,
+  }));
 }
 
 export async function getGroupedReactionsForMessages(

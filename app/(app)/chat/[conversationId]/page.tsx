@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getConversationForUser,
   getConversationMessages,
+  getMessageSenderProfiles,
   getGroupedReactionsForMessages,
   STARTER_REACTIONS,
 } from '@/modules/messaging/data/server';
@@ -31,6 +32,31 @@ function formatMessageTimestamp(value: string | null) {
   }).format(new Date(value));
 }
 
+function createFallbackSenderName(
+  senderId: string | null,
+  currentUserId: string,
+  fallbackNames: Map<string, string>,
+) {
+  if (!senderId) {
+    return 'Unknown sender';
+  }
+
+  if (senderId === currentUserId) {
+    return 'You';
+  }
+
+  const existing = fallbackNames.get(senderId);
+
+  if (existing) {
+    return existing;
+  }
+
+  const nextName = `Person ${fallbackNames.size + 1}`;
+  fallbackNames.set(senderId, nextName);
+
+  return nextName;
+}
+
 export default async function ChatPage({
   params,
   searchParams,
@@ -53,10 +79,17 @@ export default async function ChatPage({
   }
 
   const messages = await getConversationMessages(conversationId);
+  const senderProfiles = await getMessageSenderProfiles(
+    messages.map((message) => message.sender_id ?? ''),
+  );
   const reactionsByMessage = await getGroupedReactionsForMessages(
     messages.map((message) => message.id),
     user.id,
   );
+  const senderNames = new Map(
+    senderProfiles.map((profile) => [profile.userId, profile.displayName]),
+  );
+  const fallbackNames = new Map<string, string>();
 
   return (
     <section className="stack chat-screen">
@@ -101,87 +134,154 @@ export default async function ChatPage({
           </section>
         ) : (
           messages.map((message) => (
-            <article key={message.id} className="message-card">
-              <div className="message-header">
-                <span className="message-kind">Text message</span>
-                <span className="message-meta">
-                  {formatMessageTimestamp(message.created_at) || 'Just now'}
-                </span>
-              </div>
-              <div className="message-bubble">
-                <p className="message-body">
-                  {message.body?.trim() || 'Empty message'}
-                </p>
-              </div>
-
-              {reactionsByMessage.get(message.id)?.length ? (
+            <article
+              key={message.id}
+              className={
+                message.sender_id === user.id
+                  ? 'message-row message-row-own'
+                  : 'message-row'
+              }
+            >
+              <div
+                className={
+                  message.sender_id === user.id
+                    ? 'message-card message-card-own'
+                    : 'message-card'
+                }
+              >
                 <div
-                  className="reaction-groups"
-                  aria-label="Message reactions"
+                  className={
+                    message.sender_id === user.id
+                      ? 'message-header message-header-own'
+                      : 'message-header'
+                  }
                 >
-                  {reactionsByMessage.get(message.id)?.map((reaction) => (
-                    <form
-                      key={`${message.id}-${reaction.emoji}`}
-                      action={toggleReactionAction}
-                    >
-                      <input
-                        name="conversationId"
-                        type="hidden"
-                        value={conversationId}
-                      />
-                      <input name="messageId" type="hidden" value={message.id} />
-                      <input name="emoji" type="hidden" value={reaction.emoji} />
-                      <button
-                        className={
-                          reaction.selectedByCurrentUser
-                            ? 'reaction-pill reaction-pill-selected'
-                            : 'reaction-pill'
-                        }
-                        type="submit"
-                      >
-                        <span>{reaction.emoji}</span>
-                        <span className="reaction-count">{reaction.count}</span>
-                      </button>
-                    </form>
-                  ))}
+                  <div className="stack message-header-copy">
+                    <span className="message-sender">
+                      {senderNames.get(message.sender_id ?? '') ||
+                        createFallbackSenderName(
+                          message.sender_id,
+                          user.id,
+                          fallbackNames,
+                        )}
+                    </span>
+                    <span className="message-kind">Text message</span>
+                  </div>
+                  <span
+                    className={
+                      message.sender_id === user.id
+                        ? 'message-meta message-meta-own'
+                        : 'message-meta'
+                    }
+                  >
+                  {formatMessageTimestamp(message.created_at) || 'Just now'}
+                  </span>
                 </div>
-              ) : null}
+                <div
+                  className={
+                    message.sender_id === user.id
+                      ? 'message-bubble message-bubble-own'
+                      : 'message-bubble'
+                  }
+                >
+                  <p className="message-body">
+                    {message.body?.trim() || 'Empty message'}
+                  </p>
+                </div>
 
-              <div className="reaction-picker-block stack">
-                <p className="reaction-picker-label">Quick reactions</p>
-                <div className="reaction-picker" aria-label="Add a reaction">
-                {STARTER_REACTIONS.map((emoji) => {
-                  const currentReaction = reactionsByMessage
-                    .get(message.id)
-                    ?.find((reaction) => reaction.emoji === emoji);
-
-                  return (
-                    <form key={`${message.id}-picker-${emoji}`} action={toggleReactionAction}>
-                      <input
-                        name="conversationId"
-                        type="hidden"
-                        value={conversationId}
-                      />
-                      <input name="messageId" type="hidden" value={message.id} />
-                      <input name="emoji" type="hidden" value={emoji} />
-                      <button
-                        className={
-                          currentReaction?.selectedByCurrentUser
-                            ? 'reaction-toggle reaction-toggle-selected'
-                            : 'reaction-toggle'
-                        }
-                        type="submit"
+                {reactionsByMessage.get(message.id)?.length ? (
+                  <div
+                    className={
+                      message.sender_id === user.id
+                        ? 'reaction-groups reaction-groups-own'
+                        : 'reaction-groups'
+                    }
+                    aria-label="Message reactions"
+                  >
+                    {reactionsByMessage.get(message.id)?.map((reaction) => (
+                      <form
+                        key={`${message.id}-${reaction.emoji}`}
+                        action={toggleReactionAction}
                       >
-                        <span>{emoji}</span>
-                        {currentReaction ? (
-                          <span className="reaction-count">
-                            {currentReaction.count}
-                          </span>
-                        ) : null}
-                      </button>
-                    </form>
-                  );
-                })}
+                        <input
+                          name="conversationId"
+                          type="hidden"
+                          value={conversationId}
+                        />
+                        <input name="messageId" type="hidden" value={message.id} />
+                        <input name="emoji" type="hidden" value={reaction.emoji} />
+                        <button
+                          className={
+                            reaction.selectedByCurrentUser
+                              ? 'reaction-pill reaction-pill-selected'
+                              : 'reaction-pill'
+                          }
+                          type="submit"
+                        >
+                          <span>{reaction.emoji}</span>
+                          <span className="reaction-count">{reaction.count}</span>
+                        </button>
+                      </form>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div
+                  className={
+                    message.sender_id === user.id
+                      ? 'reaction-picker-block stack reaction-picker-block-own'
+                      : 'reaction-picker-block stack'
+                  }
+                >
+                  <p className="reaction-picker-label">Quick reactions</p>
+                  <div
+                    className={
+                      message.sender_id === user.id
+                        ? 'reaction-picker reaction-picker-own'
+                        : 'reaction-picker'
+                    }
+                    aria-label="Add a reaction"
+                  >
+                    {STARTER_REACTIONS.map((emoji) => {
+                      const currentReaction = reactionsByMessage
+                        .get(message.id)
+                        ?.find((reaction) => reaction.emoji === emoji);
+
+                      return (
+                        <form
+                          key={`${message.id}-picker-${emoji}`}
+                          action={toggleReactionAction}
+                        >
+                          <input
+                            name="conversationId"
+                            type="hidden"
+                            value={conversationId}
+                          />
+                          <input
+                            name="messageId"
+                            type="hidden"
+                            value={message.id}
+                          />
+                          <input name="emoji" type="hidden" value={emoji} />
+                          <button
+                            className={
+                              currentReaction?.selectedByCurrentUser
+                                ? 'reaction-toggle reaction-toggle-selected'
+                                : 'reaction-toggle'
+                            }
+                            type="submit"
+                          >
+                            <span>{emoji}</span>
+                            {currentReaction ? (
+                              <span className="reaction-count">
+                                {currentReaction.count}
+                              </span>
+                            ) : null}
+                          </button>
+                        </form>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </article>

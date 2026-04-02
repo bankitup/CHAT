@@ -482,9 +482,19 @@ main {
   gap: 10px;
 }
 
+.message-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.message-row-own {
+  justify-content: flex-end;
+}
+
 .message-card {
   display: grid;
   gap: 12px;
+  width: min(100%, 320px);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 20px;
@@ -492,11 +502,31 @@ main {
   box-shadow: 0 1px 2px rgba(17, 24, 39, 0.03);
 }
 
+.message-card-own {
+  background: rgba(31, 111, 235, 0.06);
+  border-color: rgba(31, 111, 235, 0.16);
+}
+
 .message-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.message-header-own {
+  text-align: right;
+}
+
+.message-header-copy {
+  gap: 2px;
+}
+
+.message-sender {
+  color: var(--foreground);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .message-bubble {
@@ -505,6 +535,11 @@ main {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 243, 245, 0.95));
   border: 1px solid rgba(221, 226, 232, 0.85);
+}
+
+.message-bubble-own {
+  background: rgba(31, 111, 235, 0.12);
+  border-color: rgba(31, 111, 235, 0.16);
 }
 
 .message-kind {
@@ -517,6 +552,10 @@ main {
 .message-meta {
   color: var(--muted);
   font-size: 0.78rem;
+  text-align: right;
+}
+
+.message-meta-own {
   text-align: right;
 }
 
@@ -539,8 +578,16 @@ main {
   gap: 6px;
 }
 
+.reaction-groups-own {
+  justify-content: flex-end;
+}
+
 .reaction-picker-block {
   gap: 8px;
+}
+
+.reaction-picker-block-own {
+  justify-items: end;
 }
 
 .reaction-picker-label {
@@ -549,6 +596,10 @@ main {
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+.reaction-picker-own {
+  justify-content: flex-end;
 }
 
 .reaction-pill,
