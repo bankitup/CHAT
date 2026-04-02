@@ -109,6 +109,12 @@ export type ConversationParticipantIdentity = {
   avatarPath?: string | null;
 };
 
+type ConversationNameInput = {
+  kind: string | null;
+  title?: string | null;
+  participantLabels: string[];
+};
+
 type MessageReactionRow = {
   id: string;
   message_id: string;
@@ -147,6 +153,51 @@ function normalizeConversation(
   }
 
   return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function uniqueNonEmptyLabels(labels: string[]) {
+  return Array.from(
+    new Set(labels.map((label) => label.trim()).filter(Boolean)),
+  );
+}
+
+export function getConversationDisplayName({
+  kind,
+  title,
+  participantLabels,
+}: ConversationNameInput) {
+  const normalizedTitle = title?.trim() ?? '';
+  const labels = uniqueNonEmptyLabels(participantLabels);
+
+  if (kind === 'group') {
+    if (normalizedTitle) {
+      return normalizedTitle;
+    }
+
+    return labels.join(', ') || 'New group';
+  }
+
+  return labels[0] || 'Conversation';
+}
+
+export function getConversationParticipantSummary(
+  participantLabels: string[],
+  maxVisible?: number,
+) {
+  const labels = uniqueNonEmptyLabels(participantLabels);
+
+  if (labels.length === 0) {
+    return null;
+  }
+
+  if (!maxVisible || labels.length <= maxVisible) {
+    return labels.join(', ');
+  }
+
+  const preview = labels.slice(0, maxVisible);
+  const remaining = labels.length - preview.length;
+
+  return `${preview.join(', ')} +${remaining}`;
 }
 
 export async function getInboxConversations(userId: string) {

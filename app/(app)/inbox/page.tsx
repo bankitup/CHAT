@@ -1,7 +1,9 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getAvailableUsers,
+  getConversationDisplayName,
   getConversationParticipantIdentities,
+  getConversationParticipantSummary,
   getInboxConversations,
 } from '@/modules/messaging/data/server';
 import {
@@ -124,20 +126,6 @@ function getFallbackIdentityLabel(
   return nextLabel;
 }
 
-function formatConversationIdentitySummary(
-  labels: string[],
-  maxVisible = 2,
-) {
-  if (labels.length === 0) {
-    return null;
-  }
-
-  const preview = labels.slice(0, maxVisible);
-  const remaining = Math.max(0, labels.length - preview.length);
-
-  return `${preview.join(', ')}${remaining > 0 ? ` +${remaining}` : ''}`;
-}
-
 function buildFilterHref(filter: InboxFilter, query?: string) {
   const params = new URLSearchParams();
 
@@ -153,10 +141,38 @@ function buildFilterHref(filter: InboxFilter, query?: string) {
   return href ? `/inbox?${href}` : '/inbox';
 }
 
+function buildInboxHref({
+  filter,
+  query,
+  create,
+}: {
+  filter: InboxFilter;
+  query?: string;
+  create?: boolean;
+}) {
+  const params = new URLSearchParams();
+
+  if (filter !== 'all') {
+    params.set('filter', filter);
+  }
+
+  if (query?.trim()) {
+    params.set('q', query.trim());
+  }
+
+  if (create) {
+    params.set('create', 'open');
+  }
+
+  const href = params.toString();
+  return href ? `/inbox?${href}` : '/inbox';
+}
+
 export default async function InboxPage({ searchParams }: InboxPageProps) {
   const query = await searchParams;
   const searchTerm = normalizeSearchTerm(query.q);
   const activeFilter = normalizeFilter(query.filter);
+  const isCreateOpen = query.create === 'open';
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -194,6 +210,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       ),
     ),
   }));
+  const filteredAvailableUserEntries = availableUserEntries.filter(
+    (availableUser) => {
+      if (!searchTerm) {
+        return true;
+      }
+
+      return availableUser.label.toLowerCase().includes(searchTerm);
+    },
+  );
   const conversationItems = conversations.map((conversation) => {
     const participantOptions =
       participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
@@ -207,14 +232,18 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       ),
     );
     const isGroupConversation = conversation.kind === 'group';
-    const title =
-      conversation.title?.trim() ||
-      (isGroupConversation
-        ? formatConversationIdentitySummary(otherParticipantLabels) || 'New group'
-        : otherParticipantLabels[0] || 'Direct message');
+    const title = getConversationDisplayName({
+      kind: conversation.kind ?? null,
+      title: conversation.title,
+      participantLabels: otherParticipantLabels,
+    });
+    const participantSummary = getConversationParticipantSummary(
+      otherParticipantLabels,
+      isGroupConversation ? 3 : undefined,
+    );
     const preview = isGroupConversation
-      ? formatConversationIdentitySummary(otherParticipantLabels, 3)
-        ? `${formatConversationIdentitySummary(otherParticipantLabels, 3)} in this group`
+      ? participantSummary
+        ? participantSummary
         : 'Group conversation'
       : otherParticipantLabels[0]
         ? `${otherParticipantLabels[0]}`
@@ -266,12 +295,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     return haystack.includes(searchTerm);
   });
 
-  const filteredAvailableUsers = searchTerm
-    ? availableUserEntries.filter((availableUser) =>
-        availableUser.label.toLowerCase().includes(searchTerm),
-      )
-    : availableUserEntries;
-
   const unreadConversationCount = conversationItems.filter(
     (conversation) => conversation.hasUnread,
   ).length;
@@ -286,131 +309,31 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               {unreadConversationCount > 0
                 ? `${unreadConversationCount} chat${unreadConversationCount === 1 ? '' : 's'} with new activity`
                 : conversationItems.length > 0
-                  ? "You're caught up"
+                  ? 'All caught up'
                   : 'Your conversations'}
             </p>
           </div>
-
-          <details className="inbox-compose-menu" open={query.create === 'open'}>
-            <summary className="inbox-compose-trigger" aria-label="Start a chat">
-              <span aria-hidden="true">+</span>
-            </summary>
-
-            <div className="inbox-compose-panel">
-              <section className="stack inbox-compose-section">
-                <div className="stack inbox-compose-copy">
-                  <h2 className="card-title">New direct chat</h2>
-                  <p className="muted">Choose one person.</p>
-                </div>
-
-                {filteredAvailableUsers.length === 0 ? (
-                  <p className="muted inbox-compose-empty">
-                    No matching people available right now.
-                  </p>
-                ) : (
-                  <div className="inbox-compose-user-list">
-                    {filteredAvailableUsers.map((availableUser) => (
-                      <div
-                        key={availableUser.userId}
-                        className="inbox-compose-user-row"
-                      >
-                        <div className="user-row">
-                          <IdentityAvatar
-                            identity={availableUser}
-                            label={availableUser.label}
-                            size="sm"
-                          />
-                          <div className="stack user-copy">
-                            <span className="user-label">{availableUser.label}</span>
-                            <span className="muted">Direct chat</span>
-                          </div>
-                        </div>
-
-                        <form action={createDmAction}>
-                          <input
-                            name="participantUserId"
-                            type="hidden"
-                            value={availableUser.userId}
-                          />
-                          <button className="button button-compact" type="submit">
-                            Message
-                          </button>
-                        </form>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section className="stack inbox-compose-section">
-                <div className="stack inbox-compose-copy">
-                  <h2 className="card-title">New group</h2>
-                  <p className="muted">Add a title and choose members.</p>
-                </div>
-
-                <form action={createGroupAction} className="stack compact-form">
-                  <label className="field">
-                    <span className="sr-only">Group title</span>
-                    <input
-                      className="input"
-                      name="title"
-                      placeholder="Weekend planning"
-                      required
-                    />
-                  </label>
-
-                  <fieldset className="selector-card inbox-compose-selector">
-                    <legend className="selector-title">Members</legend>
-                    {availableUsers.length === 0 ? (
-                      <p className="muted">No other users available to add yet.</p>
-                    ) : filteredAvailableUsers.length === 0 ? (
-                      <p className="muted">No matching people for this search.</p>
-                    ) : (
-                      <div className="checkbox-list inbox-compose-checkbox-list">
-                        {filteredAvailableUsers.map((availableUser) => (
-                          <label
-                            key={`group-${availableUser.userId}`}
-                            className="checkbox-row"
-                          >
-                            <input
-                              name="participantUserIds"
-                              type="checkbox"
-                              value={availableUser.userId}
-                            />
-                            <span className="checkbox-copy">
-                              <span className="checkbox-identity">
-                                <IdentityAvatar
-                                  identity={availableUser}
-                                  label={availableUser.label}
-                                  size="sm"
-                                />
-                              </span>
-                              <span className="user-label">{availableUser.label}</span>
-                              <span className="muted">Add to group</span>
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </fieldset>
-
-                  <button className="button button-compact" type="submit">
-                    Create group
-                  </button>
-                </form>
-              </section>
-            </div>
-          </details>
+          <Link
+            aria-label="Start a chat"
+            className="inbox-compose-trigger"
+            href={buildInboxHref({
+              filter: activeFilter,
+              query: query.q,
+              create: true,
+            })}
+          >
+            <span aria-hidden="true">+</span>
+          </Link>
         </div>
 
         <form action="/inbox" className="inbox-search-form inbox-search-form-minimal" role="search">
           <label className="field inbox-search-field">
-            <span className="sr-only">Search chats and people</span>
+            <span className="sr-only">Search chats</span>
             <input
               className="input inbox-search-input"
               defaultValue={query.q ?? ''}
               name="q"
-              placeholder="Search"
+              placeholder="Search chats"
               type="search"
             />
           </label>
@@ -470,10 +393,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       {query.error ? <p className="notice notice-error">{query.error}</p> : null}
 
       {conversationItems.length === 0 ? (
-        <section className="card stack empty-card inbox-empty-state">
+          <section className="card stack empty-card inbox-empty-state">
           <h2 className="card-title">No chats yet</h2>
           <p className="muted">
-            Start a direct message or create a group from the + button.
+            Start one from the + button.
           </p>
         </section>
       ) : filteredConversationItems.length === 0 ? (
@@ -504,7 +427,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 ) : (
                   <IdentityAvatar
                     identity={conversation.participants[0]}
-                    label={conversation.participantLabels[0] || 'Direct message'}
+                    label={conversation.title}
                     size="md"
                   />
                 )}
@@ -545,7 +468,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                             : 'conversation-meta'
                         }
                       >
-                        {conversation.isGroupConversation ? 'Group' : 'Direct'}
+                        {conversation.isGroupConversation ? 'Group' : 'Person'}
                       </span>
                       <span
                         className={
@@ -567,6 +490,143 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           ))}
         </section>
       )}
+
+      {isCreateOpen ? (
+        <section className="inbox-create-overlay" aria-label="Create chat">
+          <Link
+            aria-label="Close create chat"
+            className="inbox-create-backdrop"
+            href={buildInboxHref({
+              filter: activeFilter,
+              query: query.q,
+            })}
+          />
+
+          <section className="card stack inbox-create-sheet">
+            <div className="inbox-create-header">
+              <div className="stack inbox-create-copy">
+                <h2 className="section-title">New chat</h2>
+                <p className="muted">Pick a person or start a group.</p>
+              </div>
+              <Link
+                aria-label="Close create chat"
+                className="pill inbox-create-close"
+                href={buildInboxHref({
+                  filter: activeFilter,
+                  query: query.q,
+                })}
+              >
+                Close
+              </Link>
+            </div>
+
+            <section className="stack inbox-create-section">
+              <div className="stack inbox-create-copy">
+                <h3 className="card-title">People</h3>
+                <p className="muted">Start a chat.</p>
+              </div>
+
+              {availableUserEntries.length === 0 ? (
+                <p className="muted inbox-compose-empty">
+                  No other registered users are available yet.
+                </p>
+              ) : filteredAvailableUserEntries.length === 0 ? (
+                <p className="muted inbox-compose-empty">
+                  No matching people yet.
+                </p>
+              ) : (
+                <div className="inbox-compose-user-list inbox-create-user-list">
+                  {filteredAvailableUserEntries.map((availableUser) => (
+                    <div
+                      key={availableUser.userId}
+                      className="inbox-compose-user-row inbox-create-user-row"
+                    >
+                      <div className="user-row">
+                        <IdentityAvatar
+                          identity={availableUser}
+                          label={availableUser.label}
+                          size="sm"
+                        />
+                        <div className="stack user-copy">
+                          <span className="user-label">{availableUser.label}</span>
+                        </div>
+                      </div>
+
+                      <form action={createDmAction}>
+                        <input
+                          name="participantUserId"
+                          type="hidden"
+                          value={availableUser.userId}
+                        />
+                        <button className="button button-compact" type="submit">
+                          Message
+                        </button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="stack inbox-create-section">
+              <div className="stack inbox-create-copy">
+                <h3 className="card-title">Group chat</h3>
+                <p className="muted">Name it and pick people.</p>
+              </div>
+
+              <form action={createGroupAction} className="stack compact-form">
+                <label className="field">
+                  <span className="sr-only">Group title</span>
+                  <input
+                    className="input"
+                    name="title"
+                    placeholder="Weekend planning"
+                    required
+                  />
+                </label>
+
+                <fieldset className="selector-card inbox-compose-selector">
+                  <legend className="selector-title">People</legend>
+                  {availableUserEntries.length === 0 ? (
+                    <p className="muted">No other registered users are available yet.</p>
+                  ) : filteredAvailableUserEntries.length === 0 ? (
+                    <p className="muted">No matching people yet.</p>
+                  ) : (
+                    <div className="checkbox-list inbox-compose-checkbox-list">
+                      {filteredAvailableUserEntries.map((availableUser) => (
+                        <label
+                          key={`group-${availableUser.userId}`}
+                          className="checkbox-row"
+                        >
+                          <input
+                            name="participantUserIds"
+                            type="checkbox"
+                            value={availableUser.userId}
+                          />
+                          <span className="checkbox-copy">
+                            <span className="checkbox-identity">
+                              <IdentityAvatar
+                                identity={availableUser}
+                                label={availableUser.label}
+                                size="sm"
+                              />
+                            </span>
+                            <span className="user-label">{availableUser.label}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </fieldset>
+
+                <button className="button button-compact" type="submit">
+                  Create group
+                </button>
+              </form>
+            </section>
+          </section>
+        </section>
+      ) : null}
     </section>
   );
 }

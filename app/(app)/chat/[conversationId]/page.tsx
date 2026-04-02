@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   getAvailableUsers,
   CHAT_ATTACHMENT_ACCEPT,
+  getConversationDisplayName,
   getConversationForUser,
   getConversationMessages,
   getConversationMemberReadStates,
@@ -32,6 +33,7 @@ import {
 } from './actions';
 import { AutoGrowTextarea } from './auto-grow-textarea';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
+import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
 
@@ -299,11 +301,11 @@ export default async function ChatPage({
   const directParticipantIdentity = otherParticipants[0]
     ? senderIdentities.get(otherParticipants[0].userId)
     : null;
-  const conversationDisplayTitle =
-    conversation.title?.trim() ||
-    (conversation.kind === 'group'
-      ? 'Untitled group'
-      : otherParticipantLabels[0] || 'Direct message');
+  const conversationDisplayTitle = getConversationDisplayName({
+    kind: conversation.kind ?? null,
+    title: conversation.title,
+    participantLabels: otherParticipantLabels,
+  });
   const groupMemberSummary =
     conversation.kind === 'group'
       ? formatGroupMemberSummary(
@@ -433,6 +435,7 @@ export default async function ChatPage({
   return (
     <section className="stack chat-screen">
       <ActiveChatRealtimeSync conversationId={conversationId} />
+      <ComposerKeyboardOffset />
 
       <section className="stack chat-header-stack">
         <Link className="pill conversation-back" href="/inbox">
@@ -451,7 +454,7 @@ export default async function ChatPage({
             ) : (
               <IdentityAvatar
                 identity={directParticipantIdentity}
-                label={otherParticipantLabels[0] || 'Direct message'}
+                label={conversationDisplayTitle}
                 size="lg"
               />
             )}
@@ -462,11 +465,7 @@ export default async function ChatPage({
               </h1>
               {conversation.kind === 'group' ? (
                 <p className="muted chat-member-summary">{groupMemberSummary}</p>
-              ) : (
-                <p className="muted chat-header-subtitle">
-                  {otherParticipantLabels[0] || 'Direct conversation'}
-                </p>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -479,7 +478,7 @@ export default async function ChatPage({
                   : `/chat/${conversationId}?settings=open#conversation-settings`
               }
             >
-              {isSettingsOpen ? 'Close details' : 'Chat details'}
+              {isSettingsOpen ? 'Close' : 'Info'}
             </Link>
           </div>
         </section>
@@ -489,9 +488,7 @@ export default async function ChatPage({
         <section className="card stack conversation-settings-card" id="conversation-settings">
           <div className="conversation-settings-header">
             <div className="stack conversation-settings-copy">
-              <p className="eyebrow">Conversation settings</p>
-              <h2 className="section-title">Chat details</h2>
-              <p className="muted">People and conversation details.</p>
+              <h2 className="section-title">Chat info</h2>
             </div>
             <Link className="pill conversation-settings-close" href={`/chat/${conversationId}`}>
               Done
@@ -502,7 +499,7 @@ export default async function ChatPage({
             <div className="conversation-settings-item">
               <span className="conversation-settings-label">Type</span>
               <span className="conversation-settings-value">
-                {conversation.kind === 'group' ? 'Group chat' : 'Direct chat'}
+                {conversation.kind === 'group' ? 'Group' : 'Person'}
               </span>
             </div>
             <div className="conversation-settings-item">
@@ -529,11 +526,9 @@ export default async function ChatPage({
             <section className="conversation-settings-panel stack">
               <div className="stack conversation-settings-panel-copy">
                 <h3 className="card-title">Group title</h3>
-                <p className="muted">
-                  {canEditGroupTitle
-                    ? 'Rename this group.'
-                    : 'Only the creator can rename this group.'}
-                </p>
+                {canEditGroupTitle ? null : (
+                  <p className="muted">Only the creator can rename it.</p>
+                )}
               </div>
 
               {canEditGroupTitle ? (
@@ -562,20 +557,17 @@ export default async function ChatPage({
                 </form>
               ) : (
                 <p className="conversation-settings-static">
-                  {conversation.title?.trim() || 'Untitled group'}
+                  {conversationDisplayTitle}
                 </p>
               )}
             </section>
           ) : (
             <section className="conversation-settings-panel stack">
               <div className="stack conversation-settings-panel-copy">
-                <h3 className="card-title">Direct conversation</h3>
-                <p className="muted">Direct chats stay simple here.</p>
+                <h3 className="card-title">Person</h3>
               </div>
               <p className="conversation-settings-static">
-                {otherParticipantLabels[0]
-                  ? `${otherParticipantLabels[0]}`
-                  : 'Direct conversation'}
+                {conversationDisplayTitle}
               </p>
             </section>
           )}
@@ -583,7 +575,6 @@ export default async function ChatPage({
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
               <h3 className="card-title">Participants</h3>
-              <p className="muted">Current members.</p>
             </div>
 
             <div className="conversation-member-list">
@@ -609,11 +600,6 @@ export default async function ChatPage({
                             participant.isCurrentUser,
                           )}
                         </span>
-                        {conversation.kind === 'group' ? (
-                          <span className="muted">Active in this group</span>
-                        ) : (
-                          <span className="muted">Direct participant</span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -650,12 +636,12 @@ export default async function ChatPage({
                   <section className="stack conversation-participant-manager">
                     <div className="stack conversation-settings-panel-copy">
                       <h4 className="card-title">Add participants</h4>
-                      <p className="muted">Add more people to this group.</p>
+                      <p className="muted">Add more people.</p>
                     </div>
 
                     {availableParticipantsToAdd.length === 0 ? (
                       <p className="muted conversation-settings-static">
-                        Everyone available is already in this group.
+                        Everyone available is already here.
                       </p>
                     ) : (
                       <form action={addGroupParticipantsAction} className="stack compact-form">
@@ -684,7 +670,7 @@ export default async function ChatPage({
                                   />
                                 </span>
                                 <span className="user-label">{participant.label}</span>
-                                <span className="muted">Add to this group</span>
+                                <span className="muted">Ready to add</span>
                               </span>
                             </label>
                           ))}
@@ -697,17 +683,14 @@ export default async function ChatPage({
                   </section>
                 ) : (
                   <p className="muted conversation-settings-static">
-                    Only the owner can manage members.
+                    Only the owner can manage people.
                   </p>
                 )}
 
                 <section className="stack conversation-leave-panel">
                   <div className="stack conversation-settings-panel-copy">
                     <h4 className="card-title">Leave group</h4>
-                    <p className="muted">
-                      Leave this group. If you are the owner, ownership moves to
-                      the next active member.
-                    </p>
+                    <p className="muted">You’ll leave this chat.</p>
                   </div>
                   <form action={leaveGroupAction}>
                     <input
@@ -837,17 +820,8 @@ export default async function ChatPage({
                             label={senderLabel}
                             size="sm"
                           />
-                        <div className="stack message-header-copy">
+                          <div className="stack message-header-copy">
                             <span className="message-sender">{senderLabel}</span>
-                            <span className="message-kind">
-                              {isDeletedMessage
-                                ? 'Deleted message'
-                                : messageAttachments.length
-                                ? messageAttachments[0]?.isImage
-                                  ? 'Photo attachment'
-                                  : 'File attachment'
-                                : 'Text message'}
-                            </span>
                           </div>
                         </div>
                         <div className="message-header-side">
@@ -1179,7 +1153,6 @@ export default async function ChatPage({
                   name="body"
                   placeholder="Message"
                   rows={2}
-                  required
                   maxHeight={160}
                 />
               </label>
@@ -1227,7 +1200,6 @@ export default async function ChatPage({
             </div>
 
             <div className="stack message-sheet-section">
-              <span className="message-sheet-section-label">React</span>
               <div
                 className={
                   activeActionMessage.sender_id === user.id
@@ -1276,7 +1248,6 @@ export default async function ChatPage({
             </div>
 
             <div className="stack message-sheet-section">
-              <span className="message-sheet-section-label">Actions</span>
               <div className="message-sheet-action-list">
                 <Link
                   className="message-sheet-action"
@@ -1287,9 +1258,6 @@ export default async function ChatPage({
                   </span>
                   <span className="message-sheet-action-copy">
                     <span className="message-sheet-action-label">Reply</span>
-                    <span className="message-sheet-action-hint">
-                      Quote this message in your reply
-                    </span>
                   </span>
                 </Link>
 
@@ -1304,9 +1272,6 @@ export default async function ChatPage({
                       </span>
                       <span className="message-sheet-action-copy">
                         <span className="message-sheet-action-label">Edit</span>
-                        <span className="message-sheet-action-hint">
-                          Update the text of this message
-                        </span>
                       </span>
                     </Link>
 
@@ -1319,9 +1284,6 @@ export default async function ChatPage({
                       </span>
                       <span className="message-sheet-action-copy">
                         <span className="message-sheet-action-label">Delete</span>
-                        <span className="message-sheet-action-hint">
-                          Leave a deleted message state in chat
-                        </span>
                       </span>
                     </Link>
                   </>

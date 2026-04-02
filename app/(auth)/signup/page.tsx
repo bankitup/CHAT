@@ -22,58 +22,73 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = await searchParams;
 
   return (
-    <main className="page stack">
-      <section className="nav">
-        <Link className="pill" href="/">
-          Back home
-        </Link>
-      </section>
+    <main className="page auth-page">
+      <section className="stack auth-shell">
+        <section className="auth-topbar">
+          <Link className="pill auth-back-link" href="/">
+            Back
+          </Link>
+        </section>
 
-      <section className="card stack">
-        <p className="eyebrow">Authentication</p>
-        <h1>Signup</h1>
-        <p className="muted">
-          Create an account with email and password. This keeps the initial auth
-          surface minimal while the repository stays focused on foundation work.
-        </p>
+        <section className="stack auth-brand">
+          <div className="auth-brand-mark" aria-hidden="true">
+            C
+          </div>
+          <div className="stack auth-brand-copy">
+            <p className="auth-brand-name">Chat</p>
+            <p className="auth-brand-line">Chat by Build With Care</p>
+          </div>
+        </section>
 
-        {params.error ? (
-          <p className="notice notice-error">{params.error}</p>
-        ) : null}
+        <section className="card stack auth-card">
+          <div className="stack auth-card-copy">
+            <p className="eyebrow auth-eyebrow">Create account</p>
+            <h1 className="auth-title">Sign up</h1>
+            <p className="muted auth-subtitle">
+              Start with email and password.
+            </p>
+          </div>
 
-        <form action={signupAction} className="stack">
-          <label className="field">
-            <span>Email</span>
-            <input
-              className="input"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-            />
-          </label>
+          {params.error ? (
+            <p className="notice notice-error">{params.error}</p>
+          ) : null}
 
-          <label className="field">
-            <span>Password</span>
-            <input
-              className="input"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={6}
-              required
-            />
-          </label>
+          <form action={signupAction} className="stack auth-form">
+            <label className="field auth-field">
+              <span>Email</span>
+              <input
+                className="input auth-input"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+              />
+            </label>
 
-          <div className="cluster">
-            <button className="button" type="submit">
+            <label className="field auth-field">
+              <span>Password</span>
+              <input
+                className="input auth-input"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                minLength={6}
+                required
+              />
+            </label>
+
+            <button className="button auth-submit" type="submit">
               Create account
             </button>
-            <Link className="pill" href="/login">
-              Already have an account
-            </Link>
-          </div>
-        </form>
+
+            <p className="muted auth-switch-copy">
+              Already have an account?{' '}
+              <Link className="auth-switch-link" href="/login">
+                Log in
+              </Link>
+            </p>
+          </form>
+        </section>
       </section>
     </main>
   );

@@ -13,11 +13,25 @@ export function ComposerAttachmentPicker({
 }: ComposerAttachmentPickerProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const hasSelectedFile = Boolean(selectedFileName);
 
   return (
-    <div className="attachment-entry">
+    <div
+      className={
+        hasSelectedFile
+          ? 'attachment-entry attachment-entry-selected'
+          : 'attachment-entry'
+      }
+    >
       <details className="attachment-entry-details">
-        <summary className="attachment-trigger" aria-label="Attachment options">
+        <summary
+          className={
+            hasSelectedFile
+              ? 'attachment-trigger attachment-trigger-selected'
+              : 'attachment-trigger'
+          }
+          aria-label="Attachment options"
+        >
           +
         </summary>
         <div className="attachment-menu" role="menu" aria-label="Attachment options">
@@ -50,6 +64,9 @@ export function ComposerAttachmentPicker({
 
       {selectedFileName ? (
         <div className="attachment-selected-chip" aria-live="polite">
+          <span aria-hidden="true" className="attachment-selected-indicator">
+            •
+          </span>
           <span className="attachment-selected-name">{selectedFileName}</span>
           <button
             className="attachment-selected-clear"
