@@ -1235,73 +1235,143 @@ main {
 }
 
 .page.public-home {
-  padding-top: calc(16px + env(safe-area-inset-top));
-  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  padding-top: calc(22px + env(safe-area-inset-top));
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
 }
 
 .public-home {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  justify-items: center;
   min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 52px);
   gap: 0;
   grid-template-rows: 1fr auto;
   align-content: stretch;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(247, 248, 250, 0) 30%),
+    linear-gradient(180deg, rgba(240, 246, 255, 0.56), rgba(247, 248, 250, 0) 58%);
+}
+
+.public-home::before,
+.public-home::after {
+  content: '';
+  position: absolute;
+  inset: auto;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.public-home::before {
+  top: 7%;
+  left: 50%;
+  width: min(108vw, 42rem);
+  height: min(108vw, 42rem);
+  transform: translateX(-50%);
+  background:
+    radial-gradient(circle, rgba(31, 111, 235, 0.17) 0%, rgba(31, 111, 235, 0.07) 34%, rgba(31, 111, 235, 0.02) 52%, rgba(31, 111, 235, 0) 74%);
+  filter: blur(18px);
+}
+
+.public-home::after {
+  top: 18%;
+  left: 50%;
+  width: min(72vw, 24rem);
+  height: min(72vw, 24rem);
+  transform: translateX(-8%);
+  background:
+    radial-gradient(circle, rgba(140, 182, 248, 0.14) 0%, rgba(140, 182, 248, 0.05) 42%, rgba(140, 182, 248, 0) 72%);
+  filter: blur(22px);
 }
 
 .public-home-hero {
   align-self: center;
-  gap: 5px;
+  justify-items: center;
+  gap: 12px;
   align-content: start;
-  max-width: 26rem;
-  padding-block: 12px 20px;
+  width: min(100%, 24rem);
+  margin-inline: auto;
+  padding: 30px 14px 34px;
+  text-align: center;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 32px;
+  box-shadow:
+    0 18px 48px rgba(31, 111, 235, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  backdrop-filter: blur(14px);
 }
 
 .public-home-name {
   margin: 0;
   color: var(--foreground);
-  font-size: clamp(1.5rem, 6.1vw, 1.95rem);
+  font-size: clamp(1.95rem, 8.2vw, 2.8rem);
   font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.05em;
+  line-height: 0.95;
+  letter-spacing: -0.055em;
 }
 
 .public-home-title {
-  max-width: 7ch;
-  font-size: clamp(1.65rem, 5.8vw, 2.2rem);
+  max-width: 9ch;
+  margin: 0;
+  font-size: clamp(2.85rem, 12.5vw, 4.8rem);
+  line-height: 0.92;
+  letter-spacing: -0.07em;
+  text-wrap: balance;
 }
 
 .public-home-actions {
   display: grid;
-  gap: 8px;
-  padding-top: 8px;
-  width: min(100%, 18rem);
+  gap: 10px;
+  padding: 12px 0 0;
+  width: min(100%, 22rem);
 }
 
 .public-home-subtitle {
-  max-width: 26ch;
-  font-size: 0.9rem;
-  line-height: 1.4;
+  max-width: 25ch;
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.52;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  color: rgba(91, 100, 112, 0.92);
 }
 
 .public-home-action-primary {
-  min-height: 42px;
+  min-height: 54px;
+  padding: 14px 18px;
+  background: var(--accent);
+  border-color: rgba(31, 111, 235, 0.88);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow: 0 12px 28px rgba(31, 111, 235, 0.16);
 }
 
 .public-home-action-secondary {
-  min-height: 40px;
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(221, 226, 232, 0.92);
-  color: rgba(17, 24, 39, 0.82);
+  min-height: 52px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(221, 226, 232, 0.96);
+  color: rgba(17, 24, 39, 0.86);
+  font-size: 1rem;
+  font-weight: 600;
+  backdrop-filter: blur(12px);
 }
 
 .public-home-watermark {
   margin: 0;
+  justify-self: center;
   align-self: end;
   padding-top: 8px;
-  color: rgba(91, 100, 112, 0.34);
-  font-size: 0.68rem;
-  font-weight: 450;
+  color: rgba(91, 100, 112, 0.18);
+  font-size: 0.62rem;
+  font-weight: 420;
   line-height: 1.3;
-  letter-spacing: 0.03em;
-  text-align: right;
+  letter-spacing: 0.06em;
+  text-align: center;
 }
 
 .profile-settings-copy {

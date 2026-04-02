@@ -11,11 +11,9 @@ export default async function HomePage() {
     <main className="page stack public-home">
       <section className="stack public-home-hero">
         <p className="public-home-name">Chat</p>
-        <h1 className="title public-home-title">{user ? 'Open chats.' : 'Start chatting.'}</h1>
+        <h1 className="title public-home-title">Start your conversation</h1>
         <p className="subtitle public-home-subtitle">
-          {user
-            ? 'Your conversations and settings are ready.'
-            : 'Log in or create an account to start a direct message or group.'}
+          A calm place for direct messages and groups, designed for mobile first.
         </p>
         <section className="public-home-actions" aria-label={user ? 'Primary actions' : 'Get started'}>
           {user ? (
