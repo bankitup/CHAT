@@ -450,6 +450,7 @@ main {
 
 .chat-screen {
   gap: 16px;
+  min-height: calc(100dvh - 210px);
 }
 
 .chat-header-stack {
@@ -477,9 +478,21 @@ main {
   gap: 10px;
 }
 
+.chat-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
 .message-thread {
   display: grid;
   gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: calc(128px + env(safe-area-inset-bottom));
+  padding-right: 2px;
 }
 
 .message-row {
@@ -493,7 +506,7 @@ main {
 
 .message-card {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   width: min(100%, 320px);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -511,7 +524,7 @@ main {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .message-header-own {
@@ -519,7 +532,7 @@ main {
 }
 
 .message-header-copy {
-  gap: 2px;
+  gap: 3px;
 }
 
 .message-sender {
@@ -544,15 +557,21 @@ main {
 
 .message-kind {
   color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0.8;
   letter-spacing: 0.02em;
 }
 
 .message-meta {
-  color: var(--muted);
-  font-size: 0.78rem;
+  margin-top: 2px;
+  color: rgba(91, 100, 112, 0.74);
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.15;
   text-align: right;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .message-meta-own {
@@ -562,7 +581,8 @@ main {
 .message-body {
   margin: 0;
   color: var(--foreground);
-  line-height: 1.6;
+  font-size: 0.96rem;
+  line-height: 1.62;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -571,11 +591,11 @@ main {
 .reaction-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .reaction-groups {
-  gap: 6px;
+  gap: 5px;
 }
 
 .reaction-groups-own {
@@ -583,7 +603,7 @@ main {
 }
 
 .reaction-picker-block {
-  gap: 8px;
+  gap: 6px;
 }
 
 .reaction-picker-block-own {
@@ -592,8 +612,8 @@ main {
 
 .reaction-picker-label {
   margin: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
+  color: rgba(91, 100, 112, 0.82);
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -607,41 +627,71 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  min-height: 34px;
-  padding: 7px 10px;
-  background: var(--surface-muted);
+  min-height: 30px;
+  padding: 5px 9px;
+  background: rgba(241, 243, 245, 0.9);
   color: var(--foreground);
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
+  line-height: 1;
   cursor: pointer;
 }
 
 .reaction-pill-selected,
 .reaction-toggle-selected {
   border-color: var(--accent);
-  background: rgba(31, 111, 235, 0.1);
+  background: rgba(31, 111, 235, 0.08);
   color: var(--accent);
 }
 
 .reaction-count {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 600;
 }
 
 .composer-card {
   position: sticky;
-  bottom: max(12px, env(safe-area-inset-bottom));
+  bottom: 0;
   gap: 14px;
   padding: 16px;
   border-radius: 20px;
+  margin-bottom: env(safe-area-inset-bottom);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
   box-shadow: 0 10px 30px rgba(17, 24, 39, 0.08);
 }
 
 .chat-empty-card {
+  gap: 10px;
+  align-content: start;
   padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(31, 111, 235, 0.05), rgba(31, 111, 235, 0))
+    var(--surface);
+  border: 1px solid rgba(31, 111, 235, 0.12);
+}
+
+.chat-empty-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(31, 111, 235, 0.08);
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chat-empty-cta {
+  width: fit-content;
+  margin-top: 2px;
 }
 
 .composer-header,
@@ -654,10 +704,13 @@ main {
 }
 
 .composer-form .textarea {
-  min-height: 88px;
+  min-height: 52px;
+  max-height: 160px;
   border-radius: 16px;
   padding: 14px 15px;
   background: var(--surface-muted);
+  resize: none;
+  overflow-y: hidden;
 }
 
 .composer-button {
@@ -681,6 +734,14 @@ main {
   .chat-header-meta {
     grid-template-columns: auto 1fr;
     align-items: center;
+  }
+
+  .chat-screen {
+    min-height: calc(100dvh - 220px);
+  }
+
+  .message-thread {
+    padding-bottom: 120px;
   }
 
   .composer-button {
