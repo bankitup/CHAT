@@ -10,18 +10,12 @@ export default async function HomePage() {
   return (
     <main className="page stack public-home">
       <section className="stack public-home-hero">
-        <div className="public-home-brand">
-          <div className="auth-brand-mark public-home-brand-mark" aria-hidden="true">
-            C
-          </div>
-          <div className="stack public-home-brand-copy">
-            <p className="public-home-name">Chat</p>
-            <p className="public-home-line">Chat by Build With Care</p>
-          </div>
-        </div>
-        <h1 className="title public-home-title">A calm place for everyday conversation.</h1>
-        <p className="subtitle">
-          Direct messages, groups, and a mobile-first messenger that stays out of the way.
+        <p className="public-home-name">Chat</p>
+        <h1 className="title public-home-title">{user ? 'Open chats.' : 'Start chatting.'}</h1>
+        <p className="subtitle public-home-subtitle">
+          {user
+            ? 'Your conversations and settings are ready.'
+            : 'Log in or create an account to start a direct message or group.'}
         </p>
       </section>
 
@@ -47,14 +41,13 @@ export default async function HomePage() {
         )}
       </section>
 
-      <section className="card card-muted stack public-home-note">
-        <h2 className="card-title">{user ? 'Welcome back' : 'Get started'}</h2>
-        <p className="muted">
-          {user
-            ? 'Your chats and settings are ready.'
-            : 'Create an account or log in to start chatting.'}
+      <section className="stack public-home-note" aria-label={user ? 'Welcome back' : 'Get started'}>
+        <p className="muted public-home-note-copy">
+          {user ? 'Welcome back.' : 'Create an account or log in to continue.'}
         </p>
       </section>
+
+      <p className="public-home-watermark">Chat by Build With Care</p>
     </main>
   );
 }
