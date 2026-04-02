@@ -184,6 +184,20 @@ function normalizeConversation(
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
+function isMissingColumnErrorMessage(message: string, columnName: string) {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes('column') &&
+    normalizedMessage.includes(columnName.toLowerCase())
+  );
+}
+
+function createSchemaRequirementError(details: string) {
+  return new Error(
+    `${details} Apply the documented Supabase changes in /Users/danya/IOS - Apps/CHAT/docs/schema-requirements.md.`,
+  );
+}
+
 function uniqueNonEmptyLabels(labels: string[]) {
   return Array.from(
     new Set(labels.map((label) => label.trim()).filter(Boolean)),
@@ -234,10 +248,12 @@ async function getConversationsByVisibility(
   archived: boolean,
 ) {
   const supabase = await createSupabaseServerClient();
+  const baseSelect =
+    'conversation_id, state, last_read_message_seq, last_read_at, conversations(id, kind, title, created_by, last_message_at, created_at)';
   let query = supabase
     .from('conversation_members')
     .select(
-      'conversation_id, state, hidden_at, last_read_message_seq, last_read_at, conversations(id, kind, title, created_by, last_message_at, created_at)',
+      `conversation_id, state, hidden_at, last_read_message_seq, last_read_at, conversations(id, kind, title, created_by, last_message_at, created_at)`,
     )
     .eq('user_id', userId)
     .eq('state', 'active');
@@ -247,10 +263,37 @@ async function getConversationsByVisibility(
   const { data, error } = await query;
 
   if (error) {
+    if (isMissingColumnErrorMessage(error.message, 'hidden_at')) {
+      if (archived) {
+        return [] satisfies InboxConversation[];
+      }
+
+      const fallback = await supabase
+        .from('conversation_members')
+        .select(baseSelect)
+        .eq('user_id', userId)
+        .eq('state', 'active');
+
+      if (fallback.error) {
+        throw new Error(fallback.error.message);
+      }
+
+      return mapInboxConversations(
+        (fallback.data ?? []) as ConversationMemberRow[],
+        supabase,
+      );
+    }
+
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []) as ConversationMemberRow[];
+  return mapInboxConversations((data ?? []) as ConversationMemberRow[], supabase);
+}
+
+async function mapInboxConversations(
+  rows: ConversationMemberRow[],
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+) {
   const conversationIds = rows.map((row) => row.conversation_id);
   const latestMessageSeqByConversation = new Map<string, number>();
   const unreadCountByConversation = new Map<string, number>();
@@ -366,6 +409,43 @@ export async function getConversationForUser(
     .maybeSingle();
 
   if (error) {
+    if (isMissingColumnErrorMessage(error.message, 'notification_level')) {
+      const fallback = await supabase
+        .from('conversation_members')
+        .select(
+          'conversation_id, conversations(id, kind, title, created_by, last_message_at, created_at)',
+        )
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId)
+        .eq('state', 'active')
+        .maybeSingle();
+
+      if (fallback.error) {
+        throw new Error(fallback.error.message);
+      }
+
+      if (!fallback.data) {
+        return null;
+      }
+
+      const fallbackRow = fallback.data as ConversationMemberRow;
+      const fallbackConversation = normalizeConversation(fallbackRow.conversations);
+
+      if (!fallbackConversation) {
+        return null;
+      }
+
+      return {
+        conversationId: fallbackRow.conversation_id,
+        kind: fallbackConversation.kind,
+        title: fallbackConversation.title,
+        createdBy: fallbackConversation.created_by ?? null,
+        lastMessageAt: fallbackConversation.last_message_at,
+        createdAt: fallbackConversation.created_at,
+        notificationLevel: 'default' as const,
+      };
+    }
+
     throw new Error(error.message);
   }
 
@@ -1207,6 +1287,12 @@ export async function markConversationRead(input: {
     .maybeSingle();
 
   if (membershipError) {
+    if (isMissingColumnErrorMessage(membershipError.message, 'hidden_at')) {
+      throw createSchemaRequirementError(
+        'Inbox archive/hide requires public.conversation_members.hidden_at.',
+      );
+    }
+
     throw new Error(membershipError.message);
   }
 
@@ -1334,6 +1420,12 @@ export async function hideConversationForUser(input: {
     .eq('state', 'active');
 
   if (updateError) {
+    if (isMissingColumnErrorMessage(updateError.message, 'hidden_at')) {
+      throw createSchemaRequirementError(
+        'Inbox archive/hide requires public.conversation_members.hidden_at.',
+      );
+    }
+
     if (updateError.message.includes('row-level security policy')) {
       throw new Error(
         'Conversation archive debug: update blocked by conversation_members RLS.',
@@ -1379,6 +1471,12 @@ export async function restoreConversationForUser(input: {
     .maybeSingle();
 
   if (membershipError) {
+    if (isMissingColumnErrorMessage(membershipError.message, 'hidden_at')) {
+      throw createSchemaRequirementError(
+        'Inbox archive/hide requires public.conversation_members.hidden_at.',
+      );
+    }
+
     throw new Error(membershipError.message);
   }
 
@@ -1398,6 +1496,12 @@ export async function restoreConversationForUser(input: {
     .eq('state', 'active');
 
   if (updateError) {
+    if (isMissingColumnErrorMessage(updateError.message, 'hidden_at')) {
+      throw createSchemaRequirementError(
+        'Inbox archive/hide requires public.conversation_members.hidden_at.',
+      );
+    }
+
     if (updateError.message.includes('row-level security policy')) {
       throw new Error(
         'Conversation archive debug: update blocked by conversation_members RLS.',
@@ -1463,6 +1567,12 @@ export async function updateConversationNotificationLevel(input: {
     .eq('state', 'active');
 
   if (updateError) {
+    if (isMissingColumnErrorMessage(updateError.message, 'notification_level')) {
+      throw createSchemaRequirementError(
+        'Per-chat notification preferences require public.conversation_members.notification_level.',
+      );
+    }
+
     if (updateError.message.includes('row-level security policy')) {
       throw new Error(
         'Conversation notifications debug: update blocked by conversation_members RLS.',

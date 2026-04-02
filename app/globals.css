@@ -840,12 +840,18 @@ main {
   align-items: start;
   gap: 7px;
   color: inherit;
+  width: 100%;
+  grid-column: 1 / -1;
 }
 
 .conversation-row-with-action {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+}
+
+.conversation-row-with-action .conversation-row-link {
+  grid-column: 1 / 2;
 }
 
 .conversation-restore-button {

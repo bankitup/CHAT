@@ -58,6 +58,7 @@ Before or immediately after the first deployment, verify the following in Supaba
 
 - Database schema and RLS
   Confirm the production Supabase project includes the expected messaging tables, policies, and auth assumptions used by the current shell.
+  Before deploy, verify the live database still matches [docs/schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md) and apply any required SQL changes in `docs/sql/`.
 
 ## What to Verify After Deployment
 

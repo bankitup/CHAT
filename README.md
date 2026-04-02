@@ -111,6 +111,10 @@ docs/                      # Product and implementation guidance
 
 If a module is not active yet, it should still exist as a minimal placeholder with a clear purpose.
 
+## Supabase Schema Notes
+
+Recent inbox-management and conversation-settings work depends on explicit schema support in Supabase. The current code-level dependency surface is documented in [docs/schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md).
+
 ## Product Principles
 
 - Build for the active product path, not for hypothetical clients.
