@@ -4,6 +4,7 @@ import type {
   PublishDmE2eeDeviceResult,
 } from '@/modules/messaging/contract/dm-e2ee';
 import {
+  deleteLocalDmE2eeDeviceRecord,
   getLocalDmE2eeDeviceRecord,
   saveLocalDmE2eeDeviceRecord,
   updateLocalDmE2eeDeviceRecord,
@@ -19,6 +20,7 @@ type DmE2eeBootstrapStatus =
 
 type EnsureDmE2eeDeviceRegisteredOptions = {
   forcePublish?: boolean;
+  allowRepair?: boolean;
 };
 
 function createLocalDmE2eeError(
@@ -200,13 +202,21 @@ export async function ensureDmE2eeDeviceRegistered(
     };
   }
 
-  const localRecord = await ensureLocalDmE2eeDeviceRecord(userId);
+  const allowRepair = options.allowRepair !== false;
+  let localRecord = await ensureLocalDmE2eeDeviceRecord(userId);
 
   if (!isLocalDmE2eeDeviceRecordUsable(localRecord)) {
-    throw createLocalDmE2eeError(
-      'dm_e2ee_local_state_incomplete',
-      'Local DM E2EE device state is incomplete on this device.',
-    );
+    if (allowRepair) {
+      await deleteLocalDmE2eeDeviceRecord(userId);
+      localRecord = await ensureLocalDmE2eeDeviceRecord(userId);
+    }
+
+    if (!isLocalDmE2eeDeviceRecordUsable(localRecord)) {
+      throw createLocalDmE2eeError(
+        'dm_e2ee_local_state_incomplete',
+        'Local DM E2EE device state is incomplete on this device.',
+      );
+    }
   }
 
   if (localRecord.serverDeviceRecordId && !options.forcePublish) {
@@ -270,6 +280,14 @@ export async function ensureDmE2eeDeviceRegistered(
   }
 
   if (errorCode === 'dm_e2ee_local_state_incomplete') {
+    if (allowRepair) {
+      await deleteLocalDmE2eeDeviceRecord(userId);
+      return ensureDmE2eeDeviceRegistered(userId, {
+        forcePublish: true,
+        allowRepair: false,
+      });
+    }
+
     throw createLocalDmE2eeError(
       'dm_e2ee_local_state_incomplete',
       errorMessage || 'Local DM E2EE setup is incomplete on this device.',

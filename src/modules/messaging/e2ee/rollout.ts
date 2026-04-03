@@ -9,11 +9,19 @@ export type DmE2eeRolloutStatus = {
 
 type DmE2eeRolloutDiagnosticsInput = {
   enabled: boolean;
+  enabledReason:
+    | 'mode_all'
+    | 'selected_match'
+    | 'selected_no_match'
+    | 'mode_disabled'
+    | 'missing_user';
   hasUserEmail: boolean;
   hasUserId: boolean;
   matchedTesterEmail: boolean;
   matchedTesterUserId: boolean;
   mode: DmE2eeRolloutMode;
+  rawMode: string | null;
+  recognizedMode: boolean;
   source: string;
   testerEmailCount: number;
   testerUserIdCount: number;
@@ -59,6 +67,8 @@ function logDmE2eeRolloutDiagnostics(input: DmE2eeRolloutDiagnosticsInput) {
   }
 
   console.info('[dm-e2ee-rollout]', input.source, {
+    rawMode: input.rawMode,
+    recognizedMode: input.recognizedMode,
     mode: input.mode,
     hasUserId: input.hasUserId,
     hasUserEmail: input.hasUserEmail,
@@ -67,6 +77,7 @@ function logDmE2eeRolloutDiagnostics(input: DmE2eeRolloutDiagnosticsInput) {
     testerUserIdCount: input.testerUserIdCount,
     testerEmailCount: input.testerEmailCount,
     enabled: input.enabled,
+    enabledReason: input.enabledReason,
   });
 }
 
@@ -77,7 +88,9 @@ export function getDmE2eeRolloutStatusForUser(
     source?: string;
   },
 ): DmE2eeRolloutStatus {
-  const mode = normalizeRolloutMode(process.env.CHAT_DM_E2EE_ROLLOUT);
+  const rawMode = process.env.CHAT_DM_E2EE_ROLLOUT?.trim() ?? null;
+  const mode = normalizeRolloutMode(rawMode ?? undefined);
+  const recognizedMode = rawMode === 'all' || rawMode === 'selected';
   const testerUserIds = parseTesterUserIds(
     process.env.CHAT_DM_E2EE_TESTER_USER_IDS,
   );
@@ -89,6 +102,8 @@ export function getDmE2eeRolloutStatusForUser(
   if (!userId) {
     logDmE2eeRolloutDiagnostics({
       source,
+      rawMode,
+      recognizedMode,
       mode,
       hasUserId: false,
       hasUserEmail: Boolean(userEmail?.trim()),
@@ -97,6 +112,7 @@ export function getDmE2eeRolloutStatusForUser(
       testerUserIdCount: testerUserIds.length,
       testerEmailCount: testerEmails.length,
       enabled: false,
+      enabledReason: 'missing_user',
     });
     return {
       mode,
@@ -113,9 +129,19 @@ export function getDmE2eeRolloutStatusForUser(
   const enabled =
     mode === 'all' ||
     (mode === 'selected' && (matchedTesterUserId || matchedTesterEmail));
+  const enabledReason: DmE2eeRolloutDiagnosticsInput['enabledReason'] =
+    mode === 'all'
+      ? 'mode_all'
+      : mode === 'selected'
+        ? matchedTesterUserId || matchedTesterEmail
+          ? 'selected_match'
+          : 'selected_no_match'
+        : 'mode_disabled';
 
   logDmE2eeRolloutDiagnostics({
     source,
+    rawMode,
+    recognizedMode,
     mode,
     hasUserId: true,
     hasUserEmail: normalizedEmail.length > 0,
@@ -124,6 +150,7 @@ export function getDmE2eeRolloutStatusForUser(
     testerUserIdCount: testerUserIds.length,
     testerEmailCount: testerEmails.length,
     enabled,
+    enabledReason,
   });
 
   return {
