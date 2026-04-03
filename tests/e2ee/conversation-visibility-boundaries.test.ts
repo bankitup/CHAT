@@ -81,6 +81,12 @@ test('hidden_at runtime matcher catches schema-cache and field variants', () => 
     true,
   );
   assert.equal(
+    isHiddenAtVisibilityRuntimeError(
+      "relation conversation_members.hidden_at does not exist in cached metadata",
+    ),
+    true,
+  );
+  assert.equal(
     isHiddenAtVisibilityRuntimeError('permission denied for table conversation_members'),
     false,
   );

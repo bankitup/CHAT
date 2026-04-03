@@ -18,6 +18,7 @@ export function isHiddenAtVisibilityRuntimeError(message: string) {
   return (
     normalizedMessage.includes('column') ||
     normalizedMessage.includes('field') ||
+    normalizedMessage.includes('does not exist') ||
     normalizedMessage.includes('schema cache')
   );
 }

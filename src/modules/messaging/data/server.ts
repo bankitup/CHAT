@@ -393,40 +393,50 @@ async function getConversationsByVisibility(
   }
 
   const membershipRows = (baseMemberships.data ?? []) as ConversationMemberRow[];
-  const visibilityRows = await supabase
-    .from('conversation_members')
-    .select('conversation_id, hidden_at')
-    .eq('user_id', userId)
-    .eq('state', 'active');
 
-  if (visibilityRows.error) {
-    if (isHiddenAtVisibilityRuntimeError(visibilityRows.error.message)) {
-      if (archived) {
-        return [] satisfies InboxConversation[];
+  const fallbackVisibleConversations = async () =>
+    mapInboxConversations(
+      await attachConversationsToMembershipRows(membershipRows, supabase, options),
+      supabase,
+    );
+
+  try {
+    const visibilityRows = await supabase
+      .from('conversation_members')
+      .select('conversation_id, hidden_at')
+      .eq('user_id', userId)
+      .eq('state', 'active');
+
+    if (visibilityRows.error) {
+      if (isHiddenAtVisibilityRuntimeError(visibilityRows.error.message)) {
+        return archived ? ([] satisfies InboxConversation[]) : fallbackVisibleConversations();
       }
 
-      return mapInboxConversations(
-        await attachConversationsToMembershipRows(membershipRows, supabase, options),
-        supabase,
-      );
+      throw new Error(visibilityRows.error.message);
     }
 
-    throw new Error(visibilityRows.error.message);
+    const scopedMembershipRows = applyConversationVisibility(
+      membershipRows,
+      archived,
+      (visibilityRows.data ?? []) as Array<{
+        conversation_id: string;
+        hidden_at: string | null;
+      }>,
+    ) as ConversationMemberRow[];
+
+    return mapInboxConversations(
+      await attachConversationsToMembershipRows(scopedMembershipRows, supabase, options),
+      supabase,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isHiddenAtVisibilityRuntimeError(message)) {
+      return archived ? ([] satisfies InboxConversation[]) : fallbackVisibleConversations();
+    }
+
+    throw error;
   }
-
-  const scopedMembershipRows = applyConversationVisibility(
-    membershipRows,
-    archived,
-    (visibilityRows.data ?? []) as Array<{
-      conversation_id: string;
-      hidden_at: string | null;
-    }>,
-  ) as ConversationMemberRow[];
-
-  return mapInboxConversations(
-    await attachConversationsToMembershipRows(scopedMembershipRows, supabase, options),
-    supabase,
-  );
 }
 
 async function attachConversationsToMembershipRows(
