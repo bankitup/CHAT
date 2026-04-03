@@ -1,5 +1,5 @@
 -- Avatar storage policy draft for the `avatars` bucket.
--- Adjust bucket name if NEXT_PUBLIC_SUPABASE_AVATARS_BUCKET differs in production.
+-- Adjust bucket name if SUPABASE_AVATARS_BUCKET differs in production.
 
 insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', false)

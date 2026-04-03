@@ -224,7 +224,7 @@ export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
 const CHAT_ATTACHMENT_BUCKET =
   process.env.NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET ?? 'message-attachments';
 const PROFILE_AVATAR_BUCKET =
-  process.env.NEXT_PUBLIC_SUPABASE_AVATARS_BUCKET ?? 'avatars';
+  process.env.SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
 const SUPPORTED_ATTACHMENT_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -1072,6 +1072,14 @@ function isManagedAvatarObjectPath(
   }
 
   return normalizedValue.startsWith(`${userId}/`);
+}
+
+function isBucketNotFoundStorageErrorMessage(message: string) {
+  return message.toLowerCase().includes('bucket not found');
+}
+
+function getAvatarBucketRequirementErrorMessage() {
+  return `Avatar upload bucket "${PROFILE_AVATAR_BUCKET}" was not found. Create this Supabase Storage bucket and apply /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-03-avatars-storage-policies.sql.`;
 }
 
 async function resolveStoredAvatarPath(
@@ -2020,6 +2028,10 @@ export async function updateCurrentUserProfile(input: {
       });
 
     if (uploadError) {
+      if (isBucketNotFoundStorageErrorMessage(uploadError.message)) {
+        throw new Error(getAvatarBucketRequirementErrorMessage());
+      }
+
       throw new Error(uploadError.message);
     }
 

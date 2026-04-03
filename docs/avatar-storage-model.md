@@ -12,7 +12,7 @@ Avatar files live in the Supabase Storage bucket named `avatars` by default.
 
 The current app code resolves the bucket name from:
 
-- `NEXT_PUBLIC_SUPABASE_AVATARS_BUCKET`
+- `SUPABASE_AVATARS_BUCKET`
 - fallback: `avatars`
 
 New avatar uploads are stored under a user-scoped object path:

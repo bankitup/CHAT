@@ -78,6 +78,7 @@ The code already falls back if `avatar_path` is missing.
 Operational note:
 
 - avatar files are expected to live in the configured avatars bucket
+- current default bucket is `avatars` (override with `SUPABASE_AVATARS_BUCKET` if needed)
 - new `avatar_path` writes store bucket object paths, not baked public URLs
 
 ### `public.message_reactions`
@@ -106,6 +107,7 @@ Apply these if the fields are not yet present in your Supabase project:
 - [2026-04-03-conversation-member-notification-level.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-notification-level.sql)
 - [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
 - [2026-04-03-messages-shell-e2ee-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-shell-e2ee-v1-align.sql)
+- [2026-04-03-avatars-storage-policies.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-avatars-storage-policies.sql)
 
 ## Defensive behavior currently in code
 
