@@ -288,6 +288,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     requestedSpaceId: query.space,
     source: 'inbox-page-explicit-v1-test-bypass',
   });
+  const isV1TestBypass = Boolean(explicitV1TestSpace);
 
   if (explicitV1TestSpace) {
     // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
@@ -386,25 +387,33 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return [] as Awaited<ReturnType<typeof getInboxConversations>>;
       }),
     archivedConversationsPromise,
-    getAvailableUsers(user.id, {
-      spaceId: activeSpaceId,
-      source: 'inbox-page',
-    })
-      .then((value) => {
-        logDiagnostics('loader:users-ok', { count: value.length });
-        return value;
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        logDiagnostics('loader:users-error', { message });
+    isV1TestBypass
+      ? Promise.resolve([] as Awaited<ReturnType<typeof getAvailableUsers>>).then(
+          (value) => {
+            // Temporary v1 unblocker: avoid space_members lookups on critical SSR entry.
+            logDiagnostics('loader:users-v1-test-bypass-empty');
+            return value;
+          },
+        )
+      : getAvailableUsers(user.id, {
+          spaceId: activeSpaceId,
+          source: 'inbox-page',
+        })
+          .then((value) => {
+            logDiagnostics('loader:users-ok', { count: value.length });
+            return value;
+          })
+          .catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            logDiagnostics('loader:users-error', { message });
 
-        if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-          logDiagnostics('loader:users-fallback-empty');
-          return [] as Awaited<ReturnType<typeof getAvailableUsers>>;
-        }
+            if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+              logDiagnostics('loader:users-fallback-empty');
+              return [] as Awaited<ReturnType<typeof getAvailableUsers>>;
+            }
 
-        throw error;
-      }),
+            throw error;
+          }),
   ]);
   logDiagnostics('loader:all-ok');
   const visibleConversations =

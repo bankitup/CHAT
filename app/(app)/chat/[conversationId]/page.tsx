@@ -367,6 +367,7 @@ export default async function ChatPage({
     requestedSpaceId,
     source: 'chat-page-explicit-v1-test-bypass',
   });
+  const isV1TestBypass = Boolean(explicitV1TestSpace);
 
   if (explicitV1TestSpace) {
     // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
@@ -448,8 +449,9 @@ export default async function ChatPage({
   const readState = await getConversationReadState(conversationId, user.id);
   const memberReadStates = await getConversationMemberReadStates(conversationId);
   const participants = await getConversationParticipants(conversationId);
+  // Temporary v1 unblocker: do not trigger space_members-backed available user lookup in TEST bypass flow.
   const availableUsers =
-    conversation.kind === 'group' && isSettingsOpen
+    conversation.kind === 'group' && isSettingsOpen && !isV1TestBypass
       ? await getAvailableUsers(user.id, { spaceId: activeSpaceId })
       : [];
   const senderProfiles = await getMessageSenderProfiles(
