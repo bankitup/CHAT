@@ -60,85 +60,69 @@ export function ComposerAttachmentPicker({
   }, [previewUrl]);
 
   return (
-    <div
-      className={
-        hasSelectedFile
-          ? 'attachment-entry attachment-entry-selected'
-          : errorMessage
-            ? 'attachment-entry attachment-entry-error'
-            : 'attachment-entry'
-      }
-    >
-      <div
-        className={
-          hasSelectedFile
-            ? 'attachment-entry-row attachment-entry-row-selected'
-            : 'attachment-entry-row'
-        }
-      >
-        <details className="attachment-entry-details" ref={detailsRef}>
-          <summary
-            className={
-              hasSelectedFile
-                ? 'attachment-trigger attachment-trigger-selected'
-                : 'attachment-trigger'
-            }
-            aria-label={t.chat.attachmentOptions}
-          >
-            +
-          </summary>
-          <div className="attachment-menu" role="menu" aria-label={t.chat.attachmentOptions}>
-            <button
-              className="attachment-option attachment-option-action"
-              type="button"
-              onClick={() => inputRef.current?.click()}
-            >
-              <span>{t.chat.photoOrFile}</span>
-              <span className="attachment-option-note">{maxSizeLabel}</span>
-            </button>
-            <button className="attachment-option" disabled type="button">
-              <span>{t.chat.camera}</span>
-              <span className="attachment-option-note">{t.chat.soon}</span>
-            </button>
-          </div>
-        </details>
-
-        {selectedFile ? (
-          <div className="attachment-selected-card" aria-live="polite">
-            {previewUrl ? (
-              <span
-                aria-hidden="true"
-                className="attachment-selected-preview"
-                style={{ backgroundImage: `url("${previewUrl}")` }}
-              />
-            ) : (
-              <span aria-hidden="true" className="attachment-selected-file">
-                {t.chat.file}
-              </span>
-            )}
-            <span className="attachment-selected-copy">
-              <span className="attachment-selected-name">{selectedFile.name}</span>
-              <span className="attachment-selected-meta">
-                {isImage ? t.chat.image : t.chat.attachment} · {formatFileSize(selectedFile.size)}
-              </span>
+    <>
+      {selectedFile ? (
+        <div className="attachment-selected-card" aria-live="polite">
+          {previewUrl ? (
+            <span
+              aria-hidden="true"
+              className="attachment-selected-preview"
+              style={{ backgroundImage: `url("${previewUrl}")` }}
+            />
+          ) : (
+            <span aria-hidden="true" className="attachment-selected-file">
+              {t.chat.file}
             </span>
-            <button
-              className="attachment-selected-clear"
-              type="button"
-              onClick={() => {
-                if (inputRef.current) {
-                  inputRef.current.value = '';
-                }
+          )}
+          <span className="attachment-selected-copy">
+            <span className="attachment-selected-name">{selectedFile.name}</span>
+            <span className="attachment-selected-meta">
+              {isImage ? t.chat.image : t.chat.attachment} · {formatFileSize(selectedFile.size)}
+            </span>
+          </span>
+          <button
+            className="attachment-selected-clear"
+            type="button"
+            onClick={() => {
+              if (inputRef.current) {
+                inputRef.current.value = '';
+              }
 
-                setSelectedFile(null);
-                setErrorMessage(null);
-              }}
-            >
-              {t.chat.clearAttachment}
-            </button>
-          </div>
-        ) : null}
-      </div>
+              setSelectedFile(null);
+              setErrorMessage(null);
+            }}
+          >
+            {t.chat.clearAttachment}
+          </button>
+        </div>
+      ) : null}
+
+      <details className="attachment-entry-details" ref={detailsRef}>
+        <summary
+          className={
+            hasSelectedFile
+              ? 'attachment-trigger attachment-trigger-selected'
+              : 'attachment-trigger'
+          }
+          aria-label={t.chat.attachmentOptions}
+        >
+          +
+        </summary>
+        <div className="attachment-menu" role="menu" aria-label={t.chat.attachmentOptions}>
+          <button
+            className="attachment-option attachment-option-action"
+            type="button"
+            onClick={() => inputRef.current?.click()}
+          >
+            <span>{t.chat.photoOrFile}</span>
+            <span className="attachment-option-note">{maxSizeLabel}</span>
+          </button>
+          <button className="attachment-option" disabled type="button">
+            <span>{t.chat.camera}</span>
+            <span className="attachment-option-note">{t.chat.soon}</span>
+          </button>
+        </div>
+      </details>
 
       <input
         ref={inputRef}
@@ -185,6 +169,6 @@ export function ComposerAttachmentPicker({
       {errorMessage ? (
         <p className="attachment-helper attachment-helper-error">{errorMessage}</p>
       ) : null}
-    </div>
+    </>
   );
 }

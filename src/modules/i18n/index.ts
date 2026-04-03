@@ -31,6 +31,15 @@ type LanguageDictionary = {
     backToHome: string;
     signupRedirectMessage: string;
   };
+  shell: {
+    label: string;
+    chats: string;
+    dms: string;
+    activity: string;
+    openChats: string;
+    openDms: string;
+    openActivity: string;
+  };
   settings: {
     backToChats: string;
     heroEyebrow: string;
@@ -54,6 +63,23 @@ type LanguageDictionary = {
     logoutButton: string;
     profileUpdated: string;
     languageUpdated: string;
+  };
+  activity: {
+    title: string;
+    subtitle: string;
+    unreadChats: string;
+    unreadDms: string;
+    archivedChats: string;
+    openChats: string;
+    openArchived: string;
+    unreadSectionTitle: string;
+    unreadSectionBody: string;
+    recentTitle: string;
+    recentBody: string;
+    recentEmptyTitle: string;
+    recentEmptyBody: string;
+    quietTitle: string;
+    quietBody: string;
   };
   notifications: {
     title: string;
@@ -81,18 +107,24 @@ type LanguageDictionary = {
     comingSoonNote: string;
     availableNote: string;
   };
-  inbox: {
-    title: string;
-    subtitleNew: (count: number) => string;
-    subtitleCaughtUp: string;
-    subtitleStart: string;
-    subtitleArchivedCount: (count: number) => string;
-    subtitleArchivedEmpty: string;
-    settingsAria: string;
-    createAria: string;
-    searchAria: string;
-    filtersAria: string;
-    searchPlaceholder: string;
+    inbox: {
+      title: string;
+      dmTitle: string;
+      subtitleNew: (count: number) => string;
+      subtitleDmNew: (count: number) => string;
+      subtitleCaughtUp: string;
+      subtitleDmCaughtUp: string;
+      subtitleStart: string;
+      subtitleDmStart: string;
+      subtitleArchivedCount: (count: number) => string;
+      subtitleArchivedEmpty: string;
+      settingsAria: string;
+      createAria: string;
+      searchAria: string;
+      searchDmAria: string;
+      filtersAria: string;
+      searchPlaceholder: string;
+      searchDmPlaceholder: string;
     filters: {
       all: string;
       dm: string;
@@ -228,6 +260,9 @@ type LanguageDictionary = {
     photoOrFile: string;
     camera: string;
     soon: string;
+    microphone: string;
+    voiceMessagesSoon: string;
+    mentionSuggestions: string;
     clearAttachment: string;
     attachmentSizeError: (maxSizeLabel: string) => string;
     activeNow: string;
@@ -268,6 +303,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       backToHome: 'Back to home',
       signupRedirectMessage: 'Access is managed for you. Log in with an existing account.',
     },
+    shell: {
+      label: 'Primary navigation',
+      chats: 'Chats',
+      dms: 'DMs',
+      activity: 'Activity',
+      openChats: 'Open chats',
+      openDms: 'Open direct messages',
+      openActivity: 'Open activity',
+    },
     settings: {
       backToChats: 'Back to chats',
       heroEyebrow: 'You',
@@ -291,6 +335,23 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       logoutButton: 'Log out',
       profileUpdated: 'Profile updated.',
       languageUpdated: 'Language updated.',
+    },
+    activity: {
+      title: 'Activity',
+      subtitle: 'Unread chats and recent message activity.',
+      unreadChats: 'Unread chats',
+      unreadDms: 'Unread DMs',
+      archivedChats: 'Archived chats',
+      openChats: 'Open chats',
+      openArchived: 'Archived',
+      unreadSectionTitle: 'Unread now',
+      unreadSectionBody: 'Conversations that still need your attention.',
+      recentTitle: 'Recent activity',
+      recentBody: 'Latest message updates across your chats.',
+      recentEmptyTitle: 'No recent messages yet',
+      recentEmptyBody: 'New message activity will appear here once chats pick up.',
+      quietTitle: 'All quiet',
+      quietBody: 'Nothing unread right now.',
     },
     notifications: {
       title: 'Notifications',
@@ -320,16 +381,22 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     inbox: {
       title: 'Chats',
+      dmTitle: 'DMs',
       subtitleNew: (count) => `${count} new`,
+      subtitleDmNew: (count) => `${count} new direct ${count === 1 ? 'chat' : 'chats'}`,
       subtitleCaughtUp: 'All caught up',
+      subtitleDmCaughtUp: 'No unread direct messages',
       subtitleStart: 'Start a chat',
+      subtitleDmStart: 'Start a direct chat',
       subtitleArchivedCount: (count) => `${count} hidden from your inbox`,
       subtitleArchivedEmpty: 'Hidden chats stay here',
       settingsAria: 'Open settings',
       createAria: 'Start a chat',
       searchAria: 'Search chats',
+      searchDmAria: 'Search direct messages',
       filtersAria: 'Chat filters',
       searchPlaceholder: 'Search chats or people',
+      searchDmPlaceholder: 'Search direct messages',
       filters: {
         all: 'All',
         dm: 'DM',
@@ -466,6 +533,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       photoOrFile: 'Photo or file',
       camera: 'Camera',
       soon: 'Soon',
+      microphone: 'Voice message',
+      voiceMessagesSoon: 'Voice messages are coming soon.',
+      mentionSuggestions: 'Mention suggestions',
       clearAttachment: 'Clear',
       attachmentSizeError: (maxSizeLabel) =>
         `Choose a file up to ${maxSizeLabel.toLowerCase()}.`,
@@ -506,6 +576,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       signupRedirectMessage:
         'Доступ выдается вручную. Войдите с существующим аккаунтом.',
     },
+    shell: {
+      label: 'Основная навигация',
+      chats: 'Чаты',
+      dms: 'Личные',
+      activity: 'Активность',
+      openChats: 'Открыть чаты',
+      openDms: 'Открыть личные чаты',
+      openActivity: 'Открыть активность',
+    },
     settings: {
       backToChats: 'Назад к чатам',
       heroEyebrow: 'Вы',
@@ -529,6 +608,23 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       logoutButton: 'Выйти',
       profileUpdated: 'Профиль обновлён.',
       languageUpdated: 'Язык обновлён.',
+    },
+    activity: {
+      title: 'Активность',
+      subtitle: 'Непрочитанные чаты и недавняя активность сообщений.',
+      unreadChats: 'Непрочитанные чаты',
+      unreadDms: 'Непрочитанные личные',
+      archivedChats: 'Архивные чаты',
+      openChats: 'Открыть чаты',
+      openArchived: 'Архив',
+      unreadSectionTitle: 'Нужно прочитать',
+      unreadSectionBody: 'Чаты, которые все еще ждут вашего внимания.',
+      recentTitle: 'Недавно',
+      recentBody: 'Последние обновления сообщений в ваших чатах.',
+      recentEmptyTitle: 'Пока нет недавних сообщений',
+      recentEmptyBody: 'Новая активность появится здесь, когда чаты оживут.',
+      quietTitle: 'Пока тихо',
+      quietBody: 'Сейчас нет непрочитанного.',
     },
     notifications: {
       title: 'Уведомления',
@@ -558,16 +654,22 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     inbox: {
       title: 'Чаты',
+      dmTitle: 'Личные',
       subtitleNew: (count) => `${count} новых`,
+      subtitleDmNew: (count) => `${count} новых ${getRussianCountWord(count, ['личный чат', 'личных чата', 'личных чатов'])}`,
       subtitleCaughtUp: 'Новых сообщений нет',
+      subtitleDmCaughtUp: 'Непрочитанных личных нет',
       subtitleStart: 'Начните чат',
+      subtitleDmStart: 'Начните личный чат',
       subtitleArchivedCount: (count) => `${count} скрыто из входящих`,
       subtitleArchivedEmpty: 'Скрытые чаты будут здесь',
       settingsAria: 'Открыть настройки',
       createAria: 'Начать чат',
       searchAria: 'Искать чаты',
+      searchDmAria: 'Искать личные чаты',
       filtersAria: 'Фильтры чатов',
       searchPlaceholder: 'Искать чаты или людей',
+      searchDmPlaceholder: 'Искать личные чаты',
       filters: {
         all: 'Все',
         dm: 'Личные',
@@ -704,6 +806,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       photoOrFile: 'Фото или файл',
       camera: 'Камера',
       soon: 'Скоро',
+      microphone: 'Голосовое сообщение',
+      voiceMessagesSoon: 'Голосовые сообщения скоро появятся.',
+      mentionSuggestions: 'Подсказки упоминаний',
       clearAttachment: 'Убрать',
       attachmentSizeError: (maxSizeLabel) =>
         `Выберите файл до ${maxSizeLabel.toLowerCase()}.`,

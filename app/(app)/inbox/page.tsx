@@ -11,8 +11,8 @@ import {
   getArchivedConversations,
   getConversationDisplayName,
   getConversationParticipantIdentities,
-  getConversationParticipantSummary,
   getInboxConversations,
+  type InboxConversation,
 } from '@/modules/messaging/data/server';
 import {
   getIdentityLabel,
@@ -43,7 +43,7 @@ type ConversationListItem = {
   conversationId: string;
   isGroupConversation: boolean;
   title: string;
-  preview: string;
+  preview: string | null;
   metaLabels: Array<{
     label: string;
     tone: 'default' | 'archived';
@@ -133,6 +133,28 @@ function formatRecency(value: string | null, language: AppLanguage) {
   }).format(target);
 }
 
+function getInboxPreview(conversation: InboxConversation, t: ReturnType<typeof getTranslations>) {
+  if (!conversation.lastMessageAt) {
+    return null;
+  }
+
+  if (conversation.latestMessageDeletedAt) {
+    return t.chat.deletedMessage;
+  }
+
+  if (conversation.latestMessageKind === 'voice') {
+    return t.chat.voiceMessage;
+  }
+
+  const body = conversation.latestMessageBody?.trim();
+
+  if (body) {
+    return body;
+  }
+
+  return t.chat.attachment;
+}
+
 function getFallbackIdentityLabel(
   language: AppLanguage,
   userId: string,
@@ -216,6 +238,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const searchTerm = normalizeSearchTerm(query.q);
   const activeFilter = normalizeFilter(query.filter);
   const activeView = normalizeView(query.view);
+  const isDmOnlyView = activeFilter === 'dm' && activeView === 'main';
   const isCreateOpen = query.create === 'open';
   const supabase = await createSupabaseServerClient();
   const {
@@ -282,31 +305,18 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       ),
     );
     const isGroupConversation = conversation.kind === 'group';
-    const title = getConversationDisplayName({
-      kind: conversation.kind ?? null,
-      title: conversation.title,
-      participantLabels: otherParticipantLabels,
-      fallbackTitles: {
-        dm: t.inbox.dmPreviewFallback,
-        group: language === 'ru' ? 'Новая группа' : 'New group',
-      },
-    });
-    const participantSummary = getConversationParticipantSummary(
-      otherParticipantLabels,
-      isGroupConversation ? 3 : undefined,
-    );
-    const preview = isGroupConversation
-      ? participantSummary ||
-        (conversation.lastMessageAt
-          ? t.inbox.groupPreviewExisting
-          : t.inbox.groupPreviewNew)
-      : conversation.lastMessageAt
-        ? otherParticipantLabels[0]
-          ? t.inbox.dmPreviewExisting(otherParticipantLabels[0])
-          : t.chat.directChat
-        : otherParticipantLabels[0]
-          ? t.inbox.dmPreviewNew(otherParticipantLabels[0])
-          : t.inbox.dmPreviewFallback;
+    const title = isGroupConversation
+      ? getConversationDisplayName({
+          kind: conversation.kind ?? null,
+          title: conversation.title,
+          participantLabels: otherParticipantLabels,
+          fallbackTitles: {
+            dm: language === 'ru' ? 'Новый чат' : 'New chat',
+            group: language === 'ru' ? 'Новая группа' : 'New group',
+          },
+        })
+      : otherParticipantLabels[0] || (language === 'ru' ? 'Новый чат' : 'New chat');
+    const preview = getInboxPreview(conversation, t);
     const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
     const hasUnread = conversation.unreadCount > 0;
     const metaLabels = [
@@ -347,7 +357,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
     const haystack = [
       conversation.title,
-      conversation.preview,
+      conversation.preview ?? '',
       ...conversation.participantLabels,
       conversation.isGroupConversation ? t.inbox.metaGroup : t.chat.directChat,
     ]
@@ -361,6 +371,27 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     (conversation) => conversation.hasUnread,
   ).length;
   const archivedConversationCount = archivedConversations.length;
+  const headerTitle = isDmOnlyView ? t.inbox.dmTitle : t.inbox.title;
+  const headerSubtitle =
+    activeView === 'archived'
+      ? archivedConversationCount > 0
+        ? t.inbox.subtitleArchivedCount(archivedConversationCount)
+        : t.inbox.subtitleArchivedEmpty
+      : isDmOnlyView
+        ? unreadConversationCount > 0
+          ? t.inbox.subtitleDmNew(unreadConversationCount)
+          : conversationItems.length > 0
+            ? t.inbox.subtitleDmCaughtUp
+            : t.inbox.subtitleDmStart
+        : unreadConversationCount > 0
+          ? t.inbox.subtitleNew(unreadConversationCount)
+          : conversationItems.length > 0
+            ? t.inbox.subtitleCaughtUp
+            : t.inbox.subtitleStart;
+  const searchAria = isDmOnlyView ? t.inbox.searchDmAria : t.inbox.searchAria;
+  const searchPlaceholder = isDmOnlyView
+    ? t.inbox.searchDmPlaceholder
+    : t.inbox.searchPlaceholder;
   const searchScopeSummary = searchTerm
     ? (() => {
         const parts = [
@@ -386,18 +417,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       <section className="card inbox-home-shell stack">
         <div className="inbox-topbar">
           <div className="stack inbox-topbar-copy">
-            <h1 className="inbox-home-title">{t.inbox.title}</h1>
-            <p className="muted inbox-home-subtitle">
-              {activeView === 'archived'
-                ? archivedConversationCount > 0
-                  ? t.inbox.subtitleArchivedCount(archivedConversationCount)
-                  : t.inbox.subtitleArchivedEmpty
-                : unreadConversationCount > 0
-                  ? t.inbox.subtitleNew(unreadConversationCount)
-                  : conversationItems.length > 0
-                    ? t.inbox.subtitleCaughtUp
-                    : t.inbox.subtitleStart}
-            </p>
+            <h1 className="inbox-home-title">{headerTitle}</h1>
+            <p className="muted inbox-home-subtitle">{headerSubtitle}</p>
           </div>
           <div className="inbox-topbar-actions">
             <Link
@@ -426,11 +447,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           <form
             action="/inbox"
             className="inbox-search-form inbox-search-form-minimal"
-            aria-label={t.inbox.searchAria}
+            aria-label={searchAria}
             role="search"
           >
             <label className="field inbox-search-field inbox-search-shell">
-              <span className="sr-only">{t.inbox.searchAria}</span>
+              <span className="sr-only">{searchAria}</span>
               <span aria-hidden="true" className="inbox-search-icon">
                 ⌕
               </span>
@@ -439,7 +460,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 defaultValue={query.q ?? ''}
                 enterKeyHint="search"
                 name="q"
-                placeholder={t.inbox.searchPlaceholder}
+                placeholder={searchPlaceholder}
                 type="search"
               />
             </label>
@@ -627,15 +648,17 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                           ) : null}
                         </div>
                       </div>
-                      <p
-                        className={
-                          conversation.hasUnread
-                            ? 'muted conversation-preview conversation-preview-unread'
-                            : 'muted conversation-preview'
-                        }
-                      >
-                        {conversation.preview}
-                      </p>
+                      {conversation.preview ? (
+                        <p
+                          className={
+                            conversation.hasUnread
+                              ? 'muted conversation-preview conversation-preview-unread'
+                              : 'muted conversation-preview'
+                          }
+                        >
+                          {conversation.preview}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="conversation-footer">

@@ -38,6 +38,9 @@ export type InboxConversation = {
   lastReadMessageSeq: number | null;
   lastReadAt: string | null;
   latestMessageSeq: number | null;
+  latestMessageBody: string | null;
+  latestMessageKind: string | null;
+  latestMessageDeletedAt: string | null;
   unreadCount: number;
 };
 
@@ -226,10 +229,23 @@ function createSchemaRequirementError(details: string) {
   );
 }
 
+function isUniqueConstraintErrorMessage(message: string, constraintName?: string) {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes('duplicate key') ||
+    normalizedMessage.includes('unique constraint') ||
+    (constraintName ? normalizedMessage.includes(constraintName.toLowerCase()) : false)
+  );
+}
+
 function uniqueNonEmptyLabels(labels: string[]) {
   return Array.from(
     new Set(labels.map((label) => label.trim()).filter(Boolean)),
   );
+}
+
+function buildDmConversationKey(leftUserId: string, rightUserId: string) {
+  return [leftUserId, rightUserId].filter(Boolean).sort().join(':');
 }
 
 export function getConversationDisplayName({
@@ -325,12 +341,20 @@ async function mapInboxConversations(
 ) {
   const conversationIds = rows.map((row) => row.conversation_id);
   const latestMessageSeqByConversation = new Map<string, number>();
+  const latestMessageByConversation = new Map<
+    string,
+    {
+      body: string | null;
+      kind: string | null;
+      deletedAt: string | null;
+    }
+  >();
   const unreadCountByConversation = new Map<string, number>();
 
   if (conversationIds.length > 0) {
     const { data: messageRows, error: messageError } = await supabase
       .from('messages')
-      .select('conversation_id, seq')
+      .select('conversation_id, seq, body, kind, deleted_at')
       .in('conversation_id', conversationIds)
       .order('conversation_id', { ascending: true })
       .order('seq', { ascending: false });
@@ -342,6 +366,9 @@ async function mapInboxConversations(
     for (const row of (messageRows ?? []) as {
       conversation_id: string;
       seq: number | string;
+      body: string | null;
+      kind: string | null;
+      deleted_at: string | null;
     }[]) {
       const messageSeq =
         typeof row.seq === 'number' ? row.seq : Number(row.seq);
@@ -352,6 +379,11 @@ async function mapInboxConversations(
 
       if (!latestMessageSeqByConversation.has(row.conversation_id)) {
         latestMessageSeqByConversation.set(row.conversation_id, messageSeq);
+        latestMessageByConversation.set(row.conversation_id, {
+          body: row.body ?? null,
+          kind: row.kind ?? null,
+          deletedAt: row.deleted_at ?? null,
+        });
       }
     }
 
@@ -389,6 +421,7 @@ async function mapInboxConversations(
           : null;
       const latestMessageSeq =
         latestMessageSeqByConversation.get(row.conversation_id) ?? null;
+      const latestMessage = latestMessageByConversation.get(row.conversation_id);
       const unreadCount =
         unreadCountByConversation.get(row.conversation_id) ?? 0;
 
@@ -403,6 +436,9 @@ async function mapInboxConversations(
         lastReadMessageSeq,
         lastReadAt: row.last_read_at ?? null,
         latestMessageSeq,
+        latestMessageBody: latestMessage?.body ?? null,
+        latestMessageKind: latestMessage?.kind ?? null,
+        latestMessageDeletedAt: latestMessage?.deletedAt ?? null,
         unreadCount,
       };
     })
@@ -907,6 +943,33 @@ export async function findExistingActiveDmConversation(
   otherUserId: string,
 ) {
   const supabase = await createSupabaseServerClient();
+  const dmConversationKey = buildDmConversationKey(creatorUserId, otherUserId);
+  const { data: keyedMemberships, error: keyedLookupError } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, conversations!inner(id, kind, dm_key)')
+    .eq('user_id', creatorUserId)
+    .eq('state', 'active')
+    .eq('conversations.kind', 'dm')
+    .eq('conversations.dm_key', dmConversationKey);
+
+  if (keyedLookupError) {
+    if (!isMissingColumnErrorMessage(keyedLookupError.message, 'dm_key')) {
+      throw new Error(keyedLookupError.message);
+    }
+  } else {
+    const keyedMatch = ((keyedMemberships ?? []) as Array<{
+      conversation_id: string;
+      conversations:
+        | { id: string; kind: string | null; dm_key?: string | null }
+        | Array<{ id: string; kind: string | null; dm_key?: string | null }>
+        | null;
+    }>).find((row) => normalizeConversation(row.conversations)?.kind === 'dm');
+
+    if (keyedMatch?.conversation_id) {
+      return keyedMatch.conversation_id;
+    }
+  }
+
   const { data: creatorMemberships, error: creatorError } = await supabase
     .from('conversation_members')
     .select('conversation_id')
@@ -981,7 +1044,23 @@ export async function createConversationWithMembers(input: {
     throw new Error('At least one participant is required.');
   }
 
-  const conversationPayload =
+  if (input.kind === 'dm') {
+    const existingConversationId = await findExistingActiveDmConversation(
+      input.creatorUserId,
+      participantUserIds[0] ?? '',
+    );
+
+    if (existingConversationId) {
+      return existingConversationId;
+    }
+  }
+
+  const dmConversationKey =
+    input.kind === 'dm'
+      ? buildDmConversationKey(input.creatorUserId, participantUserIds[0] ?? '')
+      : null;
+
+  const conversationPayloadBase =
     input.kind === 'group'
       ? {
           id: conversationId,
@@ -996,6 +1075,14 @@ export async function createConversationWithMembers(input: {
           title: null,
         };
 
+  const conversationPayload =
+    input.kind === 'dm'
+      ? {
+          ...conversationPayloadBase,
+          dm_key: dmConversationKey,
+        }
+      : conversationPayloadBase;
+
   if (conversationPayload.created_by !== input.creatorUserId) {
     throw new Error(
       'Conversation created_by must match the authenticated user.',
@@ -1008,11 +1095,38 @@ export async function createConversationWithMembers(input: {
     );
   }
 
-  const { error: conversationError } = await supabase
+  let conversationError: { message: string } | null = null;
+  const { error: initialConversationError } = await supabase
     .from('conversations')
     .insert(conversationPayload);
+  conversationError = initialConversationError;
+
+  if (
+    conversationError &&
+    input.kind === 'dm' &&
+    isMissingColumnErrorMessage(conversationError.message, 'dm_key')
+  ) {
+    const { error: fallbackConversationError } = await supabase
+      .from('conversations')
+      .insert(conversationPayloadBase);
+    conversationError = fallbackConversationError;
+  }
 
   if (conversationError) {
+    if (
+      input.kind === 'dm' &&
+      isUniqueConstraintErrorMessage(conversationError.message, 'dm_key')
+    ) {
+      const existingConversationId = await findExistingActiveDmConversation(
+        input.creatorUserId,
+        participantUserIds[0] ?? '',
+      );
+
+      if (existingConversationId) {
+        return existingConversationId;
+      }
+    }
+
     if (conversationError.message.includes('row-level security policy')) {
       throw new Error(
         `Conversation creation debug: insert blocked by conversations RLS. auth user id=${user.id}, payload created_by=${conversationPayload.created_by}. Values match, so the failure is likely in database policy state or auth context rather than payload construction.`,
@@ -1044,46 +1158,6 @@ export async function createConversationWithMembers(input: {
   if (membershipError) {
     await supabase.from('conversations').delete().eq('id', conversationId);
     throw new Error(membershipError.message);
-  }
-
-  const expectedMemberIds = dedupeParticipantIds([
-    input.creatorUserId,
-    ...participantUserIds,
-  ]);
-  const { data: insertedMemberships, error: insertedMembershipsError } =
-    await supabase
-      .from('conversation_members')
-      .select('user_id')
-      .eq('conversation_id', conversationId)
-      .eq('state', 'active');
-
-  if (insertedMembershipsError) {
-    throw new Error(insertedMembershipsError.message);
-  }
-
-  const activeInsertedMemberIds = Array.from(
-    new Set(
-      ((insertedMemberships ?? []) as { user_id: string }[]).map(
-        (membership) => membership.user_id,
-      ),
-    ),
-  );
-
-  if (
-    activeInsertedMemberIds.length !== expectedMemberIds.length ||
-    expectedMemberIds.some(
-      (expectedMemberId) => !activeInsertedMemberIds.includes(expectedMemberId),
-    )
-  ) {
-    await supabase
-      .from('conversation_members')
-      .delete()
-      .eq('conversation_id', conversationId);
-    await supabase.from('conversations').delete().eq('id', conversationId);
-
-    throw new Error(
-      'Group creation did not persist the full active participant set.',
-    );
   }
 
   return conversationId;

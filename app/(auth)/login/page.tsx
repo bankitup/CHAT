@@ -28,7 +28,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="page auth-page">
-      <section className="stack auth-shell">
+      <section className="stack auth-shell auth-shell-login">
         <section className="auth-topbar">
           <Link
             aria-label={t.login.backToHome}
@@ -37,16 +37,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           >
             <span aria-hidden="true">←</span>
           </Link>
-        </section>
-
-        <section className="stack auth-brand">
-          <div className="auth-brand-mark" aria-hidden="true">
-            C
-          </div>
-          <div className="stack auth-brand-copy">
-            <p className="auth-brand-name">Chat</p>
-            <p className="auth-brand-line">Chat by Build With Care</p>
-          </div>
         </section>
 
         <section className="card stack auth-card">

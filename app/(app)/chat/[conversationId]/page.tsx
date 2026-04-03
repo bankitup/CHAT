@@ -406,6 +406,15 @@ export default async function ChatPage({
       roleLabel: formatParticipantRoleLabel(participant.role ?? 'member', t),
     };
   });
+  const mentionParticipants =
+    conversation.kind === 'group'
+      ? participantItems
+          .filter((participant) => !participant.isCurrentUser)
+          .map((participant) => ({
+            userId: participant.userId,
+            label: participant.label,
+          }))
+      : [];
   const activeParticipantUserIds = new Set(participants.map((participant) => participant.userId));
   const availableParticipantsToAdd = availableUsers
     .filter((availableUser) => !activeParticipantUserIds.has(availableUser.userId))
@@ -603,16 +612,6 @@ export default async function ChatPage({
                 activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
               const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
               const messageSeq = getMessageSeq(message.seq);
-              const senderLabel =
-                senderNames.get(message.sender_id ?? '') ||
-                createFallbackSenderName(
-                  message.sender_id,
-                  user.id,
-                  fallbackNames,
-                  language,
-                  t,
-                );
-              const senderIdentity = senderIdentities.get(message.sender_id ?? '');
               const otherParticipantReadSeq =
                 otherParticipantReadState?.lastReadMessageSeq ?? null;
               const showSeenState =
@@ -643,30 +642,15 @@ export default async function ChatPage({
                     }
                     id={`message-${message.id}`}
                   >
-                      <div
-                        className={
-                          isOwnMessage
-                            ? 'message-header message-header-own'
-                            : 'message-header'
-                        }
-                      >
+                      {!isDeletedMessage ? (
                         <div
                           className={
                             isOwnMessage
-                              ? 'message-sender-row message-sender-row-own'
-                              : 'message-sender-row'
+                              ? 'message-header message-header-own'
+                              : 'message-header'
                           }
                         >
-                          <IdentityAvatar
-                            identity={senderIdentity}
-                            label={senderLabel}
-                            size="sm"
-                          />
-                          <div className="stack message-header-copy">
-                            <span className="message-sender">{senderLabel}</span>
-                          </div>
-                        </div>
-                        <div className="message-header-side">
+                          <div className="message-header-side">
                           {!isDeletedMessage ? (
                             <Link
                               aria-label={t.chat.openMessageActions}
@@ -680,8 +664,9 @@ export default async function ChatPage({
                               <span aria-hidden="true">⋯</span>
                             </Link>
                           ) : null}
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
                       <div
                         className={
                           isOwnMessage
@@ -1027,7 +1012,7 @@ export default async function ChatPage({
                 value={activeReplyTarget.id}
               />
             ) : null}
-            <div className="composer-entry-row">
+            <div className="composer-input-shell">
               <ComposerAttachmentPicker
                 accept={CHAT_ATTACHMENT_ACCEPT}
                 helperText={attachmentHelpText}
@@ -1036,20 +1021,32 @@ export default async function ChatPage({
                 language={language}
               />
 
-              <div className="composer-input-shell">
-                <label className="field composer-input-field">
-                  <span className="sr-only">{t.chat.messagePlaceholder}</span>
-                  <ComposerTypingTextarea
-                    className="input textarea"
-                    conversationId={conversationId}
-                    currentUserId={user.id}
-                    currentUserLabel={currentUserDisplayLabel}
-                    name="body"
-                    placeholder={t.chat.messagePlaceholder}
-                    rows={1}
-                    maxHeight={160}
-                  />
-                </label>
+              <label className="field composer-input-field">
+                <span className="sr-only">{t.chat.messagePlaceholder}</span>
+                <ComposerTypingTextarea
+                  className="input textarea"
+                  conversationId={conversationId}
+                  currentUserId={user.id}
+                  currentUserLabel={currentUserDisplayLabel}
+                  mentionParticipants={mentionParticipants}
+                  mentionSuggestionsLabel={t.chat.mentionSuggestions}
+                  name="body"
+                  placeholder={t.chat.messagePlaceholder}
+                  rows={1}
+                  maxHeight={136}
+                />
+              </label>
+
+              <div className="composer-action-cluster">
+                <button
+                  aria-label={t.chat.microphone}
+                  className="button button-secondary composer-button composer-button-mic"
+                  disabled
+                  title={t.chat.voiceMessagesSoon}
+                  type="button"
+                >
+                  <span aria-hidden="true" className="composer-mic-icon" />
+                </button>
 
                 <button
                   aria-label={t.chat.sendMessage}
@@ -1079,12 +1076,12 @@ export default async function ChatPage({
             <div className="conversation-settings-grabber" aria-hidden="true" />
 
             <div className="conversation-settings-header">
-              <div className="stack conversation-settings-copy">
-                <p className="eyebrow conversation-settings-eyebrow">{t.chat.infoEyebrow}</p>
-                <h2 className="section-title">{t.chat.infoTitle}</h2>
-              </div>
-              <Link className="pill conversation-settings-close" href={`/chat/${conversationId}`}>
-                {t.chat.done}
+              <Link
+                aria-label={t.chat.closeInfo}
+                className="back-arrow-link conversation-settings-back-link"
+                href={`/chat/${conversationId}`}
+              >
+                <span aria-hidden="true">←</span>
               </Link>
             </div>
 

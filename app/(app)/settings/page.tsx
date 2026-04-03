@@ -9,7 +9,6 @@ import {
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
-import Link from 'next/link';
 
 type SettingsPageProps = {
   searchParams: Promise<{
@@ -53,16 +52,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
   return (
     <section className="stack settings-screen settings-shell">
-      <div className="settings-topbar settings-topbar-light">
-        <Link
-          aria-label={t.settings.backToChats}
-          className="back-arrow-link settings-back-link"
-          href="/inbox"
-        >
-          <span aria-hidden="true">←</span>
-        </Link>
-      </div>
-
       <section className="stack settings-hero">
         <div className="profile-settings-summary settings-hero-summary">
           <IdentityAvatar

@@ -42,11 +42,16 @@ Required columns used by current code:
 - `last_message_at`
 - `created_at`
 
+Optional / hardening support:
+
+- `dm_key`
+
 Assumptions:
 
 - `kind` is used as a conversation-type discriminator (`dm` or `group`).
 - `created_by` is used for group ownership-sensitive UI like title editing.
 - `last_message_at` drives inbox ordering and recency labels.
+- `dm_key`, when present, is used to make direct-message creation race-safe and reuse an existing DM for the same user pair.
 
 ## `public.conversation_members`
 
@@ -144,6 +149,11 @@ These schema changes must exist in Supabase for the current app to run safely:
 4. `public.messages.kind` must allow `voice`
    Source file: [2026-04-03-messages-kind-voice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-kind-voice.sql)
 
+## Recommended hardening before broader testing
+
+1. `public.conversations.dm_key`
+   Source file: [2026-04-03-conversations-dm-key.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-dm-key.sql)
+
 ## Current defensive behavior in code
 
 - Missing `profiles.avatar_path` is tolerated.
@@ -152,6 +162,7 @@ These schema changes must exist in Supabase for the current app to run safely:
 - Missing `conversation_members.hidden_at` no longer causes a raw confusing crash on the main inbox path, but archive-related behavior still requires the migration.
 - Missing `conversation_members.notification_level` falls back to `default` for conversation loading, but preference updates still require the migration.
 - If `messages.kind` is restricted to older values, voice-message inserts require the migration before they can be stored safely.
+- If `conversations.dm_key` is missing, direct-message creation still falls back to active-member lookup, but race-safe DM uniqueness depends on the migration.
 
 ## Highest-risk assumptions right now
 

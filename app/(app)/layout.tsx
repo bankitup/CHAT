@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestLanguage } from '@/modules/i18n/server';
+import { AppShellFrame } from './app-shell-frame';
 
 export default async function AppLayout({
   children,
@@ -15,5 +17,7 @@ export default async function AppLayout({
     redirect('/login');
   }
 
-  return <main className="page page-mobile stack app-shell">{children}</main>;
+  const language = await getRequestLanguage();
+
+  return <AppShellFrame language={language}>{children}</AppShellFrame>;
 }

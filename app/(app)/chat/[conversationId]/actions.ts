@@ -31,6 +31,17 @@ function redirectWithError(conversationId: string, message: string): never {
   redirect(`/chat/${conversationId}?${params.toString()}`);
 }
 
+function redirectWithSettingsError(
+  conversationId: string,
+  message: string,
+): never {
+  const params = new URLSearchParams({
+    error: message,
+    settings: 'open',
+  });
+  redirect(`/chat/${conversationId}?${params.toString()}#conversation-settings`);
+}
+
 export async function sendMessageAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
@@ -314,7 +325,7 @@ export async function updateConversationTitleAction(formData: FormData) {
   }
 
   if (!title) {
-    redirectWithError(conversationId, 'Group title cannot be empty.');
+    redirectWithSettingsError(conversationId, 'Group title cannot be empty.');
   }
 
   const supabase = await createSupabaseServerClient();
@@ -323,7 +334,7 @@ export async function updateConversationTitleAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -342,12 +353,12 @@ export async function updateConversationTitleAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to update group title.';
 
-    redirectWithError(conversationId, message);
+    redirectWithSettingsError(conversationId, message);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
+  redirect(`/chat/${conversationId}`);
 }
 
 export async function hideConversationAction(formData: FormData) {
@@ -381,7 +392,7 @@ export async function hideConversationAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to hide this chat.';
 
-    redirectWithError(conversationId, message);
+    redirectWithSettingsError(conversationId, message);
   }
 
   revalidatePath('/inbox');
@@ -402,7 +413,10 @@ export async function updateConversationNotificationLevelAction(
   }
 
   if (notificationLevel !== 'default' && notificationLevel !== 'muted') {
-    redirectWithError(conversationId, 'Choose a valid notification setting.');
+    redirectWithSettingsError(
+      conversationId,
+      'Choose a valid notification setting.',
+    );
   }
 
   const supabase = await createSupabaseServerClient();
@@ -432,11 +446,11 @@ export async function updateConversationNotificationLevelAction(
         ? error.message
         : 'Unable to update notification settings.';
 
-    redirectWithError(conversationId, message);
+    redirectWithSettingsError(conversationId, message);
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
+  redirect(`/chat/${conversationId}`);
 }
 
 export async function markConversationReadAction(formData: FormData) {
@@ -499,7 +513,7 @@ export async function addGroupParticipantsAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -518,12 +532,12 @@ export async function addGroupParticipantsAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to add participants.';
 
-    redirectWithError(conversationId, message);
+    redirectWithSettingsError(conversationId, message);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
+  redirect(`/chat/${conversationId}`);
 }
 
 export async function removeGroupParticipantAction(formData: FormData) {
@@ -540,7 +554,7 @@ export async function removeGroupParticipantAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -559,12 +573,12 @@ export async function removeGroupParticipantAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to remove participant.';
 
-    redirectWithError(conversationId, message);
+    redirectWithSettingsError(conversationId, message);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
+  redirect(`/chat/${conversationId}`);
 }
 
 export async function leaveGroupAction(formData: FormData) {
@@ -580,7 +594,7 @@ export async function leaveGroupAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.');
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -598,7 +612,7 @@ export async function leaveGroupAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to leave this group.';
 
-    redirectWithError(conversationId, message);
+    redirectWithSettingsError(conversationId, message);
   }
 
   revalidatePath('/inbox');
