@@ -16,7 +16,12 @@ import {
   getConversationDisplayName,
   getConversationParticipantIdentities,
   getInboxConversations,
+  getInboxConversationsStable,
 } from '@/modules/messaging/data/server';
+import {
+  loadArchivedConversationsForSsr,
+  loadInboxConversationsForSsr,
+} from '@/modules/messaging/data/inbox-ssr-stability';
 import {
   getIdentityLabel,
   GroupIdentityAvatar,
@@ -234,7 +239,27 @@ function buildInboxHref({
 }
 
 export default async function InboxPage({ searchParams }: InboxPageProps) {
+  const diagnosticsEnabled = process.env.CHAT_DEBUG_INBOX_SSR === '1';
+  const diagnosticsLabel = '[inbox-ssr]';
+  const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+
+    if (details) {
+      console.info(diagnosticsLabel, stage, details);
+      return;
+    }
+
+    console.info(diagnosticsLabel, stage);
+  };
+
   const query = await searchParams;
+  logDiagnostics('start', {
+    hasSpace: Boolean(query.space?.trim()),
+    filter: query.filter ?? 'all',
+    view: query.view ?? 'main',
+  });
   const searchTerm = normalizeSearchTerm(query.q);
   const activeFilter = normalizeFilter(query.filter);
   const activeView = normalizeView(query.view);
@@ -246,10 +271,13 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    logDiagnostics('no-user');
     return null;
   }
+  logDiagnostics('auth-ok');
 
   if (!query.space?.trim()) {
+    logDiagnostics('missing-space-redirect');
     redirect('/spaces');
   }
 
@@ -259,28 +287,86 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   });
 
   if (!activeSpaceState.activeSpace) {
+    logDiagnostics('no-active-space-notFound');
     notFound();
   }
 
   const activeSpaceId = activeSpaceState.activeSpace.id;
 
   if (activeSpaceState.requestedSpaceWasInvalid) {
+    logDiagnostics('invalid-space-redirect');
     redirect('/spaces');
   }
+  logDiagnostics('active-space-ok', { hasActiveSpace: true });
 
   const language = await getRequestLanguage();
   const t = getTranslations(language);
 
+  const emptyArchivedConversations =
+    [] as Awaited<ReturnType<typeof getArchivedConversations>>;
+
+  const archivedConversationsPromise = loadArchivedConversationsForSsr({
+    view: activeView,
+    emptyValue: emptyArchivedConversations,
+    loadArchived: async () => {
+      const value = await getArchivedConversations(user.id, {
+        spaceId: activeSpaceId,
+      });
+      logDiagnostics('loader:archived-ok', { count: value.length });
+      return value;
+    },
+  }).catch((error) => {
+    logDiagnostics('loader:archived-error', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    logDiagnostics('loader:archived-fallback-empty');
+    return emptyArchivedConversations;
+  });
+
+  if (activeView !== 'archived') {
+    logDiagnostics('loader:archived-skip-main-view');
+  }
+
   const [conversations, archivedConversations, availableUsers] = await Promise.all([
-    getInboxConversations(user.id, { spaceId: activeSpaceId }),
-    getArchivedConversations(user.id, { spaceId: activeSpaceId }),
-    getAvailableUsers(user.id, { spaceId: activeSpaceId }),
+    loadInboxConversationsForSsr({
+      view: 'main',
+      loadPrecise: () => getInboxConversations(user.id, { spaceId: activeSpaceId }),
+      loadStable: () =>
+        getInboxConversationsStable(user.id, { spaceId: activeSpaceId }),
+    })
+      .then((value) => {
+        logDiagnostics('loader:inbox-ok', { count: value.length });
+        return value;
+      })
+      .catch((error) => {
+        logDiagnostics('loader:inbox-error', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        logDiagnostics('loader:inbox-fallback-empty');
+        return [] as Awaited<ReturnType<typeof getInboxConversations>>;
+      }),
+    archivedConversationsPromise,
+    getAvailableUsers(user.id, { spaceId: activeSpaceId })
+      .then((value) => {
+        logDiagnostics('loader:users-ok', { count: value.length });
+        return value;
+      })
+      .catch((error) => {
+        logDiagnostics('loader:users-error', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }),
   ]);
+  logDiagnostics('loader:all-ok');
   const visibleConversations =
     activeView === 'archived' ? archivedConversations : conversations;
   const participantIdentities = await getConversationParticipantIdentities(
     visibleConversations.map((conversation) => conversation.conversationId),
   );
+  logDiagnostics('loader:participant-identities-ok', {
+    count: participantIdentities.length,
+  });
   const participantIdentitiesByConversation = participantIdentities.reduce(
     (map, identity) => {
       const existing = map.get(identity.conversationId) ?? [];

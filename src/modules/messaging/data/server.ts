@@ -380,6 +380,23 @@ async function getConversationsByVisibility(
   },
 ) {
   const supabase = await createSupabaseServerClient();
+  const diagnosticsEnabled = process.env.CHAT_DEBUG_INBOX_SSR === '1';
+  const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+
+    const prefix = archived
+      ? '[inbox-visibility:archived]'
+      : '[inbox-visibility:visible]';
+    if (details) {
+      console.info(prefix, stage, details);
+      return;
+    }
+
+    console.info(prefix, stage);
+  };
+  logDiagnostics('start', { hasSpaceScope: Boolean(options?.spaceId) });
   const baseMembershipSelect =
     'conversation_id, state, last_read_message_seq, last_read_at';
   const baseMemberships = await supabase
@@ -389,10 +406,14 @@ async function getConversationsByVisibility(
     .eq('state', 'active');
 
   if (baseMemberships.error) {
+    logDiagnostics('base-memberships-error', {
+      message: baseMemberships.error.message,
+    });
     throw new Error(baseMemberships.error.message);
   }
 
   const membershipRows = (baseMemberships.data ?? []) as ConversationMemberRow[];
+  logDiagnostics('base-memberships-ok', { count: membershipRows.length });
 
   const fallbackVisibleConversations = async () =>
     mapInboxConversations(
@@ -401,6 +422,7 @@ async function getConversationsByVisibility(
     );
 
   try {
+    logDiagnostics('visibility-lookup-start');
     const visibilityRows = await supabase
       .from('conversation_members')
       .select('conversation_id, hidden_at')
@@ -408,12 +430,22 @@ async function getConversationsByVisibility(
       .eq('state', 'active');
 
     if (visibilityRows.error) {
+      logDiagnostics('visibility-lookup-error', {
+        message: visibilityRows.error.message,
+        isHiddenAtRuntimeError: isHiddenAtVisibilityRuntimeError(
+          visibilityRows.error.message,
+        ),
+      });
       if (isHiddenAtVisibilityRuntimeError(visibilityRows.error.message)) {
+        logDiagnostics('fallback-from-visibility-error');
         return archived ? ([] satisfies InboxConversation[]) : fallbackVisibleConversations();
       }
 
       throw new Error(visibilityRows.error.message);
     }
+    logDiagnostics('visibility-lookup-ok', {
+      count: (visibilityRows.data ?? []).length,
+    });
 
     const scopedMembershipRows = applyConversationVisibility(
       membershipRows,
@@ -430,13 +462,45 @@ async function getConversationsByVisibility(
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    logDiagnostics('visibility-catch', {
+      message,
+      isHiddenAtRuntimeError: isHiddenAtVisibilityRuntimeError(message),
+    });
 
     if (isHiddenAtVisibilityRuntimeError(message)) {
+      logDiagnostics('fallback-from-catch');
       return archived ? ([] satisfies InboxConversation[]) : fallbackVisibleConversations();
     }
 
     throw error;
   }
+}
+
+async function getConversationsWithoutArchiveVisibility(
+  userId: string,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  const supabase = await createSupabaseServerClient();
+  const baseMembershipSelect =
+    'conversation_id, state, last_read_message_seq, last_read_at';
+  const baseMemberships = await supabase
+    .from('conversation_members')
+    .select(baseMembershipSelect)
+    .eq('user_id', userId)
+    .eq('state', 'active');
+
+  if (baseMemberships.error) {
+    throw new Error(baseMemberships.error.message);
+  }
+
+  const membershipRows = (baseMemberships.data ?? []) as ConversationMemberRow[];
+
+  return mapInboxConversations(
+    await attachConversationsToMembershipRows(membershipRows, supabase, options),
+    supabase,
+  );
 }
 
 async function attachConversationsToMembershipRows(
@@ -665,6 +729,15 @@ export async function getInboxConversations(
   },
 ) {
   return getConversationsByVisibility(userId, false, options);
+}
+
+export async function getInboxConversationsStable(
+  userId: string,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  return getConversationsWithoutArchiveVisibility(userId, options);
 }
 
 export async function getArchivedConversations(
