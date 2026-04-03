@@ -174,6 +174,7 @@ Current session/bootstrap state:
 - one-time prekey race can trigger one recipient-bundle refresh retry
 - missing one-time prekeys do not authorize plaintext fallback
 - encrypted DM send now relies on one atomic database function to claim recipient one-time prekeys, insert the message shell, insert ciphertext envelopes, and update conversation recency together
+- this atomic function runs with explicit sender/conversation/recipient-device validation so recipient prekey claims can succeed under RLS-constrained deployments without opening broad plaintext or key-access bypasses
 
 Prepared but not implemented yet:
 

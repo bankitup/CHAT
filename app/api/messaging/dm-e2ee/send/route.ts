@@ -10,6 +10,22 @@ import {
   sendEncryptedDmTextMessage,
 } from '@/modules/messaging/data/server';
 
+function logDmE2eeSendRouteDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_DM_E2EE_SEND !== '1') {
+    return;
+  }
+
+  if (details) {
+    console.info('[api-dm-e2ee-send]', stage, details);
+    return;
+  }
+
+  console.info('[api-dm-e2ee-send]', stage);
+}
+
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -37,11 +53,13 @@ export async function POST(request: Request) {
   const input = (await request.json()) as DmE2eeSendRequest;
 
   try {
+    logDmE2eeSendRouteDiagnostics('send:start');
     const result = await sendEncryptedDmTextMessage({
       ...input,
       senderId: user.id,
     });
 
+    logDmE2eeSendRouteDiagnostics('send:ok');
     return NextResponse.json(result);
   } catch (error) {
     const message =
@@ -51,6 +69,11 @@ export async function POST(request: Request) {
       : message.includes('schema is missing')
         ? 'dm_e2ee_schema_missing'
         : null;
+
+    logDmE2eeSendRouteDiagnostics('send:error', {
+      message,
+      code,
+    });
 
     return NextResponse.json(
       {

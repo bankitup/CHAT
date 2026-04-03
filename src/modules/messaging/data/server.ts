@@ -43,6 +43,22 @@ function createDmE2eeOperationError(
   return new DmE2eeOperationError(code, message);
 }
 
+function logDmE2eeSendDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_DM_E2EE_SEND !== '1') {
+    return;
+  }
+
+  if (details) {
+    console.info('[dm-e2ee-send]', stage, details);
+    return;
+  }
+
+  console.info('[dm-e2ee-send]', stage);
+}
+
 type ConversationRecord = {
   id: string;
   kind: string | null;
@@ -2831,6 +2847,11 @@ export async function sendTextMessage(input: {
 export async function sendEncryptedDmTextMessage(
   input: DmE2eeSendRequest & { senderId: string },
 ) {
+  logDmE2eeSendDiagnostics('start', {
+    hasConversationId: Boolean(input.conversationId),
+    hasSenderDeviceRecordId: Boolean(input.senderDeviceRecordId),
+    envelopeCount: input.envelopes.length,
+  });
   const conversation = await getConversationForUser(
     input.conversationId,
     input.senderId,
@@ -2876,6 +2897,7 @@ export async function sendEncryptedDmTextMessage(
       'Sending device is not registered for DM E2EE.',
     );
   }
+  logDmE2eeSendDiagnostics('sender-device-ok');
 
   const rpcResult = await supabase.rpc('send_dm_e2ee_message_atomic', {
     p_conversation_id: input.conversationId,
@@ -2886,6 +2908,9 @@ export async function sendEncryptedDmTextMessage(
   });
 
   if (rpcResult.error) {
+    logDmE2eeSendDiagnostics('rpc-error', {
+      message: rpcResult.error.message,
+    });
     if (
       isMissingRelationErrorMessage(rpcResult.error.message, 'message_e2ee_envelopes') ||
       isMissingRelationErrorMessage(rpcResult.error.message, 'user_devices') ||
@@ -2918,6 +2943,29 @@ export async function sendEncryptedDmTextMessage(
       );
     }
 
+    if (
+      rpcResult.error.message.includes('dm_e2ee_conversation_unavailable') ||
+      rpcResult.error.message.includes('dm_e2ee_recipient_unavailable')
+    ) {
+      throw createDmE2eeOperationError(
+        'dm_e2ee_recipient_unavailable',
+        'Recipient encrypted setup is unavailable for this direct chat.',
+      );
+    }
+
+    if (rpcResult.error.message.includes('dm_e2ee_missing_envelopes')) {
+      throw createDmE2eeOperationError(
+        'dm_e2ee_local_state_incomplete',
+        'Local encrypted payload was incomplete. Refresh encrypted setup and try again.',
+      );
+    }
+
+    if (rpcResult.error.message.includes('row-level security policy')) {
+      throw createSchemaRequirementError(
+        'DM E2EE send is blocked by database policy. Apply the latest atomic send SQL patch.',
+      );
+    }
+
     throw new Error(rpcResult.error.message);
   }
 
@@ -2934,6 +2982,10 @@ export async function sendEncryptedDmTextMessage(
   if (!messageId) {
     throw new Error('Encrypted DM send did not return a persisted message id.');
   }
+
+  logDmE2eeSendDiagnostics('done', {
+    hasMessageId: true,
+  });
 
   return {
     messageId,

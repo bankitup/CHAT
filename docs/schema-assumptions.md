@@ -392,6 +392,10 @@ Operational alignment note for partial production rollouts:
   `messages.content_mode`, apply:
   [2026-04-03-messages-shell-e2ee-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-shell-e2ee-v1-align.sql)
 
+- if encrypted DM send fails with generic send errors or policy-blocked prekey
+  claims, apply:
+  [2026-04-03-dm-e2ee-send-atomic-rls-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-dm-e2ee-send-atomic-rls-align.sql)
+
 ## Current defensive behavior in code
 
 - Missing `profiles.avatar_path` is tolerated.
