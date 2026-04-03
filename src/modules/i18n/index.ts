@@ -125,6 +125,7 @@ type LanguageDictionary = {
       filtersAria: string;
       searchPlaceholder: string;
       searchDmPlaceholder: string;
+      searchEncryptedNote: string;
     filters: {
       all: string;
       dm: string;
@@ -229,6 +230,8 @@ type LanguageDictionary = {
     image: string;
     audio: string;
     voiceMessage: string;
+    encryptedMessage: string;
+    encryptedMessageUnavailable: string;
     attachment: string;
     file: string;
     unavailableRightNow: string;
@@ -270,6 +273,20 @@ type LanguageDictionary = {
     typingDouble: (left: string, right: string) => string;
     typingSeveral: string;
     sendMessage: string;
+    encryptionRolloutUnavailable: string;
+    encryptionSetupUnavailable: string;
+    encryptionUnavailableHere: string;
+    recipientEncryptionUnavailable: string;
+    encryptionNeedsRefresh: string;
+    encryptionSessionChanged: string;
+    unableToSendEncryptedMessage: string;
+    encryptedMessageSetupUnavailable: string;
+    encryptedReplyInfo: string;
+    encryptedEditUnavailable: string;
+    retryEncryptedAction: string;
+    refreshEncryptedSetup: string;
+    reloadConversation: string;
+    encryptedAttachmentsUnsupported: string;
     messageReactions: string;
   };
 };
@@ -397,6 +414,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       filtersAria: 'Chat filters',
       searchPlaceholder: 'Search chats or people',
       searchDmPlaceholder: 'Search direct messages',
+      searchEncryptedNote:
+        'Encrypted direct-message text is not searchable here yet.',
       filters: {
         all: 'All',
         dm: 'DM',
@@ -502,6 +521,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       image: 'Image',
       audio: 'Audio',
       voiceMessage: 'Voice message',
+      encryptedMessage: 'Encrypted message',
+      encryptedMessageUnavailable: 'Encrypted message is not available on this device yet.',
       attachment: 'Attachment',
       file: 'File',
       unavailableRightNow: 'Unavailable right now',
@@ -544,6 +565,28 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       typingDouble: (left, right) => `${left} and ${right} are typing`,
       typingSeveral: 'Several people are typing',
       sendMessage: 'Send message',
+      encryptionRolloutUnavailable:
+        'Encrypted direct messages are not enabled for this account yet.',
+      encryptionSetupUnavailable: 'Encrypted DM setup is not ready yet.',
+      encryptionUnavailableHere: 'Encrypted DM sending is not available in this browser.',
+      recipientEncryptionUnavailable:
+        'This person is not ready for encrypted direct messages yet.',
+      encryptionNeedsRefresh:
+        'Encrypted DM setup on this device needs to refresh. Try again.',
+      encryptionSessionChanged:
+        'Encrypted DM session changed. Try sending again.',
+      unableToSendEncryptedMessage: 'Unable to send encrypted message.',
+      encryptedMessageSetupUnavailable:
+        'This encrypted message is not available on this device right now.',
+      encryptedReplyInfo:
+        'Replies keep the message reference, not the encrypted text.',
+      encryptedEditUnavailable:
+        'Editing encrypted direct messages is not available yet.',
+      retryEncryptedAction: 'Retry',
+      refreshEncryptedSetup: 'Refresh encrypted setup',
+      reloadConversation: 'Reload chat',
+      encryptedAttachmentsUnsupported:
+        'Encrypted text with attachments is not supported yet in direct messages.',
       messageReactions: 'Message reactions',
     },
   },
@@ -670,6 +713,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       filtersAria: 'Фильтры чатов',
       searchPlaceholder: 'Искать чаты или людей',
       searchDmPlaceholder: 'Искать личные чаты',
+      searchEncryptedNote:
+        'Текст в зашифрованных личных сообщениях здесь пока не ищется.',
       filters: {
         all: 'Все',
         dm: 'Личные',
@@ -775,6 +820,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       image: 'Изображение',
       audio: 'Аудио',
       voiceMessage: 'Голосовое сообщение',
+      encryptedMessage: 'Зашифрованное сообщение',
+      encryptedMessageUnavailable:
+        'Зашифрованное сообщение пока недоступно на этом устройстве.',
       attachment: 'Файл',
       file: 'Файл',
       unavailableRightNow: 'Сейчас недоступно',
@@ -817,6 +865,31 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       typingDouble: (left, right) => `${left} и ${right} печатают`,
       typingSeveral: 'Пишут несколько человек',
       sendMessage: 'Отправить сообщение',
+      encryptionRolloutUnavailable:
+        'Зашифрованные личные сообщения для этого аккаунта пока не включены.',
+      encryptionSetupUnavailable:
+        'Настройка шифрования для личных сообщений пока недоступна.',
+      encryptionUnavailableHere:
+        'Отправка зашифрованных личных сообщений недоступна в этом браузере.',
+      recipientEncryptionUnavailable:
+        'У этого человека пока нет готовой настройки для зашифрованных личных сообщений.',
+      encryptionNeedsRefresh:
+        'Настройку шифрования на этом устройстве нужно обновить. Попробуйте ещё раз.',
+      encryptionSessionChanged:
+        'Состояние зашифрованного диалога изменилось. Попробуйте отправить сообщение ещё раз.',
+      unableToSendEncryptedMessage:
+        'Не удалось отправить зашифрованное сообщение.',
+      encryptedMessageSetupUnavailable:
+        'Это зашифрованное сообщение сейчас недоступно на этом устройстве.',
+      encryptedReplyInfo:
+        'Ответ сохраняет ссылку на сообщение, но не раскрывает зашифрованный текст.',
+      encryptedEditUnavailable:
+        'Редактирование зашифрованных личных сообщений пока недоступно.',
+      retryEncryptedAction: 'Повторить',
+      refreshEncryptedSetup: 'Обновить настройку шифрования',
+      reloadConversation: 'Обновить чат',
+      encryptedAttachmentsUnsupported:
+        'Зашифрованный текст с вложениями в личных чатах пока не поддерживается.',
       messageReactions: 'Реакции на сообщение',
     },
   },

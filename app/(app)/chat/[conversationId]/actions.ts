@@ -7,6 +7,7 @@ import {
   addParticipantsToGroupConversation,
   assertConversationExists,
   assertConversationMembership,
+  getConversationForUser,
   assertMessageInConversation,
   assertMessageOwnedByUser,
   CHAT_ATTACHMENT_HELP_TEXT,
@@ -25,6 +26,7 @@ import {
   updateConversationNotificationLevel,
   updateConversationTitle,
 } from '@/modules/messaging/data/server';
+import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 
 function redirectWithError(conversationId: string, message: string): never {
   const params = new URLSearchParams({ error: message });
@@ -96,6 +98,26 @@ export async function sendMessageAction(formData: FormData) {
 
   if (!isMember) {
     redirectWithError(conversationId, 'You can no longer send messages in this chat.');
+  }
+
+  const conversation = await getConversationForUser(conversationId, userId);
+
+  if (!conversation) {
+    redirectWithError(conversationId, 'This chat is no longer available.');
+  }
+
+  if (conversation.kind === 'dm' && body) {
+    if (!isDmE2eeEnabledForUser(userId)) {
+      redirectWithError(
+        conversationId,
+        'Encrypted direct messages are not enabled for this account yet.',
+      );
+    }
+
+    redirectWithError(
+      conversationId,
+      'Direct-message text must use the encrypted client path.',
+    );
   }
 
   if (replyToMessageId) {
@@ -237,6 +259,29 @@ export async function editMessageAction(formData: FormData) {
     redirectWithError(
       conversationId,
       'Only the sender can edit this message.',
+    );
+  }
+
+  const messageMetadata = await supabase
+    .from('messages')
+    .select('content_mode, deleted_at')
+    .eq('id', messageId)
+    .eq('conversation_id', conversationId)
+    .eq('sender_id', user.id)
+    .maybeSingle();
+
+  if (messageMetadata.error) {
+    redirectWithError(conversationId, 'Unable to load this message right now.');
+  }
+
+  if (messageMetadata.data?.deleted_at) {
+    redirectWithError(conversationId, 'This message is no longer available.');
+  }
+
+  if (messageMetadata.data?.content_mode === 'dm_e2ee_v1') {
+    redirectWithError(
+      conversationId,
+      'Editing encrypted direct messages is not available yet.',
     );
   }
 

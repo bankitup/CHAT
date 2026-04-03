@@ -122,6 +122,10 @@ function getActivityPreview(
     return t.chat.voiceMessage;
   }
 
+  if (conversation.latestMessageContentMode === 'dm_e2ee_v1') {
+    return t.chat.encryptedMessage;
+  }
+
   const body = conversation.latestMessageBody?.trim();
 
   if (body) {

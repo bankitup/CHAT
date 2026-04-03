@@ -592,15 +592,26 @@ main {
   min-height: 12px;
 }
 
+.inbox-search-copy {
+  gap: 2px;
+  min-width: 0;
+}
+
 .inbox-search-meta-actions {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  flex-shrink: 0;
 }
 
 .inbox-search-scope {
   font-size: 0.69rem;
   line-height: 1.15;
+}
+
+.inbox-search-note {
+  font-size: 0.66rem;
+  line-height: 1.28;
 }
 
 .inbox-settings-trigger,
@@ -2650,6 +2661,22 @@ main {
   gap: 8px;
 }
 
+.message-edit-unavailable {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(221, 228, 238, 0.82);
+  background: rgba(248, 250, 253, 0.92);
+}
+
+.message-edit-unavailable-copy {
+  margin: 0;
+  color: rgba(55, 65, 81, 0.9);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .message-edit-actions,
 .message-delete-actions {
   display: flex;
@@ -3046,6 +3073,10 @@ main {
   background: rgba(247, 248, 250, 0.76);
 }
 
+.message-sheet-action-disabled {
+  opacity: 0.78;
+}
+
 .message-sheet-action-danger {
   border-color: rgba(180, 35, 24, 0.14);
   background: rgba(254, 242, 242, 0.78);
@@ -3072,6 +3103,7 @@ main {
 .message-sheet-action-copy {
   display: grid;
   min-width: 0;
+  gap: 1px;
 }
 
 .message-sheet-action-label {
@@ -3079,6 +3111,12 @@ main {
   font-size: 0.82rem;
   font-weight: 600;
   line-height: 1.25;
+}
+
+.message-sheet-action-note {
+  color: rgba(91, 100, 112, 0.86);
+  font-size: 0.7rem;
+  line-height: 1.3;
 }
 
 .composer-button-icon {
@@ -3328,6 +3366,41 @@ main {
   color: #b42318;
 }
 
+.composer-encryption-status {
+  display: grid;
+  gap: 8px;
+}
+
+.composer-encryption-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.composer-recovery-button {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 0.78rem;
+}
+
+.message-encryption-state {
+  display: grid;
+  gap: 8px;
+}
+
+.message-encryption-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.message-encryption-action {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  box-shadow: none;
+}
+
 .composer-reply-preview {
   display: flex;
   align-items: flex-start;
@@ -3362,6 +3435,12 @@ main {
 .composer-reply-snippet {
   color: rgba(91, 100, 112, 0.92);
   font-size: 0.77rem;
+  line-height: 1.35;
+}
+
+.composer-reply-note {
+  color: rgba(91, 100, 112, 0.84);
+  font-size: 0.68rem;
   line-height: 1.35;
 }
 

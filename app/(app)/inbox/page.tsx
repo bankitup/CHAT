@@ -20,6 +20,7 @@ import {
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
+import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
 import Link from 'next/link';
 import {
   restoreConversationAction,
@@ -44,6 +45,8 @@ type ConversationListItem = {
   isGroupConversation: boolean;
   title: string;
   preview: string | null;
+  latestMessageId: string | null;
+  latestMessageContentMode: string | null;
   metaLabels: Array<{
     label: string;
     tone: 'default' | 'archived';
@@ -144,6 +147,10 @@ function getInboxPreview(conversation: InboxConversation, t: ReturnType<typeof g
 
   if (conversation.latestMessageKind === 'voice') {
     return t.chat.voiceMessage;
+  }
+
+  if (conversation.latestMessageContentMode === 'dm_e2ee_v1') {
+    return t.chat.encryptedMessage;
   }
 
   const body = conversation.latestMessageBody?.trim();
@@ -333,6 +340,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       isGroupConversation,
       title,
       preview,
+      latestMessageId: conversation.latestMessageId,
+      latestMessageContentMode: conversation.latestMessageContentMode,
       metaLabels,
       recencyLabel: formatRecency(lastActivityAt, language),
       timestampLabel: formatTimestamp(lastActivityAt, language),
@@ -355,9 +364,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       return true;
     }
 
+    const searchablePreview =
+      conversation.latestMessageContentMode === 'dm_e2ee_v1'
+        ? ''
+        : conversation.preview ?? '';
+
     const haystack = [
       conversation.title,
-      conversation.preview ?? '',
+      searchablePreview,
       ...conversation.participantLabels,
       conversation.isGroupConversation ? t.inbox.metaGroup : t.chat.directChat,
     ]
@@ -406,6 +420,13 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return parts.length > 0 ? parts.join(' · ') : t.inbox.searchSummaryNone;
       })()
     : null;
+  const hasEncryptedDmSearchLimit =
+    searchTerm.length > 0 &&
+    visibleConversations.some(
+      (conversation) =>
+        conversation.kind === 'dm' &&
+        conversation.latestMessageContentMode === 'dm_e2ee_v1',
+    );
 
   return (
     <section className="stack inbox-screen inbox-screen-minimal">
@@ -535,7 +556,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
           {searchTerm ? (
             <div className="inbox-search-meta">
-              <p className="muted inbox-search-scope">{searchScopeSummary}</p>
+              <div className="stack inbox-search-copy">
+                <p className="muted inbox-search-scope">{searchScopeSummary}</p>
+                {hasEncryptedDmSearchLimit ? (
+                  <p className="muted inbox-search-note">
+                    {t.inbox.searchEncryptedNote}
+                  </p>
+                ) : null}
+              </div>
               <div className="inbox-search-meta-actions">
               {searchTerm ? (
                 <Link
@@ -649,15 +677,17 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                         </div>
                       </div>
                       {conversation.preview ? (
-                        <p
+                        <EncryptedDmInboxPreview
                           className={
                             conversation.hasUnread
                               ? 'muted conversation-preview conversation-preview-unread'
                               : 'muted conversation-preview'
                           }
-                        >
-                          {conversation.preview}
-                        </p>
+                          conversationId={conversation.conversationId}
+                          fallbackPreview={conversation.preview}
+                          latestMessageContentMode={conversation.latestMessageContentMode}
+                          latestMessageId={conversation.latestMessageId}
+                        />
                       ) : null}
                     </div>
 

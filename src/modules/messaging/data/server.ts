@@ -2,6 +2,41 @@ import 'server-only';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
+import type {
+  DmE2eeApiErrorCode,
+  DmE2eeRecipientBundleResponse,
+  DmE2eeSendRequest,
+  PublishDmE2eeDeviceRequest,
+  PublishDmE2eeDeviceResult,
+  StoredDmE2eeEnvelope,
+  UserDevicePublicBundle,
+} from '@/modules/messaging/contract/dm-e2ee';
+
+class DmE2eeOperationError extends Error {
+  code: DmE2eeApiErrorCode;
+
+  constructor(code: DmE2eeApiErrorCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export function isDmE2eeOperationError(
+  error: unknown,
+): error is DmE2eeOperationError {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  );
+}
+
+function createDmE2eeOperationError(
+  code: DmE2eeApiErrorCode,
+  message: string,
+) {
+  return new DmE2eeOperationError(code, message);
+}
 
 type ConversationRecord = {
   id: string;
@@ -37,9 +72,11 @@ export type InboxConversation = {
   hiddenAt: string | null;
   lastReadMessageSeq: number | null;
   lastReadAt: string | null;
+  latestMessageId: string | null;
   latestMessageSeq: number | null;
   latestMessageBody: string | null;
   latestMessageKind: string | null;
+  latestMessageContentMode: string | null;
   latestMessageDeletedAt: string | null;
   unreadCount: number;
 };
@@ -55,6 +92,8 @@ export type ConversationMessage = {
   kind: string;
   client_id: string;
   body: string | null;
+  content_mode?: string | null;
+  sender_device_id?: string | null;
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string | null;
@@ -153,6 +192,19 @@ export type MessageReactionGroup = {
   selectedByCurrentUser: boolean;
 };
 
+type MessageE2eeEnvelopeRow = {
+  message_id: string;
+  recipient_device_id: string;
+  envelope_type: string;
+  ciphertext: string;
+  used_one_time_prekey_id: number | null;
+  created_at: string | null;
+  messages:
+    | { sender_device_id?: string | null }
+    | Array<{ sender_device_id?: string | null }>
+    | null;
+};
+
 export const STARTER_REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🎉'] as const;
 export const CHAT_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const CHAT_ATTACHMENT_ACCEPT =
@@ -215,6 +267,14 @@ function normalizeConversation(
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
+function normalizeJoinedRecord<T>(value: T | T[] | null) {
+  if (!value) {
+    return null;
+  }
+
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
 function isMissingColumnErrorMessage(message: string, columnName: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -226,6 +286,14 @@ function isMissingColumnErrorMessage(message: string, columnName: string) {
 function createSchemaRequirementError(details: string) {
   return new Error(
     `${details} Apply the documented Supabase changes in /Users/danya/IOS - Apps/CHAT/docs/schema-assumptions.md.`,
+  );
+}
+
+function isMissingRelationErrorMessage(message: string, relationName: string) {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes('relation') &&
+    normalizedMessage.includes(relationName.toLowerCase())
   );
 }
 
@@ -339,37 +407,67 @@ async function mapInboxConversations(
   rows: ConversationMemberRow[],
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
 ) {
+  type LatestMessageRow = {
+    conversation_id: string;
+    id: string;
+    seq: number | string;
+    body: string | null;
+    kind: string | null;
+    content_mode?: string | null;
+    deleted_at: string | null;
+  };
+
   const conversationIds = rows.map((row) => row.conversation_id);
   const latestMessageSeqByConversation = new Map<string, number>();
   const latestMessageByConversation = new Map<
     string,
     {
+      id: string | null;
       body: string | null;
       kind: string | null;
+      contentMode: string | null;
       deletedAt: string | null;
     }
   >();
   const unreadCountByConversation = new Map<string, number>();
 
   if (conversationIds.length > 0) {
-    const { data: messageRows, error: messageError } = await supabase
+    const latestMessagesWithContentMode = await supabase
       .from('messages')
-      .select('conversation_id, seq, body, kind, deleted_at')
+      .select('id, conversation_id, seq, body, kind, content_mode, deleted_at')
       .in('conversation_id', conversationIds)
       .order('conversation_id', { ascending: true })
       .order('seq', { ascending: false });
 
-    if (messageError) {
-      throw new Error(messageError.message);
+    let messageRows = (latestMessagesWithContentMode.data ?? null) as
+      | LatestMessageRow[]
+      | null;
+
+    if (latestMessagesWithContentMode.error) {
+      if (
+        isMissingColumnErrorMessage(
+          latestMessagesWithContentMode.error.message,
+          'content_mode',
+        )
+      ) {
+        const fallbackLatestMessages = await supabase
+          .from('messages')
+          .select('id, conversation_id, seq, body, kind, deleted_at')
+          .in('conversation_id', conversationIds)
+          .order('conversation_id', { ascending: true })
+          .order('seq', { ascending: false });
+
+        if (fallbackLatestMessages.error) {
+          throw new Error(fallbackLatestMessages.error.message);
+        }
+
+        messageRows = (fallbackLatestMessages.data ?? null) as LatestMessageRow[] | null;
+      } else {
+        throw new Error(latestMessagesWithContentMode.error.message);
+      }
     }
 
-    for (const row of (messageRows ?? []) as {
-      conversation_id: string;
-      seq: number | string;
-      body: string | null;
-      kind: string | null;
-      deleted_at: string | null;
-    }[]) {
+    for (const row of messageRows ?? []) {
       const messageSeq =
         typeof row.seq === 'number' ? row.seq : Number(row.seq);
 
@@ -380,8 +478,10 @@ async function mapInboxConversations(
       if (!latestMessageSeqByConversation.has(row.conversation_id)) {
         latestMessageSeqByConversation.set(row.conversation_id, messageSeq);
         latestMessageByConversation.set(row.conversation_id, {
+          id: row.id ?? null,
           body: row.body ?? null,
           kind: row.kind ?? null,
+          contentMode: row.content_mode ?? null,
           deletedAt: row.deleted_at ?? null,
         });
       }
@@ -435,9 +535,11 @@ async function mapInboxConversations(
         hiddenAt: row.hidden_at ?? null,
         lastReadMessageSeq,
         lastReadAt: row.last_read_at ?? null,
+        latestMessageId: latestMessage?.id ?? null,
         latestMessageSeq,
         latestMessageBody: latestMessage?.body ?? null,
         latestMessageKind: latestMessage?.kind ?? null,
+        latestMessageContentMode: latestMessage?.contentMode ?? null,
         latestMessageDeletedAt: latestMessage?.deletedAt ?? null,
         unreadCount,
       };
@@ -860,6 +962,318 @@ export async function getStoredProfileLanguage(userId: string) {
   }
 
   throw new Error(response.error.message);
+}
+
+export async function publishCurrentUserDmE2eeDevice(
+  input: PublishDmE2eeDeviceRequest & { userId: string },
+) {
+  const supabase = await createSupabaseServerClient();
+  const now = new Date().toISOString();
+  const userDevices = await supabase
+    .from('user_devices')
+    .upsert(
+      {
+        user_id: input.userId,
+        device_id: input.deviceId,
+        registration_id: input.registrationId,
+        identity_key_public: input.identityKeyPublic,
+        signed_prekey_id: input.signedPrekeyId,
+        signed_prekey_public: input.signedPrekeyPublic,
+        signed_prekey_signature: input.signedPrekeySignature,
+        last_seen_at: now,
+        retired_at: null,
+      },
+      {
+        onConflict: 'user_id,device_id',
+      },
+    )
+    .select('id')
+    .single();
+
+  if (userDevices.error) {
+    if (
+      isMissingRelationErrorMessage(userDevices.error.message, 'user_devices') ||
+      isMissingColumnErrorMessage(userDevices.error.message, 'identity_key_public') ||
+      isMissingColumnErrorMessage(userDevices.error.message, 'signed_prekey_public')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE bootstrap schema is missing.',
+      );
+    }
+
+    throw new Error(userDevices.error.message);
+  }
+
+  const deviceRecordId = String((userDevices.data as { id: string } | null)?.id ?? '').trim();
+
+  if (!deviceRecordId) {
+    throw new Error('Unable to persist DM E2EE device identity.');
+  }
+
+  const retireOthers = await supabase
+    .from('user_devices')
+    .update({
+      retired_at: now,
+    })
+    .eq('user_id', input.userId)
+    .neq('id', deviceRecordId)
+    .is('retired_at', null);
+
+  if (retireOthers.error) {
+    throw new Error(retireOthers.error.message);
+  }
+
+  const deleteExistingPrekeys = await supabase
+    .from('device_one_time_prekeys')
+    .delete()
+    .eq('device_id', deviceRecordId)
+    .is('claimed_at', null);
+
+  if (deleteExistingPrekeys.error) {
+    if (
+      isMissingRelationErrorMessage(
+        deleteExistingPrekeys.error.message,
+        'device_one_time_prekeys',
+      ) ||
+      isMissingColumnErrorMessage(deleteExistingPrekeys.error.message, 'claimed_at')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE bootstrap schema is missing.',
+      );
+    }
+
+    throw new Error(deleteExistingPrekeys.error.message);
+  }
+
+  if (input.oneTimePrekeys.length > 0) {
+    const insertedPrekeys = await supabase
+      .from('device_one_time_prekeys')
+      .insert(
+        input.oneTimePrekeys.map((prekey) => ({
+          device_id: deviceRecordId,
+          prekey_id: prekey.prekeyId,
+          public_key: prekey.publicKey,
+        })),
+      );
+
+    if (insertedPrekeys.error) {
+      throw new Error(insertedPrekeys.error.message);
+    }
+  }
+
+  return {
+    deviceRecordId,
+    publishedPrekeyCount: input.oneTimePrekeys.length,
+  } satisfies PublishDmE2eeDeviceResult;
+}
+
+export async function getCurrentUserDmE2eeRecipientBundle(input: {
+  conversationId: string;
+  userId: string;
+}) {
+  const conversation = await getConversationForUser(
+    input.conversationId,
+    input.userId,
+  );
+
+  if (!conversation) {
+    throw new Error('Conversation is not available.');
+  }
+
+  if (conversation.kind !== 'dm') {
+    throw new Error('Encrypted DM send is only available for direct chats.');
+  }
+
+  const participants = await getConversationParticipants(input.conversationId);
+  const recipientParticipant = participants.find(
+    (participant) => participant.userId !== input.userId,
+  );
+
+  if (!recipientParticipant?.userId) {
+    throw createDmE2eeOperationError(
+      'dm_e2ee_recipient_unavailable',
+      'Direct-message recipient is not available.',
+    );
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const deviceLookup = await supabase
+    .from('user_devices')
+    .select(
+      'id, user_id, device_id, registration_id, identity_key_public, signed_prekey_id, signed_prekey_public, signed_prekey_signature',
+    )
+    .eq('user_id', recipientParticipant.userId)
+    .is('retired_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (deviceLookup.error) {
+    if (
+      isMissingRelationErrorMessage(deviceLookup.error.message, 'user_devices') ||
+      isMissingColumnErrorMessage(deviceLookup.error.message, 'signed_prekey_public')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE bootstrap schema is missing.',
+      );
+    }
+
+    throw new Error(deviceLookup.error.message);
+  }
+
+  if (!deviceLookup.data) {
+    throw createDmE2eeOperationError(
+      'dm_e2ee_recipient_device_missing',
+      'Recipient does not have a DM E2EE device registered yet.',
+    );
+  }
+
+  const device = deviceLookup.data as {
+    id: string;
+    user_id: string;
+    device_id: number;
+    registration_id: number;
+    identity_key_public: string;
+    signed_prekey_id: number;
+    signed_prekey_public: string;
+    signed_prekey_signature: string;
+  };
+  const oneTimePrekeyLookup = await supabase
+    .from('device_one_time_prekeys')
+    .select('prekey_id, public_key')
+    .eq('device_id', device.id)
+    .is('claimed_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (oneTimePrekeyLookup.error) {
+    if (
+      isMissingRelationErrorMessage(
+        oneTimePrekeyLookup.error.message,
+        'device_one_time_prekeys',
+      ) ||
+      isMissingColumnErrorMessage(oneTimePrekeyLookup.error.message, 'claimed_at')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE bootstrap schema is missing.',
+      );
+    }
+
+    throw new Error(oneTimePrekeyLookup.error.message);
+  }
+
+  return {
+    conversationId: input.conversationId,
+    recipient: {
+      deviceRecordId: device.id,
+      userId: device.user_id,
+      deviceId: device.device_id,
+      registrationId: device.registration_id,
+      identityKeyPublic: device.identity_key_public,
+      signedPrekeyId: device.signed_prekey_id,
+      signedPrekeyPublic: device.signed_prekey_public,
+      signedPrekeySignature: device.signed_prekey_signature,
+      oneTimePrekeyId:
+        oneTimePrekeyLookup.data?.prekey_id ?? null,
+      oneTimePrekeyPublic:
+        oneTimePrekeyLookup.data?.public_key ?? null,
+    } satisfies UserDevicePublicBundle,
+  } satisfies DmE2eeRecipientBundleResponse;
+}
+
+async function getCurrentUserActiveDmE2eeDeviceRecordId(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const response = await supabase
+    .from('user_devices')
+    .select('id')
+    .eq('user_id', userId)
+    .is('retired_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (response.error) {
+    if (
+      isMissingRelationErrorMessage(response.error.message, 'user_devices') ||
+      isMissingColumnErrorMessage(response.error.message, 'retired_at')
+    ) {
+      return null;
+    }
+
+    throw new Error(response.error.message);
+  }
+
+  return ((response.data as { id?: string | null } | null)?.id ?? null) as
+    | string
+    | null;
+}
+
+export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
+  userId: string;
+  messageIds: string[];
+}) {
+  const uniqueMessageIds = Array.from(
+    new Set(input.messageIds.map((value) => value.trim()).filter(Boolean)),
+  );
+
+  if (uniqueMessageIds.length === 0) {
+    return new Map<string, StoredDmE2eeEnvelope>();
+  }
+
+  const activeDeviceRecordId = await getCurrentUserActiveDmE2eeDeviceRecordId(
+    input.userId,
+  );
+
+  if (!activeDeviceRecordId) {
+    return new Map<string, StoredDmE2eeEnvelope>();
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const response = await supabase
+    .from('message_e2ee_envelopes')
+    .select(
+      'message_id, recipient_device_id, envelope_type, ciphertext, used_one_time_prekey_id, created_at, messages!inner(sender_device_id)',
+    )
+    .eq('recipient_device_id', activeDeviceRecordId)
+    .in('message_id', uniqueMessageIds);
+
+  if (response.error) {
+    if (
+      isMissingRelationErrorMessage(
+        response.error.message,
+        'message_e2ee_envelopes',
+      ) ||
+      isMissingColumnErrorMessage(response.error.message, 'sender_device_id') ||
+      isMissingColumnErrorMessage(response.error.message, 'ciphertext')
+    ) {
+      return new Map<string, StoredDmE2eeEnvelope>();
+    }
+
+    throw new Error(response.error.message);
+  }
+
+  return new Map(
+    ((response.data ?? []) as MessageE2eeEnvelopeRow[]).map((row) => {
+      const messageRecord = normalizeJoinedRecord(row.messages);
+
+      return [
+        row.message_id,
+        {
+          messageId: row.message_id,
+          senderDeviceRecordId: messageRecord?.sender_device_id ?? '',
+          recipientDeviceRecordId: row.recipient_device_id,
+          envelopeType:
+            row.envelope_type === 'signal_message'
+              ? 'signal_message'
+              : 'prekey_signal_message',
+          ciphertext: row.ciphertext,
+          usedOneTimePrekeyId: row.used_one_time_prekey_id ?? null,
+          createdAt: row.created_at ?? null,
+        } satisfies StoredDmE2eeEnvelope,
+      ];
+    }),
+  );
 }
 
 export async function getAvailableUsers(currentUserId: string) {
@@ -1295,19 +1709,35 @@ export async function updateCurrentUserLanguagePreference(input: {
 
 export async function getConversationMessages(conversationId: string) {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  const response = await supabase
     .from('messages')
     .select(
-      'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
+      'id, conversation_id, sender_id, sender_device_id, reply_to_message_id, seq, kind, client_id, body, content_mode, edited_at, deleted_at, created_at',
     )
     .eq('conversation_id', conversationId)
     .order('seq', { ascending: true });
 
-  if (error) {
-    throw new Error(error.message);
+  if (response.error) {
+    if (isMissingColumnErrorMessage(response.error.message, 'content_mode')) {
+      const fallback = await supabase
+        .from('messages')
+        .select(
+          'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
+        )
+        .eq('conversation_id', conversationId)
+        .order('seq', { ascending: true });
+
+      if (fallback.error) {
+        throw new Error(fallback.error.message);
+      }
+
+      return (fallback.data ?? []) as ConversationMessage[];
+    }
+
+    throw new Error(response.error.message);
   }
 
-  return (data ?? []) as ConversationMessage[];
+  return (response.data ?? []) as ConversationMessage[];
 }
 
 export async function getMessageSenderProfiles(userIds: string[]) {
@@ -1914,6 +2344,125 @@ export async function sendTextMessage(input: {
   });
 }
 
+export async function sendEncryptedDmTextMessage(
+  input: DmE2eeSendRequest & { senderId: string },
+) {
+  const conversation = await getConversationForUser(
+    input.conversationId,
+    input.senderId,
+  );
+
+  if (!conversation) {
+    throw new Error('This chat is no longer available.');
+  }
+
+  if (conversation.kind !== 'dm') {
+    throw new Error('Encrypted DM send is only available for direct chats.');
+  }
+
+  if (!input.envelopes.length) {
+    throw new Error('Encrypted DM send requires at least one ciphertext envelope.');
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const deviceOwnership = await supabase
+    .from('user_devices')
+    .select('id')
+    .eq('id', input.senderDeviceRecordId)
+    .eq('user_id', input.senderId)
+    .is('retired_at', null)
+    .maybeSingle();
+
+  if (deviceOwnership.error) {
+    if (
+      isMissingRelationErrorMessage(deviceOwnership.error.message, 'user_devices') ||
+      isMissingColumnErrorMessage(deviceOwnership.error.message, 'retired_at')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE bootstrap schema is missing.',
+      );
+    }
+
+    throw new Error(deviceOwnership.error.message);
+  }
+
+  if (!deviceOwnership.data) {
+    throw createDmE2eeOperationError(
+      'dm_e2ee_sender_device_stale',
+      'Sending device is not registered for DM E2EE.',
+    );
+  }
+
+  for (const envelope of input.envelopes) {
+    if (envelope.usedOneTimePrekeyId === null) {
+      continue;
+    }
+
+    const claim = await supabase
+      .from('device_one_time_prekeys')
+      .update({
+        claimed_at: new Date().toISOString(),
+      })
+      .eq('device_id', envelope.recipientDeviceRecordId)
+      .eq('prekey_id', envelope.usedOneTimePrekeyId)
+      .is('claimed_at', null)
+      .select('id')
+      .maybeSingle();
+
+    if (claim.error) {
+      throw new Error(claim.error.message);
+    }
+
+    if (!claim.data) {
+      throw createDmE2eeOperationError(
+        'dm_e2ee_prekey_conflict',
+        'Recipient prekey was already used. Refresh and try sending again.',
+      );
+    }
+  }
+
+  const messageRecord = await createMessageRecord({
+    conversationId: input.conversationId,
+    senderId: input.senderId,
+    replyToMessageId: input.replyToMessageId ?? null,
+    kind: 'text',
+    clientId: input.clientId,
+    body: null,
+    contentMode: 'dm_e2ee_v1',
+    senderDeviceId: input.senderDeviceRecordId,
+  });
+
+  const envelopeInsert = await supabase
+    .from('message_e2ee_envelopes')
+    .insert(
+      input.envelopes.map((envelope) => ({
+        message_id: messageRecord.messageId,
+        recipient_device_id: envelope.recipientDeviceRecordId,
+        envelope_type: envelope.envelopeType,
+        ciphertext: envelope.ciphertext,
+        used_one_time_prekey_id: envelope.usedOneTimePrekeyId,
+      })),
+    );
+
+  if (envelopeInsert.error) {
+    if (
+      isMissingRelationErrorMessage(
+        envelopeInsert.error.message,
+        'message_e2ee_envelopes',
+      ) ||
+      isMissingColumnErrorMessage(envelopeInsert.error.message, 'ciphertext')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE send schema is missing.',
+      );
+    }
+
+    throw new Error(envelopeInsert.error.message);
+  }
+
+  return messageRecord;
+}
+
 async function createMessageRecord(input: {
   conversationId: string;
   senderId: string;
@@ -1921,10 +2470,13 @@ async function createMessageRecord(input: {
   replyToMessageId?: string | null;
   touchConversation?: boolean;
   kind?: 'text' | 'attachment' | 'voice';
+  clientId?: string;
+  contentMode?: 'plaintext' | 'dm_e2ee_v1';
+  senderDeviceId?: string | null;
 }) {
   const supabase = await createSupabaseServerClient();
   const timestamp = new Date().toISOString();
-  const clientId = crypto.randomUUID();
+  const clientId = input.clientId?.trim() || crypto.randomUUID();
   const messageId = crypto.randomUUID();
 
   if (!input.senderId) {
@@ -1955,7 +2507,7 @@ async function createMessageRecord(input: {
     );
   }
 
-  const { error: insertError } = await supabase.from('messages').insert({
+  const payload: Record<string, unknown> = {
     id: messageId,
     conversation_id: input.conversationId,
     sender_id: input.senderId,
@@ -1963,9 +2515,29 @@ async function createMessageRecord(input: {
     kind: input.kind ?? 'text',
     client_id: clientId,
     body: input.body?.trim() || null,
-  });
+  };
+
+  if (input.senderDeviceId) {
+    payload.sender_device_id = input.senderDeviceId;
+  }
+
+  if (input.contentMode) {
+    payload.content_mode = input.contentMode;
+  }
+
+  const { error: insertError } = await supabase.from('messages').insert(payload);
 
   if (insertError) {
+    if (
+      (input.contentMode === 'dm_e2ee_v1' &&
+        (isMissingColumnErrorMessage(insertError.message, 'content_mode') ||
+          isMissingColumnErrorMessage(insertError.message, 'sender_device_id'))) ||
+      (input.contentMode === 'dm_e2ee_v1' &&
+        isMissingColumnErrorMessage(insertError.message, 'body'))
+    ) {
+      throw createSchemaRequirementError('DM E2EE send schema is missing.');
+    }
+
     if (insertError.message.includes('row-level security policy')) {
       throw new Error(
         `Message sending debug: insert blocked by messages RLS. auth user id=${user.id}, payload sender_id=${input.senderId}, conversation_id=${input.conversationId}. Values match, so the failure is likely database-side RLS state or membership policy rather than payload construction.`,

@@ -13,6 +13,7 @@ import {
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   getConversationDisplayName,
+  getCurrentUserDmE2eeEnvelopesForMessages,
   getConversationForUser,
   getConversationMessages,
   getConversationMemberReadStates,
@@ -23,6 +24,7 @@ import {
   getGroupedReactionsForMessages,
   STARTER_REACTIONS,
 } from '@/modules/messaging/data/server';
+import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
 import {
   getIdentityLabel,
@@ -51,6 +53,8 @@ import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
 import { TypingIndicator } from './typing-indicator';
+import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
+import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
 
 type ChatPageProps = {
   params: Promise<{
@@ -204,6 +208,18 @@ function getMessageSeq(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
 }
 
+function isEncryptedDmTextMessage(value: {
+  kind: string | null;
+  content_mode?: string | null;
+  deleted_at?: string | null;
+}) {
+  return (
+    value.kind === 'text' &&
+    value.content_mode === 'dm_e2ee_v1' &&
+    !value.deleted_at
+  );
+}
+
 function formatGroupMemberSummary(
   participantIds: string[],
   currentUserId: string,
@@ -287,6 +303,7 @@ export default async function ChatPage({
   }
   const language = await getRequestLanguage();
   const t = getTranslations(language);
+  const encryptedDmEnabled = isDmE2eeEnabledForUser(user.id);
 
   const isSettingsOpen = query.settings === 'open';
   const messages = await getConversationMessages(conversationId);
@@ -313,6 +330,12 @@ export default async function ChatPage({
   const attachmentsByMessage = await getMessageAttachments(
     messages.map((message) => message.id),
   );
+  const e2eeEnvelopesByMessage = await getCurrentUserDmE2eeEnvelopesForMessages({
+    userId: user.id,
+    messageIds: messages
+      .filter((message) => isEncryptedDmTextMessage(message))
+      .map((message) => message.id),
+  });
   const senderNames = new Map(
     senderProfiles.map((profile) => [profile.userId, profile.displayName]),
   );
@@ -606,12 +629,19 @@ export default async function ChatPage({
               const { message } = item;
               const isOwnMessage = message.sender_id === user.id;
               const isDeletedMessage = Boolean(message.deleted_at);
+              const messageSeq = getMessageSeq(message.seq);
+              const isLatestConversationMessage =
+                latestVisibleMessageSeq !== null &&
+                Number.isFinite(messageSeq) &&
+                messageSeq === latestVisibleMessageSeq;
               const isMessageInEditMode =
-                activeEditMessageId === message.id && isOwnMessage && !isDeletedMessage;
+                activeEditMessageId === message.id &&
+                isOwnMessage &&
+                !isDeletedMessage &&
+                !isEncryptedDmTextMessage(message);
               const isMessageInDeleteMode =
                 activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
               const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
-              const messageSeq = getMessageSeq(message.seq);
               const otherParticipantReadSeq =
                 otherParticipantReadState?.lastReadMessageSeq ?? null;
               const showSeenState =
@@ -716,6 +746,10 @@ export default async function ChatPage({
                                   return t.chat.voiceMessage;
                                 }
 
+                                if (repliedMessage && isEncryptedDmTextMessage(repliedMessage)) {
+                                  return t.chat.encryptedMessage;
+                                }
+
                                 return getMessageSnippet(
                                   repliedMessage?.body ?? null,
                                   t,
@@ -739,7 +773,11 @@ export default async function ChatPage({
                               <span className="sr-only">{t.chat.edit}</span>
                               <AutoGrowTextarea
                                 className="input textarea"
-                                defaultValue={message.body?.trim() ?? ''}
+                                defaultValue={
+                                  isEncryptedDmTextMessage(message)
+                                    ? ''
+                                    : message.body?.trim() ?? ''
+                                }
                                 maxHeight={160}
                                 name="body"
                                 required
@@ -758,6 +796,40 @@ export default async function ChatPage({
                               </Link>
                             </div>
                           </form>
+                        ) : activeEditMessageId === message.id &&
+                          isOwnMessage &&
+                          isEncryptedDmTextMessage(message) ? (
+                          <div className="message-edit-unavailable">
+                            <p className="message-edit-unavailable-copy">
+                              {t.chat.encryptedEditUnavailable}
+                            </p>
+                            <div className="message-edit-actions">
+                              <Link
+                                className="pill message-edit-cancel"
+                                href={`/chat/${conversationId}#message-${message.id}`}
+                              >
+                                {t.chat.cancel}
+                              </Link>
+                            </div>
+                          </div>
+                        ) : isEncryptedDmTextMessage(message) ? (
+                          <EncryptedDmMessageBody
+                            clientId={message.client_id}
+                            conversationId={conversationId}
+                            currentUserId={user.id}
+                            envelope={e2eeEnvelopesByMessage.get(message.id) ?? null}
+                            fallbackLabel={t.chat.encryptedMessage}
+                            refreshSetupLabel={t.chat.refreshEncryptedSetup}
+                            reloadConversationLabel={t.chat.reloadConversation}
+                            retryLabel={t.chat.retryEncryptedAction}
+                            setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
+                            unavailableLabel={t.chat.encryptedMessageUnavailable}
+                            messageId={message.id}
+                            messageCreatedAt={message.created_at}
+                            shouldCachePreview={
+                              conversation.kind === 'dm' && isLatestConversationMessage
+                            }
+                          />
                         ) : message.body?.trim() ? (
                           <p className="message-body">{message.body.trim()}</p>
                         ) : !messageAttachments.length ? (
@@ -992,8 +1064,15 @@ export default async function ChatPage({
                 <span className="composer-reply-snippet">
                   {activeReplyTarget.deleted_at
                     ? t.chat.thisMessageWasDeleted
+                    : isEncryptedDmTextMessage(activeReplyTarget)
+                      ? t.chat.encryptedMessage
                     : getMessageSnippet(activeReplyTarget.body, t, 88)}
                 </span>
+                {isEncryptedDmTextMessage(activeReplyTarget) ? (
+                  <span className="composer-reply-note">
+                    {t.chat.encryptedReplyInfo}
+                  </span>
+                ) : null}
               </div>
               <Link
                 className="pill composer-reply-cancel"
@@ -1003,61 +1082,80 @@ export default async function ChatPage({
               </Link>
             </div>
           ) : null}
-          <form action={sendMessageAction} className="stack composer-form">
-            <input name="conversationId" type="hidden" value={conversationId} />
-            {activeReplyTarget ? (
-              <input
-                name="replyToMessageId"
-                type="hidden"
-                value={activeReplyTarget.id}
-              />
-            ) : null}
-            <div className="composer-input-shell">
-              <ComposerAttachmentPicker
-                accept={CHAT_ATTACHMENT_ACCEPT}
-                helperText={attachmentHelpText}
-                maxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
-                maxSizeLabel={attachmentMaxSizeLabel}
-                language={language}
-              />
-
-              <label className="field composer-input-field">
-                <span className="sr-only">{t.chat.messagePlaceholder}</span>
-                <ComposerTypingTextarea
-                  className="input textarea"
-                  conversationId={conversationId}
-                  currentUserId={user.id}
-                  currentUserLabel={currentUserDisplayLabel}
-                  mentionParticipants={mentionParticipants}
-                  mentionSuggestionsLabel={t.chat.mentionSuggestions}
-                  name="body"
-                  placeholder={t.chat.messagePlaceholder}
-                  rows={1}
-                  maxHeight={136}
+          {conversation.kind === 'dm' ? (
+            <EncryptedDmComposerForm
+              action={sendMessageAction}
+              accept={CHAT_ATTACHMENT_ACCEPT}
+              attachmentHelpText={attachmentHelpText}
+              attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
+              attachmentMaxSizeLabel={attachmentMaxSizeLabel}
+              conversationId={conversationId}
+              currentUserId={user.id}
+              currentUserLabel={currentUserDisplayLabel}
+              encryptedDmEnabled={encryptedDmEnabled}
+              language={language}
+              mentionParticipants={mentionParticipants}
+              mentionSuggestionsLabel={t.chat.mentionSuggestions}
+              messagePlaceholder={t.chat.messagePlaceholder}
+              replyToMessageId={activeReplyTarget?.id ?? null}
+            />
+          ) : (
+            <form action={sendMessageAction} className="stack composer-form">
+              <input name="conversationId" type="hidden" value={conversationId} />
+              {activeReplyTarget ? (
+                <input
+                  name="replyToMessageId"
+                  type="hidden"
+                  value={activeReplyTarget.id}
                 />
-              </label>
+              ) : null}
+              <div className="composer-input-shell">
+                <ComposerAttachmentPicker
+                  accept={CHAT_ATTACHMENT_ACCEPT}
+                  helperText={attachmentHelpText}
+                  maxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
+                  maxSizeLabel={attachmentMaxSizeLabel}
+                  language={language}
+                />
 
-              <div className="composer-action-cluster">
-                <button
-                  aria-label={t.chat.microphone}
-                  className="button button-secondary composer-button composer-button-mic"
-                  disabled
-                  title={t.chat.voiceMessagesSoon}
-                  type="button"
-                >
-                  <span aria-hidden="true" className="composer-mic-icon" />
-                </button>
+                <label className="field composer-input-field">
+                  <span className="sr-only">{t.chat.messagePlaceholder}</span>
+                  <ComposerTypingTextarea
+                    className="input textarea"
+                    conversationId={conversationId}
+                    currentUserId={user.id}
+                    currentUserLabel={currentUserDisplayLabel}
+                    mentionParticipants={mentionParticipants}
+                    mentionSuggestionsLabel={t.chat.mentionSuggestions}
+                    name="body"
+                    placeholder={t.chat.messagePlaceholder}
+                    rows={1}
+                    maxHeight={136}
+                  />
+                </label>
 
-                <button
-                  aria-label={t.chat.sendMessage}
-                  className="button composer-button composer-button-icon"
-                  type="submit"
-                >
-                  <span aria-hidden="true">➤</span>
-                </button>
+                <div className="composer-action-cluster">
+                  <button
+                    aria-label={t.chat.microphone}
+                    className="button button-secondary composer-button composer-button-mic"
+                    disabled
+                    title={t.chat.voiceMessagesSoon}
+                    type="button"
+                  >
+                    <span aria-hidden="true" className="composer-mic-icon" />
+                  </button>
+
+                  <button
+                    aria-label={t.chat.sendMessage}
+                    className="button composer-button composer-button-icon"
+                    type="submit"
+                  >
+                    <span aria-hidden="true">➤</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          </form>
+            </form>
+          )}
         </section>
       </section>
 
@@ -1438,7 +1536,9 @@ export default async function ChatPage({
                   {activeActionMessageSenderLabel}
                 </span>
                 <span className="message-sheet-snippet">
-                  {activeActionMessage.body?.trim()
+                  {isEncryptedDmTextMessage(activeActionMessage)
+                    ? t.chat.encryptedMessage
+                    : activeActionMessage.body?.trim()
                     ? getMessageSnippet(activeActionMessage.body, t, 96)
                     : activeActionMessage.kind === 'voice'
                       ? t.chat.voiceMessage
@@ -1515,10 +1615,41 @@ export default async function ChatPage({
                   </span>
                   <span className="message-sheet-action-copy">
                     <span className="message-sheet-action-label">{t.chat.reply}</span>
+                    {isEncryptedDmTextMessage(activeActionMessage) ? (
+                      <span className="message-sheet-action-note">
+                        {t.chat.encryptedReplyInfo}
+                      </span>
+                    ) : null}
                   </span>
                 </Link>
 
-                {activeActionMessageIsOwn ? (
+                {activeActionMessageIsOwn && isEncryptedDmTextMessage(activeActionMessage) ? (
+                  <>
+                    <div className="message-sheet-action message-sheet-action-disabled">
+                      <span className="message-sheet-action-icon" aria-hidden="true">
+                        ✎
+                      </span>
+                      <span className="message-sheet-action-copy">
+                        <span className="message-sheet-action-label">{t.chat.edit}</span>
+                        <span className="message-sheet-action-note">
+                          {t.chat.encryptedEditUnavailable}
+                        </span>
+                      </span>
+                    </div>
+
+                    <Link
+                      className="message-sheet-action message-sheet-action-danger"
+                      href={`/chat/${conversationId}?deleteMessageId=${activeActionMessage.id}#message-${activeActionMessage.id}`}
+                    >
+                      <span className="message-sheet-action-icon" aria-hidden="true">
+                        🗑
+                      </span>
+                      <span className="message-sheet-action-copy">
+                        <span className="message-sheet-action-label">{t.chat.delete}</span>
+                      </span>
+                    </Link>
+                  </>
+                ) : activeActionMessageIsOwn && !isEncryptedDmTextMessage(activeActionMessage) ? (
                   <>
                     <Link
                       className="message-sheet-action"

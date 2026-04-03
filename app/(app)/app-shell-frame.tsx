@@ -4,13 +4,21 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import { DmE2eeBootstrap } from '@/modules/messaging/e2ee/dm-e2ee-bootstrap';
 
 type AppShellFrameProps = {
   children: ReactNode;
+  dmE2eeEnabled: boolean;
   language: AppLanguage;
+  userId: string;
 };
 
-export function AppShellFrame({ children, language }: AppShellFrameProps) {
+export function AppShellFrame({
+  children,
+  dmE2eeEnabled,
+  language,
+  userId,
+}: AppShellFrameProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const t = getTranslations(language);
@@ -35,6 +43,7 @@ export function AppShellFrame({ children, language }: AppShellFrameProps) {
           : 'page page-mobile app-shell'
       }
     >
+      <DmE2eeBootstrap enabled={dmE2eeEnabled} userId={userId} />
       <div className="stack app-shell-content">{children}</div>
 
       {showBottomNav ? (
