@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyConversationVisibility } from '../../src/modules/messaging/data/visibility.ts';
+import {
+  applyConversationVisibility,
+  isHiddenAtVisibilityRuntimeError,
+} from '../../src/modules/messaging/data/visibility.ts';
 
 test('visible conversations exclude archived rows when hidden_at data is available', () => {
   const rows = [
@@ -61,5 +64,24 @@ test('hidden_at lookup failure fallback keeps inbox alive and archives empty', (
   assert.deepEqual(archivedFallback, []);
   assert.ok(
     visibleFallback.every((row) => row.hidden_at === null),
+  );
+});
+
+test('hidden_at runtime matcher catches schema-cache and field variants', () => {
+  assert.equal(
+    isHiddenAtVisibilityRuntimeError(
+      "column conversation_members.hidden_at does not exist",
+    ),
+    true,
+  );
+  assert.equal(
+    isHiddenAtVisibilityRuntimeError(
+      "Could not find the 'hidden_at' field of 'conversation_members' in the schema cache",
+    ),
+    true,
+  );
+  assert.equal(
+    isHiddenAtVisibilityRuntimeError('permission denied for table conversation_members'),
+    false,
   );
 });

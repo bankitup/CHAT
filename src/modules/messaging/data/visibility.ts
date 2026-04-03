@@ -8,6 +8,20 @@ export type VisibilityLookupRow = {
   hidden_at: string | null;
 };
 
+export function isHiddenAtVisibilityRuntimeError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (!normalizedMessage.includes('hidden_at')) {
+    return false;
+  }
+
+  return (
+    normalizedMessage.includes('column') ||
+    normalizedMessage.includes('field') ||
+    normalizedMessage.includes('schema cache')
+  );
+}
+
 export function applyConversationVisibility(
   rows: VisibilityMembershipRow[],
   archived: boolean,

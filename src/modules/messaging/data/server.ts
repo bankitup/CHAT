@@ -3,7 +3,10 @@ import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
-import { applyConversationVisibility } from '@/modules/messaging/data/visibility';
+import {
+  applyConversationVisibility,
+  isHiddenAtVisibilityRuntimeError,
+} from '@/modules/messaging/data/visibility';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeRecipientBundleResponse,
@@ -397,7 +400,7 @@ async function getConversationsByVisibility(
     .eq('state', 'active');
 
   if (visibilityRows.error) {
-    if (isMissingColumnErrorMessage(visibilityRows.error.message, 'hidden_at')) {
+    if (isHiddenAtVisibilityRuntimeError(visibilityRows.error.message)) {
       if (archived) {
         return [] satisfies InboxConversation[];
       }
@@ -2277,7 +2280,7 @@ export async function markConversationRead(input: {
     .maybeSingle();
 
   if (membershipError) {
-    if (isMissingColumnErrorMessage(membershipError.message, 'hidden_at')) {
+    if (isHiddenAtVisibilityRuntimeError(membershipError.message)) {
       throw createSchemaRequirementError(
         'Inbox archive/hide requires public.conversation_members.hidden_at.',
       );
@@ -2391,7 +2394,7 @@ export async function hideConversationForUser(input: {
     .maybeSingle();
 
   if (membershipError) {
-    if (isMissingColumnErrorMessage(membershipError.message, 'hidden_at')) {
+    if (isHiddenAtVisibilityRuntimeError(membershipError.message)) {
       throw createSchemaRequirementError(
         'Inbox archive/hide requires public.conversation_members.hidden_at.',
       );
@@ -2416,7 +2419,7 @@ export async function hideConversationForUser(input: {
     .eq('state', 'active');
 
   if (updateError) {
-    if (isMissingColumnErrorMessage(updateError.message, 'hidden_at')) {
+    if (isHiddenAtVisibilityRuntimeError(updateError.message)) {
       throw createSchemaRequirementError(
         'Inbox archive/hide requires public.conversation_members.hidden_at.',
       );
@@ -2467,7 +2470,7 @@ export async function restoreConversationForUser(input: {
     .maybeSingle();
 
   if (membershipError) {
-    if (isMissingColumnErrorMessage(membershipError.message, 'hidden_at')) {
+    if (isHiddenAtVisibilityRuntimeError(membershipError.message)) {
       throw createSchemaRequirementError(
         'Inbox archive/hide requires public.conversation_members.hidden_at.',
       );
@@ -2492,7 +2495,7 @@ export async function restoreConversationForUser(input: {
     .eq('state', 'active');
 
   if (updateError) {
-    if (isMissingColumnErrorMessage(updateError.message, 'hidden_at')) {
+    if (isHiddenAtVisibilityRuntimeError(updateError.message)) {
       throw createSchemaRequirementError(
         'Inbox archive/hide requires public.conversation_members.hidden_at.',
       );
