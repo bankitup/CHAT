@@ -14,6 +14,7 @@ Encrypted DM rollout is controlled by environment variables:
 
 - `CHAT_DM_E2EE_ROLLOUT=disabled|selected|all`
 - `CHAT_DM_E2EE_TESTER_USER_IDS=<comma-separated auth user ids>`
+- `CHAT_DM_E2EE_TESTER_EMAILS=<comma-separated auth emails>` (optional convenience allowlist)
 
 Recommended rollout order:
 
@@ -26,7 +27,7 @@ Recommended rollout order:
 
 Notes:
 
-- `selected` mode enables encrypted DMs only for the listed auth user ids.
+- `selected` mode enables encrypted DMs only for accounts listed by tester user id and/or tester email.
 - Non-enabled users do not bootstrap DM E2EE device state and cannot call encrypted DM bootstrap/send endpoints successfully.
 - This is a rollout gate, not an operator recovery path. It does not reveal plaintext.
 
@@ -51,7 +52,7 @@ All of these should be true before enabling even a small tester set:
 For each selected tester pair, verify:
 
 1. Both users can log in normally.
-2. Both users are listed in `CHAT_DM_E2EE_TESTER_USER_IDS`.
+2. Both users are listed in `CHAT_DM_E2EE_TESTER_USER_IDS` or `CHAT_DM_E2EE_TESTER_EMAILS`.
 3. Each user gets a `user_devices` row after opening the app.
 4. Each user publishes one-time prekeys.
 5. First encrypted DM send succeeds without plaintext fallback.

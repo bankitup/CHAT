@@ -19,7 +19,9 @@ export default async function AppLayout({
   }
 
   const language = await getRequestLanguage();
-  const dmE2eeEnabled = isDmE2eeEnabledForUser(user.id);
+  const dmE2eeEnabled = isDmE2eeEnabledForUser(user.id, user.email ?? null, {
+    source: 'app-layout',
+  });
 
   return (
     <AppShellFrame

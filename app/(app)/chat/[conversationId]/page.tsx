@@ -442,7 +442,13 @@ export default async function ChatPage({
   }
   const language = await getRequestLanguage();
   const t = getTranslations(language);
-  const encryptedDmEnabled = isDmE2eeEnabledForUser(user.id);
+  const encryptedDmEnabled = isDmE2eeEnabledForUser(
+    user.id,
+    user.email ?? null,
+    {
+      source: 'chat-page',
+    },
+  );
 
   const isSettingsOpen = query.settings === 'open';
   const messages = await getConversationMessages(conversationId);

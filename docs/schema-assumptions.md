@@ -406,6 +406,7 @@ Operational alignment note for partial production rollouts:
 - Runtime rollout is also gated by environment configuration:
   - `CHAT_DM_E2EE_ROLLOUT=disabled|selected|all`
   - `CHAT_DM_E2EE_TESTER_USER_IDS=<comma-separated auth user ids>`
+  - `CHAT_DM_E2EE_TESTER_EMAILS=<comma-separated auth emails>` (optional convenience allowlist)
 - The recommended operational checklist lives in [dm-e2ee-rollout-checklist.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/dm-e2ee-rollout-checklist.md).
 
 ## Highest-risk assumptions right now

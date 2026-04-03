@@ -274,6 +274,7 @@ Runtime controls:
 
 - `CHAT_DM_E2EE_ROLLOUT=disabled|selected|all`
 - `CHAT_DM_E2EE_TESTER_USER_IDS=<comma-separated auth user ids>`
+- `CHAT_DM_E2EE_TESTER_EMAILS=<comma-separated auth emails>` (optional convenience allowlist)
 
 Rules:
 

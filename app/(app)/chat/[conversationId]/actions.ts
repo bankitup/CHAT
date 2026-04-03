@@ -153,7 +153,11 @@ export async function sendMessageAction(formData: FormData) {
   }
 
   if (conversation.kind === 'dm' && body) {
-    if (!isDmE2eeEnabledForUser(userId)) {
+    if (
+      !isDmE2eeEnabledForUser(userId, user.email ?? null, {
+        source: 'chat-send-action',
+      })
+    ) {
       redirectWithError(
         conversationId,
         'Encrypted direct messages are not enabled for this account yet.',

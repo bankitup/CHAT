@@ -14,7 +14,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   }
 
-  if (!isDmE2eeEnabledForUser(user.id)) {
+  if (
+    !isDmE2eeEnabledForUser(user.id, user.email ?? null, {
+      source: 'api-dm-e2ee-device',
+    })
+  ) {
     return NextResponse.json(
       {
         error: 'Encrypted direct messages are not enabled for this account yet.',
