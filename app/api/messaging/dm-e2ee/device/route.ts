@@ -49,9 +49,42 @@ function getMissingBootstrapFields(input: PublishDmE2eeDeviceRequest) {
 
   if (!Array.isArray(input.oneTimePrekeys)) {
     missing.push('oneTimePrekeys');
+  } else {
+    const invalidPrekeyIndex = input.oneTimePrekeys.findIndex(
+      (prekey) =>
+        !Number.isInteger(prekey?.prekeyId) ||
+        !prekey.publicKey?.trim(),
+    );
+
+    if (invalidPrekeyIndex >= 0) {
+      const invalidPrekey = input.oneTimePrekeys[invalidPrekeyIndex];
+
+      if (!Number.isInteger(invalidPrekey?.prekeyId)) {
+        missing.push(`oneTimePrekeys[${invalidPrekeyIndex}].prekeyId`);
+      }
+
+      if (!invalidPrekey?.publicKey?.trim()) {
+        missing.push(`oneTimePrekeys[${invalidPrekeyIndex}].publicKey`);
+      }
+    }
   }
 
   return missing;
+}
+
+function classifyDmE2eeDevice400Reason(message: string) {
+  if (
+    message.includes('foreign key constraint') &&
+    message.includes('user_devices_user_id_fkey')
+  ) {
+    return 'user-devices-profile-fk-missing';
+  }
+
+  if (message.includes('DM E2EE profile seed failed:')) {
+    return 'profile-seed-failed';
+  }
+
+  return 'publish-failed';
 }
 
 export async function POST(request: Request) {
@@ -82,8 +115,10 @@ export async function POST(request: Request) {
   const missingFields = getMissingBootstrapFields(input);
 
   if (missingFields.length > 0) {
-    logDmE2eeDeviceRouteDiagnostics('payload-invalid', {
+    logDmE2eeDeviceRouteDiagnostics('response:400:payload-invalid', {
+      code: 'dm_e2ee_local_state_incomplete',
       missingFields,
+      reason: 'payload-validation-failed',
     });
     return NextResponse.json(
       {
@@ -108,7 +143,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Unable to publish DM E2EE device.';
+    const reason = classifyDmE2eeDevice400Reason(message);
     logDmE2eeDeviceRouteDiagnostics('publish:error', {
+      reason,
       message,
     });
 
@@ -122,10 +159,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      message.includes('foreign key constraint') &&
-      message.includes('user_devices_user_id_fkey')
-    ) {
+    if (reason === 'user-devices-profile-fk-missing') {
+      logDmE2eeDeviceRouteDiagnostics('response:400:profile-row-missing', {
+        code: 'dm_e2ee_local_state_incomplete',
+      });
       return NextResponse.json(
         {
           error:
@@ -136,6 +173,23 @@ export async function POST(request: Request) {
       );
     }
 
+    if (reason === 'profile-seed-failed') {
+      logDmE2eeDeviceRouteDiagnostics('response:400:profile-seed-failed', {
+        code: 'dm_e2ee_local_state_incomplete',
+      });
+      return NextResponse.json(
+        {
+          error: 'Encrypted setup could not prepare local profile identity state.',
+          code: 'dm_e2ee_local_state_incomplete',
+        },
+        { status: 400 },
+      );
+    }
+
+    logDmE2eeDeviceRouteDiagnostics('response:400:publish-failed', {
+      code: 'dm_e2ee_local_state_incomplete',
+      reason,
+    });
     return NextResponse.json(
       {
         error: 'Unable to refresh encrypted setup on this device.',

@@ -23,6 +23,29 @@ type EnsureDmE2eeDeviceRegisteredOptions = {
   allowRepair?: boolean;
 };
 
+function shouldLogDmE2eeBootstrapClientDiagnostics() {
+  return (
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+  );
+}
+
+function logDmE2eeBootstrapClientDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (!shouldLogDmE2eeBootstrapClientDiagnostics()) {
+    return;
+  }
+
+  if (details) {
+    console.info('[dm-e2ee-bootstrap-client]', stage, details);
+    return;
+  }
+
+  console.info('[dm-e2ee-bootstrap-client]', stage);
+}
+
 function createLocalDmE2eeError(
   code: DmE2eeApiErrorCode,
   message: string,
@@ -157,12 +180,29 @@ async function ensureLocalDmE2eeDeviceRecord(userId: string) {
 }
 
 function isLocalDmE2eeDeviceRecordUsable(record: LocalDmE2eeDeviceRecord) {
+  const hasValidOneTimePrekeys =
+    Array.isArray(record.oneTimePrekeys) &&
+    record.oneTimePrekeys.every(
+      (prekey) =>
+        Number.isInteger(prekey.prekeyId) &&
+        prekey.prekeyId > 0 &&
+        Boolean(prekey.publicKey?.trim()) &&
+        Boolean(prekey.privateKeyJwk?.kty),
+    );
+
   return Boolean(
-    record.identityPublicKey &&
+    Number.isInteger(record.deviceId) &&
+      record.deviceId > 0 &&
+      Number.isInteger(record.registrationId) &&
+      record.registrationId > 0 &&
+      Number.isInteger(record.signedPrekeyId) &&
+      record.signedPrekeyId > 0 &&
+      record.identityPublicKey?.trim() &&
       record.identityPrivateKeyJwk?.kty &&
-      record.signedPrekeyPublicKey &&
+      record.signedPrekeyPublicKey?.trim() &&
       record.signedPrekeyPrivateKeyJwk?.kty &&
-      Array.isArray(record.oneTimePrekeys),
+      record.signedPrekeySignature?.trim() &&
+      hasValidOneTimePrekeys,
   );
 }
 
@@ -187,6 +227,13 @@ export async function ensureDmE2eeDeviceRegistered(
   userId: string,
   options: EnsureDmE2eeDeviceRegisteredOptions = {},
 ) {
+  const allowRepair = options.allowRepair !== false;
+  logDmE2eeBootstrapClientDiagnostics('ensure:start', {
+    allowRepair,
+    forcePublish: Boolean(options.forcePublish),
+    userIdPresent: Boolean(userId),
+  });
+
   if (
     typeof window === 'undefined' ||
     typeof window.indexedDB === 'undefined' ||
@@ -202,13 +249,25 @@ export async function ensureDmE2eeDeviceRegistered(
     };
   }
 
-  const allowRepair = options.allowRepair !== false;
   let localRecord = await ensureLocalDmE2eeDeviceRecord(userId);
+  logDmE2eeBootstrapClientDiagnostics('local-record:loaded', {
+    hasServerDeviceRecordId: Boolean(localRecord.serverDeviceRecordId),
+    oneTimePrekeyCount: localRecord.oneTimePrekeys.length,
+    usable: isLocalDmE2eeDeviceRecordUsable(localRecord),
+  });
 
   if (!isLocalDmE2eeDeviceRecordUsable(localRecord)) {
     if (allowRepair) {
+      logDmE2eeBootstrapClientDiagnostics('local-record:repair:start', {
+        reason: 'local-record-unusable',
+      });
       await deleteLocalDmE2eeDeviceRecord(userId);
       localRecord = await ensureLocalDmE2eeDeviceRecord(userId);
+      logDmE2eeBootstrapClientDiagnostics('local-record:repair:rebuilt', {
+        hasServerDeviceRecordId: Boolean(localRecord.serverDeviceRecordId),
+        oneTimePrekeyCount: localRecord.oneTimePrekeys.length,
+        usable: isLocalDmE2eeDeviceRecordUsable(localRecord),
+      });
     }
 
     if (!isLocalDmE2eeDeviceRecordUsable(localRecord)) {
@@ -220,6 +279,9 @@ export async function ensureDmE2eeDeviceRegistered(
   }
 
   if (localRecord.serverDeviceRecordId && !options.forcePublish) {
+    logDmE2eeBootstrapClientDiagnostics('publish:skip-already-registered', {
+      serverDeviceRecordIdPresent: true,
+    });
     return {
       status: 'registered',
       result: {
@@ -242,6 +304,10 @@ export async function ensureDmE2eeDeviceRegistered(
 
   if (response.ok) {
     const result = (await response.json()) as PublishDmE2eeDeviceResult;
+    logDmE2eeBootstrapClientDiagnostics('publish:ok', {
+      deviceRecordIdPresent: Boolean(result.deviceRecordId),
+      publishedPrekeyCount: result.publishedPrekeyCount,
+    });
     await saveLocalDmE2eeDeviceRecord({
       ...localRecord,
       serverDeviceRecordId: result.deviceRecordId,
@@ -268,6 +334,11 @@ export async function ensureDmE2eeDeviceRegistered(
     errorCode = null;
     errorMessage = null;
   }
+  logDmE2eeBootstrapClientDiagnostics('publish:error', {
+    errorCode,
+    errorMessage,
+    status: response.status,
+  });
 
   if (errorCode === 'dm_e2ee_schema_missing') {
     return {
@@ -281,13 +352,24 @@ export async function ensureDmE2eeDeviceRegistered(
 
   if (errorCode === 'dm_e2ee_local_state_incomplete') {
     if (allowRepair) {
+      logDmE2eeBootstrapClientDiagnostics('local-record:repair:start', {
+        reason: 'server-reported-local-state-incomplete',
+      });
       await deleteLocalDmE2eeDeviceRecord(userId);
+      logDmE2eeBootstrapClientDiagnostics('local-record:repair:retry', {
+        allowRepair: false,
+        forcePublish: true,
+      });
       return ensureDmE2eeDeviceRegistered(userId, {
         forcePublish: true,
         allowRepair: false,
       });
     }
 
+    logDmE2eeBootstrapClientDiagnostics('local-record:repair:failed', {
+      errorCode,
+      errorMessage,
+    });
     throw createLocalDmE2eeError(
       'dm_e2ee_local_state_incomplete',
       errorMessage || 'Local DM E2EE setup is incomplete on this device.',

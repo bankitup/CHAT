@@ -17,6 +17,25 @@ function supportsBrowserStateCleanup() {
   return typeof window !== 'undefined';
 }
 
+function logDmE2eeLifecycleDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (
+    typeof window === 'undefined' ||
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP !== '1'
+  ) {
+    return;
+  }
+
+  if (details) {
+    console.info('[dm-e2ee-lifecycle]', stage, details);
+    return;
+  }
+
+  console.info('[dm-e2ee-lifecycle]', stage);
+}
+
 export async function clearAllLocalDmE2eeState() {
   if (!supportsBrowserStateCleanup()) {
     return;
@@ -66,8 +85,18 @@ export async function keepOnlyLocalDmE2eeStateForUser(userId: string) {
 }
 
 export async function reinitializeLocalDmE2eeStateForUser(userId: string) {
+  logDmE2eeLifecycleDiagnostics('reinitialize:start', {
+    userIdPresent: Boolean(userId),
+  });
   await clearLocalDmE2eeStateForUser(userId);
-  return ensureDmE2eeDeviceRegistered(userId, { forcePublish: true });
+  const result = await ensureDmE2eeDeviceRegistered(userId, {
+    forcePublish: true,
+  });
+  logDmE2eeLifecycleDiagnostics('reinitialize:done', {
+    status: result.status,
+    published: Boolean(result.result?.deviceRecordId),
+  });
+  return result;
 }
 
 export function invalidateEncryptedDmPreviewForConversation(

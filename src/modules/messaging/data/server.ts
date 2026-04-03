@@ -1295,20 +1295,57 @@ export async function publishCurrentUserDmE2eeDevice(
     oneTimePrekeyCount: input.oneTimePrekeys.length,
   });
 
-  const seededProfile = await supabase.from('profiles').upsert(
-    {
-      user_id: input.userId,
-    },
-    {
-      onConflict: 'user_id',
-    },
-  );
+  const profileLookup = await supabase
+    .from('profiles')
+    .select('user_id')
+    .eq('user_id', input.userId)
+    .maybeSingle();
 
-  if (seededProfile.error) {
-    logDmE2eeBootstrapDiagnostics('publish:profile-upsert-error', {
-      message: seededProfile.error.message,
+  if (profileLookup.error) {
+    logDmE2eeBootstrapDiagnostics('publish:profile-lookup-error', {
+      message: profileLookup.error.message,
     });
-    throw new Error(seededProfile.error.message);
+
+    if (
+      isMissingRelationErrorMessage(profileLookup.error.message, 'profiles') ||
+      isMissingColumnErrorMessage(profileLookup.error.message, 'user_id')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE bootstrap schema is missing.',
+      );
+    }
+
+    throw new Error(profileLookup.error.message);
+  }
+
+  if (!profileLookup.data) {
+    logDmE2eeBootstrapDiagnostics('publish:profile-missing-insert:start');
+    const profileInsert = await supabase.from('profiles').insert({
+      user_id: input.userId,
+    });
+
+    if (profileInsert.error) {
+      logDmE2eeBootstrapDiagnostics('publish:profile-missing-insert:error', {
+        message: profileInsert.error.message,
+      });
+
+      if (
+        isMissingRelationErrorMessage(profileInsert.error.message, 'profiles') ||
+        isMissingColumnErrorMessage(profileInsert.error.message, 'user_id')
+      ) {
+        throw createSchemaRequirementError(
+          'DM E2EE bootstrap schema is missing.',
+        );
+      }
+
+      throw new Error(
+        `DM E2EE profile seed failed: ${profileInsert.error.message}`,
+      );
+    }
+
+    logDmE2eeBootstrapDiagnostics('publish:profile-missing-insert:ok');
+  } else {
+    logDmE2eeBootstrapDiagnostics('publish:profile-existing');
   }
 
   const userDevices = await supabase
