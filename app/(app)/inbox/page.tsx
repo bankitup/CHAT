@@ -290,6 +290,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   });
 
   if (explicitV1TestSpace) {
+    // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
+    // Remove once membership resolution via space_members is stable again.
     activeSpaceId = explicitV1TestSpace.id;
     logDiagnostics('active-space-bypass-v1-test', {
       spaceId: explicitV1TestSpace.id,

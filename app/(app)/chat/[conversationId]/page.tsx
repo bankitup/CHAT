@@ -26,8 +26,11 @@ import {
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
-import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
-import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
+import {
+  resolveV1TestSpaceFallback,
+  resolveActiveSpaceForUser,
+  isSpaceMembersSchemaCacheErrorMessage,
+} from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
   getIdentityLabel,
@@ -358,28 +361,61 @@ export default async function ChatPage({
     );
   }
 
-  let activeSpaceState: Awaited<ReturnType<typeof resolveActiveSpaceForUser>>;
-  try {
-    activeSpaceState = await resolveActiveSpaceForUser({
-      userId: user.id,
-      requestedSpaceId: baseConversation.spaceId,
-      source: 'chat-page',
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+  const requestedSpaceId = query.space?.trim() || baseConversation.spaceId;
+  let activeSpaceId: string | null = null;
+  const explicitV1TestSpace = await resolveV1TestSpaceFallback({
+    requestedSpaceId,
+    source: 'chat-page-explicit-v1-test-bypass',
+  });
 
-    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-      redirect('/spaces');
+  if (explicitV1TestSpace) {
+    // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
+    // Remove once membership resolution via space_members is stable again.
+    activeSpaceId = explicitV1TestSpace.id;
+  } else {
+    let activeSpaceState: Awaited<
+      ReturnType<typeof resolveActiveSpaceForUser>
+    > | null = null;
+    try {
+      activeSpaceState = await resolveActiveSpaceForUser({
+        userId: user.id,
+        requestedSpaceId,
+        source: 'chat-page',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+        const fallbackSpace = await resolveV1TestSpaceFallback({
+          requestedSpaceId,
+          source: 'chat-page',
+        });
+
+        if (!fallbackSpace) {
+          redirect('/spaces');
+        }
+
+        activeSpaceId = fallbackSpace.id;
+      } else {
+        throw error;
+      }
     }
 
-    throw error;
+    if (!activeSpaceId) {
+      if (
+        !activeSpaceState?.activeSpace ||
+        activeSpaceState.requestedSpaceWasInvalid
+      ) {
+        notFound();
+      }
+
+      activeSpaceId = activeSpaceState.activeSpace.id;
+    }
   }
 
-  if (!activeSpaceState.activeSpace || activeSpaceState.requestedSpaceWasInvalid) {
-    notFound();
+  if (!activeSpaceId) {
+    redirect('/spaces');
   }
-
-  const activeSpaceId = activeSpaceState.activeSpace.id;
 
   if (!query.space || query.space !== activeSpaceId) {
     redirect(

@@ -20,8 +20,11 @@ import {
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
-import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
-import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
+import {
+  resolveV1TestSpaceFallback,
+  resolveActiveSpaceForUser,
+  isSpaceMembersSchemaCacheErrorMessage,
+} from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { notFound, redirect } from 'next/navigation';
 import { NotificationReadinessPanel } from '../settings/notification-readiness';
@@ -163,30 +166,59 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     redirect('/spaces');
   }
 
-  let activeSpaceState: Awaited<ReturnType<typeof resolveActiveSpaceForUser>>;
-  try {
-    activeSpaceState = await resolveActiveSpaceForUser({
-      userId: user.id,
-      requestedSpaceId: query.space,
-      source: 'activity-page',
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+  let activeSpaceId: string | null = null;
+  const explicitV1TestSpace = await resolveV1TestSpaceFallback({
+    requestedSpaceId: query.space,
+    source: 'activity-page-explicit-v1-test-bypass',
+  });
 
-    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-      redirect('/spaces');
+  if (explicitV1TestSpace) {
+    // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
+    // Remove once membership resolution via space_members is stable again.
+    activeSpaceId = explicitV1TestSpace.id;
+  } else {
+    let activeSpaceState: Awaited<
+      ReturnType<typeof resolveActiveSpaceForUser>
+    > | null = null;
+    try {
+      activeSpaceState = await resolveActiveSpaceForUser({
+        userId: user.id,
+        requestedSpaceId: query.space,
+        source: 'activity-page',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+        const fallbackSpace = await resolveV1TestSpaceFallback({
+          requestedSpaceId: query.space,
+          source: 'activity-page',
+        });
+
+        if (!fallbackSpace) {
+          redirect('/spaces');
+        }
+
+        activeSpaceId = fallbackSpace.id;
+      } else {
+        throw error;
+      }
     }
 
-    throw error;
+    if (!activeSpaceId) {
+      if (!activeSpaceState?.activeSpace) {
+        notFound();
+      }
+
+      if (activeSpaceState.requestedSpaceWasInvalid) {
+        redirect('/spaces');
+      }
+
+      activeSpaceId = activeSpaceState.activeSpace.id;
+    }
   }
 
-  if (!activeSpaceState.activeSpace) {
-    notFound();
-  }
-
-  const activeSpaceId = activeSpaceState.activeSpace.id;
-
-  if (activeSpaceState.requestedSpaceWasInvalid) {
+  if (!activeSpaceId) {
     redirect('/spaces');
   }
 
