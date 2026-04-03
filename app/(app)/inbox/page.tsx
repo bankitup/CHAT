@@ -284,43 +284,55 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   }
 
   let activeSpaceId: string;
-  try {
-    const activeSpaceState = await resolveActiveSpaceForUser({
-      userId: user.id,
-      requestedSpaceId: query.space,
-      source: 'inbox-page',
+  const explicitV1TestSpace = await resolveV1TestSpaceFallback({
+    requestedSpaceId: query.space,
+    source: 'inbox-page-explicit-v1-test-bypass',
+  });
+
+  if (explicitV1TestSpace) {
+    activeSpaceId = explicitV1TestSpace.id;
+    logDiagnostics('active-space-bypass-v1-test', {
+      spaceId: explicitV1TestSpace.id,
     });
-
-    if (!activeSpaceState.activeSpace) {
-      logDiagnostics('no-active-space-notFound');
-      notFound();
-    }
-
-    if (activeSpaceState.requestedSpaceWasInvalid) {
-      logDiagnostics('invalid-space-redirect');
-      redirect('/spaces');
-    }
-
-    activeSpaceId = activeSpaceState.activeSpace.id;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-      const fallbackSpace = await resolveV1TestSpaceFallback({
+  } else {
+    try {
+      const activeSpaceState = await resolveActiveSpaceForUser({
+        userId: user.id,
         requestedSpaceId: query.space,
         source: 'inbox-page',
       });
 
-      if (!fallbackSpace) {
+      if (!activeSpaceState.activeSpace) {
+        logDiagnostics('no-active-space-notFound');
+        notFound();
+      }
+
+      if (activeSpaceState.requestedSpaceWasInvalid) {
+        logDiagnostics('invalid-space-redirect');
         redirect('/spaces');
       }
 
-      activeSpaceId = fallbackSpace.id;
-      logDiagnostics('active-space-fallback-v1-test', {
-        spaceId: fallbackSpace.id,
-      });
-    } else {
-      throw error;
+      activeSpaceId = activeSpaceState.activeSpace.id;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+        const fallbackSpace = await resolveV1TestSpaceFallback({
+          requestedSpaceId: query.space,
+          source: 'inbox-page',
+        });
+
+        if (!fallbackSpace) {
+          redirect('/spaces');
+        }
+
+        activeSpaceId = fallbackSpace.id;
+        logDiagnostics('active-space-fallback-v1-test', {
+          spaceId: fallbackSpace.id,
+        });
+      } else {
+        throw error;
+      }
     }
   }
   logDiagnostics('active-space-ok', { hasActiveSpace: true });
