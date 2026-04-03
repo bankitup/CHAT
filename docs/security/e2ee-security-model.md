@@ -231,6 +231,8 @@ Current recovery behavior:
 - reload chat
 - one safe auto-retry for stale sender device publication
 - one safe auto-retry for prekey race
+- device-bootstrap publish validates required public fields before server-side persistence
+- device-bootstrap publish now ensures a `profiles` identity row exists for the authenticated user before writing `user_devices`, to avoid foreign-key bootstrap failures on fresh accounts
 - local encrypted-state maintenance failures (for example browser IndexedDB cleanup issues) are non-fatal for app-shell routes and must degrade to logged diagnostics rather than route crashes
 
 Unsupported recovery:

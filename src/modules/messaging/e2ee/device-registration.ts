@@ -248,12 +248,15 @@ export async function ensureDmE2eeDeviceRegistered(
   }
 
   let errorCode: string | null = null;
+  let errorMessage: string | null = null;
 
   try {
-    const payload = (await response.json()) as { code?: string };
+    const payload = (await response.json()) as { code?: string; error?: string };
     errorCode = payload.code ?? null;
+    errorMessage = payload.error ?? null;
   } catch {
     errorCode = null;
+    errorMessage = null;
   }
 
   if (errorCode === 'dm_e2ee_schema_missing') {
@@ -266,7 +269,14 @@ export async function ensureDmE2eeDeviceRegistered(
     };
   }
 
-  throw new Error('Unable to publish DM E2EE device bootstrap.');
+  if (errorCode === 'dm_e2ee_local_state_incomplete') {
+    throw createLocalDmE2eeError(
+      'dm_e2ee_local_state_incomplete',
+      errorMessage || 'Local DM E2EE setup is incomplete on this device.',
+    );
+  }
+
+  throw new Error(errorMessage || 'Unable to publish DM E2EE device bootstrap.');
 }
 
 export async function markLocalDmE2eeDeviceRegistrationStale(userId: string) {

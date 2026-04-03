@@ -59,6 +59,22 @@ function logDmE2eeSendDiagnostics(
   console.info('[dm-e2ee-send]', stage);
 }
 
+function logDmE2eeBootstrapDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP !== '1') {
+    return;
+  }
+
+  if (details) {
+    console.info('[dm-e2ee-bootstrap]', stage, details);
+    return;
+  }
+
+  console.info('[dm-e2ee-bootstrap]', stage);
+}
+
 type ConversationRecord = {
   id: string;
   kind: string | null;
@@ -1274,6 +1290,27 @@ export async function publishCurrentUserDmE2eeDevice(
 ) {
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
+  logDmE2eeBootstrapDiagnostics('publish:start', {
+    hasUserId: Boolean(input.userId),
+    oneTimePrekeyCount: input.oneTimePrekeys.length,
+  });
+
+  const seededProfile = await supabase.from('profiles').upsert(
+    {
+      user_id: input.userId,
+    },
+    {
+      onConflict: 'user_id',
+    },
+  );
+
+  if (seededProfile.error) {
+    logDmE2eeBootstrapDiagnostics('publish:profile-upsert-error', {
+      message: seededProfile.error.message,
+    });
+    throw new Error(seededProfile.error.message);
+  }
+
   const userDevices = await supabase
     .from('user_devices')
     .upsert(
@@ -1296,6 +1333,9 @@ export async function publishCurrentUserDmE2eeDevice(
     .single();
 
   if (userDevices.error) {
+    logDmE2eeBootstrapDiagnostics('publish:user-devices-error', {
+      message: userDevices.error.message,
+    });
     if (
       isMissingRelationErrorMessage(userDevices.error.message, 'user_devices') ||
       isMissingColumnErrorMessage(userDevices.error.message, 'identity_key_public') ||
@@ -1314,6 +1354,7 @@ export async function publishCurrentUserDmE2eeDevice(
   if (!deviceRecordId) {
     throw new Error('Unable to persist DM E2EE device identity.');
   }
+  logDmE2eeBootstrapDiagnostics('publish:user-device-ok');
 
   const retireOthers = await supabase
     .from('user_devices')
@@ -1325,6 +1366,9 @@ export async function publishCurrentUserDmE2eeDevice(
     .is('retired_at', null);
 
   if (retireOthers.error) {
+    logDmE2eeBootstrapDiagnostics('publish:retire-others-error', {
+      message: retireOthers.error.message,
+    });
     throw new Error(retireOthers.error.message);
   }
 
@@ -1335,6 +1379,9 @@ export async function publishCurrentUserDmE2eeDevice(
     .is('claimed_at', null);
 
   if (deleteExistingPrekeys.error) {
+    logDmE2eeBootstrapDiagnostics('publish:delete-prekeys-error', {
+      message: deleteExistingPrekeys.error.message,
+    });
     if (
       isMissingRelationErrorMessage(
         deleteExistingPrekeys.error.message,
@@ -1362,9 +1409,16 @@ export async function publishCurrentUserDmE2eeDevice(
       );
 
     if (insertedPrekeys.error) {
+      logDmE2eeBootstrapDiagnostics('publish:insert-prekeys-error', {
+        message: insertedPrekeys.error.message,
+      });
       throw new Error(insertedPrekeys.error.message);
     }
   }
+
+  logDmE2eeBootstrapDiagnostics('publish:done', {
+    publishedPrekeyCount: input.oneTimePrekeys.length,
+  });
 
   return {
     deviceRecordId,
