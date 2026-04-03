@@ -7,12 +7,15 @@ import {
 } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
+  getInboxPreviewText,
+  getSearchableConversationPreview,
+} from '@/modules/messaging/e2ee/inbox-policy';
+import {
   getAvailableUsers,
   getArchivedConversations,
   getConversationDisplayName,
   getConversationParticipantIdentities,
   getInboxConversations,
-  type InboxConversation,
 } from '@/modules/messaging/data/server';
 import {
   getIdentityLabel,
@@ -47,6 +50,7 @@ type ConversationListItem = {
   preview: string | null;
   latestMessageId: string | null;
   latestMessageContentMode: string | null;
+  latestMessageDeletedAt: string | null;
   metaLabels: Array<{
     label: string;
     tone: 'default' | 'archived';
@@ -134,32 +138,6 @@ function formatRecency(value: string | null, language: AppLanguage) {
     month: 'short',
     day: 'numeric',
   }).format(target);
-}
-
-function getInboxPreview(conversation: InboxConversation, t: ReturnType<typeof getTranslations>) {
-  if (!conversation.lastMessageAt) {
-    return null;
-  }
-
-  if (conversation.latestMessageDeletedAt) {
-    return t.chat.deletedMessage;
-  }
-
-  if (conversation.latestMessageKind === 'voice') {
-    return t.chat.voiceMessage;
-  }
-
-  if (conversation.latestMessageContentMode === 'dm_e2ee_v1') {
-    return t.chat.encryptedMessage;
-  }
-
-  const body = conversation.latestMessageBody?.trim();
-
-  if (body) {
-    return body;
-  }
-
-  return t.chat.attachment;
 }
 
 function getFallbackIdentityLabel(
@@ -323,7 +301,13 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           },
         })
       : otherParticipantLabels[0] || (language === 'ru' ? 'Новый чат' : 'New chat');
-    const preview = getInboxPreview(conversation, t);
+    const preview = getInboxPreviewText(conversation, {
+      deletedMessage: t.chat.deletedMessage,
+      voiceMessage: t.chat.voiceMessage,
+      encryptedMessage: t.chat.encryptedMessage,
+      newEncryptedMessage: t.chat.newEncryptedMessage,
+      attachment: t.chat.attachment,
+    });
     const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
     const hasUnread = conversation.unreadCount > 0;
     const metaLabels = [
@@ -342,6 +326,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       preview,
       latestMessageId: conversation.latestMessageId,
       latestMessageContentMode: conversation.latestMessageContentMode,
+      latestMessageDeletedAt: conversation.latestMessageDeletedAt,
       metaLabels,
       recencyLabel: formatRecency(lastActivityAt, language),
       timestampLabel: formatTimestamp(lastActivityAt, language),
@@ -364,10 +349,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       return true;
     }
 
-    const searchablePreview =
-      conversation.latestMessageContentMode === 'dm_e2ee_v1'
-        ? ''
-        : conversation.preview ?? '';
+    const searchablePreview = getSearchableConversationPreview({
+      latestMessageContentMode: conversation.latestMessageContentMode,
+      preview: conversation.preview,
+    });
 
     const haystack = [
       conversation.title,
@@ -684,8 +669,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                               : 'muted conversation-preview'
                           }
                           conversationId={conversation.conversationId}
+                          currentUserId={user.id}
                           fallbackPreview={conversation.preview}
                           latestMessageContentMode={conversation.latestMessageContentMode}
+                          latestMessageDeletedAt={conversation.latestMessageDeletedAt ?? null}
                           latestMessageId={conversation.latestMessageId}
                         />
                       ) : null}

@@ -13,7 +13,7 @@ Scope of this phase:
 - DM text only
 - client-side encryption and decryption only
 - device-based identity and session setup
-- Signal-style asynchronous session establishment and ratcheting direction
+- Signal-style asynchronous session establishment and ratcheting direction, without claiming full Signal parity today
 
 Out of scope for this phase:
 
@@ -30,18 +30,28 @@ Reference direction:
 - Double Ratchet for ongoing message secrecy and break-in recovery:
   [Signal Double Ratchet](https://signal.org/docs/specifications/doubleratchet/)
 
-## Current plaintext exposure
+## Current implemented state
 
-Today DM text is not end-to-end encrypted.
+Today the repo has a limited DM-only encrypted path:
 
-Current plaintext path:
+- direct-message text can be encrypted on the client before upload
+- encrypted DM shells are stored in `public.messages`
+- opaque ciphertext envelopes are stored in `public.message_e2ee_envelopes`
+- encrypted DM text is decrypted only on the client for thread rendering
+- inbox/activity use truthful generic fallback copy unless a safe local preview is available
 
-- the composer submits plaintext text into `sendMessageAction`
-- server-side messaging helpers write plaintext into `public.messages.body`
-- inbox and activity previews derive text from `public.messages.body`
-- chat rendering reads plaintext `body` back from the database
+What remains plaintext today:
 
-This means the current server and database can read DM text. That must change before any E2EE claim is made.
+- non-DM conversations
+- non-encrypted message paths
+- non-text message content such as attachments and voice messages
+
+What is still not true today:
+
+- full X3DH session establishment
+- Double Ratchet follow-up messaging
+- multi-device E2EE
+- encrypted DM edit support
 
 ## Proposed DM-first architecture
 
@@ -60,7 +70,7 @@ The server stores only the public portions needed for session establishment and 
 
 ### 2. Session establishment
 
-For a DM, the sending device fetches the recipient device prekey bundle from the server and establishes a session using a Signal-style X3DH flow.
+For a DM, the sending device fetches the recipient device prekey bundle from the server and uses a prekey-bootstrap flow that is compatible with later Signal-style session evolution.
 
 Server-visible material:
 
@@ -89,7 +99,7 @@ That keeps the current conversation ordering model, reactions, unread tracking, 
 
 ### 4. Ratcheting-friendly direction
 
-After the first X3DH session setup, devices exchange opaque Signal-style message envelopes only.
+After a future stronger session layer exists, devices should exchange opaque ratcheted message envelopes only.
 
 The repo should treat these envelopes as opaque bytes:
 
@@ -97,7 +107,7 @@ The repo should treat these envelopes as opaque bytes:
 - the server only stores and routes
 - the client decrypts after fetch
 
-This avoids inventing custom cryptography or partially reimplementing Signal semantics in application code.
+The current repo does not yet implement full Signal semantics. Future work should move closer to a standard session model rather than expanding the current bootstrap-only flow indefinitely.
 
 ## Data boundaries
 
@@ -223,12 +233,12 @@ Notes:
 
 ### Send
 
-Future encrypted DM send flow:
+Current implemented encrypted DM send flow:
 
 1. The client resolves the current conversation as a DM.
 2. The client loads the sender device keys from local secure storage.
 3. The client fetches recipient device bundles from the server.
-4. The client establishes or resumes a per-device session.
+4. The client performs a prekey-bootstrap encryption step for the recipient device and a self-envelope for the sender device.
 5. The client encrypts the plaintext locally into one envelope per target device.
 6. The client uploads:
    - a `public.messages` shell row with `content_mode = 'dm_e2ee_v1'`
@@ -241,15 +251,16 @@ Current v1 hardening behavior:
 - if the local device binding is stale, the client re-publishes and retries once
 - if a one-time prekey race occurs during send, the client refreshes the recipient bundle and retries once
 - if recipient one-time prekeys are exhausted, bootstrap still uses the signed prekey only rather than downgrading to plaintext
+- recipient one-time-prekey claim, encrypted message shell insert, ciphertext envelope insert, and conversation recency update now commit through one database function so they succeed or fail together
 - failures remain explicit; the app does not silently fall back to server-readable DM text
 - rollout can be limited to selected auth users without weakening ciphertext storage or server blindness
 
 ### Receive
 
-Future encrypted DM receive flow:
+Current implemented encrypted DM receive flow:
 
 1. The client fetches message shell rows plus only the envelopes targeted to the local device.
-2. The client loads local session state and private keys.
+2. The client loads local device private material.
 3. The client decrypts locally.
 4. The client renders plaintext only in memory or local protected storage.
 

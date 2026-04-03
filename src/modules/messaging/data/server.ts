@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
+import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeRecipientBundleResponse,
@@ -294,6 +295,15 @@ function isMissingRelationErrorMessage(message: string, relationName: string) {
   return (
     normalizedMessage.includes('relation') &&
     normalizedMessage.includes(relationName.toLowerCase())
+  );
+}
+
+function isMissingFunctionErrorMessage(message: string, functionName: string) {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    (normalizedMessage.includes('function') ||
+      normalizedMessage.includes('could not find the function')) &&
+    normalizedMessage.includes(functionName.toLowerCase())
   );
 }
 
@@ -2393,74 +2403,69 @@ export async function sendEncryptedDmTextMessage(
     );
   }
 
-  for (const envelope of input.envelopes) {
-    if (envelope.usedOneTimePrekeyId === null) {
-      continue;
-    }
-
-    const claim = await supabase
-      .from('device_one_time_prekeys')
-      .update({
-        claimed_at: new Date().toISOString(),
-      })
-      .eq('device_id', envelope.recipientDeviceRecordId)
-      .eq('prekey_id', envelope.usedOneTimePrekeyId)
-      .is('claimed_at', null)
-      .select('id')
-      .maybeSingle();
-
-    if (claim.error) {
-      throw new Error(claim.error.message);
-    }
-
-    if (!claim.data) {
-      throw createDmE2eeOperationError(
-        'dm_e2ee_prekey_conflict',
-        'Recipient prekey was already used. Refresh and try sending again.',
-      );
-    }
-  }
-
-  const messageRecord = await createMessageRecord({
-    conversationId: input.conversationId,
-    senderId: input.senderId,
-    replyToMessageId: input.replyToMessageId ?? null,
-    kind: 'text',
-    clientId: input.clientId,
-    body: null,
-    contentMode: 'dm_e2ee_v1',
-    senderDeviceId: input.senderDeviceRecordId,
+  const rpcResult = await supabase.rpc('send_dm_e2ee_message_atomic', {
+    p_conversation_id: input.conversationId,
+    p_reply_to_message_id: input.replyToMessageId ?? null,
+    p_client_id: input.clientId,
+    p_sender_device_id: input.senderDeviceRecordId,
+    p_envelopes: input.envelopes,
   });
 
-  const envelopeInsert = await supabase
-    .from('message_e2ee_envelopes')
-    .insert(
-      input.envelopes.map((envelope) => ({
-        message_id: messageRecord.messageId,
-        recipient_device_id: envelope.recipientDeviceRecordId,
-        envelope_type: envelope.envelopeType,
-        ciphertext: envelope.ciphertext,
-        used_one_time_prekey_id: envelope.usedOneTimePrekeyId,
-      })),
-    );
-
-  if (envelopeInsert.error) {
+  if (rpcResult.error) {
     if (
-      isMissingRelationErrorMessage(
-        envelopeInsert.error.message,
-        'message_e2ee_envelopes',
+      isMissingRelationErrorMessage(rpcResult.error.message, 'message_e2ee_envelopes') ||
+      isMissingRelationErrorMessage(rpcResult.error.message, 'user_devices') ||
+      isMissingRelationErrorMessage(rpcResult.error.message, 'device_one_time_prekeys') ||
+      isMissingFunctionErrorMessage(
+        rpcResult.error.message,
+        'send_dm_e2ee_message_atomic',
       ) ||
-      isMissingColumnErrorMessage(envelopeInsert.error.message, 'ciphertext')
+      isMissingColumnErrorMessage(rpcResult.error.message, 'content_mode') ||
+      isMissingColumnErrorMessage(rpcResult.error.message, 'sender_device_id') ||
+      isMissingColumnErrorMessage(rpcResult.error.message, 'ciphertext') ||
+      isMissingColumnErrorMessage(rpcResult.error.message, 'claimed_at')
     ) {
       throw createSchemaRequirementError(
         'DM E2EE send schema is missing.',
       );
     }
 
-    throw new Error(envelopeInsert.error.message);
+    if (rpcResult.error.message.includes('dm_e2ee_prekey_conflict')) {
+      throw createDmE2eeOperationError(
+        'dm_e2ee_prekey_conflict',
+        'Recipient prekey was already used. Refresh and try sending again.',
+      );
+    }
+
+    if (rpcResult.error.message.includes('dm_e2ee_sender_device_stale')) {
+      throw createDmE2eeOperationError(
+        'dm_e2ee_sender_device_stale',
+        'Sending device is not registered for DM E2EE.',
+      );
+    }
+
+    throw new Error(rpcResult.error.message);
   }
 
-  return messageRecord;
+  const row = Array.isArray(rpcResult.data)
+    ? (rpcResult.data[0] as
+        | { message_id?: string | null; created_at?: string | null; client_id?: string | null }
+        | undefined)
+    : (rpcResult.data as
+        | { message_id?: string | null; created_at?: string | null; client_id?: string | null }
+        | null);
+
+  const messageId = String(row?.message_id ?? '').trim();
+
+  if (!messageId) {
+    throw new Error('Encrypted DM send did not return a persisted message id.');
+  }
+
+  return {
+    messageId,
+    timestamp: row?.created_at ?? new Date().toISOString(),
+    clientId: String(row?.client_id ?? input.clientId),
+  };
 }
 
 async function createMessageRecord(input: {
@@ -2507,23 +2512,17 @@ async function createMessageRecord(input: {
     );
   }
 
-  const payload: Record<string, unknown> = {
-    id: messageId,
-    conversation_id: input.conversationId,
-    sender_id: input.senderId,
-    reply_to_message_id: input.replyToMessageId ?? null,
+  const payload = buildMessageInsertPayload({
+    messageId,
+    conversationId: input.conversationId,
+    senderId: input.senderId,
+    replyToMessageId: input.replyToMessageId ?? null,
     kind: input.kind ?? 'text',
-    client_id: clientId,
-    body: input.body?.trim() || null,
-  };
-
-  if (input.senderDeviceId) {
-    payload.sender_device_id = input.senderDeviceId;
-  }
-
-  if (input.contentMode) {
-    payload.content_mode = input.contentMode;
-  }
+    clientId,
+    body: input.body ?? null,
+    contentMode: input.contentMode,
+    senderDeviceId: input.senderDeviceId ?? null,
+  });
 
   const { error: insertError } = await supabase.from('messages').insert(payload);
 

@@ -47,6 +47,9 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Unable to refresh encrypted setup on this device.' },
+      { status: 400 },
+    );
   }
 }

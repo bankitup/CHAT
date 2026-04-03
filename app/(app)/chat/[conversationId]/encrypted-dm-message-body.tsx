@@ -3,12 +3,15 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
-import { ensureDmE2eeDeviceRegistered } from '@/modules/messaging/e2ee/device-registration';
+import { reinitializeLocalDmE2eeStateForUser } from '@/modules/messaging/e2ee/lifecycle';
 import { decryptStoredDmEnvelope } from '@/modules/messaging/e2ee/prekey-encrypt';
 import { getLocalDmE2eeDeviceRecordByServerDeviceId } from '@/modules/messaging/e2ee/device-store';
 import { writeLocalEncryptedDmPreview } from '@/modules/messaging/e2ee/preview-cache';
-
-type EncryptedDmFailureKind = 'device-setup' | 'unavailable';
+import {
+  classifyEncryptedDmFailure,
+  getEncryptedDmBodyRenderState,
+  type EncryptedDmFailureKind,
+} from '@/modules/messaging/e2ee/ui-policy';
 
 type EncryptedDmMessageBodyProps = {
   clientId: string;
@@ -48,21 +51,6 @@ export function EncryptedDmMessageBody({
   const [retryNonce, setRetryNonce] = useState(0);
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
 
-  function classifyFailure(error: unknown): EncryptedDmFailureKind {
-    if (!(error instanceof Error)) {
-      return 'unavailable';
-    }
-
-    if (
-      error.message.includes('Local DM E2EE device record is missing') ||
-      error.message.includes('one-time prekey is missing locally')
-    ) {
-      return 'device-setup';
-    }
-
-    return 'unavailable';
-  }
-
   useEffect(() => {
     let cancelled = false;
 
@@ -98,6 +86,7 @@ export function EncryptedDmMessageBody({
 
         if (shouldCachePreview) {
           writeLocalEncryptedDmPreview({
+            userId: currentUserId,
             conversationId,
             messageId,
             plaintext: nextPlaintext,
@@ -108,7 +97,7 @@ export function EncryptedDmMessageBody({
         if (!cancelled) {
           setPlaintext(null);
           setIsUnavailable(true);
-          setFailureKind(classifyFailure(error));
+          setFailureKind(classifyEncryptedDmFailure(error));
         }
       }
     })();
@@ -124,20 +113,26 @@ export function EncryptedDmMessageBody({
     messageId,
     retryNonce,
     shouldCachePreview,
+    currentUserId,
   ]);
 
-  if (plaintext?.trim()) {
-    return <p className="message-body">{plaintext.trim()}</p>;
+  const renderState = getEncryptedDmBodyRenderState({
+    plaintext,
+    isUnavailable,
+    failureKind,
+    fallbackLabel,
+    setupUnavailableLabel,
+    unavailableLabel,
+  });
+
+  if (renderState.kind === 'plaintext') {
+    return <p className="message-body">{renderState.text}</p>;
   }
 
-  if (isUnavailable) {
+  if (renderState.kind === 'unavailable') {
     return (
       <div className="message-encryption-state">
-        <p className="message-body">
-          {failureKind === 'device-setup'
-            ? setupUnavailableLabel
-            : unavailableLabel}
-        </p>
+        <p className="message-body">{renderState.text}</p>
         <div className="message-encryption-actions">
           <button
             className="button button-secondary button-compact message-encryption-action"
@@ -146,16 +141,16 @@ export function EncryptedDmMessageBody({
           >
             {retryLabel}
           </button>
-          {failureKind === 'device-setup' ? (
+          {renderState.showRefreshSetup ? (
             <button
               className="button button-secondary button-compact message-encryption-action"
               disabled={isRefreshingSetup}
               onClick={async () => {
                 setIsRefreshingSetup(true);
                 try {
-                  const bootstrap = await ensureDmE2eeDeviceRegistered(currentUserId, {
-                    forcePublish: true,
-                  });
+                  const bootstrap = await reinitializeLocalDmE2eeStateForUser(
+                    currentUserId,
+                  );
 
                   if (bootstrap.status === 'registered') {
                     setRetryNonce((value) => value + 1);
@@ -181,5 +176,5 @@ export function EncryptedDmMessageBody({
     );
   }
 
-  return <p className="message-body">{fallbackLabel}</p>;
+  return <p className="message-body">{renderState.text}</p>;
 }

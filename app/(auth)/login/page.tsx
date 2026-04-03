@@ -4,6 +4,7 @@ import { loginAction } from '../actions';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getTranslations } from '@/modules/i18n';
 import { getCookieLanguage } from '@/modules/i18n/server';
+import { DmE2eePublicBoundaryCleanup } from '@/modules/messaging/e2ee/local-state-boundary';
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -28,6 +29,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="page auth-page">
+      <DmE2eePublicBoundaryCleanup />
       <section className="stack auth-shell auth-shell-login">
         <section className="auth-topbar">
           <Link

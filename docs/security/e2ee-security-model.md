@@ -89,6 +89,13 @@ Current implemented flow:
 8. recipient client fetches shell plus its own envelope
 9. recipient client decrypts locally for rendering
 
+Current protocol boundary:
+
+- the implementation uses a repository-specific prekey-bootstrap envelope design built with WebCrypto primitives
+- it is directionally compatible with later Signal-style session evolution
+- it is not a complete X3DH implementation
+- it is not a complete Double Ratchet implementation
+
 ## 7. What the server can see
 
 The server can see:
@@ -105,6 +112,13 @@ The server can see:
 - whether encrypted DM rollout is enabled for a given account
 
 The server may also see generic fallback labels in rendered UX logic, but not decrypted DM text.
+
+Current secondary-surface fallback policy:
+
+- inbox and activity use generic encrypted labels only
+- unread encrypted DM list surfaces may use a generic `New encrypted message` label
+- reply references to encrypted DM text use a generic `Reply to encrypted message` label
+- these labels must never be backed by server-readable decrypted content
 
 ## 8. What the server cannot see
 
@@ -148,6 +162,7 @@ Current session/bootstrap state:
 - stale sender registration can trigger one forced re-publish retry
 - one-time prekey race can trigger one recipient-bundle refresh retry
 - missing one-time prekeys do not authorize plaintext fallback
+- encrypted DM send now relies on one atomic database function to claim recipient one-time prekeys, insert the message shell, insert ciphertext envelopes, and update conversation recency together
 
 Prepared but not implemented yet:
 
@@ -169,9 +184,20 @@ Rules:
 
 - cache is non-canonical
 - cache is disposable
+- cache is scoped to the authenticated user on the current device
 - cache is written only after successful client-side decryption
 - cache must never sync to the server
 - cache must never be treated as a search index in v1
+- cache should be cleared on logout, unauthenticated public/auth entry, rollout disable for that user, explicit encrypted-setup reinitialization, and account switch on the same browser
+- cache should be invalidated when the latest message state no longer supports showing the cached decrypted snippet, including latest-message deletion or replacement by non-encrypted latest content
+
+Local device-key lifecycle:
+
+- device private material persists across app reload for the same authenticated enabled user
+- device private material is cleared on logout/public unauthenticated entry
+- device private material is cleared for users outside the current authenticated session on the same browser
+- rollout-disabled users have their local DM E2EE device state cleared rather than left warm in the browser
+- explicit encrypted setup reinitialization clears prior local device state before publishing a new local device record
 
 ## 12. Failure and recovery semantics
 
@@ -199,6 +225,12 @@ Unsupported recovery:
 - operator-side plaintext recovery
 - cross-device recovery
 - recovery of old encrypted messages after true local key loss
+
+Error-surface rule:
+
+- encrypted DM routes and UI should prefer stable, non-technical recovery copy over raw server/debug strings
+- explicit structured error codes may still drive recovery actions
+- user-facing recovery copy should avoid implying full ratcheted session semantics when the current implementation is still bootstrap-style
 
 ## 13. Reply / edit / delete policy for encrypted DMs
 
@@ -241,6 +273,7 @@ Rules:
 Operational checklist:
 
 - use [dm-e2ee-rollout-checklist.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/dm-e2ee-rollout-checklist.md)
+- use [e2ee-ops-playbook.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/e2ee-ops-playbook.md) for operator/support-safe rollout and incident handling
 
 ## 16. Security invariants that must not be violated
 
@@ -258,6 +291,8 @@ Operational checklist:
 - browser storage is weaker than native secure storage
 - no multi-device recovery
 - no group or attachment E2EE
+- current encrypted DM traffic is still bootstrap-style, not ratcheted follow-up messaging
+- atomic encrypted DM send now depends on the `send_dm_e2ee_message_atomic` database function being present; if it is missing, encrypted DM send must fail explicitly rather than falling back to non-atomic behavior
 - repeat sends are not yet backed by full ratcheted session state
 - inbox previews can be useful only on the device that decrypted them
 - encrypted DM search is intentionally limited

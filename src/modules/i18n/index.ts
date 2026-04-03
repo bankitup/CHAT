@@ -231,6 +231,8 @@ type LanguageDictionary = {
     audio: string;
     voiceMessage: string;
     encryptedMessage: string;
+    newEncryptedMessage: string;
+    replyToEncryptedMessage: string;
     encryptedMessageUnavailable: string;
     attachment: string;
     file: string;
@@ -522,6 +524,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       audio: 'Audio',
       voiceMessage: 'Voice message',
       encryptedMessage: 'Encrypted message',
+      newEncryptedMessage: 'New encrypted message',
+      replyToEncryptedMessage: 'Reply to encrypted message',
       encryptedMessageUnavailable: 'Encrypted message is not available on this device yet.',
       attachment: 'Attachment',
       file: 'File',
@@ -574,7 +578,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       encryptionNeedsRefresh:
         'Encrypted DM setup on this device needs to refresh. Try again.',
       encryptionSessionChanged:
-        'Encrypted DM session changed. Try sending again.',
+        'Encrypted DM setup changed. Try sending again.',
       unableToSendEncryptedMessage: 'Unable to send encrypted message.',
       encryptedMessageSetupUnavailable:
         'This encrypted message is not available on this device right now.',
@@ -821,6 +825,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       audio: 'Аудио',
       voiceMessage: 'Голосовое сообщение',
       encryptedMessage: 'Зашифрованное сообщение',
+      newEncryptedMessage: 'Новое зашифрованное сообщение',
+      replyToEncryptedMessage: 'Ответ на зашифрованное сообщение',
       encryptedMessageUnavailable:
         'Зашифрованное сообщение пока недоступно на этом устройстве.',
       attachment: 'Файл',
@@ -876,7 +882,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       encryptionNeedsRefresh:
         'Настройку шифрования на этом устройстве нужно обновить. Попробуйте ещё раз.',
       encryptionSessionChanged:
-        'Состояние зашифрованного диалога изменилось. Попробуйте отправить сообщение ещё раз.',
+        'Настройка шифрования для этого личного чата изменилась. Попробуйте отправить сообщение ещё раз.',
       unableToSendEncryptedMessage:
         'Не удалось отправить зашифрованное сообщение.',
       encryptedMessageSetupUnavailable:

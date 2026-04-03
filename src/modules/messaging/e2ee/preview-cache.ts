@@ -1,11 +1,18 @@
 export type LocalEncryptedDmPreview = {
+  userId: string;
   conversationId: string;
   messageId: string;
   snippet: string;
   updatedAt: string;
 };
 
-const PREVIEW_CACHE_KEY = 'chat_dm_e2ee_preview_cache_v1';
+type LocalEncryptedDmPreviewCache = Record<
+  string,
+  Record<string, LocalEncryptedDmPreview>
+>;
+
+const PREVIEW_CACHE_KEY = 'chat_dm_e2ee_preview_cache_v2';
+const LEGACY_PREVIEW_CACHE_KEY = 'chat_dm_e2ee_preview_cache_v1';
 const PREVIEW_MAX_LENGTH = 120;
 
 function isBrowserStorageAvailable() {
@@ -22,38 +29,52 @@ function normalizeSnippet(value: string) {
   return `${trimmed.slice(0, PREVIEW_MAX_LENGTH).trimEnd()}...`;
 }
 
-function readPreviewCacheMap() {
-  if (!isBrowserStorageAvailable()) {
-    return {} as Record<string, LocalEncryptedDmPreview>;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(PREVIEW_CACHE_KEY);
-
-    if (!raw) {
-      return {} as Record<string, LocalEncryptedDmPreview>;
-    }
-
-    return JSON.parse(raw) as Record<string, LocalEncryptedDmPreview>;
-  } catch {
-    return {} as Record<string, LocalEncryptedDmPreview>;
-  }
-}
-
-function writePreviewCacheMap(value: Record<string, LocalEncryptedDmPreview>) {
+function clearLegacyPreviewCache() {
   if (!isBrowserStorageAvailable()) {
     return;
   }
 
+  window.localStorage.removeItem(LEGACY_PREVIEW_CACHE_KEY);
+}
+
+function readPreviewCacheMap() {
+  if (!isBrowserStorageAvailable()) {
+    return {} as LocalEncryptedDmPreviewCache;
+  }
+
+  try {
+    clearLegacyPreviewCache();
+    const raw = window.localStorage.getItem(PREVIEW_CACHE_KEY);
+
+    if (!raw) {
+      return {} as LocalEncryptedDmPreviewCache;
+    }
+
+    return JSON.parse(raw) as LocalEncryptedDmPreviewCache;
+  } catch {
+    return {} as LocalEncryptedDmPreviewCache;
+  }
+}
+
+function writePreviewCacheMap(value: LocalEncryptedDmPreviewCache) {
+  if (!isBrowserStorageAvailable()) {
+    return;
+  }
+
+  clearLegacyPreviewCache();
   window.localStorage.setItem(PREVIEW_CACHE_KEY, JSON.stringify(value));
 }
 
-export function readLocalEncryptedDmPreview(conversationId: string) {
+export function readLocalEncryptedDmPreview(
+  userId: string,
+  conversationId: string,
+) {
   const cacheMap = readPreviewCacheMap();
-  return cacheMap[conversationId] ?? null;
+  return cacheMap[userId]?.[conversationId] ?? null;
 }
 
 export function writeLocalEncryptedDmPreview(input: {
+  userId: string;
   conversationId: string;
   messageId: string;
   plaintext: string;
@@ -66,11 +87,67 @@ export function writeLocalEncryptedDmPreview(input: {
   }
 
   const cacheMap = readPreviewCacheMap();
-  cacheMap[input.conversationId] = {
+  const userCache = cacheMap[input.userId] ?? {};
+  userCache[input.conversationId] = {
+    userId: input.userId,
     conversationId: input.conversationId,
     messageId: input.messageId,
     snippet,
     updatedAt: input.updatedAt ?? new Date().toISOString(),
   };
+  cacheMap[input.userId] = userCache;
   writePreviewCacheMap(cacheMap);
+}
+
+export function clearLocalEncryptedDmPreview(
+  userId: string,
+  conversationId: string,
+) {
+  const cacheMap = readPreviewCacheMap();
+  const userCache = cacheMap[userId];
+
+  if (!userCache?.[conversationId]) {
+    return;
+  }
+
+  delete userCache[conversationId];
+
+  if (Object.keys(userCache).length === 0) {
+    delete cacheMap[userId];
+  } else {
+    cacheMap[userId] = userCache;
+  }
+
+  writePreviewCacheMap(cacheMap);
+}
+
+export function clearLocalEncryptedDmPreviewsForUser(userId: string) {
+  const cacheMap = readPreviewCacheMap();
+
+  if (!cacheMap[userId]) {
+    return;
+  }
+
+  delete cacheMap[userId];
+  writePreviewCacheMap(cacheMap);
+}
+
+export function clearLocalEncryptedDmPreviewsExceptUser(userId: string) {
+  const cacheMap = readPreviewCacheMap();
+  const nextCache: LocalEncryptedDmPreviewCache = {};
+
+  if (cacheMap[userId]) {
+    nextCache[userId] = cacheMap[userId];
+  }
+
+  writePreviewCacheMap(nextCache);
+}
+
+export function clearAllLocalEncryptedDmPreviews() {
+  if (!isBrowserStorageAvailable()) {
+    return;
+  }
+
+  clearLegacyPreviewCache();
+  window.localStorage.removeItem(PREVIEW_CACHE_KEY);
 }

@@ -55,7 +55,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       {
-        error: message,
+        error:
+          code === 'dm_e2ee_schema_missing'
+            ? message
+            : code === 'dm_e2ee_recipient_device_missing' ||
+                code === 'dm_e2ee_recipient_unavailable'
+              ? message
+              : 'Unable to prepare encrypted direct message setup.',
         code,
       } satisfies DmE2eeApiErrorResponse,
       { status: code === 'dm_e2ee_schema_missing' ? 409 : 400 },

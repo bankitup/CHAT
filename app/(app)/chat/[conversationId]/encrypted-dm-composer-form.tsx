@@ -14,7 +14,9 @@ import {
   markLocalDmE2eeDeviceRegistrationStale,
 } from '@/modules/messaging/e2ee/device-registration';
 import { getLocalDmE2eeDeviceRecord } from '@/modules/messaging/e2ee/device-store';
+import { reinitializeLocalDmE2eeStateForUser } from '@/modules/messaging/e2ee/lifecycle';
 import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encrypt';
+import { getEncryptedDmComposerErrorMessage } from '@/modules/messaging/e2ee/ui-policy';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 
@@ -137,25 +139,18 @@ function getEncryptedDmErrorMessage(
     return t.chat.encryptionUnavailableHere;
   }
 
-  switch (code) {
-    case 'dm_e2ee_schema_missing':
-      return t.chat.encryptionSetupUnavailable;
-    case 'dm_e2ee_rollout_disabled':
-      return t.chat.encryptionRolloutUnavailable;
-    case 'dm_e2ee_local_state_incomplete':
-      return t.chat.encryptionNeedsRefresh;
-    case 'dm_e2ee_recipient_device_missing':
-    case 'dm_e2ee_recipient_unavailable':
-      return t.chat.recipientEncryptionUnavailable;
-    case 'dm_e2ee_sender_device_stale':
-      return t.chat.encryptionNeedsRefresh;
-    case 'dm_e2ee_prekey_conflict':
-      return t.chat.encryptionSessionChanged;
-    default:
-      return error instanceof Error
-        ? error.message || t.chat.unableToSendEncryptedMessage
-        : t.chat.unableToSendEncryptedMessage;
-  }
+  return getEncryptedDmComposerErrorMessage({
+    code,
+    labels: {
+      encryptionUnavailableHere: t.chat.encryptionUnavailableHere,
+      encryptionSetupUnavailable: t.chat.encryptionSetupUnavailable,
+      encryptionRolloutUnavailable: t.chat.encryptionRolloutUnavailable,
+      encryptionNeedsRefresh: t.chat.encryptionNeedsRefresh,
+      recipientEncryptionUnavailable: t.chat.recipientEncryptionUnavailable,
+      encryptionSessionChanged: t.chat.encryptionSessionChanged,
+      unableToSendEncryptedMessage: t.chat.unableToSendEncryptedMessage,
+    },
+  });
 }
 
 export function EncryptedDmComposerForm({
@@ -363,9 +358,9 @@ export function EncryptedDmComposerForm({
                 onClick={async () => {
                   setIsRefreshingSetup(true);
                   try {
-                    const bootstrap = await ensureDmE2eeDeviceRegistered(currentUserId, {
-                      forcePublish: true,
-                    });
+                    const bootstrap = await reinitializeLocalDmE2eeStateForUser(
+                      currentUserId,
+                    );
 
                     if (bootstrap.status === 'registered') {
                       setErrorMessage(null);

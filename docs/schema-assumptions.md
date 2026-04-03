@@ -104,8 +104,19 @@ Assumptions:
 
 - `seq` is the per-conversation ordering/read-position anchor.
 - `kind` is currently used for current text messaging flows and future-facing `voice` message support.
-- `body` is still the current plaintext source of truth for message rendering, inbox previews, and activity previews.
+- `body` remains the plaintext source of truth for non-encrypted message rendering and previews.
 - `deleted_at` is used for soft-deleted message rendering.
+
+Required additions when DM E2EE is enabled:
+
+- `content_mode`
+- `sender_device_id`
+
+Additional assumptions when DM E2EE is enabled:
+
+- `content_mode = 'dm_e2ee_v1'` means direct-message text lives in ciphertext envelopes, not in `body`
+- `body` must be `null` for encrypted DM text
+- inbox and activity must use either a local device preview cache or a truthful generic fallback for encrypted DMs
 
 ## `public.message_attachments`
 
@@ -140,13 +151,13 @@ Assumptions:
 - Reaction grouping is computed from raw rows.
 - Current app logic enforces max reaction selection behavior in code, not here.
 
-## DM E2EE bootstrap foundation
+## DM E2EE foundation
 
-These schema elements support the current authenticated device-bootstrap path and the first DM-text encrypted send path. They do not mean full encrypted DM read/render is already live.
+These schema elements support the current authenticated device-bootstrap path, encrypted DM send, encrypted DM receive, and local-preview-compatible rendering. They do not mean full encrypted messenger feature parity.
 
 ### `public.user_devices`
 
-Planned role:
+Active role when DM E2EE is enabled:
 
 - one row per active user device
 - public device identity material only
@@ -169,7 +180,7 @@ Planned columns:
 
 ### `public.device_one_time_prekeys`
 
-Planned role:
+Active role when DM E2EE is enabled:
 
 - public one-time prekey supply for asynchronous DM session setup
 
@@ -189,12 +200,12 @@ Planned columns:
 
 ### `public.messages` additions for DM E2EE
 
-Prepared additions:
+Active additions when DM E2EE is enabled:
 
 - `content_mode`
 - `sender_device_id`
 
-Future assumptions once DM E2EE rolls out:
+Current assumptions once DM E2EE is enabled:
 
 - `kind` remains the semantic message kind such as `text` or `voice`
 - `content_mode = 'plaintext'` keeps current behavior
@@ -203,7 +214,7 @@ Future assumptions once DM E2EE rolls out:
 
 ### `public.message_e2ee_envelopes`
 
-Planned role:
+Active role when DM E2EE is enabled:
 
 - one opaque ciphertext envelope per target device for encrypted DM text
 
@@ -250,6 +261,9 @@ Do not apply these as a user-facing "encrypted messaging is live" claim by thems
 
 3. `public.message_e2ee_envelopes`
    Source file: [2026-04-03-message-e2ee-envelopes.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-message-e2ee-envelopes.sql)
+
+4. `public.send_dm_e2ee_message_atomic(...)`
+   Source file: [2026-04-03-dm-e2ee-send-atomic.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-dm-e2ee-send-atomic.sql)
 
 ## Current defensive behavior in code
 

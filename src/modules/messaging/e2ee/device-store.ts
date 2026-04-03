@@ -79,6 +79,72 @@ export async function saveLocalDmE2eeDeviceRecord(
   });
 }
 
+export async function deleteLocalDmE2eeDeviceRecord(userId: string) {
+  const database = await openDatabase();
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(DEVICE_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(DEVICE_STORE_NAME);
+
+    store.delete(userId);
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(
+        transaction.error ?? new Error('Unable to remove DM E2EE device record.'),
+      );
+  });
+}
+
+export async function clearAllLocalDmE2eeDeviceRecords() {
+  const database = await openDatabase();
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(DEVICE_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(DEVICE_STORE_NAME);
+
+    store.clear();
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(
+        transaction.error ??
+          new Error('Unable to clear DM E2EE device records.'),
+      );
+  });
+}
+
+export async function clearLocalDmE2eeDeviceRecordsExcept(userId: string) {
+  const database = await openDatabase();
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(DEVICE_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(DEVICE_STORE_NAME);
+    const request = store.getAllKeys();
+
+    request.onsuccess = () => {
+      const keys = (request.result ?? []) as IDBValidKey[];
+
+      for (const key of keys) {
+        if (String(key) !== userId) {
+          store.delete(key);
+        }
+      }
+    };
+    request.onerror = () =>
+      reject(
+        request.error ??
+          new Error('Unable to read DM E2EE device record keys.'),
+      );
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(
+        transaction.error ??
+          new Error('Unable to prune DM E2EE device records.'),
+      );
+  });
+}
+
 export async function updateLocalDmE2eeDeviceRecord(
   userId: string,
   update: (

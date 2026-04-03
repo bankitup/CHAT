@@ -747,7 +747,7 @@ export default async function ChatPage({
                                 }
 
                                 if (repliedMessage && isEncryptedDmTextMessage(repliedMessage)) {
-                                  return t.chat.encryptedMessage;
+                                  return t.chat.replyToEncryptedMessage;
                                 }
 
                                 return getMessageSnippet(
@@ -1065,8 +1065,8 @@ export default async function ChatPage({
                   {activeReplyTarget.deleted_at
                     ? t.chat.thisMessageWasDeleted
                     : isEncryptedDmTextMessage(activeReplyTarget)
-                      ? t.chat.encryptedMessage
-                    : getMessageSnippet(activeReplyTarget.body, t, 88)}
+                      ? t.chat.replyToEncryptedMessage
+                      : getMessageSnippet(activeReplyTarget.body, t, 88)}
                 </span>
                 {isEncryptedDmTextMessage(activeReplyTarget) ? (
                   <span className="composer-reply-note">

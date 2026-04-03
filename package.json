@@ -13,6 +13,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:e2ee": "node --test tests/e2ee/*.test.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

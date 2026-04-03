@@ -7,12 +7,12 @@ import {
   type AppLanguage,
 } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
+import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getArchivedConversations,
   getConversationDisplayName,
   getConversationParticipantIdentities,
   getInboxConversations,
-  type InboxConversation,
 } from '@/modules/messaging/data/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import {
@@ -106,35 +106,6 @@ function formatActivityTimestamp(value: string | null, language: AppLanguage) {
   }).format(new Date(value));
 }
 
-function getActivityPreview(
-  conversation: InboxConversation,
-  t: ReturnType<typeof getTranslations>,
-) {
-  if (!conversation.lastMessageAt) {
-    return null;
-  }
-
-  if (conversation.latestMessageDeletedAt) {
-    return t.chat.deletedMessage;
-  }
-
-  if (conversation.latestMessageKind === 'voice') {
-    return t.chat.voiceMessage;
-  }
-
-  if (conversation.latestMessageContentMode === 'dm_e2ee_v1') {
-    return t.chat.encryptedMessage;
-  }
-
-  const body = conversation.latestMessageBody?.trim();
-
-  if (body) {
-    return body;
-  }
-
-  return t.chat.attachment;
-}
-
 function getFallbackIdentityLabel(
   language: AppLanguage,
   userId: string,
@@ -210,7 +181,13 @@ export default async function ActivityPage() {
     return {
       conversationId: conversation.conversationId,
       title,
-      preview: getActivityPreview(conversation, t),
+      preview: getInboxPreviewText(conversation, {
+        deletedMessage: t.chat.deletedMessage,
+        voiceMessage: t.chat.voiceMessage,
+        encryptedMessage: t.chat.encryptedMessage,
+        newEncryptedMessage: t.chat.newEncryptedMessage,
+        attachment: t.chat.attachment,
+      }),
       recencyLabel: formatActivityRecency(lastActivityAt, language),
       timestampLabel: formatActivityTimestamp(lastActivityAt, language),
       unreadCount: conversation.unreadCount,

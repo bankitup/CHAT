@@ -50,7 +50,16 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: message,
+        error:
+          code === 'dm_e2ee_schema_missing'
+            ? message
+            : code === 'dm_e2ee_sender_device_stale' ||
+                code === 'dm_e2ee_local_state_incomplete' ||
+                code === 'dm_e2ee_recipient_device_missing' ||
+                code === 'dm_e2ee_recipient_unavailable' ||
+                code === 'dm_e2ee_prekey_conflict'
+              ? message
+              : 'Unable to send encrypted message right now.',
         code,
       } satisfies DmE2eeApiErrorResponse,
       { status: code === 'dm_e2ee_schema_missing' ? 409 : 400 },

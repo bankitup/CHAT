@@ -7,6 +7,7 @@ import {
   type AppLanguage,
   getTranslations,
 } from '@/modules/i18n';
+import { DmE2eePublicBoundaryCleanup } from '@/modules/messaging/e2ee/local-state-boundary';
 
 type PublicHomeScreenProps = {
   initialLanguage: AppLanguage;
@@ -31,6 +32,7 @@ export function PublicHomeScreen({
 
   return (
     <main className="page stack public-home">
+      {!isAuthenticated ? <DmE2eePublicBoundaryCleanup /> : null}
       <div className="public-home-language">
         <div className="public-home-language-switch" aria-label={t.languageSwitcher.label}>
           <button
