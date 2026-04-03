@@ -386,6 +386,12 @@ Do not apply these as a user-facing "encrypted messaging is live" claim by thems
 4. `public.send_dm_e2ee_message_atomic(...)`
    Source file: [2026-04-03-dm-e2ee-send-atomic.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-dm-e2ee-send-atomic.sql)
 
+Operational alignment note for partial production rollouts:
+
+- if chat loading fails with missing `messages.sender_device_id` or
+  `messages.content_mode`, apply:
+  [2026-04-03-messages-shell-e2ee-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-shell-e2ee-v1-align.sql)
+
 ## Current defensive behavior in code
 
 - Missing `profiles.avatar_path` is tolerated.

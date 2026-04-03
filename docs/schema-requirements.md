@@ -53,11 +53,13 @@ Notes:
 - `id`
 - `conversation_id`
 - `sender_id`
+- `sender_device_id` (required by current E2EE-aware chat shell selects)
 - `reply_to_message_id`
 - `seq`
 - `kind`
 - `client_id`
 - `body`
+- `content_mode` (required by current E2EE-aware chat/inbox logic)
 - `edited_at`
 - `deleted_at`
 - `created_at`
@@ -103,6 +105,7 @@ Apply these if the fields are not yet present in your Supabase project:
 - [2026-04-03-conversation-member-hidden-at.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-hidden-at.sql)
 - [2026-04-03-conversation-member-notification-level.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-notification-level.sql)
 - [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
+- [2026-04-03-messages-shell-e2ee-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-shell-e2ee-v1-align.sql)
 
 ## Defensive behavior currently in code
 
