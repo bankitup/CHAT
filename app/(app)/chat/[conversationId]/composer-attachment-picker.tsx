@@ -1,5 +1,6 @@
 'use client';
 
+import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type ComposerAttachmentPickerProps = {
@@ -7,6 +8,7 @@ type ComposerAttachmentPickerProps = {
   helperText: string;
   maxSizeBytes: number;
   maxSizeLabel: string;
+  language: AppLanguage;
 };
 
 function formatFileSize(value: number) {
@@ -22,7 +24,9 @@ export function ComposerAttachmentPicker({
   helperText,
   maxSizeBytes,
   maxSizeLabel,
+  language,
 }: ComposerAttachmentPickerProps) {
+  const t = getTranslations(language);
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -79,22 +83,22 @@ export function ComposerAttachmentPicker({
                 ? 'attachment-trigger attachment-trigger-selected'
                 : 'attachment-trigger'
             }
-            aria-label="Attachment options"
+            aria-label={t.chat.attachmentOptions}
           >
             +
           </summary>
-          <div className="attachment-menu" role="menu" aria-label="Attachment options">
+          <div className="attachment-menu" role="menu" aria-label={t.chat.attachmentOptions}>
             <button
               className="attachment-option attachment-option-action"
               type="button"
               onClick={() => inputRef.current?.click()}
             >
-              <span>Photo or file</span>
+              <span>{t.chat.photoOrFile}</span>
               <span className="attachment-option-note">{maxSizeLabel}</span>
             </button>
             <button className="attachment-option" disabled type="button">
-              <span>Camera</span>
-              <span className="attachment-option-note">Soon</span>
+              <span>{t.chat.camera}</span>
+              <span className="attachment-option-note">{t.chat.soon}</span>
             </button>
           </div>
         </details>
@@ -109,13 +113,13 @@ export function ComposerAttachmentPicker({
               />
             ) : (
               <span aria-hidden="true" className="attachment-selected-file">
-                File
+                {t.chat.file}
               </span>
             )}
             <span className="attachment-selected-copy">
               <span className="attachment-selected-name">{selectedFile.name}</span>
               <span className="attachment-selected-meta">
-                {isImage ? 'Image' : 'Attachment'} · {formatFileSize(selectedFile.size)}
+                {isImage ? t.chat.image : t.chat.attachment} · {formatFileSize(selectedFile.size)}
               </span>
             </span>
             <button
@@ -130,7 +134,7 @@ export function ComposerAttachmentPicker({
                 setErrorMessage(null);
               }}
             >
-              Clear
+              {t.chat.clearAttachment}
             </button>
           </div>
         ) : null}
@@ -156,7 +160,7 @@ export function ComposerAttachmentPicker({
             }
 
             setSelectedFile(null);
-            setErrorMessage(`Choose a file up to ${maxSizeLabel.toLowerCase()}.`);
+            setErrorMessage(t.chat.attachmentSizeError(maxSizeLabel));
             detailsRef.current?.removeAttribute('open');
             return;
           }

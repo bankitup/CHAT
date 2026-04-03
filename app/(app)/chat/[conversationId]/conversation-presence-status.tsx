@@ -1,5 +1,6 @@
 'use client';
 
+import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -7,6 +8,7 @@ type ConversationPresenceStatusProps = {
   conversationId: string;
   currentUserId: string;
   otherUserId: string;
+  language: AppLanguage;
 };
 
 type PresenceStateEntry = {
@@ -30,7 +32,9 @@ export function ConversationPresenceStatus({
   conversationId,
   currentUserId,
   otherUserId,
+  language,
 }: ConversationPresenceStatusProps) {
+  const t = getTranslations(language);
   const [isOtherParticipantPresent, setIsOtherParticipantPresent] = useState(false);
   const channelName = useMemo(
     () => `chat-presence:${conversationId}`,
@@ -81,7 +85,7 @@ export function ConversationPresenceStatus({
   return (
     <p className="chat-presence-status" aria-live="polite">
       <span className="chat-presence-dot" aria-hidden="true" />
-      <span>Active now</span>
+      <span>{t.chat.activeNow}</span>
     </p>
   );
 }

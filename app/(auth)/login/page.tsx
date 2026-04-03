@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { loginAction } from '../actions';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getTranslations } from '@/modules/i18n';
+import { getCookieLanguage } from '@/modules/i18n/server';
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -21,13 +23,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   const params = await searchParams;
+  const language = await getCookieLanguage();
+  const t = getTranslations(language);
 
   return (
     <main className="page auth-page">
       <section className="stack auth-shell">
         <section className="auth-topbar">
-          <Link className="pill auth-back-link" href="/">
-            Back
+          <Link
+            aria-label={t.login.backToHome}
+            className="back-arrow-link auth-back-link"
+            href="/"
+          >
+            <span aria-hidden="true">←</span>
           </Link>
         </section>
 
@@ -43,10 +51,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <section className="card stack auth-card">
           <div className="stack auth-card-copy">
-            <h1 className="auth-title">Log in</h1>
-            <p className="muted auth-subtitle">
-              Pick up where you left off.
-            </p>
+            <h1 className="auth-title">{t.login.title}</h1>
+            <p className="muted auth-subtitle">{t.login.subtitle}</p>
           </div>
 
           {params.error ? (
@@ -57,7 +63,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           <form action={loginAction} className="stack auth-form">
             <label className="field auth-field">
-              <span>Email</span>
+              <span>{t.login.email}</span>
               <input
                 className="input auth-input"
                 name="email"
@@ -68,7 +74,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </label>
 
             <label className="field auth-field">
-              <span>Password</span>
+              <span>{t.login.password}</span>
               <input
                 className="input auth-input"
                 name="password"
@@ -79,15 +85,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </label>
 
             <button className="button auth-submit" type="submit">
-              Log in
+              {t.login.submit}
             </button>
 
-            <p className="muted auth-switch-copy">
-              Don&apos;t have an account?{' '}
-              <Link className="auth-switch-link" href="/signup">
-                Create account
-              </Link>
-            </p>
+            <p className="muted auth-switch-copy">{t.login.managedAccess}</p>
           </form>
         </section>
       </section>

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
 
 type ConversationRecord = {
   id: string;
@@ -77,6 +78,8 @@ export type MessageAttachment = {
   fileName: string;
   signedUrl: string | null;
   isImage: boolean;
+  isAudio: boolean;
+  isVoiceMessage: boolean;
 };
 
 export type MessageSenderProfile = {
@@ -96,6 +99,7 @@ export type CurrentUserProfile = {
   email: string | null;
   displayName: string | null;
   avatarPath: string | null;
+  preferredLanguage: AppLanguage | null;
 };
 
 export type ConversationReadState = {
@@ -126,6 +130,10 @@ type ConversationNameInput = {
   kind: string | null;
   title?: string | null;
   participantLabels: string[];
+  fallbackTitles?: {
+    dm: string;
+    group: string;
+  };
 };
 
 type MessageReactionRow = {
@@ -145,9 +153,9 @@ export type MessageReactionGroup = {
 export const STARTER_REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🎉'] as const;
 export const CHAT_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const CHAT_ATTACHMENT_ACCEPT =
-  'image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain';
+  'image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/aac,audio/mp3,audio/m4a';
 export const CHAT_ATTACHMENT_HELP_TEXT =
-  'Supported files: JPG, PNG, WEBP, GIF, PDF, and TXT up to 10 MB.';
+  'Supported files: JPG, PNG, WEBP, GIF, PDF, TXT, and common audio files up to 10 MB.';
 export const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 
@@ -162,6 +170,26 @@ const SUPPORTED_ATTACHMENT_TYPES = new Set([
   'image/gif',
   'application/pdf',
   'text/plain',
+  'audio/webm',
+  'audio/mp4',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/aac',
+  'audio/mp3',
+  'audio/m4a',
+]);
+const SUPPORTED_VOICE_ATTACHMENT_TYPES = new Set([
+  'audio/webm',
+  'audio/mp4',
+  'audio/ogg',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/m4a',
+  'audio/aac',
+  'audio/wav',
+  'audio/x-wav',
 ]);
 const SUPPORTED_PROFILE_AVATAR_TYPES = new Set([
   'image/jpeg',
@@ -194,7 +222,7 @@ function isMissingColumnErrorMessage(message: string, columnName: string) {
 
 function createSchemaRequirementError(details: string) {
   return new Error(
-    `${details} Apply the documented Supabase changes in /Users/danya/IOS - Apps/CHAT/docs/schema-requirements.md.`,
+    `${details} Apply the documented Supabase changes in /Users/danya/IOS - Apps/CHAT/docs/schema-assumptions.md.`,
   );
 }
 
@@ -208,6 +236,7 @@ export function getConversationDisplayName({
   kind,
   title,
   participantLabels,
+  fallbackTitles,
 }: ConversationNameInput) {
   const normalizedTitle = title?.trim() ?? '';
   const labels = uniqueNonEmptyLabels(participantLabels);
@@ -217,10 +246,10 @@ export function getConversationDisplayName({
       return normalizedTitle;
     }
 
-    return labels.join(', ') || 'New group';
+    return labels.join(', ') || fallbackTitles?.group || 'New group';
   }
 
-  return labels[0] || 'New chat';
+  return labels[0] || fallbackTitles?.dm || 'New chat';
 }
 
 export function getConversationParticipantSummary(
@@ -673,6 +702,22 @@ function isImageAttachment(mimeType: string | null) {
   return Boolean(mimeType?.startsWith('image/'));
 }
 
+export function isAudioAttachment(mimeType: string | null) {
+  return Boolean(mimeType?.startsWith('audio/'));
+}
+
+export function isSupportedVoiceAttachmentType(mimeType: string | null) {
+  return Boolean(mimeType && SUPPORTED_VOICE_ATTACHMENT_TYPES.has(mimeType));
+}
+
+function getAttachmentMessageKind(mimeType: string | null) {
+  if (isSupportedVoiceAttachmentType(mimeType)) {
+    return 'voice' as const;
+  }
+
+  return 'text' as const;
+}
+
 export async function getProfileIdentities(userIds: string[]) {
   const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
 
@@ -731,14 +776,54 @@ export async function getProfileIdentities(userIds: string[]) {
 }
 
 export async function getCurrentUserProfile(userId: string, email?: string | null) {
+  const supabase = await createSupabaseServerClient();
   const [identity] = await getProfileIdentities([userId]);
+  let preferredLanguage: AppLanguage | null = null;
+
+  const withLanguage = await supabase
+    .from('profiles')
+    .select('preferred_language')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!withLanguage.error) {
+    const rawLanguage = (
+      withLanguage.data as { preferred_language?: string | null } | null
+    )?.preferred_language;
+    preferredLanguage = rawLanguage ? normalizeLanguage(rawLanguage) : null;
+  } else if (!isMissingColumnErrorMessage(withLanguage.error.message, 'preferred_language')) {
+    throw new Error(withLanguage.error.message);
+  }
 
   return {
     userId,
     email: email?.trim() || null,
     displayName: identity?.displayName ?? null,
     avatarPath: identity?.avatarPath ?? null,
+    preferredLanguage,
   } satisfies CurrentUserProfile;
+}
+
+export async function getStoredProfileLanguage(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const response = await supabase
+    .from('profiles')
+    .select('preferred_language')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (!response.error) {
+    const rawLanguage = (
+      response.data as { preferred_language?: string | null } | null
+    )?.preferred_language;
+    return rawLanguage ? normalizeLanguage(rawLanguage) : null;
+  }
+
+  if (isMissingColumnErrorMessage(response.error.message, 'preferred_language')) {
+    return null;
+  }
+
+  throw new Error(response.error.message);
 }
 
 export async function getAvailableUsers(currentUserId: string) {
@@ -1085,6 +1170,55 @@ export async function updateCurrentUserProfile(input: {
   }
 }
 
+export async function updateCurrentUserLanguagePreference(input: {
+  userId: string;
+  preferredLanguage: AppLanguage;
+}) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Authenticated user is required to update language.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Language update debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Language update debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        user_id: input.userId,
+        preferred_language: input.preferredLanguage,
+      },
+      { onConflict: 'user_id' },
+    );
+
+  if (error) {
+    if (isMissingColumnErrorMessage(error.message, 'preferred_language')) {
+      throw createSchemaRequirementError(
+        'Profile language preference requires profiles.preferred_language.',
+      );
+    }
+
+    if (error.message.includes('row-level security policy')) {
+      throw new Error('Language preference update was blocked by profiles RLS.');
+    }
+
+    throw new Error(error.message);
+  }
+}
+
 export async function getConversationMessages(conversationId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -1200,6 +1334,8 @@ export async function getMessageAttachments(messageIds: string[]) {
           fileName: getAttachmentFileName(row.object_path),
           signedUrl: null,
           isImage: isImageAttachment(row.mime_type),
+          isAudio: isAudioAttachment(row.mime_type),
+          isVoiceMessage: row.object_path.includes('/voice/'),
         } satisfies MessageAttachment;
       }
 
@@ -1214,6 +1350,8 @@ export async function getMessageAttachments(messageIds: string[]) {
         fileName: getAttachmentFileName(row.object_path),
         signedUrl: signedUrlData.signedUrl,
         isImage: isImageAttachment(row.mime_type),
+        isAudio: isAudioAttachment(row.mime_type),
+        isVoiceMessage: row.object_path.includes('/voice/'),
       } satisfies MessageAttachment;
     }),
   );
@@ -1708,6 +1846,7 @@ async function createMessageRecord(input: {
   body?: string | null;
   replyToMessageId?: string | null;
   touchConversation?: boolean;
+  kind?: 'text' | 'attachment' | 'voice';
 }) {
   const supabase = await createSupabaseServerClient();
   const timestamp = new Date().toISOString();
@@ -1747,7 +1886,7 @@ async function createMessageRecord(input: {
     conversation_id: input.conversationId,
     sender_id: input.senderId,
     reply_to_message_id: input.replyToMessageId ?? null,
-    kind: 'text',
+    kind: input.kind ?? 'text',
     client_id: clientId,
     body: input.body?.trim() || null,
   });
@@ -2189,15 +2328,18 @@ export async function sendMessageWithAttachment(input: {
   }
 
   const supabase = await createSupabaseServerClient();
+  const attachmentMessageKind = getAttachmentMessageKind(input.file.type);
+  const storageFolder = attachmentMessageKind === 'voice' ? 'voice' : 'files';
   const messageResult = await createMessageRecord({
     conversationId: input.conversationId,
     senderId: input.senderId,
     body: input.body ?? null,
     replyToMessageId: input.replyToMessageId ?? null,
     touchConversation: false,
+    kind: attachmentMessageKind,
   });
   const fileName = sanitizeAttachmentFileName(input.file.name);
-  const objectPath = `${input.conversationId}/${messageResult.messageId}/${Date.now()}-${fileName}`;
+  const objectPath = `${input.conversationId}/${messageResult.messageId}/${storageFolder}/${Date.now()}-${fileName}`;
   const fileBuffer = Buffer.from(await input.file.arrayBuffer());
 
   const { error: uploadError } = await supabase.storage

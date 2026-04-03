@@ -1,8 +1,13 @@
 'use server';
 
+import { getTranslations, normalizeLanguage } from '@/modules/i18n';
+import { getRequestLanguage, setLanguageCookie } from '@/modules/i18n/server';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { updateCurrentUserProfile } from '@/modules/messaging/data/server';
+import {
+  updateCurrentUserLanguagePreference,
+  updateCurrentUserProfile,
+} from '@/modules/messaging/data/server';
 
 function redirectWithMessage(
   kind: 'error' | 'message',
@@ -13,6 +18,8 @@ function redirectWithMessage(
 }
 
 export async function updateProfileAction(formData: FormData) {
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
   const displayName = String(formData.get('displayName') ?? '').trim();
   const avatarEntry = formData.get('avatar');
   const avatarFile =
@@ -24,7 +31,7 @@ export async function updateProfileAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithMessage('error', 'You must be signed in to update your profile.');
+    redirectWithMessage('error', t.login.managedAccess);
   }
 
   try {
@@ -40,5 +47,35 @@ export async function updateProfileAction(formData: FormData) {
     );
   }
 
-  redirectWithMessage('message', 'Profile updated.');
+  redirectWithMessage('message', t.settings.profileUpdated);
+}
+
+export async function updateLanguagePreferenceAction(formData: FormData) {
+  const preferredLanguage = normalizeLanguage(
+    String(formData.get('preferredLanguage') ?? '').trim(),
+  );
+  const t = getTranslations(preferredLanguage);
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    redirectWithMessage('error', t.login.managedAccess);
+  }
+
+  try {
+    await updateCurrentUserLanguagePreference({
+      userId: user.id,
+      preferredLanguage,
+    });
+    await setLanguageCookie(preferredLanguage);
+  } catch (error) {
+    redirectWithMessage(
+      'error',
+      error instanceof Error ? error.message : 'Unable to update language.',
+    );
+  }
+
+  redirectWithMessage('message', t.settings.languageUpdated);
 }

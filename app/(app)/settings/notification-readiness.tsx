@@ -1,57 +1,73 @@
 'use client';
 
 import {
+  getTranslations,
+  type AppLanguage,
+} from '@/modules/i18n';
+import {
   enableNotificationReadiness,
   getNotificationReadiness,
   type NotificationReadiness,
 } from '@/modules/messaging/sdk/notifications';
 import { useEffect, useState, useTransition } from 'react';
 
-function getStatusCopy(readiness: NotificationReadiness | null) {
+function getStatusCopy(
+  readiness: NotificationReadiness | null,
+  language: AppLanguage,
+) {
+  const t = getTranslations(language);
+
   if (!readiness) {
     return {
-      title: 'Notifications',
-      body: 'Checking this device.',
-      badge: 'Checking',
-      settingValue: 'Checking',
+      title: t.notifications.title,
+      body: t.notifications.checkingBody,
+      badge: t.notifications.checkingBadge,
+      settingValue: t.notifications.checking,
     };
   }
 
   switch (readiness.status) {
     case 'unsupported':
       return {
-        title: 'Notifications',
-        body: 'Not available here right now.',
-        badge: 'Unsupported',
-        settingValue: 'Unavailable',
+        title: t.notifications.title,
+        body: t.notifications.unsupportedBody,
+        badge: t.notifications.unsupportedBadge,
+        settingValue: t.notifications.unavailable,
       };
     case 'blocked':
       return {
-        title: 'Notifications',
-        body: 'Turned off in your browser settings.',
-        badge: 'Off',
-        settingValue: 'Off',
+        title: t.notifications.title,
+        body: t.notifications.blockedBody,
+        badge: t.notifications.blockedBadge,
+        settingValue: t.notifications.off,
       };
     case 'enabled':
       return {
-        title: 'Notifications',
-        body: 'On for this device.',
-        badge: 'On',
-        settingValue: 'On',
+        title: t.notifications.title,
+        body: t.notifications.enabledBody,
+        badge: t.notifications.enabledBadge,
+        settingValue: t.notifications.on,
       };
     default:
       return {
-        title: 'Notifications',
-        body: 'Available for this device.',
-        badge: 'Available',
-        settingValue: 'Available',
+        title: t.notifications.title,
+        body: t.notifications.availableBody,
+        badge: t.notifications.availableBadge,
+        settingValue: t.notifications.available,
       };
   }
 }
 
-export function NotificationReadinessPanel() {
+export function NotificationReadinessPanel({
+  embedded = false,
+  language,
+}: {
+  embedded?: boolean;
+  language: AppLanguage;
+}) {
   const [readiness, setReadiness] = useState<NotificationReadiness | null>(null);
   const [isPending, startTransition] = useTransition();
+  const t = getTranslations(language);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,13 +83,19 @@ export function NotificationReadinessPanel() {
     };
   }, []);
 
-  const statusCopy = getStatusCopy(readiness);
+  const statusCopy = getStatusCopy(readiness, language);
 
   return (
-    <section className="card stack settings-card">
-      <div className="stack settings-card-copy">
+    <section
+      className={
+        embedded
+          ? 'stack settings-section settings-notification-section'
+          : 'card stack settings-card'
+      }
+    >
+      <div className="stack settings-card-copy settings-section-copy">
         <h2 className="section-title">{statusCopy.title}</h2>
-        <p className="muted">Alerts for this device.</p>
+        <p className="muted">{t.notifications.subtitle}</p>
       </div>
 
       <div className="cluster settings-summary">
@@ -82,15 +104,19 @@ export function NotificationReadinessPanel() {
 
       <div className="settings-capability-list">
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Status</span>
+          <span className="settings-capability-label">{t.notifications.status}</span>
           <span className="settings-capability-value">{statusCopy.settingValue}</span>
         </div>
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Permission</span>
+          <span className="settings-capability-label">{t.notifications.permission}</span>
           <span className="settings-capability-value">
             {readiness?.permission === 'unsupported'
-              ? 'Unavailable'
-              : readiness?.permission ?? 'Checking'}
+              ? t.notifications.unavailable
+              : readiness?.permission === 'granted'
+                ? t.notifications.on
+                : readiness?.permission === 'denied'
+                  ? t.notifications.off
+                  : t.notifications.checking}
           </span>
         </div>
       </div>
@@ -108,25 +134,25 @@ export function NotificationReadinessPanel() {
               });
             }}
           >
-            {isPending ? 'Turning on…' : 'Turn on notifications'}
+            {isPending ? t.notifications.turningOn : t.notifications.turnOn}
           </button>
         ) : null}
 
         {readiness?.status === 'blocked' ? (
           <p className="muted settings-note">
-            You can change this later in browser settings.
+            {t.notifications.browserSettingsNote}
           </p>
         ) : null}
 
         {readiness?.status === 'enabled' ? (
           <p className="muted settings-note">
-            Message alerts are coming soon.
+            {t.notifications.comingSoonNote}
           </p>
         ) : null}
 
         {readiness?.status === 'available' ? (
           <p className="muted settings-note">
-            You can turn this on now. Message alerts are coming soon.
+            {t.notifications.availableNote}
           </p>
         ) : null}
 

@@ -1,5 +1,13 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
+  formatMemberCount,
+  formatPersonFallbackLabel,
+  getLocaleForLanguage,
+  getTranslations,
+  type AppLanguage,
+} from '@/modules/i18n';
+import { getRequestLanguage } from '@/modules/i18n/server';
+import {
   getAvailableUsers,
   CHAT_ATTACHMENT_ACCEPT,
   CHAT_ATTACHMENT_HELP_TEXT,
@@ -58,12 +66,12 @@ type ChatPageProps = {
   }>;
 };
 
-function formatMessageTimestamp(value: string | null) {
+function formatMessageTimestamp(value: string | null, language: AppLanguage) {
   if (!value) {
     return '';
   }
 
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -84,9 +92,13 @@ function getCalendarDayKey(value: string | null) {
   return `${year}-${month}-${day}`;
 }
 
-function formatDaySeparatorLabel(value: string | null) {
+function formatDaySeparatorLabel(
+  value: string | null,
+  language: AppLanguage,
+  t: ReturnType<typeof getTranslations>,
+) {
   if (!value) {
-    return 'Earlier';
+    return t.chat.earlier;
   }
 
   const targetDate = new Date(value);
@@ -101,14 +113,14 @@ function formatDaySeparatorLabel(value: string | null) {
   );
 
   if (compareDate.getTime() === today.getTime()) {
-    return 'Today';
+    return t.chat.today;
   }
 
   if (compareDate.getTime() === yesterday.getTime()) {
-    return 'Yesterday';
+    return t.chat.yesterday;
   }
 
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     month: 'short',
     day: 'numeric',
     year:
@@ -116,12 +128,12 @@ function formatDaySeparatorLabel(value: string | null) {
   }).format(targetDate);
 }
 
-function formatLongDate(value: string | null) {
+function formatLongDate(value: string | null, language: AppLanguage, t: ReturnType<typeof getTranslations>) {
   if (!value) {
-    return 'Unknown';
+    return t.chat.unknown;
   }
 
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
@@ -131,13 +143,15 @@ function createFallbackSenderName(
   senderId: string | null,
   currentUserId: string,
   fallbackNames: Map<string, string>,
+  language: AppLanguage,
+  t: ReturnType<typeof getTranslations>,
 ) {
   if (!senderId) {
-    return 'Unknown sender';
+    return t.chat.unknownSender;
   }
 
   if (senderId === currentUserId) {
-    return 'You';
+    return t.chat.you;
   }
 
   const existing = fallbackNames.get(senderId);
@@ -146,17 +160,21 @@ function createFallbackSenderName(
     return existing;
   }
 
-  const nextName = `Person ${fallbackNames.size + 1}`;
+  const nextName = formatPersonFallbackLabel(language, fallbackNames.size + 1);
   fallbackNames.set(senderId, nextName);
 
   return nextName;
 }
 
-function getMessageSnippet(value: string | null, maxLength = 90) {
+function getMessageSnippet(
+  value: string | null,
+  t: ReturnType<typeof getTranslations>,
+  maxLength = 90,
+) {
   const normalized = value?.trim() ?? '';
 
   if (!normalized) {
-    return 'Empty message';
+    return t.chat.emptyMessage;
   }
 
   if (normalized.length <= maxLength) {
@@ -190,12 +208,14 @@ function formatGroupMemberSummary(
   participantIds: string[],
   currentUserId: string,
   displayNames: Map<string, string | null>,
+  language: AppLanguage,
+  t: ReturnType<typeof getTranslations>,
 ) {
   const fallbackNames = new Map<string, string>();
 
   const labels = participantIds.map((participantId) => {
     if (participantId === currentUserId) {
-      return 'You';
+      return t.chat.you;
     }
 
     const displayName = displayNames.get(participantId)?.trim();
@@ -210,16 +230,16 @@ function formatGroupMemberSummary(
       return existing;
     }
 
-    const nextLabel = `Person ${fallbackNames.size + 1}`;
+    const nextLabel = formatPersonFallbackLabel(language, fallbackNames.size + 1);
     fallbackNames.set(participantId, nextLabel);
 
     return nextLabel;
   });
 
-  const otherLabels = labels.filter((label) => label !== 'You');
+  const otherLabels = labels.filter((label) => label !== t.chat.you);
   const previewNames = otherLabels.slice(0, 2);
   const remainingCount = Math.max(0, otherLabels.length - previewNames.length);
-  const memberLabel = `${participantIds.length} member${participantIds.length === 1 ? '' : 's'}`;
+  const memberLabel = formatMemberCount(language, participantIds.length);
 
   if (previewNames.length === 0) {
     return memberLabel;
@@ -230,16 +250,19 @@ function formatGroupMemberSummary(
   }`;
 }
 
-function formatParticipantRoleLabel(role: string | null) {
+function formatParticipantRoleLabel(
+  role: string | null,
+  t: ReturnType<typeof getTranslations>,
+) {
   if (role === 'owner') {
-    return 'Owner';
+    return t.chat.owner;
   }
 
   if (role === 'admin') {
-    return 'Admin';
+    return t.chat.admin;
   }
 
-  return 'Member';
+  return t.chat.member;
 }
 
 export default async function ChatPage({
@@ -262,6 +285,8 @@ export default async function ChatPage({
   if (!conversation) {
     notFound();
   }
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
 
   const isSettingsOpen = query.settings === 'open';
   const messages = await getConversationMessages(conversationId);
@@ -302,7 +327,13 @@ export default async function ChatPage({
   const otherParticipantLabels = otherParticipants.map((participant) =>
     getIdentityLabel(
       senderIdentities.get(participant.userId),
-      createFallbackSenderName(participant.userId, user.id, fallbackNames),
+      createFallbackSenderName(
+        participant.userId,
+        user.id,
+        fallbackNames,
+        language,
+        t,
+      ),
     ),
   );
   const directParticipantIdentity = otherParticipants[0]
@@ -312,10 +343,14 @@ export default async function ChatPage({
     kind: conversation.kind ?? null,
     title: conversation.title,
     participantLabels: otherParticipantLabels,
+    fallbackTitles: {
+      dm: t.chat.directChat,
+      group: language === 'ru' ? 'Новая группа' : 'New group',
+    },
   });
   const currentUserDisplayLabel = getIdentityLabel(
     senderIdentities.get(user.id),
-    'Someone',
+    t.chat.someone,
   );
   const groupMemberSummary =
     conversation.kind === 'group'
@@ -323,8 +358,15 @@ export default async function ChatPage({
           participants.map((participant) => participant.userId),
           user.id,
           senderNames,
+          language,
+          t,
         )
       : null;
+  const attachmentHelpText =
+    language === 'ru'
+      ? 'Поддерживаются JPG, PNG, WEBP, GIF, PDF и TXT до 10 МБ.'
+      : CHAT_ATTACHMENT_HELP_TEXT;
+  const attachmentMaxSizeLabel = language === 'ru' ? 'До 10 МБ' : 'Up to 10 MB';
   const activeReplyTarget = query.replyToMessageId
     ? messagesById.get(query.replyToMessageId) ?? null
     : null;
@@ -346,7 +388,13 @@ export default async function ChatPage({
     const identity = senderIdentities.get(participant.userId);
     const label = getIdentityLabel(
       identity,
-      createFallbackSenderName(participant.userId, user.id, fallbackNames),
+      createFallbackSenderName(
+        participant.userId,
+        user.id,
+        fallbackNames,
+        language,
+        t,
+      ),
     );
 
     return {
@@ -355,7 +403,7 @@ export default async function ChatPage({
       label,
       isCurrentUser: participant.userId === user.id,
       role: participant.role ?? 'member',
-      roleLabel: formatParticipantRoleLabel(participant.role ?? 'member'),
+      roleLabel: formatParticipantRoleLabel(participant.role ?? 'member', t),
     };
   });
   const activeParticipantUserIds = new Set(participants.map((participant) => participant.userId));
@@ -365,18 +413,19 @@ export default async function ChatPage({
       ...availableUser,
       label: getIdentityLabel(
         senderIdentities.get(availableUser.userId),
-        createFallbackSenderName(availableUser.userId, user.id, fallbackNames),
+        createFallbackSenderName(
+          availableUser.userId,
+          user.id,
+          fallbackNames,
+          language,
+          t,
+        ),
       ),
     }));
   const latestVisibleMessageSeq =
     messages.length > 0
       ? getMessageSeq(messages[messages.length - 1]?.seq ?? 0)
       : null;
-  const isConversationCaughtUp =
-    latestVisibleMessageSeq !== null &&
-    readState.lastReadMessageSeq !== null &&
-    Number.isFinite(latestVisibleMessageSeq) &&
-    readState.lastReadMessageSeq >= latestVisibleMessageSeq;
   const otherParticipantReadState =
     conversation.kind === 'dm'
       ? memberReadStates.find((state) => state.userId !== user.id) ?? null
@@ -390,6 +439,8 @@ export default async function ChatPage({
         activeActionMessage.sender_id,
         user.id,
         fallbackNames,
+        language,
+        t,
       )
     : null;
   const activeActionMessageIsOwn =
@@ -413,7 +464,7 @@ export default async function ChatPage({
       items.push({
         type: 'separator',
         key: `day-${currentDayKey}-${message.id}`,
-        label: formatDaySeparatorLabel(message.created_at),
+        label: formatDaySeparatorLabel(message.created_at, language, t),
       });
     }
 
@@ -431,7 +482,7 @@ export default async function ChatPage({
       items.push({
         type: 'unread',
         key: `unread-${message.id}`,
-        label: 'Unread messages',
+        label: t.chat.unreadMessages,
       });
     }
 
@@ -453,11 +504,19 @@ export default async function ChatPage({
       <ComposerKeyboardOffset />
 
       <section className="stack chat-header-stack">
-        <Link className="pill conversation-back" href="/inbox">
-          Back
+        <Link
+          aria-label={t.chat.backToChats}
+          className="back-arrow-link conversation-back"
+          href="/inbox"
+        >
+          <span aria-hidden="true">←</span>
         </Link>
 
-        <section className="card stack chat-header-card">
+        <Link
+          aria-label={t.chat.openInfoAria(conversationDisplayTitle)}
+          className="card chat-header-card chat-header-link"
+          href={`/chat/${conversationId}?settings=open`}
+        >
           <div className="chat-header-identity">
             {conversation.kind === 'group' ? (
               <IdentityAvatarStack
@@ -484,387 +543,30 @@ export default async function ChatPage({
                 <ConversationPresenceStatus
                   conversationId={conversationId}
                   currentUserId={user.id}
+                  language={language}
                   otherUserId={otherParticipants[0].userId}
                 />
               ) : null}
             </div>
           </div>
-
-          <div className="chat-header-meta">
-            <Link
-              className="pill conversation-settings-trigger"
-              href={
-                isSettingsOpen
-                  ? `/chat/${conversationId}`
-                  : `/chat/${conversationId}?settings=open#conversation-settings`
-              }
-            >
-              {isSettingsOpen ? 'Close' : 'Info'}
-            </Link>
-          </div>
-        </section>
+          <span className="chat-header-chevron" aria-hidden="true">
+            ›
+          </span>
+        </Link>
       </section>
-
-      {isSettingsOpen ? (
-        <section className="card stack conversation-settings-card" id="conversation-settings">
-          <div className="conversation-settings-header">
-            <div className="stack conversation-settings-copy">
-              <h2 className="section-title">Info</h2>
-            </div>
-            <Link className="pill conversation-settings-close" href={`/chat/${conversationId}`}>
-              Done
-            </Link>
-          </div>
-
-          <section className="conversation-info-summary">
-            <div className="conversation-info-identity">
-              {conversation.kind === 'group' ? (
-                <IdentityAvatarStack
-                  identities={otherParticipants.map((participant) =>
-                    senderIdentities.get(participant.userId),
-                  )}
-                  labels={otherParticipantLabels}
-                />
-              ) : (
-                <IdentityAvatar
-                  identity={directParticipantIdentity}
-                  label={conversationDisplayTitle}
-                  size="lg"
-                />
-              )}
-
-              <div className="stack conversation-info-copy">
-                <h3 className="conversation-info-title">{conversationDisplayTitle}</h3>
-                <p className="muted conversation-info-subtitle">
-                  {conversation.kind === 'group'
-                    ? groupMemberSummary
-                    : 'Direct chat'}
-                </p>
-              </div>
-            </div>
-
-            <div className="conversation-info-meta">
-              <span className="conversation-info-meta-item">
-                {conversation.kind === 'group' ? 'Group' : 'Person'}
-              </span>
-              <span className="conversation-info-meta-item">
-                Started {formatLongDate(conversation.createdAt ?? null)}
-              </span>
-              {conversation.kind === 'group' ? (
-                <span className="conversation-info-meta-item">
-                  {participants.length} member{participants.length === 1 ? '' : 's'}
-                </span>
-              ) : null}
-            </div>
-          </section>
-
-          <dl className="conversation-info-list">
-            <div className="conversation-info-row">
-              <dt className="conversation-info-label">Type</dt>
-              <dd className="conversation-info-value">
-                {conversation.kind === 'group' ? 'Group chat' : 'Direct chat'}
-              </dd>
-            </div>
-            {conversation.kind === 'group' ? (
-              <div className="conversation-info-row">
-                <dt className="conversation-info-label">Members</dt>
-                <dd className="conversation-info-value">
-                  {participants.length} member{participants.length === 1 ? '' : 's'}
-                </dd>
-              </div>
-            ) : null}
-            <div className="conversation-info-row">
-              <dt className="conversation-info-label">Started</dt>
-              <dd className="conversation-info-value">
-                {formatLongDate(conversation.createdAt ?? null)}
-              </dd>
-            </div>
-          </dl>
-
-          <section className="conversation-settings-panel stack">
-            <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">People</h3>
-              <p className="muted conversation-settings-note">
-                {conversation.kind === 'group'
-                  ? `${participants.length} member${participants.length === 1 ? '' : 's'}`
-                  : 'In this chat'}
-              </p>
-            </div>
-
-            <div className="conversation-member-list">
-              {participantItems.map((participant) => (
-                <div
-                  key={participant.userId}
-                  className="conversation-member-row"
-                >
-                  <div className="conversation-member-identity">
-                    <IdentityAvatar
-                      identity={participant.identity}
-                      label={participant.label}
-                      size="sm"
-                    />
-                    <div className="stack conversation-member-copy">
-                      <span className="user-label">
-                        {participant.label}
-                      </span>
-                      <div className="conversation-member-meta">
-                        <span className="conversation-role-chip">
-                          {participant.roleLabel}
-                        </span>
-                        {participant.isCurrentUser ? (
-                          <span className="conversation-member-self-chip">You</span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                  {conversation.kind === 'group' &&
-                  canManageGroupParticipants &&
-                  !participant.isCurrentUser &&
-                  participant.role !== 'owner' ? (
-                    <form action={removeGroupParticipantAction}>
-                      <input
-                        name="conversationId"
-                        type="hidden"
-                        value={conversationId}
-                      />
-                      <input
-                        name="targetUserId"
-                        type="hidden"
-                        value={participant.userId}
-                      />
-                      <button
-                        className="button button-compact button-danger-subtle"
-                        type="submit"
-                      >
-                        Remove
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {conversation.kind === 'group' ? (
-            <section className="conversation-settings-panel stack">
-              <div className="stack conversation-settings-panel-copy">
-                <h3 className="card-title">Group</h3>
-                <p className="muted conversation-settings-note">
-                  Name and people.
-                </p>
-              </div>
-
-              <div className="conversation-group-actions">
-                <section className="stack conversation-settings-subsection">
-                  <div className="stack conversation-settings-panel-copy">
-                    <h4 className="conversation-settings-subtitle">Name</h4>
-                    <p className="conversation-settings-static conversation-settings-title-preview">
-                      {conversationDisplayTitle}
-                    </p>
-                    {!canEditGroupTitle ? (
-                      <p className="muted conversation-settings-note">
-                        Owner only.
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {canEditGroupTitle ? (
-                    <form
-                      action={updateConversationTitleAction}
-                      className="conversation-title-form"
-                    >
-                      <input
-                        name="conversationId"
-                        type="hidden"
-                        value={conversationId}
-                      />
-                      <label className="field">
-                        <span className="sr-only">Group title</span>
-                        <input
-                          className="input"
-                          defaultValue={conversation.title?.trim() || ''}
-                          name="title"
-                          placeholder="Enter a group name"
-                          required
-                        />
-                      </label>
-                      <button className="button button-compact" type="submit">
-                        Save name
-                      </button>
-                    </form>
-                  ) : null}
-                </section>
-
-                <section className="stack conversation-settings-subsection conversation-participant-manager">
-                  <div className="stack conversation-settings-panel-copy">
-                    <h4 className="conversation-settings-subtitle">Add people</h4>
-                    {!canManageGroupParticipants ? (
-                      <p className="muted conversation-settings-note">
-                        Owner only.
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {canManageGroupParticipants ? (
-                    availableParticipantsToAdd.length === 0 ? (
-                      <p className="muted conversation-settings-note">
-                        Everyone is already here.
-                      </p>
-                    ) : (
-                      <form action={addGroupParticipantsAction} className="stack compact-form">
-                        <input
-                          name="conversationId"
-                          type="hidden"
-                          value={conversationId}
-                        />
-                        <div className="checkbox-list conversation-checkbox-list">
-                          {availableParticipantsToAdd.map((participant) => (
-                            <label
-                              key={`add-${participant.userId}`}
-                              className="checkbox-row"
-                            >
-                              <input
-                                name="participantUserIds"
-                                type="checkbox"
-                                value={participant.userId}
-                              />
-                              <span className="checkbox-copy">
-                                <span className="checkbox-identity">
-                                  <IdentityAvatar
-                                    identity={participant}
-                                    label={participant.label}
-                                    size="sm"
-                                  />
-                                </span>
-                                <span className="user-label">{participant.label}</span>
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                        <button className="button button-compact" type="submit">
-                          Add people
-                        </button>
-                      </form>
-                    )
-                  ) : null}
-                </section>
-
-                <section className="stack conversation-settings-subsection conversation-leave-panel">
-                  <div className="stack conversation-settings-panel-copy">
-                    <h4 className="conversation-settings-subtitle">Leave group</h4>
-                  </div>
-                  <form action={leaveGroupAction}>
-                    <input
-                      name="conversationId"
-                      type="hidden"
-                      value={conversationId}
-                    />
-                    <button
-                      className="button button-compact button-danger-subtle"
-                      type="submit"
-                    >
-                      Leave group
-                    </button>
-                  </form>
-                </section>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="conversation-settings-panel stack">
-            <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">Notifications</h3>
-              <p className="muted conversation-settings-note">
-                How this chat notifies you.
-              </p>
-            </div>
-
-            <form
-              action={updateConversationNotificationLevelAction}
-              className="conversation-notification-form"
-            >
-              <input
-                name="conversationId"
-                type="hidden"
-                value={conversationId}
-              />
-
-              <button
-                className={
-                  conversation.notificationLevel === 'default'
-                    ? 'conversation-choice-button conversation-choice-button-active'
-                    : 'conversation-choice-button'
-                }
-                name="notificationLevel"
-                type="submit"
-                value="default"
-              >
-                  <span className="conversation-choice-copy">
-                    <span className="conversation-choice-title">Default</span>
-                    <span className="conversation-choice-note">
-                    Use your usual setting.
-                    </span>
-                  </span>
-              </button>
-
-              <button
-                className={
-                  conversation.notificationLevel === 'muted'
-                    ? 'conversation-choice-button conversation-choice-button-active'
-                    : 'conversation-choice-button'
-                }
-                name="notificationLevel"
-                type="submit"
-                value="muted"
-              >
-                  <span className="conversation-choice-copy">
-                    <span className="conversation-choice-title">Muted</span>
-                    <span className="conversation-choice-note">
-                    Keep this chat quieter.
-                    </span>
-                  </span>
-              </button>
-            </form>
-          </section>
-
-          <section className="conversation-settings-panel stack">
-            <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">Inbox</h3>
-              <p className="muted conversation-settings-note">
-                Hide this chat from your inbox only.
-              </p>
-            </div>
-
-            <div className="conversation-manage-actions">
-              <form action={hideConversationAction}>
-                <input
-                  name="conversationId"
-                  type="hidden"
-                  value={conversationId}
-                />
-                <button
-                  className="button button-compact button-secondary"
-                  type="submit"
-                >
-                  Hide from inbox
-                </button>
-              </form>
-            </div>
-          </section>
-        </section>
-      ) : null}
 
       {query.error ? <p className="notice notice-error">{query.error}</p> : null}
 
       <section className="chat-main">
         <section className="message-thread" id="message-thread-scroll">
           <AutoScrollToLatest
+            conversationId={conversationId}
             latestVisibleMessageSeq={latestVisibleMessageSeq}
             targetId="message-thread-scroll"
           />
           {messages.length === 0 ? (
-            <div className="chat-empty-state" aria-label="No messages yet">
-              <span className="chat-empty-state-label">No messages yet</span>
+            <div className="chat-empty-state" aria-label={t.chat.noMessagesYet}>
+              <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
             </div>
           ) : (
             timelineItems.map((item) => {
@@ -873,7 +575,7 @@ export default async function ChatPage({
                   <div
                     key={item.key}
                     className="message-day-separator"
-                    aria-label={`Messages from ${item.label}`}
+                    aria-label={item.label}
                   >
                     <span className="message-day-label">{item.label}</span>
                   </div>
@@ -907,6 +609,8 @@ export default async function ChatPage({
                   message.sender_id,
                   user.id,
                   fallbackNames,
+                  language,
+                  t,
                 );
               const senderIdentity = senderIdentities.get(message.sender_id ?? '');
               const otherParticipantReadSeq =
@@ -919,7 +623,7 @@ export default async function ChatPage({
                 otherParticipantReadSeq !== null &&
                 Number.isFinite(messageSeq) &&
                 otherParticipantReadSeq >= messageSeq;
-              const ownMessageStatusLabel = showSeenState ? 'Seen' : 'Sent';
+              const ownMessageStatusLabel = showSeenState ? t.chat.seen : t.chat.sent;
               const isMessageActionActive = activeActionMessage?.id === message.id;
 
               return (
@@ -963,42 +667,9 @@ export default async function ChatPage({
                           </div>
                         </div>
                         <div className="message-header-side">
-                          <span
-                            className={
-                              isOwnMessage
-                                ? 'message-meta message-meta-own'
-                                : 'message-meta'
-                            }
-                          >
-                            <span>{formatMessageTimestamp(message.created_at) || 'Just now'}</span>
-                            {isEditedMessage(message) ? (
-                              <span className="message-edited" aria-label="Edited">
-                                Edited
-                              </span>
-                            ) : null}
-                            {isOwnMessage ? (
-                              <span
-                                className={
-                                  showSeenState
-                                    ? 'message-status message-status-seen'
-                                    : 'message-status'
-                                }
-                                aria-label={ownMessageStatusLabel}
-                              >
-                                {showSeenState ? (
-                                  <>
-                                    <span className="message-status-dot" aria-hidden="true" />
-                                    <span>Seen</span>
-                                  </>
-                                ) : (
-                                  'Sent'
-                                )}
-                              </span>
-                            ) : null}
-                          </span>
                           {!isDeletedMessage ? (
                             <Link
-                              aria-label="Open message actions"
+                              aria-label={t.chat.openMessageActions}
                               className={
                                 isMessageActionActive
                                   ? 'message-actions-trigger message-actions-trigger-active'
@@ -1027,11 +698,11 @@ export default async function ChatPage({
                                 );
 
                                 if (!repliedMessage) {
-                                  return 'Earlier message';
+                                  return t.chat.earlierMessage;
                                 }
 
                                 if (repliedMessage.deleted_at) {
-                                  return 'Deleted message';
+                                  return t.chat.deletedMessage;
                                 }
 
                                 return (
@@ -1040,6 +711,8 @@ export default async function ChatPage({
                                     repliedMessage.sender_id,
                                     user.id,
                                     fallbackNames,
+                                    language,
+                                    t,
                                   )
                                 );
                               })()}
@@ -1051,16 +724,24 @@ export default async function ChatPage({
                                 );
 
                                 if (repliedMessage?.deleted_at) {
-                                  return 'Message deleted';
+                                  return t.chat.messageDeleted;
                                 }
 
-                                return getMessageSnippet(repliedMessage?.body ?? null, 72);
+                                if (repliedMessage?.kind === 'voice') {
+                                  return t.chat.voiceMessage;
+                                }
+
+                                return getMessageSnippet(
+                                  repliedMessage?.body ?? null,
+                                  t,
+                                  72,
+                                );
                               })()}
                             </span>
                           </div>
                         ) : null}
                         {isDeletedMessage ? (
-                          <p className="message-deleted-text">Message deleted</p>
+                          <p className="message-deleted-text">{t.chat.messageDeleted}</p>
                         ) : isMessageInEditMode ? (
                           <form action={editMessageAction} className="stack message-edit-form">
                             <input
@@ -1070,7 +751,7 @@ export default async function ChatPage({
                             />
                             <input name="messageId" type="hidden" value={message.id} />
                             <label className="field">
-                              <span className="sr-only">Edit message</span>
+                              <span className="sr-only">{t.chat.edit}</span>
                               <AutoGrowTextarea
                                 className="input textarea"
                                 defaultValue={message.body?.trim() ?? ''}
@@ -1082,20 +763,20 @@ export default async function ChatPage({
                             </label>
                             <div className="message-edit-actions">
                               <button className="button button-compact" type="submit">
-                                Save
+                                {t.chat.save}
                               </button>
                               <Link
                                 className="pill message-edit-cancel"
                                 href={`/chat/${conversationId}#message-${message.id}`}
                               >
-                                Cancel
+                                {t.chat.cancel}
                               </Link>
                             </div>
                           </form>
                         ) : message.body?.trim() ? (
                           <p className="message-body">{message.body.trim()}</p>
                         ) : !messageAttachments.length ? (
-                          <p className="message-body">Empty message</p>
+                          <p className="message-body">{t.chat.emptyMessage}</p>
                         ) : null}
                         {messageAttachments.length && !isDeletedMessage ? (
                           <div className="message-attachments">
@@ -1115,7 +796,7 @@ export default async function ChatPage({
                                       aria-hidden="true"
                                       className="message-attachment-file"
                                     >
-                                      File
+                                      {attachment.isAudio ? t.chat.audio : t.chat.file}
                                     </span>
                                   )}
                                   <span className="message-attachment-copy">
@@ -1123,14 +804,20 @@ export default async function ChatPage({
                                       {attachment.fileName}
                                     </span>
                                     <span className="message-attachment-meta">
-                                      {attachment.isImage ? 'Image' : 'Attachment'}
+                                      {attachment.isVoiceMessage
+                                        ? t.chat.voiceMessage
+                                        : attachment.isAudio
+                                          ? t.chat.audio
+                                          : attachment.isImage
+                                            ? t.chat.image
+                                            : t.chat.attachment}
                                       {formatAttachmentSize(attachment.sizeBytes)
                                         ? ` · ${formatAttachmentSize(
                                             attachment.sizeBytes,
                                           )}`
                                         : ''}
                                       {!attachment.signedUrl
-                                        ? ' · Unavailable right now'
+                                        ? ` · ${t.chat.unavailableRightNow}`
                                         : ''}
                                     </span>
                                   </span>
@@ -1144,6 +831,23 @@ export default async function ChatPage({
                                     className="message-attachment-card message-attachment-card-unavailable"
                                   >
                                     {attachmentContent}
+                                  </div>
+                                );
+                              }
+
+                              if (attachment.isAudio) {
+                                return (
+                                  <div
+                                    key={attachment.id}
+                                    className="message-attachment-card message-attachment-card-audio"
+                                  >
+                                    {attachmentContent}
+                                    <audio
+                                      className="message-attachment-audio"
+                                      controls
+                                      preload="metadata"
+                                      src={attachment.signedUrl}
+                                    />
                                   </div>
                                 );
                               }
@@ -1163,6 +867,39 @@ export default async function ChatPage({
                           </div>
                         ) : null}
                       </div>
+                      <span
+                        className={
+                          isOwnMessage
+                            ? 'message-meta message-meta-own'
+                            : 'message-meta'
+                        }
+                      >
+                        <span>{formatMessageTimestamp(message.created_at, language) || t.chat.justNow}</span>
+                        {isEditedMessage(message) ? (
+                          <span className="message-edited" aria-label={t.chat.edited}>
+                            {t.chat.edited}
+                          </span>
+                        ) : null}
+                        {isOwnMessage ? (
+                          <span
+                            className={
+                              showSeenState
+                                ? 'message-status message-status-seen'
+                                : 'message-status'
+                            }
+                            aria-label={ownMessageStatusLabel}
+                          >
+                            {showSeenState ? (
+                              <>
+                                <span className="message-status-dot" aria-hidden="true" />
+                                <span>{t.chat.seen}</span>
+                              </>
+                            ) : (
+                              t.chat.sent
+                            )}
+                          </span>
+                        ) : null}
+                      </span>
 
                       {reactionsByMessage.get(message.id)?.length && !isDeletedMessage ? (
                         <div
@@ -1171,7 +908,7 @@ export default async function ChatPage({
                               ? 'reaction-groups reaction-groups-own'
                               : 'reaction-groups'
                           }
-                          aria-label="Message reactions"
+                          aria-label={t.chat.messageReactions}
                         >
                           {reactionsByMessage.get(message.id)?.map((reaction) => (
                             <form
@@ -1214,17 +951,17 @@ export default async function ChatPage({
                           <input name="messageId" type="hidden" value={message.id} />
                           <input name="confirmDelete" type="hidden" value="true" />
                           <span className="message-delete-copy">
-                            Delete this message for everyone in this chat?
+                            {t.chat.deleteConfirm}
                           </span>
                           <div className="message-delete-actions">
                             <button className="button button-compact" type="submit">
-                              Delete
+                              {t.chat.delete}
                             </button>
                             <Link
                               className="pill message-edit-cancel"
                               href={`/chat/${conversationId}#message-${message.id}`}
                             >
-                              Cancel
+                              {t.chat.cancel}
                             </Link>
                           </div>
                         </form>
@@ -1234,11 +971,6 @@ export default async function ChatPage({
               );
             })
           )}
-          {messages.length > 0 && isConversationCaughtUp ? (
-            <div className="message-caught-up-state" aria-label="Conversation read up to date">
-              <span className="message-caught-up-label">You&apos;re caught up</span>
-            </div>
-          ) : null}
           <MarkConversationRead
             conversationId={conversationId}
             currentReadMessageSeq={readState.lastReadMessageSeq}
@@ -1254,32 +986,35 @@ export default async function ChatPage({
           <TypingIndicator
             conversationId={conversationId}
             currentUserId={user.id}
+            language={language}
           />
           {activeReplyTarget ? (
             <div className="composer-reply-preview">
               <div className="stack composer-reply-copy">
-                <span className="composer-reply-label">Replying to</span>
+                <span className="composer-reply-label">{t.chat.replyingTo}</span>
                 <span className="composer-reply-sender">
                   {activeReplyTarget.deleted_at
-                    ? 'Deleted message'
+                    ? t.chat.deletedMessage
                     : senderNames.get(activeReplyTarget.sender_id ?? '') ||
                       createFallbackSenderName(
                         activeReplyTarget.sender_id,
                         user.id,
                         fallbackNames,
+                        language,
+                        t,
                       )}
                 </span>
                 <span className="composer-reply-snippet">
                   {activeReplyTarget.deleted_at
-                    ? 'This message was deleted.'
-                    : getMessageSnippet(activeReplyTarget.body, 88)}
+                    ? t.chat.thisMessageWasDeleted
+                    : getMessageSnippet(activeReplyTarget.body, t, 88)}
                 </span>
               </div>
               <Link
                 className="pill composer-reply-cancel"
                 href={`/chat/${conversationId}#message-composer`}
               >
-                Cancel
+                {t.chat.cancel}
               </Link>
             </div>
           ) : null}
@@ -1295,28 +1030,29 @@ export default async function ChatPage({
             <div className="composer-entry-row">
               <ComposerAttachmentPicker
                 accept={CHAT_ATTACHMENT_ACCEPT}
-                helperText={CHAT_ATTACHMENT_HELP_TEXT}
+                helperText={attachmentHelpText}
                 maxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
-                maxSizeLabel="Up to 10 MB"
+                maxSizeLabel={attachmentMaxSizeLabel}
+                language={language}
               />
 
               <div className="composer-input-shell">
                 <label className="field composer-input-field">
-                  <span className="sr-only">Message</span>
+                  <span className="sr-only">{t.chat.messagePlaceholder}</span>
                   <ComposerTypingTextarea
                     className="input textarea"
                     conversationId={conversationId}
                     currentUserId={user.id}
                     currentUserLabel={currentUserDisplayLabel}
                     name="body"
-                    placeholder="Message"
+                    placeholder={t.chat.messagePlaceholder}
                     rows={1}
                     maxHeight={160}
                   />
                 </label>
 
                 <button
-                  aria-label="Send message"
+                  aria-label={t.chat.sendMessage}
                   className="button composer-button composer-button-icon"
                   type="submit"
                 >
@@ -1328,10 +1064,373 @@ export default async function ChatPage({
         </section>
       </section>
 
-      {activeActionMessage && !activeActionMessage.deleted_at ? (
-        <section className="message-sheet-overlay" aria-label="Message actions">
+      {isSettingsOpen ? (
+        <section
+          className="conversation-settings-overlay"
+          id="conversation-settings"
+        >
           <Link
-            aria-label="Close message actions"
+            aria-label={t.chat.closeInfo}
+            className="conversation-settings-backdrop"
+            href={`/chat/${conversationId}`}
+          />
+
+          <section className="card stack conversation-settings-card conversation-settings-sheet">
+            <div className="conversation-settings-grabber" aria-hidden="true" />
+
+            <div className="conversation-settings-header">
+              <div className="stack conversation-settings-copy">
+                <p className="eyebrow conversation-settings-eyebrow">{t.chat.infoEyebrow}</p>
+                <h2 className="section-title">{t.chat.infoTitle}</h2>
+              </div>
+              <Link className="pill conversation-settings-close" href={`/chat/${conversationId}`}>
+                {t.chat.done}
+              </Link>
+            </div>
+
+            <section className="conversation-info-summary">
+              <div className="conversation-info-identity">
+                {conversation.kind === 'group' ? (
+                  <IdentityAvatarStack
+                    identities={otherParticipants.map((participant) =>
+                      senderIdentities.get(participant.userId),
+                    )}
+                    labels={otherParticipantLabels}
+                  />
+                ) : (
+                  <IdentityAvatar
+                    identity={directParticipantIdentity}
+                    label={conversationDisplayTitle}
+                    size="lg"
+                  />
+                )}
+
+                <div className="stack conversation-info-copy">
+                  <h3 className="conversation-info-title">{conversationDisplayTitle}</h3>
+                  <p className="muted conversation-info-subtitle">
+                    {conversation.kind === 'group'
+                      ? groupMemberSummary
+                      : t.chat.directChat}
+                  </p>
+                </div>
+              </div>
+
+              <div className="conversation-info-meta">
+                <span className="conversation-info-meta-item">
+                  {conversation.kind === 'group' ? t.chat.group : t.chat.person}
+                </span>
+                <span className="conversation-info-meta-item">
+                  {t.chat.startedAt(formatLongDate(conversation.createdAt ?? null, language, t))}
+                </span>
+                {conversation.kind === 'group' ? (
+                  <span className="conversation-info-meta-item">
+                    {formatMemberCount(language, participants.length)}
+                  </span>
+                ) : null}
+              </div>
+            </section>
+
+            <dl className="conversation-info-list">
+              <div className="conversation-info-row">
+                <dt className="conversation-info-label">{t.chat.type}</dt>
+                <dd className="conversation-info-value">
+                  {conversation.kind === 'group' ? t.inbox.create.group : t.chat.directChat}
+                </dd>
+              </div>
+              {conversation.kind === 'group' ? (
+                <div className="conversation-info-row">
+                  <dt className="conversation-info-label">{t.chat.members}</dt>
+                  <dd className="conversation-info-value">
+                    {formatMemberCount(language, participants.length)}
+                  </dd>
+                </div>
+              ) : null}
+              <div className="conversation-info-row">
+                <dt className="conversation-info-label">{t.chat.started}</dt>
+                <dd className="conversation-info-value">
+                  {formatLongDate(conversation.createdAt ?? null, language, t)}
+                </dd>
+              </div>
+            </dl>
+
+            <section className="conversation-settings-panel stack">
+              <div className="stack conversation-settings-panel-copy">
+                <h3 className="card-title">{t.chat.people}</h3>
+                <p className="muted conversation-settings-note">
+                  {conversation.kind === 'group'
+                    ? formatMemberCount(language, participants.length)
+                    : t.chat.inThisChat}
+                </p>
+              </div>
+
+              <div className="conversation-member-list">
+                {participantItems.map((participant) => (
+                  <div
+                    key={participant.userId}
+                    className="conversation-member-row"
+                  >
+                    <div className="conversation-member-identity">
+                      <IdentityAvatar
+                        identity={participant.identity}
+                        label={participant.label}
+                        size="sm"
+                      />
+                      <div className="stack conversation-member-copy">
+                        <span className="user-label">
+                          {participant.label}
+                        </span>
+                        <div className="conversation-member-meta">
+                          <span className="conversation-role-chip">
+                            {participant.roleLabel}
+                          </span>
+                          {participant.isCurrentUser ? (
+                            <span className="conversation-member-self-chip">{t.chat.you}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    {conversation.kind === 'group' &&
+                    canManageGroupParticipants &&
+                    !participant.isCurrentUser &&
+                    participant.role !== 'owner' ? (
+                      <form action={removeGroupParticipantAction}>
+                        <input
+                          name="conversationId"
+                          type="hidden"
+                          value={conversationId}
+                        />
+                        <input
+                          name="targetUserId"
+                          type="hidden"
+                          value={participant.userId}
+                        />
+                        <button
+                          className="button button-compact button-danger-subtle"
+                          type="submit"
+                        >
+                          {t.chat.remove}
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {conversation.kind === 'group' ? (
+              <section className="conversation-settings-panel stack">
+                <div className="stack conversation-settings-panel-copy">
+                  <h3 className="card-title">{t.chat.groupSection}</h3>
+                  <p className="muted conversation-settings-note">
+                    {t.chat.nameAndPeople}
+                  </p>
+                </div>
+
+                <div className="conversation-group-actions">
+                  <section className="stack conversation-settings-subsection">
+                    <div className="stack conversation-settings-panel-copy">
+                      <h4 className="conversation-settings-subtitle">{t.chat.name}</h4>
+                      <p className="conversation-settings-static conversation-settings-title-preview">
+                        {conversationDisplayTitle}
+                      </p>
+                      {!canEditGroupTitle ? (
+                        <p className="muted conversation-settings-note">
+                          {t.chat.ownerOnly}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {canEditGroupTitle ? (
+                      <form
+                        action={updateConversationTitleAction}
+                        className="conversation-title-form"
+                      >
+                        <input
+                          name="conversationId"
+                          type="hidden"
+                          value={conversationId}
+                        />
+                        <label className="field">
+                          <span className="sr-only">{t.chat.name}</span>
+                          <input
+                            className="input"
+                            defaultValue={conversation.title?.trim() || ''}
+                            name="title"
+                            placeholder={t.chat.groupNamePlaceholder}
+                            required
+                          />
+                        </label>
+                        <button className="button button-compact" type="submit">
+                          {t.chat.saveName}
+                        </button>
+                      </form>
+                    ) : null}
+                  </section>
+
+                  <section className="stack conversation-settings-subsection conversation-participant-manager">
+                    <div className="stack conversation-settings-panel-copy">
+                      <h4 className="conversation-settings-subtitle">{t.chat.addPeople}</h4>
+                      {!canManageGroupParticipants ? (
+                        <p className="muted conversation-settings-note">
+                          {t.chat.ownerOnly}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {canManageGroupParticipants ? (
+                      availableParticipantsToAdd.length === 0 ? (
+                        <p className="muted conversation-settings-note">
+                          {t.chat.everyoneIsHere}
+                        </p>
+                      ) : (
+                        <form action={addGroupParticipantsAction} className="stack compact-form">
+                          <input
+                            name="conversationId"
+                            type="hidden"
+                            value={conversationId}
+                          />
+                          <div className="checkbox-list conversation-checkbox-list">
+                            {availableParticipantsToAdd.map((participant) => (
+                              <label
+                                key={`add-${participant.userId}`}
+                                className="checkbox-row"
+                              >
+                                <input
+                                  name="participantUserIds"
+                                  type="checkbox"
+                                  value={participant.userId}
+                                />
+                                <span className="checkbox-copy">
+                                  <span className="checkbox-identity">
+                                    <IdentityAvatar
+                                      identity={participant}
+                                      label={participant.label}
+                                      size="sm"
+                                    />
+                                  </span>
+                                  <span className="user-label">{participant.label}</span>
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                          <button className="button button-compact" type="submit">
+                            {t.chat.addPeople}
+                          </button>
+                        </form>
+                      )
+                    ) : null}
+                  </section>
+
+                  <section className="stack conversation-settings-subsection conversation-leave-panel">
+                    <div className="stack conversation-settings-panel-copy">
+                      <h4 className="conversation-settings-subtitle">{t.chat.leaveGroup}</h4>
+                    </div>
+                    <form action={leaveGroupAction}>
+                      <input
+                        name="conversationId"
+                        type="hidden"
+                        value={conversationId}
+                      />
+                      <button
+                        className="button button-compact button-danger-subtle"
+                        type="submit"
+                      >
+                        {t.chat.leaveGroupButton}
+                      </button>
+                    </form>
+                  </section>
+                </div>
+              </section>
+            ) : null}
+
+            <section className="conversation-settings-panel stack">
+              <div className="stack conversation-settings-panel-copy">
+                <h3 className="card-title">{t.chat.notifications}</h3>
+                <p className="muted conversation-settings-note">
+                  {t.chat.notificationsNote}
+                </p>
+              </div>
+
+              <form
+                action={updateConversationNotificationLevelAction}
+                className="conversation-notification-form"
+              >
+                <input
+                  name="conversationId"
+                  type="hidden"
+                  value={conversationId}
+                />
+
+                <button
+                  className={
+                    conversation.notificationLevel === 'default'
+                      ? 'conversation-choice-button conversation-choice-button-active'
+                      : 'conversation-choice-button'
+                  }
+                  name="notificationLevel"
+                  type="submit"
+                  value="default"
+                >
+                    <span className="conversation-choice-copy">
+                      <span className="conversation-choice-title">{t.chat.notificationsDefault}</span>
+                      <span className="conversation-choice-note">
+                        {t.chat.notificationsDefaultNote}
+                      </span>
+                    </span>
+                </button>
+
+                <button
+                  className={
+                    conversation.notificationLevel === 'muted'
+                      ? 'conversation-choice-button conversation-choice-button-active'
+                      : 'conversation-choice-button'
+                  }
+                  name="notificationLevel"
+                  type="submit"
+                  value="muted"
+                >
+                    <span className="conversation-choice-copy">
+                      <span className="conversation-choice-title">{t.chat.notificationsMuted}</span>
+                      <span className="conversation-choice-note">
+                        {t.chat.notificationsMutedNote}
+                      </span>
+                    </span>
+                </button>
+              </form>
+            </section>
+
+            <section className="conversation-settings-panel stack">
+              <div className="stack conversation-settings-panel-copy">
+                <h3 className="card-title">{t.chat.inbox}</h3>
+                <p className="muted conversation-settings-note">
+                  {t.chat.inboxNote}
+                </p>
+              </div>
+
+              <div className="conversation-manage-actions">
+                <form action={hideConversationAction}>
+                  <input
+                    name="conversationId"
+                    type="hidden"
+                    value={conversationId}
+                  />
+                  <button
+                    className="button button-compact button-secondary"
+                    type="submit"
+                  >
+                    {t.chat.hideFromInbox}
+                  </button>
+                </form>
+              </div>
+            </section>
+          </section>
+        </section>
+      ) : null}
+
+      {activeActionMessage && !activeActionMessage.deleted_at ? (
+        <section className="message-sheet-overlay" aria-label={t.chat.openMessageActions}>
+          <Link
+            aria-label={t.chat.closeMessageActions}
             className="message-sheet-backdrop"
             href={`/chat/${conversationId}#message-${activeActionMessage.id}`}
           />
@@ -1343,14 +1442,16 @@ export default async function ChatPage({
                 </span>
                 <span className="message-sheet-snippet">
                   {activeActionMessage.body?.trim()
-                    ? getMessageSnippet(activeActionMessage.body, 96)
+                    ? getMessageSnippet(activeActionMessage.body, t, 96)
+                    : activeActionMessage.kind === 'voice'
+                      ? t.chat.voiceMessage
                     : activeActionMessage.reply_to_message_id
-                      ? 'Reply message'
-                      : 'Choose an action'}
+                      ? t.chat.replyMessage
+                      : t.chat.chooseAction}
                 </span>
               </div>
               <Link
-                aria-label="Close message actions"
+                aria-label={t.chat.closeMessageActions}
                 className="message-sheet-close"
                 href={`/chat/${conversationId}#message-${activeActionMessage.id}`}
               >
@@ -1416,7 +1517,7 @@ export default async function ChatPage({
                     ↩
                   </span>
                   <span className="message-sheet-action-copy">
-                    <span className="message-sheet-action-label">Reply</span>
+                    <span className="message-sheet-action-label">{t.chat.reply}</span>
                   </span>
                 </Link>
 
@@ -1430,7 +1531,7 @@ export default async function ChatPage({
                         ✎
                       </span>
                       <span className="message-sheet-action-copy">
-                        <span className="message-sheet-action-label">Edit</span>
+                        <span className="message-sheet-action-label">{t.chat.edit}</span>
                       </span>
                     </Link>
 
@@ -1442,7 +1543,7 @@ export default async function ChatPage({
                         🗑
                       </span>
                       <span className="message-sheet-action-copy">
-                        <span className="message-sheet-action-label">Delete</span>
+                        <span className="message-sheet-action-label">{t.chat.delete}</span>
                       </span>
                     </Link>
                   </>

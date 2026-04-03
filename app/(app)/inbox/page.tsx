@@ -1,5 +1,12 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
+  formatPersonFallbackLabel,
+  getLocaleForLanguage,
+  getTranslations,
+  type AppLanguage,
+} from '@/modules/i18n';
+import { getRequestLanguage } from '@/modules/i18n/server';
+import {
   getAvailableUsers,
   getArchivedConversations,
   getConversationDisplayName,
@@ -15,10 +22,9 @@ import {
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import Link from 'next/link';
 import {
-  createDmAction,
-  createGroupAction,
   restoreConversationAction,
 } from './actions';
+import { NewChatSheet } from './new-chat-sheet';
 
 type InboxPageProps = {
   searchParams: Promise<{
@@ -53,10 +59,6 @@ type ConversationListItem = {
   hasUnread: boolean;
 };
 
-function formatSearchResultLabel(count: number, singular: string, plural: string) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 function normalizeSearchTerm(value: string | undefined) {
   return value?.trim().toLowerCase() ?? '';
 }
@@ -73,20 +75,21 @@ function normalizeView(value: string | undefined): InboxView {
   return value === 'archived' ? 'archived' : 'main';
 }
 
-function formatTimestamp(value: string | null) {
+function formatTimestamp(value: string | null, language: AppLanguage) {
   if (!value) {
-    return 'No activity yet';
+    return getTranslations(language).inbox.noActivityYet;
   }
 
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
 }
 
-function formatRecency(value: string | null) {
+function formatRecency(value: string | null, language: AppLanguage) {
+  const t = getTranslations(language);
   if (!value) {
-    return 'New';
+    return t.inbox.newRecency;
   }
 
   const target = new Date(value);
@@ -95,13 +98,13 @@ function formatRecency(value: string | null) {
   const diffMinutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
 
   if (diffMinutes < 60) {
-    return `${diffMinutes}m`;
+    return language === 'ru' ? `${diffMinutes} мин` : `${diffMinutes}m`;
   }
 
   const diffHours = Math.floor(diffMinutes / 60);
 
   if (diffHours < 24) {
-    return `${diffHours}h`;
+    return language === 'ru' ? `${diffHours} ч` : `${diffHours}h`;
   }
 
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -115,23 +118,26 @@ function formatRecency(value: string | null) {
   );
 
   if (dayDiff === 1) {
-    return 'Yesterday';
+    return t.inbox.yesterday;
   }
 
   if (dayDiff < 7) {
-    return new Intl.DateTimeFormat('en', { weekday: 'short' }).format(target);
+    return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+      weekday: 'short',
+    }).format(target);
   }
 
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     month: 'short',
     day: 'numeric',
   }).format(target);
 }
 
 function getFallbackIdentityLabel(
+  language: AppLanguage,
   userId: string,
   fallbackLabels: Map<string, string>,
-  prefix = 'Person',
+  kind: 'person' | 'member' = 'person',
 ) {
   const existing = fallbackLabels.get(userId);
 
@@ -139,7 +145,11 @@ function getFallbackIdentityLabel(
     return existing;
   }
 
-  const nextLabel = `${prefix} ${fallbackLabels.size + 1}`;
+  const nextLabel = formatPersonFallbackLabel(
+    language,
+    fallbackLabels.size + 1,
+    kind,
+  );
   fallbackLabels.set(userId, nextLabel);
 
   return nextLabel;
@@ -215,6 +225,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   if (!user) {
     return null;
   }
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
 
   const [conversations, archivedConversations, availableUsers] = await Promise.all([
     getInboxConversations(user.id),
@@ -241,9 +253,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     label: getIdentityLabel(
       availableUser,
       getFallbackIdentityLabel(
+        language,
         availableUser.userId,
         fallbackIdentityLabels,
-        'Member',
+        'member',
       ),
     ),
   }));
@@ -265,7 +278,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     const otherParticipantLabels = otherParticipants.map((participant) =>
       getIdentityLabel(
         participant,
-        getFallbackIdentityLabel(participant.userId, fallbackIdentityLabels),
+        getFallbackIdentityLabel(language, participant.userId, fallbackIdentityLabels),
       ),
     );
     const isGroupConversation = conversation.kind === 'group';
@@ -273,28 +286,35 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       kind: conversation.kind ?? null,
       title: conversation.title,
       participantLabels: otherParticipantLabels,
+      fallbackTitles: {
+        dm: t.inbox.dmPreviewFallback,
+        group: language === 'ru' ? 'Новая группа' : 'New group',
+      },
     });
     const participantSummary = getConversationParticipantSummary(
       otherParticipantLabels,
       isGroupConversation ? 3 : undefined,
     );
     const preview = isGroupConversation
-      ? participantSummary || (conversation.lastMessageAt ? 'Group chat' : 'Start the group')
+      ? participantSummary ||
+        (conversation.lastMessageAt
+          ? t.inbox.groupPreviewExisting
+          : t.inbox.groupPreviewNew)
       : conversation.lastMessageAt
         ? otherParticipantLabels[0]
-          ? `Chat with ${otherParticipantLabels[0]}`
-          : 'Direct chat'
+          ? t.inbox.dmPreviewExisting(otherParticipantLabels[0])
+          : t.chat.directChat
         : otherParticipantLabels[0]
-          ? `Say hi to ${otherParticipantLabels[0]}`
-          : 'Start a chat';
+          ? t.inbox.dmPreviewNew(otherParticipantLabels[0])
+          : t.inbox.dmPreviewFallback;
     const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
     const hasUnread = conversation.unreadCount > 0;
     const metaLabels = [
       ...(isGroupConversation
-        ? [{ label: 'Group', tone: 'default' as const }]
+        ? [{ label: t.inbox.metaGroup, tone: 'default' as const }]
         : []),
       ...(activeView === 'archived'
-        ? [{ label: 'Archived', tone: 'archived' as const }]
+        ? [{ label: t.inbox.metaArchived, tone: 'archived' as const }]
         : []),
     ];
 
@@ -304,8 +324,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       title,
       preview,
       metaLabels,
-      recencyLabel: formatRecency(lastActivityAt),
-      timestampLabel: formatTimestamp(lastActivityAt),
+      recencyLabel: formatRecency(lastActivityAt, language),
+      timestampLabel: formatTimestamp(lastActivityAt, language),
       participants: otherParticipants,
       participantLabels: otherParticipantLabels,
       hasUnread,
@@ -329,7 +349,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       conversation.title,
       conversation.preview,
       ...conversation.participantLabels,
-      conversation.isGroupConversation ? 'group' : 'direct',
+      conversation.isGroupConversation ? t.inbox.metaGroup : t.chat.directChat,
     ]
       .join(' ')
       .toLowerCase();
@@ -345,14 +365,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ? (() => {
         const parts = [
           filteredConversationItems.length > 0
-            ? formatSearchResultLabel(filteredConversationItems.length, 'chat', 'chats')
+            ? t.inbox.searchResultChat(filteredConversationItems.length)
             : null,
           filteredAvailableUserEntries.length > 0
-            ? formatSearchResultLabel(filteredAvailableUserEntries.length, 'person', 'people')
+            ? t.inbox.searchResultPerson(filteredAvailableUserEntries.length)
             : null,
         ].filter(Boolean);
 
-        return parts.length > 0 ? parts.join(' · ') : 'No chats or people';
+        return parts.length > 0 ? parts.join(' · ') : t.inbox.searchSummaryNone;
       })()
     : null;
 
@@ -366,29 +386,29 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       <section className="card inbox-home-shell stack">
         <div className="inbox-topbar">
           <div className="stack inbox-topbar-copy">
-            <h1 className="inbox-home-title">Chats</h1>
+            <h1 className="inbox-home-title">{t.inbox.title}</h1>
             <p className="muted inbox-home-subtitle">
               {activeView === 'archived'
                 ? archivedConversationCount > 0
-                  ? `${archivedConversationCount} hidden from your inbox`
-                  : 'Hidden chats stay here'
+                  ? t.inbox.subtitleArchivedCount(archivedConversationCount)
+                  : t.inbox.subtitleArchivedEmpty
                 : unreadConversationCount > 0
-                  ? `${unreadConversationCount} new`
+                  ? t.inbox.subtitleNew(unreadConversationCount)
                   : conversationItems.length > 0
-                    ? 'All caught up'
-                    : 'Start a chat'}
+                    ? t.inbox.subtitleCaughtUp
+                    : t.inbox.subtitleStart}
             </p>
           </div>
           <div className="inbox-topbar-actions">
             <Link
-              aria-label="Open settings"
+              aria-label={t.inbox.settingsAria}
               className="inbox-settings-trigger"
               href="/settings"
             >
               <span aria-hidden="true">⚙</span>
             </Link>
             <Link
-              aria-label="Start a chat"
+              aria-label={t.inbox.createAria}
               className="inbox-compose-trigger"
               href={buildInboxHref({
                 filter: activeFilter,
@@ -406,10 +426,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           <form
             action="/inbox"
             className="inbox-search-form inbox-search-form-minimal"
+            aria-label={t.inbox.searchAria}
             role="search"
           >
             <label className="field inbox-search-field inbox-search-shell">
-              <span className="sr-only">Search chats</span>
+              <span className="sr-only">{t.inbox.searchAria}</span>
               <span aria-hidden="true" className="inbox-search-icon">
                 ⌕
               </span>
@@ -418,7 +439,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 defaultValue={query.q ?? ''}
                 enterKeyHint="search"
                 name="q"
-                placeholder="Search chats or people"
+                placeholder={t.inbox.searchPlaceholder}
                 type="search"
               />
             </label>
@@ -430,7 +451,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             ) : null}
           </form>
 
-          <div className="inbox-filter-row" role="tablist" aria-label="Chat filters">
+          <div className="inbox-filter-row" role="tablist" aria-label={t.inbox.filtersAria}>
             <Link
               aria-selected={activeFilter === 'all'}
               className={
@@ -440,7 +461,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               }
               href={buildFilterHref('all', query.q, activeView)}
             >
-              All
+              {t.inbox.filters.all}
             </Link>
             <Link
               aria-selected={activeFilter === 'dm'}
@@ -451,7 +472,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               }
               href={buildFilterHref('dm', query.q, activeView)}
             >
-              DM
+              {t.inbox.filters.dm}
             </Link>
             <Link
               aria-selected={activeFilter === 'groups'}
@@ -462,7 +483,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               }
               href={buildFilterHref('groups', query.q, activeView)}
             >
-              Groups
+              {t.inbox.filters.groups}
             </Link>
             {(archivedConversationCount > 0 || activeView === 'archived') ? (
               <Link
@@ -485,8 +506,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 }
               >
                 {activeView === 'archived'
-                  ? 'Inbox'
-                  : `Archived${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
+                  ? t.inbox.filters.inbox
+                  : `${t.inbox.filters.archived}${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
               </Link>
             ) : null}
           </div>
@@ -500,7 +521,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   className="inbox-search-clear"
                   href={buildFilterHref(activeFilter, undefined, activeView)}
                 >
-                  Clear
+                  {t.inbox.clear}
                 </Link>
               ) : null}
               </div>
@@ -514,7 +535,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       {activeView === 'archived' ? (
         <section className="card stack inbox-archived-note">
           <p className="muted inbox-archived-note-copy">
-            Archived chats are only hidden from your inbox. They still keep their messages and can return anytime.
+            {t.inbox.archivedNote}
           </p>
         </section>
       ) : null}
@@ -522,23 +543,23 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       {conversationItems.length === 0 ? (
           <section className="card stack empty-card inbox-empty-state">
           <h2 className="card-title">
-            {activeView === 'archived' ? 'No archived chats' : 'No chats here'}
+            {activeView === 'archived' ? t.inbox.emptyArchivedTitle : t.inbox.emptyMainTitle}
           </h2>
           <p className="muted">
             {activeView === 'archived'
-              ? 'Chats you hide from your inbox will appear here.'
-              : 'Start one from the + button.'}
+              ? t.inbox.emptyArchivedBody
+              : t.inbox.emptyMainBody}
           </p>
         </section>
       ) : filteredConversationItems.length === 0 ? (
         <section className="card stack empty-card inbox-empty-state">
           <h2 className="card-title">
             {activeView === 'archived'
-              ? 'No matching archived chats'
-              : 'No matching chats'}
+              ? t.inbox.emptyArchivedSearchTitle
+              : t.inbox.emptySearchTitle}
           </h2>
           <p className="muted">
-            Try another search or filter.
+            {t.inbox.emptySearchBody}
           </p>
         </section>
       ) : (
@@ -601,7 +622,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                           {conversation.hasUnread ? (
                             <span
                               className="conversation-unread-dot"
-                              aria-label="Unread messages"
+                              aria-label={t.inbox.unreadAria}
                             />
                           ) : null}
                         </div>
@@ -628,7 +649,9 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                                 : 'conversation-kind-label'
                             }
                           >
-                            {metaLabel.label}
+                            {metaLabel.tone === 'archived'
+                              ? t.inbox.metaArchived
+                              : t.inbox.metaGroup}
                           </span>
                         ))}
                       </div>
@@ -649,7 +672,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                       className="button button-compact button-secondary conversation-restore-button"
                       type="submit"
                     >
-                      Show in inbox
+                      {t.inbox.restore}
                     </button>
                   </form>
                 ) : null}
@@ -671,130 +694,16 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             })}
           />
 
-          <section className="card stack inbox-create-sheet">
-            <div className="inbox-create-header">
-              <div className="stack inbox-create-copy">
-                <h2 className="section-title">New chat</h2>
-                <p className="muted">Pick a person or start a group.</p>
-              </div>
-              <Link
-                aria-label="Close create chat"
-                className="pill inbox-create-close"
-                href={buildInboxHref({
-                  filter: activeFilter,
-                  query: query.q,
-                  view: activeView,
-                })}
-              >
-                Close
-              </Link>
-            </div>
-
-            <section className="stack inbox-create-section">
-              <div className="stack inbox-create-copy">
-                <h3 className="card-title">People</h3>
-                <p className="muted">Choose one person.</p>
-              </div>
-
-              {availableUserEntries.length === 0 ? (
-                <p className="muted inbox-compose-empty">
-                  No other registered users are available yet.
-                </p>
-              ) : filteredAvailableUserEntries.length === 0 ? (
-                <p className="muted inbox-compose-empty">
-                  No matching people yet.
-                </p>
-              ) : (
-                <div className="inbox-compose-user-list inbox-create-user-list">
-                  {filteredAvailableUserEntries.map((availableUser) => (
-                    <div
-                      key={availableUser.userId}
-                      className="inbox-compose-user-row inbox-create-user-row"
-                    >
-                      <div className="user-row">
-                        <IdentityAvatar
-                          identity={availableUser}
-                          label={availableUser.label}
-                          size="sm"
-                        />
-                        <div className="stack user-copy">
-                          <span className="user-label">{availableUser.label}</span>
-                        </div>
-                      </div>
-
-                      <form action={createDmAction}>
-                        <input
-                          name="participantUserId"
-                          type="hidden"
-                          value={availableUser.userId}
-                        />
-                        <button className="button button-compact" type="submit">
-                          Message
-                        </button>
-                      </form>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="stack inbox-create-section">
-              <div className="stack inbox-create-copy">
-                <h3 className="card-title">Group chat</h3>
-                <p className="muted">Name it and pick people.</p>
-              </div>
-
-              <form action={createGroupAction} className="stack compact-form">
-                <label className="field">
-                  <span className="sr-only">Group title</span>
-                  <input
-                    className="input"
-                    name="title"
-                    placeholder="Weekend planning"
-                    required
-                  />
-                </label>
-
-                <fieldset className="selector-card inbox-compose-selector">
-                  <legend className="selector-title">People</legend>
-                  {availableUserEntries.length === 0 ? (
-                    <p className="muted">No other registered users are available yet.</p>
-                  ) : filteredAvailableUserEntries.length === 0 ? (
-                    <p className="muted">No matching people yet.</p>
-                  ) : (
-                    <div className="checkbox-list inbox-compose-checkbox-list">
-                      {filteredAvailableUserEntries.map((availableUser) => (
-                        <label
-                          key={`group-${availableUser.userId}`}
-                          className="checkbox-row"
-                        >
-                          <input
-                            name="participantUserIds"
-                            type="checkbox"
-                            value={availableUser.userId}
-                          />
-                          <span className="checkbox-copy">
-                            <span className="checkbox-identity">
-                              <IdentityAvatar
-                                identity={availableUser}
-                                label={availableUser.label}
-                                size="sm"
-                              />
-                            </span>
-                            <span className="user-label">{availableUser.label}</span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </fieldset>
-
-                <button className="button button-compact" type="submit">
-                  Create group
-                </button>
-              </form>
-            </section>
-          </section>
+          <NewChatSheet
+            availableUsers={filteredAvailableUserEntries}
+            hasAnyUsers={availableUserEntries.length > 0}
+            closeHref={buildInboxHref({
+              filter: activeFilter,
+              query: query.q,
+              view: activeView,
+            })}
+            language={language}
+          />
         </section>
       ) : null}
     </section>

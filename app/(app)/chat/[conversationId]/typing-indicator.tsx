@@ -1,11 +1,13 @@
 'use client';
 
+import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type TypingIndicatorProps = {
   conversationId: string;
   currentUserId: string;
+  language: AppLanguage;
 };
 
 type TypingPayload = {
@@ -24,7 +26,9 @@ const TYPING_VISIBLE_MS = 2800;
 export function TypingIndicator({
   conversationId,
   currentUserId,
+  language,
 }: TypingIndicatorProps) {
+  const t = getTranslations(language);
   const [activeTypers, setActiveTypers] = useState<Record<string, ActiveTyper>>({});
   const expiryTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const channelName = useMemo(
@@ -68,10 +72,10 @@ export function TypingIndicator({
           return;
         }
 
-        setActiveTypers((current) => ({
+          setActiveTypers((current) => ({
           ...current,
           [nextPayload.userId as string]: {
-            label: nextPayload.label?.trim() || 'Someone',
+            label: nextPayload.label?.trim() || t.chat.someone,
           },
         }));
 
@@ -93,7 +97,7 @@ export function TypingIndicator({
       expiryTimeouts.clear();
       void supabase.removeChannel(channel);
     };
-  }, [channelName, conversationId, currentUserId]);
+  }, [channelName, conversationId, currentUserId, language, t.chat.someone]);
 
   const typerLabels = Object.values(activeTypers).map((typer) => typer.label);
 
@@ -103,10 +107,10 @@ export function TypingIndicator({
 
   const typingLabel =
     typerLabels.length === 1
-      ? `${typerLabels[0]} is typing`
+      ? t.chat.typingSingle(typerLabels[0])
       : typerLabels.length === 2
-        ? `${typerLabels[0]} and ${typerLabels[1]} are typing`
-        : 'Several people are typing';
+        ? t.chat.typingDouble(typerLabels[0], typerLabels[1])
+        : t.chat.typingSeveral;
 
   return (
     <div className="chat-typing-indicator" aria-live="polite" aria-atomic="true">

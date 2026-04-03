@@ -23,11 +23,13 @@ Required columns used by current code:
 Optional / fallback-supported:
 
 - `avatar_path`
+- `preferred_language` is read defensively, but authenticated language persistence requires it
 
 Notes:
 
 - If `avatar_path` is missing, the app falls back to initials/name-based identity rendering.
 - Profile editing writes `display_name` and, when avatar upload succeeds, `avatar_path`.
+- Settings language preference writes `preferred_language` when the column exists.
 
 ## `public.conversations`
 
@@ -90,7 +92,7 @@ Required columns used by current code:
 Assumptions:
 
 - `seq` is the per-conversation ordering/read-position anchor.
-- `kind` is currently used with text/attachment flows.
+- `kind` is currently used for current text messaging flows and future-facing `voice` message support.
 - `deleted_at` is used for soft-deleted message rendering.
 
 ## `public.message_attachments`
@@ -109,6 +111,7 @@ Assumptions:
 
 - Attachment metadata lives here; file bytes live in Supabase Storage.
 - `bucket` and `object_path` must match the actual storage layout.
+- Voice messages reuse this table; current object paths use `/voice/` for voice-note files and `/files/` for other attachments.
 
 ## `public.message_reactions`
 
@@ -135,18 +138,27 @@ These schema changes must exist in Supabase for the current app to run safely:
 2. `public.conversation_members.notification_level`
    Source file: [2026-04-03-conversation-member-notification-level.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-notification-level.sql)
 
+3. `public.profiles.preferred_language`
+   Source file: [2026-04-03-profiles-preferred-language.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-profiles-preferred-language.sql)
+
+4. `public.messages.kind` must allow `voice`
+   Source file: [2026-04-03-messages-kind-voice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-kind-voice.sql)
+
 ## Current defensive behavior in code
 
 - Missing `profiles.avatar_path` is tolerated.
+- Missing `profiles.preferred_language` falls back to cookie/default language for reads, but language preference updates still require the migration.
 - Missing `conversation_members.last_read_message_seq` / `last_read_at` falls back to `null` read state.
 - Missing `conversation_members.hidden_at` no longer causes a raw confusing crash on the main inbox path, but archive-related behavior still requires the migration.
 - Missing `conversation_members.notification_level` falls back to `default` for conversation loading, but preference updates still require the migration.
+- If `messages.kind` is restricted to older values, voice-message inserts require the migration before they can be stored safely.
 
 ## Highest-risk assumptions right now
 
 - `conversation_members.hidden_at`
 - `conversation_members.notification_level`
+- `profiles.preferred_language`
 - `conversation_members.last_read_message_seq`
 - `conversation_members.last_read_at`
 
-These fields directly affect inbox loading, archive behavior, notification preferences, and read/unread UX.
+These fields directly affect language preference persistence, inbox loading, archive behavior, notification preferences, and read/unread UX.

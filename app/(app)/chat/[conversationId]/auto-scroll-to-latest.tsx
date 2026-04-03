@@ -1,19 +1,27 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 type AutoScrollToLatestProps = {
+  conversationId: string;
   targetId: string;
   latestVisibleMessageSeq: number | null;
 };
 
 export function AutoScrollToLatest({
+  conversationId,
   targetId,
   latestVisibleMessageSeq,
 }: AutoScrollToLatestProps) {
   const hasInitializedRef = useRef(false);
+  const lastConversationIdRef = useRef(conversationId);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (lastConversationIdRef.current !== conversationId) {
+      hasInitializedRef.current = false;
+      lastConversationIdRef.current = conversationId;
+    }
+
     const target =
       typeof document === 'undefined'
         ? null
@@ -40,7 +48,7 @@ export function AutoScrollToLatest({
     return () => {
       cancelAnimationFrame(animationFrame);
     };
-  }, [latestVisibleMessageSeq, targetId]);
+  }, [conversationId, latestVisibleMessageSeq, targetId]);
 
   return null;
 }

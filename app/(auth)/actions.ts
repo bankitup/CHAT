@@ -1,7 +1,10 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getStoredProfileLanguage } from '@/modules/messaging/data/server';
+import { LANGUAGE_COOKIE_NAME } from '@/modules/i18n';
 
 function readFormValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -10,7 +13,7 @@ function readFormValue(formData: FormData, key: string) {
 }
 
 function redirectWithMessage(
-  path: '/login' | '/signup',
+  path: '/login',
   type: 'error' | 'message',
   value: string,
 ) {
@@ -27,7 +30,7 @@ export async function loginAction(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -36,34 +39,18 @@ export async function loginAction(formData: FormData) {
     redirectWithMessage('/login', 'error', error.message);
   }
 
+  const profileLanguage = data.user?.id
+    ? await getStoredProfileLanguage(data.user.id)
+    : null;
+
+  if (profileLanguage) {
+    const cookieStore = await cookies();
+    cookieStore.set(LANGUAGE_COOKIE_NAME, profileLanguage, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: 'lax',
+    });
+  }
+
   redirect('/inbox');
-}
-
-export async function signupAction(formData: FormData) {
-  const email = readFormValue(formData, 'email');
-  const password = readFormValue(formData, 'password');
-
-  if (!email || !password) {
-    redirectWithMessage('/signup', 'error', 'Email and password are required.');
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-  });
-
-  if (error) {
-    redirectWithMessage('/signup', 'error', error.message);
-  }
-
-  if (data.session) {
-    redirect('/inbox');
-  }
-
-  redirectWithMessage(
-    '/login',
-    'message',
-    'Account created. Check your email if confirmation is enabled.',
-  );
 }

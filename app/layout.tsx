@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { getCookieLanguage } from '@/modules/i18n/server';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -34,13 +35,15 @@ export const viewport: Viewport = {
   themeColor: '#f7f8fa',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const language = await getCookieLanguage();
+
   return (
-    <html lang="en">
+    <html lang={language}>
       <body>{children}</body>
     </html>
   );
