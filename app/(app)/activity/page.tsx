@@ -132,10 +132,6 @@ function getFallbackIdentityLabel(
   return nextLabel;
 }
 
-function buildActivityHref(spaceId: string) {
-  return withSpaceParam('/activity', spaceId);
-}
-
 function buildInboxHref(input: {
   spaceId: string;
   view?: 'main' | 'archived';
@@ -162,6 +158,10 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     return null;
   }
 
+  if (!query.space?.trim()) {
+    redirect('/spaces');
+  }
+
   const activeSpaceState = await resolveActiveSpaceForUser({
     userId: user.id,
     requestedSpaceId: query.space,
@@ -173,8 +173,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
   const activeSpaceId = activeSpaceState.activeSpace.id;
 
-  if (!query.space || activeSpaceState.requestedSpaceWasInvalid) {
-    redirect(buildActivityHref(activeSpaceId));
+  if (activeSpaceState.requestedSpaceWasInvalid) {
+    redirect('/spaces');
   }
 
   const language = await getRequestLanguage();

@@ -52,5 +52,5 @@ export async function loginAction(formData: FormData) {
     });
   }
 
-  redirect('/inbox');
+  redirect('/spaces');
 }

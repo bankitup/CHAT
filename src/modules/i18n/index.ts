@@ -40,6 +40,14 @@ type LanguageDictionary = {
     openDms: string;
     openActivity: string;
   };
+  spaces: {
+    title: string;
+    subtitle: string;
+    openSpace: string;
+    currentActivityNote: string;
+    emptyTitle: string;
+    emptyBody: string;
+  };
   settings: {
     backToChats: string;
     heroEyebrow: string;
@@ -333,6 +341,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openChats: 'Open chats',
       openDms: 'Open direct messages',
       openActivity: 'Open activity',
+    },
+    spaces: {
+      title: 'Choose a space',
+      subtitle: 'Pick the project or team context you want to open first.',
+      openSpace: 'Open space',
+      currentActivityNote: 'Current messaging activity is available here for now.',
+      emptyTitle: 'No spaces yet',
+      emptyBody: 'Ask the operator to add you to a space first.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -637,6 +653,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openChats: 'Открыть чаты',
       openDms: 'Открыть личные чаты',
       openActivity: 'Открыть активность',
+    },
+    spaces: {
+      title: 'Выберите пространство',
+      subtitle: 'Сначала откройте нужный проектный или командный контекст.',
+      openSpace: 'Открыть пространство',
+      currentActivityNote: 'Текущая переписка пока доступна здесь.',
+      emptyTitle: 'Пока нет пространств',
+      emptyBody: 'Попросите оператора добавить вас в пространство.',
     },
     settings: {
       backToChats: 'Назад к чатам',

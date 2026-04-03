@@ -10,7 +10,7 @@ export default async function SignupPage() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect('/inbox');
+    redirect('/spaces');
   }
   const language = await getCookieLanguage();
   const t = getTranslations(language);

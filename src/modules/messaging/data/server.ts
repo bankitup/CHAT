@@ -3,6 +3,7 @@ import 'server-only';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
+import { applyConversationVisibility } from '@/modules/messaging/data/visibility';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeRecipientBundleResponse,
@@ -378,53 +379,49 @@ async function getConversationsByVisibility(
   const supabase = await createSupabaseServerClient();
   const baseMembershipSelect =
     'conversation_id, state, last_read_message_seq, last_read_at';
-  let query = supabase
+  const baseMemberships = await supabase
     .from('conversation_members')
-    .select(
-      'conversation_id, state, hidden_at, last_read_message_seq, last_read_at',
-    )
+    .select(baseMembershipSelect)
     .eq('user_id', userId)
     .eq('state', 'active');
 
-  query = archived ? query.not('hidden_at', 'is', null) : query.is('hidden_at', null);
+  if (baseMemberships.error) {
+    throw new Error(baseMemberships.error.message);
+  }
 
-  const { data, error } = await query;
+  const membershipRows = (baseMemberships.data ?? []) as ConversationMemberRow[];
+  const visibilityRows = await supabase
+    .from('conversation_members')
+    .select('conversation_id, hidden_at')
+    .eq('user_id', userId)
+    .eq('state', 'active');
 
-  if (error) {
-    if (isMissingColumnErrorMessage(error.message, 'hidden_at')) {
+  if (visibilityRows.error) {
+    if (isMissingColumnErrorMessage(visibilityRows.error.message, 'hidden_at')) {
       if (archived) {
         return [] satisfies InboxConversation[];
       }
 
-      const fallback = await supabase
-        .from('conversation_members')
-        .select(baseMembershipSelect)
-        .eq('user_id', userId)
-        .eq('state', 'active');
-
-      if (fallback.error) {
-        throw new Error(fallback.error.message);
-      }
-
       return mapInboxConversations(
-        await attachConversationsToMembershipRows(
-          (fallback.data ?? []) as ConversationMemberRow[],
-          supabase,
-          options,
-        ),
+        await attachConversationsToMembershipRows(membershipRows, supabase, options),
         supabase,
       );
     }
 
-    throw new Error(error.message);
+    throw new Error(visibilityRows.error.message);
   }
 
+  const scopedMembershipRows = applyConversationVisibility(
+    membershipRows,
+    archived,
+    (visibilityRows.data ?? []) as Array<{
+      conversation_id: string;
+      hidden_at: string | null;
+    }>,
+  ) as ConversationMemberRow[];
+
   return mapInboxConversations(
-    await attachConversationsToMembershipRows(
-      (data ?? []) as ConversationMemberRow[],
-      supabase,
-      options,
-    ),
+    await attachConversationsToMembershipRows(scopedMembershipRows, supabase, options),
     supabase,
   );
 }

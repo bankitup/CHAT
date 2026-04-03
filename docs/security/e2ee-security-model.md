@@ -80,6 +80,7 @@ Space access boundary note:
 
 - spaces and space membership define who can enter a project/team/client context
 - inbox, activity, and chat entry are scoped by the selected parent space
+- current first-step rollout may place existing activity inside a default `TEST` space
 - spaces do not define who can decrypt DM text
 - space owners and space admins must not gain DM plaintext access by role alone
 

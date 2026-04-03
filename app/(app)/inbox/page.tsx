@@ -248,6 +248,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   if (!user) {
     return null;
   }
+
+  if (!query.space?.trim()) {
+    redirect('/spaces');
+  }
+
   const activeSpaceState = await resolveActiveSpaceForUser({
     userId: user.id,
     requestedSpaceId: query.space,
@@ -259,19 +264,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
   const activeSpaceId = activeSpaceState.activeSpace.id;
 
-  if (
-    !query.space ||
-    activeSpaceState.requestedSpaceWasInvalid
-  ) {
-    redirect(
-      buildInboxHref({
-        filter: activeFilter,
-        query: query.q,
-        create: isCreateOpen,
-        spaceId: activeSpaceId,
-        view: activeView,
-      }),
-    );
+  if (activeSpaceState.requestedSpaceWasInvalid) {
+    redirect('/spaces');
   }
 
   const language = await getRequestLanguage();

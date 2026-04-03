@@ -27,25 +27,68 @@ import {
   updateConversationTitle,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
+import { withSpaceParam } from '@/modules/spaces/url';
 
-function redirectWithError(conversationId: string, message: string): never {
+function readSpaceId(formData: FormData) {
+  return String(formData.get('spaceId') ?? '').trim() || null;
+}
+
+function redirectToInbox(spaceId?: string | null): never {
+  redirect(withSpaceParam('/inbox', spaceId));
+}
+
+function redirectToChat(
+  conversationId: string,
+  spaceId?: string | null,
+  options?: {
+    error?: string | null;
+    settings?: 'open' | null;
+    hash?: string | null;
+  },
+): never {
+  const params = new URLSearchParams();
+
+  if (options?.error?.trim()) {
+    params.set('error', options.error.trim());
+  }
+
+  if (options?.settings === 'open') {
+    params.set('settings', 'open');
+  }
+
+  const baseHref = params.toString()
+    ? `/chat/${conversationId}?${params.toString()}`
+    : `/chat/${conversationId}`;
+  const href = withSpaceParam(baseHref, spaceId);
+
+  redirect(options?.hash ? `${href}${options.hash}` : href);
+}
+
+function redirectWithError(
+  conversationId: string,
+  message: string,
+  spaceId?: string | null,
+): never {
   const params = new URLSearchParams({ error: message });
-  redirect(`/chat/${conversationId}?${params.toString()}`);
+  redirect(withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId));
 }
 
 function redirectWithSettingsError(
   conversationId: string,
   message: string,
+  spaceId?: string | null,
 ): never {
   const params = new URLSearchParams({
     error: message,
     settings: 'open',
   });
-  redirect(`/chat/${conversationId}?${params.toString()}#conversation-settings`);
+  const href = withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId);
+  redirect(`${href}#conversation-settings`);
 }
 
 export async function sendMessageAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const body = String(formData.get('body') ?? '').trim();
   const replyToMessageId = String(formData.get('replyToMessageId') ?? '').trim();
   const attachmentEntry = formData.get('attachment');
@@ -55,22 +98,23 @@ export async function sendMessageAction(formData: FormData) {
       : null;
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   if (!body && !attachment) {
-    redirectWithError(conversationId, 'Write a message or choose a file.');
+    redirectWithError(conversationId, 'Write a message or choose a file.', spaceId);
   }
 
   if (attachment && attachment.size > CHAT_ATTACHMENT_MAX_SIZE_BYTES) {
     redirectWithError(
       conversationId,
       'Attachments can be up to 10 MB in this first version.',
+      spaceId,
     );
   }
 
   if (attachment && !isSupportedChatAttachmentType(attachment.type)) {
-    redirectWithError(conversationId, CHAT_ATTACHMENT_HELP_TEXT);
+    redirectWithError(conversationId, CHAT_ATTACHMENT_HELP_TEXT, spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -79,11 +123,11 @@ export async function sendMessageAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   if (!user.id) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   const userId = user.id;
@@ -91,19 +135,21 @@ export async function sendMessageAction(formData: FormData) {
   const conversationExists = await assertConversationExists(conversationId);
 
   if (!conversationExists) {
-    redirectWithError(conversationId, 'This chat is no longer available.');
+    redirectWithError(conversationId, 'This chat is no longer available.', spaceId);
   }
 
   const isMember = await assertConversationMembership(conversationId, userId);
 
   if (!isMember) {
-    redirectWithError(conversationId, 'You can no longer send messages in this chat.');
+    redirectWithError(conversationId, 'You can no longer send messages in this chat.', spaceId);
   }
 
-  const conversation = await getConversationForUser(conversationId, userId);
+  const conversation = await getConversationForUser(conversationId, userId, {
+    spaceId,
+  });
 
   if (!conversation) {
-    redirectWithError(conversationId, 'This chat is no longer available.');
+    redirectWithError(conversationId, 'This chat is no longer available.', spaceId);
   }
 
   if (conversation.kind === 'dm' && body) {
@@ -111,12 +157,14 @@ export async function sendMessageAction(formData: FormData) {
       redirectWithError(
         conversationId,
         'Encrypted direct messages are not enabled for this account yet.',
+        spaceId,
       );
     }
 
     redirectWithError(
       conversationId,
       'Direct-message text must use the encrypted client path.',
+      spaceId,
     );
   }
 
@@ -130,6 +178,7 @@ export async function sendMessageAction(formData: FormData) {
       redirectWithError(
         conversationId,
         'Reply target is not available in this conversation.',
+        spaceId,
       );
     }
   }
@@ -162,25 +211,26 @@ export async function sendMessageAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to send message.';
 
-    redirectWithError(conversationId, message);
+    redirectWithError(conversationId, message, spaceId);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function toggleReactionAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const messageId = String(formData.get('messageId') ?? '').trim();
   const emoji = String(formData.get('emoji') ?? '').trim();
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   if (!messageId || !emoji || !STARTER_REACTIONS.includes(emoji as (typeof STARTER_REACTIONS)[number])) {
-    redirectWithError(conversationId, 'Invalid reaction.');
+    redirectWithError(conversationId, 'Invalid reaction.', spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -195,13 +245,13 @@ export async function toggleReactionAction(formData: FormData) {
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   const messageExists = await assertMessageInConversation(messageId, conversationId);
 
   if (!messageExists) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -214,28 +264,29 @@ export async function toggleReactionAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to update reaction.';
 
-    redirectWithError(conversationId, message);
+    redirectWithError(conversationId, message, spaceId);
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function editMessageAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const messageId = String(formData.get('messageId') ?? '').trim();
   const body = String(formData.get('body') ?? '').trim();
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   if (!messageId) {
-    redirectWithError(conversationId, 'Choose a message to edit.');
+    redirectWithError(conversationId, 'Choose a message to edit.', spaceId);
   }
 
   if (!body) {
-    redirectWithError(conversationId, 'Edited message cannot be empty.');
+    redirectWithError(conversationId, 'Edited message cannot be empty.', spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -244,13 +295,13 @@ export async function editMessageAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   const isOwner = await assertMessageOwnedByUser(messageId, conversationId, user.id);
@@ -271,17 +322,18 @@ export async function editMessageAction(formData: FormData) {
     .maybeSingle();
 
   if (messageMetadata.error) {
-    redirectWithError(conversationId, 'Unable to load this message right now.');
+    redirectWithError(conversationId, 'Unable to load this message right now.', spaceId);
   }
 
   if (messageMetadata.data?.deleted_at) {
-    redirectWithError(conversationId, 'This message is no longer available.');
+    redirectWithError(conversationId, 'This message is no longer available.', spaceId);
   }
 
   if (messageMetadata.data?.content_mode === 'dm_e2ee_v1') {
     redirectWithError(
       conversationId,
       'Editing encrypted direct messages is not available yet.',
+      spaceId,
     );
   }
 
@@ -296,28 +348,29 @@ export async function editMessageAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to edit message.';
 
-    redirectWithError(conversationId, message);
+    redirectWithError(conversationId, message, spaceId);
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function deleteMessageAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const messageId = String(formData.get('messageId') ?? '').trim();
   const confirmed = String(formData.get('confirmDelete') ?? '').trim();
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   if (!messageId) {
-    redirectWithError(conversationId, 'Choose a message to delete.');
+    redirectWithError(conversationId, 'Choose a message to delete.', spaceId);
   }
 
   if (confirmed !== 'true') {
-    redirectWithError(conversationId, 'Confirm deletion before removing a message.');
+    redirectWithError(conversationId, 'Confirm deletion before removing a message.', spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -326,13 +379,13 @@ export async function deleteMessageAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithError(conversationId, 'Please log in and try again.');
+    redirectWithError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   const isOwner = await assertMessageOwnedByUser(messageId, conversationId, user.id);
@@ -354,23 +407,24 @@ export async function deleteMessageAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to delete message.';
 
-    redirectWithError(conversationId, message);
+    redirectWithError(conversationId, message, spaceId);
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function updateConversationTitleAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const title = String(formData.get('title') ?? '').trim();
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   if (!title) {
-    redirectWithSettingsError(conversationId, 'Group title cannot be empty.');
+    redirectWithSettingsError(conversationId, 'Group title cannot be empty.', spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -379,13 +433,13 @@ export async function updateConversationTitleAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithSettingsError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -398,19 +452,20 @@ export async function updateConversationTitleAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to update group title.';
 
-    redirectWithSettingsError(conversationId, message);
+    redirectWithSettingsError(conversationId, message, spaceId);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function hideConversationAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -425,7 +480,7 @@ export async function hideConversationAction(formData: FormData) {
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -437,30 +492,32 @@ export async function hideConversationAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to hide this chat.';
 
-    redirectWithSettingsError(conversationId, message);
+    redirectWithSettingsError(conversationId, message, spaceId);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect('/inbox');
+  redirectToInbox(spaceId);
 }
 
 export async function updateConversationNotificationLevelAction(
   formData: FormData,
 ) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const notificationLevel = String(
     formData.get('notificationLevel') ?? '',
   ).trim();
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   if (notificationLevel !== 'default' && notificationLevel !== 'muted') {
     redirectWithSettingsError(
       conversationId,
       'Choose a valid notification setting.',
+      spaceId,
     );
   }
 
@@ -476,7 +533,7 @@ export async function updateConversationNotificationLevelAction(
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -491,11 +548,11 @@ export async function updateConversationNotificationLevelAction(
         ? error.message
         : 'Unable to update notification settings.';
 
-    redirectWithSettingsError(conversationId, message);
+    redirectWithSettingsError(conversationId, message, spaceId);
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function markConversationReadAction(formData: FormData) {
@@ -543,13 +600,14 @@ export async function markConversationReadAction(formData: FormData) {
 
 export async function addGroupParticipantsAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const participantUserIds = formData
     .getAll('participantUserIds')
     .map((value) => String(value).trim())
     .filter(Boolean);
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -558,13 +616,13 @@ export async function addGroupParticipantsAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithSettingsError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -577,20 +635,24 @@ export async function addGroupParticipantsAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to add participants.';
 
-    redirectWithSettingsError(conversationId, message);
+    redirectWithSettingsError(conversationId, message, spaceId);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
+  redirectToChat(conversationId, spaceId, {
+    settings: 'open',
+    hash: '#conversation-settings',
+  });
 }
 
 export async function removeGroupParticipantAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
   const targetUserId = String(formData.get('targetUserId') ?? '').trim();
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -599,13 +661,13 @@ export async function removeGroupParticipantAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithSettingsError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -618,19 +680,20 @@ export async function removeGroupParticipantAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to remove participant.';
 
-    redirectWithSettingsError(conversationId, message);
+    redirectWithSettingsError(conversationId, message, spaceId);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function leaveGroupAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
 
   if (!conversationId) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   const supabase = await createSupabaseServerClient();
@@ -639,13 +702,13 @@ export async function leaveGroupAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithSettingsError(conversationId, 'Please log in and try again.');
+    redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
-    redirect('/inbox');
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -657,10 +720,10 @@ export async function leaveGroupAction(formData: FormData) {
     const message =
       error instanceof Error ? error.message : 'Unable to leave this group.';
 
-    redirectWithSettingsError(conversationId, message);
+    redirectWithSettingsError(conversationId, message, spaceId);
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect('/inbox');
+  redirectToInbox(spaceId);
 }

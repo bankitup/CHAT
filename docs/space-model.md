@@ -19,6 +19,11 @@ In v1, a space:
 
 The active app context should become one selected space at a time.
 
+Current rollout note:
+
+- until broader space UX lands, current messaging activity is temporarily scoped into one default space named `TEST`
+- authenticated users now land on a space selection screen first, then enter chats inside the chosen space
+
 ## Core model
 
 ### `public.spaces`
@@ -115,17 +120,35 @@ Implemented now:
 
 - explicit schema design for spaces
 - migration draft for `spaces`, `space_members`, and `conversations.space_id`
+- migration draft to seed a default `TEST` space and backfill current conversations into it
 - documentation of the access boundary and DM-in-space rules
 - runtime active-space scoping for inbox, activity, and chat entry via `?space=<space_id>`
+- post-login routing into a minimal space selection screen before messenger entry
+- inbox, DMs, and Activity require an explicit selected space and redirect back to `/spaces` when that context is missing or invalid
 - conversation access validation against the parent conversation space
 - space-aware DM/group creation inputs from the inbox flow
+- main chat action redirects preserve the active selected space for the current v1 messaging flow
 
 Not implemented yet:
 
 - full active-space switcher UI
+- persisted active-space selection beyond the current explicit `?space=<space_id>` entry model
 - space-aware settings UI
 - realtime filtering refinements by active space
 - full space scoping across every remaining action redirect and secondary workflow
+- richer multi-space management beyond simple selection
+
+## Default TEST space behavior
+
+For the first space-aware rollout step, the app treats existing messaging activity as belonging to one default space named `TEST`.
+
+That means:
+
+- legacy conversations are backfilled into `TEST`
+- users who already participate in conversations are added to `TEST`
+- new DM and group activity continues inside the selected space, which will initially be `TEST` for current users
+
+This is a migration and rollout boundary, not a long-term product limit. The purpose is to establish one explicit space before adding broader space selection UX.
 
 ## Query and routing surfaces to scope next
 
@@ -150,5 +173,5 @@ These are the main surfaces that should become more fully selected-space aware n
 
 1. Add a lightweight active-space switcher and selected-space persistence UX.
 2. Scope the remaining chat action redirects and realtime helpers more explicitly by `space_id`.
-3. Backfill legacy conversations into explicit spaces and then tighten
+3. Split activity out of the default `TEST` space into user-meaningful spaces and then tighten
    `public.conversations.space_id` to `not null`.

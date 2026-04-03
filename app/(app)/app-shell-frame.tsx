@@ -24,11 +24,14 @@ export function AppShellFrame({
   const searchParams = useSearchParams();
   const t = getTranslations(language);
   const isChatRoute = pathname.startsWith('/chat/');
+  const isSpacesRoute = pathname.startsWith('/spaces');
   const isActivityRoute = pathname.startsWith('/activity');
   const isDmInboxRoute =
     pathname.startsWith('/inbox') && searchParams.get('filter') === 'dm';
   const activeSpaceId = searchParams.get('space');
-  const showBottomNav = !isChatRoute;
+  const navSpaceHref = (pathname: string) =>
+    activeSpaceId ? withSpaceParam(pathname, activeSpaceId) : '/spaces';
+  const showBottomNav = !isChatRoute && !isSpacesRoute;
   const activeTab = isActivityRoute
     ? 'activity'
     : isDmInboxRoute
@@ -58,7 +61,7 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href={withSpaceParam('/inbox', activeSpaceId)}
+              href={navSpaceHref('/inbox')}
             >
               <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.chats}</span>
@@ -71,7 +74,7 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href={withSpaceParam('/inbox?filter=dm', activeSpaceId)}
+              href={navSpaceHref('/inbox?filter=dm')}
             >
               <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.dms}</span>
@@ -84,7 +87,7 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href={withSpaceParam('/activity', activeSpaceId)}
+              href={navSpaceHref('/activity')}
             >
               <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.activity}</span>

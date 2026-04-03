@@ -15,6 +15,10 @@ future foundation: selected-space routing currently depends on
 `public.spaces`, `public.space_members`, and `public.conversations.space_id`,
 even though full space-switcher UX is still not implemented.
 
+Current rollout assumption:
+
+- existing messaging activity is backfilled into one default space named `TEST`
+
 ## Tables in active use
 
 - `public.profiles`
@@ -271,6 +275,7 @@ Current assumptions:
 - a user can belong to multiple spaces
 - spaces are the outer access boundary for conversations
 - active-space routing resolves against this table at runtime
+- current first-step rollout expects a default `TEST` space to exist
 
 ### `public.space_members`
 
@@ -293,6 +298,7 @@ Current assumptions:
 - exactly one owner per space is the intended v1 default
 - `space_members` is broader than `conversation_members`; it is the outer access boundary, not the per-chat participant list
 - inbox, activity, and chat access rely on `space_members` to decide which spaces a user may actively enter
+- current first-step rollout backfills current conversation participants into the default `TEST` space
 
 ### `public.conversations.space_id`
 
@@ -305,7 +311,7 @@ Prepared role for space scoping:
 Current migration shape:
 
 - add `space_id` nullable first for safe backfill
-- backfill legacy conversations into explicit spaces
+- backfill legacy conversations into the default `TEST` space first
 - tighten to `not null` as the space-scoped runtime becomes universal
 - conversation membership should only be considered valid when it remains inside the parent space boundary
 - inbox and activity filters already scope by selected `space_id`
@@ -356,6 +362,9 @@ and the runtime query/routing layer is actively scoped to a selected space.
 
 1. `public.spaces`, `public.space_members`, and `public.conversations.space_id`
    Source file: [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql)
+
+2. default `TEST` space seed and backfill of current conversations/members
+   Source file: [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
 
 ## Required migrations before enabling DM E2EE bootstrap
 
