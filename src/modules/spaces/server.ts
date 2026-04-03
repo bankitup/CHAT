@@ -86,10 +86,16 @@ export function isSpaceMembersSchemaCacheErrorMessage(message: string) {
   );
 }
 
-export async function getUserSpaces(userId: string) {
+export async function getUserSpaces(
+  userId: string,
+  options?: {
+    source?: string;
+  },
+) {
   const supabase = await createSupabaseServerClient();
-  logSpacesDiagnostics('getUserSpaces:start');
-  logSpacesDiagnostics('space_members:query-start', { queried: true });
+  const source = options?.source ?? 'unknown';
+  logSpacesDiagnostics('getUserSpaces:start', { source });
+  logSpacesDiagnostics('space_members:query-start', { queried: true, source });
   const { data: memberships, error: membershipError } = await supabase
     .from('space_members')
     .select('space_id, role, created_at')
@@ -99,6 +105,7 @@ export async function getUserSpaces(userId: string) {
   if (membershipError) {
     logSpacesDiagnostics('space_members:query-error', {
       queried: true,
+      source,
       message: membershipError.message,
     });
     if (isMissingRelationErrorMessage(membershipError.message, 'space_members')) {
@@ -111,6 +118,7 @@ export async function getUserSpaces(userId: string) {
   }
   logSpacesDiagnostics('space_members:query-ok', {
     queried: true,
+    source,
     count: (memberships ?? []).length,
   });
 
@@ -125,7 +133,7 @@ export async function getUserSpaces(userId: string) {
   );
 
   if (spaceIds.length === 0) {
-    logSpacesDiagnostics('getUserSpaces:done', { count: 0 });
+    logSpacesDiagnostics('getUserSpaces:done', { count: 0, source });
     return [] as UserSpaceRecord[];
   }
 
@@ -136,6 +144,7 @@ export async function getUserSpaces(userId: string) {
 
   if (spacesError) {
     logSpacesDiagnostics('spaces:query-error', {
+      source,
       message: spacesError.message,
     });
     if (isMissingRelationErrorMessage(spacesError.message, 'spaces')) {
@@ -197,7 +206,10 @@ export async function getUserSpaces(userId: string) {
       return (left?.name ?? '').localeCompare(right?.name ?? '');
     }) as UserSpaceRecord[];
 
-  logSpacesDiagnostics('getUserSpaces:done', { count: resolvedSpaces.length });
+  logSpacesDiagnostics('getUserSpaces:done', {
+    count: resolvedSpaces.length,
+    source,
+  });
   return resolvedSpaces;
 }
 
@@ -210,7 +222,9 @@ export async function resolveActiveSpaceForUser(input: {
     source: input.source ?? 'unknown',
     hasRequestedSpaceId: Boolean(input.requestedSpaceId?.trim()),
   });
-  const spaces = await getUserSpaces(input.userId);
+  const spaces = await getUserSpaces(input.userId, {
+    source: input.source ?? 'unknown',
+  });
   const requestedSpaceId = input.requestedSpaceId?.trim() || null;
   const requestedSpace =
     requestedSpaceId

@@ -39,7 +39,9 @@ export default async function SpacesPage() {
 
   try {
     logDiagnostics('loader:getUserSpaces:start');
-    spaces = await getUserSpaces(user.id);
+    spaces = await getUserSpaces(user.id, {
+      source: 'spaces-page',
+    });
     logDiagnostics('loader:getUserSpaces:ok', { count: spaces.length });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
