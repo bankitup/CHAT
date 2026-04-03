@@ -1409,6 +1409,9 @@ export async function publishCurrentUserDmE2eeDevice(
     throw new Error(retireOthers.error.message);
   }
 
+  // A repaired device publish must replace the full server-side prekey batch for
+  // this device record. Keeping previously claimed rows around can block
+  // re-insert on the unique (device_id, prekey_id) constraint during republish.
   const deleteExistingPrekeys = await supabase
     .from('device_one_time_prekeys')
     .delete()
