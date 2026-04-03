@@ -68,14 +68,6 @@ function isMissingRelationErrorMessage(message: string, relationName: string) {
   );
 }
 
-function isMissingColumnErrorMessage(message: string, columnName: string) {
-  const normalizedMessage = message.toLowerCase();
-  return (
-    normalizedMessage.includes('column') &&
-    normalizedMessage.includes(columnName.toLowerCase())
-  );
-}
-
 export function isSpaceMembersSchemaCacheErrorMessage(message: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -98,9 +90,9 @@ export async function getUserSpaces(
   logSpacesDiagnostics('space_members:query-start', { queried: true, source });
   const { data: memberships, error: membershipError } = await supabase
     .from('space_members')
-    .select('space_id, role, created_at')
+    .select('space_id, role, joined_at')
     .eq('user_id', userId)
-    .order('created_at', { ascending: true });
+    .order('joined_at', { ascending: true });
 
   if (membershipError) {
     logSpacesDiagnostics('space_members:query-error', {
@@ -125,7 +117,7 @@ export async function getUserSpaces(
   const membershipRows = (memberships ?? []) as Array<{
     space_id: string;
     role: SpaceRole;
-    created_at?: string | null;
+    joined_at?: string | null;
   }>;
 
   const spaceIds = Array.from(
@@ -139,7 +131,7 @@ export async function getUserSpaces(
 
   const { data: spaces, error: spacesError } = await supabase
     .from('spaces')
-    .select('id, name, created_by, created_at, updated_at')
+    .select('id, name, created_by, created_at')
     .in('id', spaceIds);
 
   if (spacesError) {
@@ -153,12 +145,6 @@ export async function getUserSpaces(
       );
     }
 
-    if (isMissingColumnErrorMessage(spacesError.message, 'updated_at')) {
-      throw createSpaceSchemaRequirementError(
-        'Active space resolution requires public.spaces.updated_at.',
-      );
-    }
-
     throw new Error(spacesError.message);
   }
 
@@ -168,7 +154,6 @@ export async function getUserSpaces(
       name: string;
       created_by: string;
       created_at: string | null;
-      updated_at: string | null;
     }>).map((space) => [
       space.id,
       {
@@ -176,9 +161,12 @@ export async function getUserSpaces(
         name: space.name,
         createdBy: space.created_by,
         createdAt: space.created_at,
-        updatedAt: space.updated_at,
+        updatedAt: null,
       } satisfies SpaceRecord,
     ]),
+  );
+  const joinedAtBySpaceId = new Map(
+    membershipRows.map((membership) => [membership.space_id, membership.joined_at ?? '']),
   );
 
   const resolvedSpaces = membershipRows
@@ -196,8 +184,8 @@ export async function getUserSpaces(
     })
     .filter(Boolean)
     .sort((left, right) => {
-      const leftValue = left?.createdAt ?? '';
-      const rightValue = right?.createdAt ?? '';
+      const leftValue = joinedAtBySpaceId.get(left?.id ?? '') ?? '';
+      const rightValue = joinedAtBySpaceId.get(right?.id ?? '') ?? '';
 
       if (leftValue !== rightValue) {
         return leftValue.localeCompare(rightValue);
