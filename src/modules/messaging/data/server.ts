@@ -220,7 +220,7 @@ export function getConversationDisplayName({
     return labels.join(', ') || 'New group';
   }
 
-  return labels[0] || 'Conversation';
+  return labels[0] || 'New chat';
 }
 
 export function getConversationParticipantSummary(

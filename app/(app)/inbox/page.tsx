@@ -38,8 +38,10 @@ type ConversationListItem = {
   isGroupConversation: boolean;
   title: string;
   preview: string;
-  kindLabel: string;
-  readStateLabel: string;
+  metaLabels: Array<{
+    label: string;
+    tone: 'default' | 'archived';
+  }>;
   recencyLabel: string;
   timestampLabel: string;
   participants: Array<{
@@ -277,27 +279,31 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       isGroupConversation ? 3 : undefined,
     );
     const preview = isGroupConversation
-      ? participantSummary
-        ? participantSummary
-        : 'People in this chat'
-      : otherParticipantLabels[0]
-        ? `${otherParticipantLabels[0]}`
-        : 'Conversation';
+      ? participantSummary || (conversation.lastMessageAt ? 'Group chat' : 'Start the group')
+      : conversation.lastMessageAt
+        ? otherParticipantLabels[0]
+          ? `Chat with ${otherParticipantLabels[0]}`
+          : 'Direct chat'
+        : otherParticipantLabels[0]
+          ? `Say hi to ${otherParticipantLabels[0]}`
+          : 'Start a chat';
     const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
     const hasUnread = conversation.unreadCount > 0;
-    const readStateLabel = hasUnread
-      ? 'New'
-      : conversation.lastMessageAt
-        ? 'Read'
-        : 'Start';
+    const metaLabels = [
+      ...(isGroupConversation
+        ? [{ label: 'Group', tone: 'default' as const }]
+        : []),
+      ...(activeView === 'archived'
+        ? [{ label: 'Archived', tone: 'archived' as const }]
+        : []),
+    ];
 
     return {
       conversationId: conversation.conversationId,
       isGroupConversation,
       title,
       preview,
-      kindLabel: isGroupConversation ? 'Group' : 'DM',
-      readStateLabel,
+      metaLabels,
       recencyLabel: formatRecency(lastActivityAt),
       timestampLabel: formatTimestamp(lastActivityAt),
       participants: otherParticipants,
@@ -336,13 +342,19 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   ).length;
   const archivedConversationCount = archivedConversations.length;
   const searchScopeSummary = searchTerm
-    ? [
-        formatSearchResultLabel(filteredConversationItems.length, 'chat', 'chats'),
-        formatSearchResultLabel(filteredAvailableUserEntries.length, 'person', 'people'),
-      ].join(' · ')
-    : activeView === 'archived'
-      ? 'Search archived chats and people'
-      : 'Search chats and people';
+    ? (() => {
+        const parts = [
+          filteredConversationItems.length > 0
+            ? formatSearchResultLabel(filteredConversationItems.length, 'chat', 'chats')
+            : null,
+          filteredAvailableUserEntries.length > 0
+            ? formatSearchResultLabel(filteredAvailableUserEntries.length, 'person', 'people')
+            : null,
+        ].filter(Boolean);
+
+        return parts.length > 0 ? parts.join(' · ') : 'No chats or people';
+      })()
+    : null;
 
   return (
     <section className="stack inbox-screen inbox-screen-minimal">
@@ -358,8 +370,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             <p className="muted inbox-home-subtitle">
               {activeView === 'archived'
                 ? archivedConversationCount > 0
-                  ? `${archivedConversationCount} archived`
-                  : 'Archived chats live here'
+                  ? `${archivedConversationCount} hidden from your inbox`
+                  : 'Hidden chats stay here'
                 : unreadConversationCount > 0
                   ? `${unreadConversationCount} new`
                   : conversationItems.length > 0
@@ -452,36 +464,37 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             >
               Groups
             </Link>
+            {(archivedConversationCount > 0 || activeView === 'archived') ? (
+              <Link
+                className={
+                  activeView === 'archived'
+                    ? 'inbox-filter-pill inbox-filter-pill-active'
+                    : 'inbox-filter-pill'
+                }
+                href={
+                  activeView === 'archived'
+                    ? buildInboxHref({
+                        filter: activeFilter,
+                        query: query.q,
+                      })
+                    : buildInboxHref({
+                        filter: activeFilter,
+                        query: query.q,
+                        view: 'archived',
+                      })
+                }
+              >
+                {activeView === 'archived'
+                  ? 'Inbox'
+                  : `Archived${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
+              </Link>
+            ) : null}
           </div>
 
-          <div className="inbox-search-meta">
-            <p className="muted inbox-search-scope">{searchScopeSummary}</p>
-            <div className="inbox-search-meta-actions">
-              {(archivedConversationCount > 0 || activeView === 'archived') ? (
-                <Link
-                  className={
-                    activeView === 'archived'
-                      ? 'inbox-archive-link inbox-archive-link-active'
-                      : 'inbox-archive-link'
-                  }
-                  href={
-                    activeView === 'archived'
-                      ? buildInboxHref({
-                          filter: activeFilter,
-                          query: query.q,
-                        })
-                      : buildInboxHref({
-                          filter: activeFilter,
-                          query: query.q,
-                          view: 'archived',
-                        })
-                  }
-                >
-                  {activeView === 'archived'
-                    ? 'Back to chats'
-                    : `Archived${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
-                </Link>
-              ) : null}
+          {searchTerm ? (
+            <div className="inbox-search-meta">
+              <p className="muted inbox-search-scope">{searchScopeSummary}</p>
+              <div className="inbox-search-meta-actions">
               {searchTerm ? (
                 <Link
                   className="inbox-search-clear"
@@ -490,12 +503,21 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   Clear
                 </Link>
               ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
       {query.error ? <p className="notice notice-error">{query.error}</p> : null}
+
+      {activeView === 'archived' ? (
+        <section className="card stack inbox-archived-note">
+          <p className="muted inbox-archived-note-copy">
+            Archived chats are only hidden from your inbox. They still keep their messages and can return anytime.
+          </p>
+        </section>
+      ) : null}
 
       {conversationItems.length === 0 ? (
           <section className="card stack empty-card inbox-empty-state">
@@ -504,7 +526,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           </h2>
           <p className="muted">
             {activeView === 'archived'
-              ? 'Hidden chats will appear here.'
+              ? 'Chats you hide from your inbox will appear here.'
               : 'Start one from the + button.'}
           </p>
         </section>
@@ -516,7 +538,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               : 'No matching chats'}
           </h2>
           <p className="muted">
-            Try a different filter or clear the search.
+            Try another search or filter.
           </p>
         </section>
       ) : (
@@ -597,18 +619,18 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
                     <div className="conversation-footer">
                       <div className="conversation-footer-meta">
-                        <span className="conversation-kind-label">
-                          {conversation.kindLabel}
-                        </span>
-                        <span
-                          className={
-                            conversation.hasUnread
-                              ? 'conversation-read-state conversation-read-state-unread'
-                              : 'muted conversation-read-state'
-                          }
-                        >
-                          {conversation.readStateLabel}
-                        </span>
+                        {conversation.metaLabels.map((metaLabel) => (
+                          <span
+                            key={metaLabel.label}
+                            className={
+                              metaLabel.tone === 'archived'
+                                ? 'conversation-kind-label conversation-kind-label-archived'
+                                : 'conversation-kind-label'
+                            }
+                          >
+                            {metaLabel.label}
+                          </span>
+                        ))}
                       </div>
                       <p className="muted conversation-timestamp">
                         {conversation.timestampLabel}
@@ -627,7 +649,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                       className="button button-compact button-secondary conversation-restore-button"
                       type="submit"
                     >
-                      Restore
+                      Show in inbox
                     </button>
                   </form>
                 ) : null}

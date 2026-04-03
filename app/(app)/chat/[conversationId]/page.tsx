@@ -538,7 +538,7 @@ export default async function ChatPage({
                 <p className="muted conversation-info-subtitle">
                   {conversation.kind === 'group'
                     ? groupMemberSummary
-                    : 'Person'}
+                    : 'Direct chat'}
                 </p>
               </div>
             </div>
@@ -586,8 +586,8 @@ export default async function ChatPage({
               <h3 className="card-title">People</h3>
               <p className="muted conversation-settings-note">
                 {conversation.kind === 'group'
-                  ? `${participants.length} active member${participants.length === 1 ? '' : 's'}`
-                  : 'The people in this chat'}
+                  ? `${participants.length} member${participants.length === 1 ? '' : 's'}`
+                  : 'In this chat'}
               </p>
             </div>
 
@@ -650,7 +650,7 @@ export default async function ChatPage({
               <div className="stack conversation-settings-panel-copy">
                 <h3 className="card-title">Group</h3>
                 <p className="muted conversation-settings-note">
-                  A few lightweight group actions.
+                  Name and people.
                 </p>
               </div>
 
@@ -663,7 +663,7 @@ export default async function ChatPage({
                     </p>
                     {!canEditGroupTitle ? (
                       <p className="muted conversation-settings-note">
-                        Only the owner can change it.
+                        Owner only.
                       </p>
                     ) : null}
                   </div>
@@ -700,7 +700,7 @@ export default async function ChatPage({
                     <h4 className="conversation-settings-subtitle">Add people</h4>
                     {!canManageGroupParticipants ? (
                       <p className="muted conversation-settings-note">
-                        Only the owner can add or remove people.
+                        Owner only.
                       </p>
                     ) : null}
                   </div>
@@ -775,7 +775,7 @@ export default async function ChatPage({
             <div className="stack conversation-settings-panel-copy">
               <h3 className="card-title">Notifications</h3>
               <p className="muted conversation-settings-note">
-                Choose how active this chat should feel for you.
+                How this chat notifies you.
               </p>
             </div>
 
@@ -799,12 +799,12 @@ export default async function ChatPage({
                 type="submit"
                 value="default"
               >
-                <span className="conversation-choice-copy">
-                  <span className="conversation-choice-title">Default</span>
-                  <span className="conversation-choice-note">
-                    Follow your normal app setting for this chat.
+                  <span className="conversation-choice-copy">
+                    <span className="conversation-choice-title">Default</span>
+                    <span className="conversation-choice-note">
+                    Use your usual setting.
+                    </span>
                   </span>
-                </span>
               </button>
 
               <button
@@ -817,12 +817,12 @@ export default async function ChatPage({
                 type="submit"
                 value="muted"
               >
-                <span className="conversation-choice-copy">
-                  <span className="conversation-choice-title">Muted</span>
-                  <span className="conversation-choice-note">
-                    Keep this chat quieter when alerts arrive later.
+                  <span className="conversation-choice-copy">
+                    <span className="conversation-choice-title">Muted</span>
+                    <span className="conversation-choice-note">
+                    Keep this chat quieter.
+                    </span>
                   </span>
-                </span>
               </button>
             </form>
           </section>
@@ -831,7 +831,7 @@ export default async function ChatPage({
             <div className="stack conversation-settings-panel-copy">
               <h3 className="card-title">Inbox</h3>
               <p className="muted conversation-settings-note">
-                Hide this chat from your main list without deleting it.
+                Hide this chat from your inbox only.
               </p>
             </div>
 

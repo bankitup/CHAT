@@ -73,7 +73,7 @@ export function NotificationReadinessPanel() {
     <section className="card stack settings-card">
       <div className="stack settings-card-copy">
         <h2 className="section-title">{statusCopy.title}</h2>
-        <p className="muted">Choose how this device stays in touch.</p>
+        <p className="muted">Alerts for this device.</p>
       </div>
 
       <div className="cluster settings-summary">
@@ -82,11 +82,11 @@ export function NotificationReadinessPanel() {
 
       <div className="settings-capability-list">
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Alerts</span>
+          <span className="settings-capability-label">Status</span>
           <span className="settings-capability-value">{statusCopy.settingValue}</span>
         </div>
         <div className="settings-capability-row">
-          <span className="settings-capability-label">Browser permission</span>
+          <span className="settings-capability-label">Permission</span>
           <span className="settings-capability-value">
             {readiness?.permission === 'unsupported'
               ? 'Unavailable'
@@ -120,7 +120,7 @@ export function NotificationReadinessPanel() {
 
         {readiness?.status === 'enabled' ? (
           <p className="muted settings-note">
-            Message alerts will arrive in a later update.
+            Message alerts are coming soon.
           </p>
         ) : null}
 

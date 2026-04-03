@@ -63,7 +63,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           />
 
           <div className="stack profile-settings-copy">
-            <p className="eyebrow">Account</p>
+            <p className="eyebrow">You</p>
             <h1 className="section-title">{profileLabel}</h1>
             <p className="muted profile-settings-email">
               {profile.email ?? 'Your profile'}
@@ -78,7 +78,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <section className="card stack settings-card">
         <div className="stack settings-card-copy">
           <h2 className="section-title">Profile</h2>
-          <p className="muted">Photo and display name</p>
+          <p className="muted">Photo and name</p>
         </div>
 
         <form action={updateProfileAction} className="stack profile-settings-form">
@@ -117,7 +117,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <section className="card stack settings-card">
         <div className="stack settings-card-copy">
           <h2 className="section-title">Log out</h2>
-          <p className="muted">Sign out on this device.</p>
+          <p className="muted">Sign out on this device</p>
         </div>
 
         <form action={logoutAction}>

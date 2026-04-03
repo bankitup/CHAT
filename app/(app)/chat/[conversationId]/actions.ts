@@ -118,6 +118,13 @@ export async function sendMessageAction(formData: FormData) {
         replyToMessageId: replyToMessageId || null,
       });
     }
+
+    // Sending your own message should also advance your read position.
+    await markConversationRead({
+      conversationId,
+      userId,
+      lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Unable to send message.';
