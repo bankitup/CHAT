@@ -30,6 +30,7 @@ import {
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
+import { resolveV1TestSpaceFallback } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
 import Link from 'next/link';
@@ -282,33 +283,45 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     redirect('/spaces');
   }
 
-  let activeSpaceState: Awaited<ReturnType<typeof resolveActiveSpaceForUser>>;
+  let activeSpaceId: string;
   try {
-    activeSpaceState = await resolveActiveSpaceForUser({
+    const activeSpaceState = await resolveActiveSpaceForUser({
       userId: user.id,
       requestedSpaceId: query.space,
       source: 'inbox-page',
     });
+
+    if (!activeSpaceState.activeSpace) {
+      logDiagnostics('no-active-space-notFound');
+      notFound();
+    }
+
+    if (activeSpaceState.requestedSpaceWasInvalid) {
+      logDiagnostics('invalid-space-redirect');
+      redirect('/spaces');
+    }
+
+    activeSpaceId = activeSpaceState.activeSpace.id;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
     if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-      redirect('/spaces');
+      const fallbackSpace = await resolveV1TestSpaceFallback({
+        requestedSpaceId: query.space,
+        source: 'inbox-page',
+      });
+
+      if (!fallbackSpace) {
+        redirect('/spaces');
+      }
+
+      activeSpaceId = fallbackSpace.id;
+      logDiagnostics('active-space-fallback-v1-test', {
+        spaceId: fallbackSpace.id,
+      });
+    } else {
+      throw error;
     }
-
-    throw error;
-  }
-
-  if (!activeSpaceState.activeSpace) {
-    logDiagnostics('no-active-space-notFound');
-    notFound();
-  }
-
-  const activeSpaceId = activeSpaceState.activeSpace.id;
-
-  if (activeSpaceState.requestedSpaceWasInvalid) {
-    logDiagnostics('invalid-space-redirect');
-    redirect('/spaces');
   }
   logDiagnostics('active-space-ok', { hasActiveSpace: true });
 
@@ -365,9 +378,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return value;
       })
       .catch((error) => {
-        logDiagnostics('loader:users-error', {
-          message: error instanceof Error ? error.message : String(error),
-        });
+        const message = error instanceof Error ? error.message : String(error);
+        logDiagnostics('loader:users-error', { message });
+
+        if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+          logDiagnostics('loader:users-fallback-empty');
+          return [] as Awaited<ReturnType<typeof getAvailableUsers>>;
+        }
+
         throw error;
       }),
   ]);

@@ -128,6 +128,7 @@ Implemented now:
 - conversation access validation against the parent conversation space
 - space-aware DM/group creation inputs from the inbox flow
 - main chat action redirects preserve the active selected space for the current v1 messaging flow
+- temporary v1 stability fallback for `/inbox` entry: when `space_members` lookup fails via API/schema-cache mismatch, the requested space may be accepted only if it resolves to the default `TEST` space
 
 Not implemented yet:
 

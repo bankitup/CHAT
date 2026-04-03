@@ -78,6 +78,56 @@ export function isSpaceMembersSchemaCacheErrorMessage(message: string) {
   );
 }
 
+export async function resolveV1TestSpaceFallback(input: {
+  requestedSpaceId?: string | null;
+  source?: string;
+}) {
+  const requestedSpaceId = input.requestedSpaceId?.trim() || null;
+
+  if (!requestedSpaceId) {
+    return null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  logSpacesDiagnostics('v1-test-fallback:lookup-start', {
+    source: input.source ?? 'unknown',
+    hasRequestedSpaceId: true,
+  });
+  const { data, error } = await supabase
+    .from('spaces')
+    .select('id, name')
+    .eq('id', requestedSpaceId)
+    .maybeSingle();
+
+  if (error) {
+    logSpacesDiagnostics('v1-test-fallback:lookup-error', {
+      source: input.source ?? 'unknown',
+      message: error.message,
+    });
+    return null;
+  }
+
+  const row = data as { id: string; name: string | null } | null;
+  const spaceName = row?.name?.trim().toUpperCase() ?? '';
+
+  if (!row || spaceName !== 'TEST') {
+    logSpacesDiagnostics('v1-test-fallback:not-eligible', {
+      source: input.source ?? 'unknown',
+      requestedSpaceId,
+    });
+    return null;
+  }
+
+  logSpacesDiagnostics('v1-test-fallback:resolved', {
+    source: input.source ?? 'unknown',
+    requestedSpaceId,
+  });
+  return {
+    id: row.id,
+    name: row.name ?? 'TEST',
+  };
+}
+
 export async function getUserSpaces(
   userId: string,
   options?: {
