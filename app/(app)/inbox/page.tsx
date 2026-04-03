@@ -23,10 +23,10 @@ import {
   loadInboxConversationsForSsr,
 } from '@/modules/messaging/data/inbox-ssr-stability';
 import {
-  getIdentityLabel,
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
+import { getIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';

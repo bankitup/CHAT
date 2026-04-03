@@ -16,10 +16,10 @@ import {
 } from '@/modules/messaging/data/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import {
-  getIdentityLabel,
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
+import { getIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
   resolveV1TestSpaceFallback,
   resolveActiveSpaceForUser,

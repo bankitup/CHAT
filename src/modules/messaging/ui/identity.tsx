@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+export { getIdentityLabel } from './identity-label';
 
 type IdentityRecord = {
   userId: string;
@@ -51,13 +52,6 @@ function isRenderableAvatarPath(value: string | null | undefined) {
     value.startsWith('http://') ||
     value.startsWith('/')
   );
-}
-
-export function getIdentityLabel(
-  identity: IdentityRecord | null | undefined,
-  fallbackLabel: string,
-) {
-  return identity?.displayName?.trim() || fallbackLabel;
 }
 
 export function getIdentityInitials(label: string) {

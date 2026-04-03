@@ -33,10 +33,10 @@ import {
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
-  getIdentityLabel,
   IdentityAvatar,
   IdentityAvatarStack,
 } from '@/modules/messaging/ui/identity';
+import { getIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
