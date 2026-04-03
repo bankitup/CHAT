@@ -21,25 +21,25 @@ export function DmE2eeAuthenticatedBoundary({
     let cancelled = false;
 
     void (async () => {
-      const previousUserId = previousUserIdRef.current;
-
-      if (previousUserId && previousUserId !== userId) {
-        await clearAllLocalDmE2eeState();
-      }
-
-      previousUserIdRef.current = userId;
-      await keepOnlyLocalDmE2eeStateForUser(userId);
-
-      if (!enabled) {
-        await clearLocalDmE2eeStateForUser(userId);
-        return;
-      }
-
       try {
+        const previousUserId = previousUserIdRef.current;
+
+        if (previousUserId && previousUserId !== userId) {
+          await clearAllLocalDmE2eeState();
+        }
+
+        previousUserIdRef.current = userId;
+        await keepOnlyLocalDmE2eeStateForUser(userId);
+
+        if (!enabled) {
+          await clearLocalDmE2eeStateForUser(userId);
+          return;
+        }
+
         await ensureDmE2eeDeviceRegistered(userId);
       } catch (error) {
         if (!cancelled) {
-          console.error('DM E2EE bootstrap failed.', error);
+          console.error('DM E2EE boundary step failed.', error);
         }
       }
     })();
@@ -54,7 +54,9 @@ export function DmE2eeAuthenticatedBoundary({
 
 export function DmE2eePublicBoundaryCleanup() {
   useEffect(() => {
-    void clearAllLocalDmE2eeState();
+    void clearAllLocalDmE2eeState().catch((error) => {
+      console.error('DM E2EE public cleanup failed.', error);
+    });
   }, []);
 
   return null;

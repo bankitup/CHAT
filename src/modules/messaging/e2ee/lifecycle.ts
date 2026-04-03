@@ -22,10 +22,14 @@ export async function clearAllLocalDmE2eeState() {
     return;
   }
 
-  clearAllLocalEncryptedDmPreviews();
+  try {
+    clearAllLocalEncryptedDmPreviews();
 
-  if (typeof window.indexedDB !== 'undefined') {
-    await clearAllLocalDmE2eeDeviceRecords();
+    if (typeof window.indexedDB !== 'undefined') {
+      await clearAllLocalDmE2eeDeviceRecords();
+    }
+  } catch (error) {
+    console.error('Unable to clear local DM E2EE state.', error);
   }
 }
 
@@ -34,10 +38,14 @@ export async function clearLocalDmE2eeStateForUser(userId: string) {
     return;
   }
 
-  clearLocalEncryptedDmPreviewsForUser(userId);
+  try {
+    clearLocalEncryptedDmPreviewsForUser(userId);
 
-  if (typeof window.indexedDB !== 'undefined') {
-    await deleteLocalDmE2eeDeviceRecord(userId);
+    if (typeof window.indexedDB !== 'undefined') {
+      await deleteLocalDmE2eeDeviceRecord(userId);
+    }
+  } catch (error) {
+    console.error('Unable to clear local DM E2EE user state.', error);
   }
 }
 
@@ -46,10 +54,14 @@ export async function keepOnlyLocalDmE2eeStateForUser(userId: string) {
     return;
   }
 
-  clearLocalEncryptedDmPreviewsExceptUser(userId);
+  try {
+    clearLocalEncryptedDmPreviewsExceptUser(userId);
 
-  if (typeof window.indexedDB !== 'undefined') {
-    await clearLocalDmE2eeDeviceRecordsExcept(userId);
+    if (typeof window.indexedDB !== 'undefined') {
+      await clearLocalDmE2eeDeviceRecordsExcept(userId);
+    }
+  } catch (error) {
+    console.error('Unable to prune local DM E2EE state.', error);
   }
 }
 
