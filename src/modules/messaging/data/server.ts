@@ -304,6 +304,22 @@ function isMissingRelationErrorMessage(message: string, relationName: string) {
   );
 }
 
+function logSpaceMembershipDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_SPACES_SSR !== '1') {
+    return;
+  }
+
+  if (details) {
+    console.info('[space-members-query]', stage, details);
+    return;
+  }
+
+  console.info('[space-members-query]', stage);
+}
+
 function isMissingFunctionErrorMessage(message: string, functionName: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -1545,12 +1561,20 @@ export async function getAvailableUsers(
   currentUserId: string,
   options?: {
     spaceId?: string | null;
+    source?: string;
   },
 ) {
   const supabase = await createSupabaseServerClient();
   let userIds: string[] = [];
+  const source = options?.source ?? 'unknown';
 
   if (options?.spaceId) {
+    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:start', {
+      source,
+      queryShape:
+        "from('space_members').select('user_id').eq('space_id', ?).neq('user_id', ?).order('user_id')",
+      spaceId: options.spaceId,
+    });
     const { data, error } = await supabase
       .from('space_members')
       .select('user_id')
@@ -1559,6 +1583,10 @@ export async function getAvailableUsers(
       .order('user_id', { ascending: true });
 
     if (error) {
+      logSpaceMembershipDiagnostics('getAvailableUsers:space-members:error', {
+        source,
+        message: error.message,
+      });
       if (isMissingRelationErrorMessage(error.message, 'space_members')) {
         throw createSchemaRequirementError(
           'Space-scoped user lookup requires public.space_members.',
@@ -1569,6 +1597,10 @@ export async function getAvailableUsers(
     }
 
     userIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
+    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:ok', {
+      source,
+      count: userIds.length,
+    });
   } else {
     const { data, error } = await supabase
       .from('profiles')

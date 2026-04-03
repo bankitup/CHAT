@@ -74,7 +74,8 @@ export function isSpaceMembersSchemaCacheErrorMessage(message: string) {
     normalizedMessage.includes('space_members') &&
     (normalizedMessage.includes('schema cache') ||
       normalizedMessage.includes('could not find the table') ||
-      normalizedMessage.includes('relation'))
+      normalizedMessage.includes('relation') ||
+      normalizedMessage.includes('requires public.space_members'))
   );
 }
 
@@ -137,7 +138,12 @@ export async function getUserSpaces(
   const supabase = await createSupabaseServerClient();
   const source = options?.source ?? 'unknown';
   logSpacesDiagnostics('getUserSpaces:start', { source });
-  logSpacesDiagnostics('space_members:query-start', { queried: true, source });
+  logSpacesDiagnostics('space_members:query-start', {
+    queried: true,
+    source,
+    queryShape:
+      "from('space_members').select('space_id, role, joined_at').eq('user_id', ?).order('joined_at')",
+  });
   const { data: memberships, error: membershipError } = await supabase
     .from('space_members')
     .select('space_id, role, joined_at')

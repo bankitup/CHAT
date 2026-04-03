@@ -372,7 +372,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return [] as Awaited<ReturnType<typeof getInboxConversations>>;
       }),
     archivedConversationsPromise,
-    getAvailableUsers(user.id, { spaceId: activeSpaceId })
+    getAvailableUsers(user.id, {
+      spaceId: activeSpaceId,
+      source: 'inbox-page',
+    })
       .then((value) => {
         logDiagnostics('loader:users-ok', { count: value.length });
         return value;
