@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
+import { withSpaceParam } from '@/modules/spaces/url';
 
 type AppShellFrameProps = {
   children: ReactNode;
@@ -26,6 +27,7 @@ export function AppShellFrame({
   const isActivityRoute = pathname.startsWith('/activity');
   const isDmInboxRoute =
     pathname.startsWith('/inbox') && searchParams.get('filter') === 'dm';
+  const activeSpaceId = searchParams.get('space');
   const showBottomNav = !isChatRoute;
   const activeTab = isActivityRoute
     ? 'activity'
@@ -56,7 +58,7 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href="/inbox"
+              href={withSpaceParam('/inbox', activeSpaceId)}
             >
               <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.chats}</span>
@@ -69,7 +71,7 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href="/inbox?filter=dm"
+              href={withSpaceParam('/inbox?filter=dm', activeSpaceId)}
             >
               <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.dms}</span>
@@ -82,7 +84,7 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href="/activity"
+              href={withSpaceParam('/activity', activeSpaceId)}
             >
               <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.activity}</span>

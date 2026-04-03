@@ -1,0 +1,154 @@
+# Space Model v1
+
+Purpose:
+
+- define the minimal v1 space model for CHAT
+- make conversation tenancy explicit before broader product rollout
+- keep space access boundaries separate from DM E2EE confidentiality
+
+## What a space is
+
+A space is the top-level container for one project, team, or client context.
+
+In v1, a space:
+
+- has its own name
+- has its own member set
+- has its own owner/admin/member boundary
+- contains both direct messages and group chats
+
+The active app context should become one selected space at a time.
+
+## Core model
+
+### `public.spaces`
+
+Space metadata and ownership shell.
+
+Minimum v1 responsibility:
+
+- identify the space
+- store its display name
+- record the creating/owning user
+
+### `public.space_members`
+
+Membership and coarse permissions for entering the space.
+
+Minimum v1 roles:
+
+- `owner`
+- `admin`
+- `member`
+
+This is the broader access boundary for everything inside the space. It is not
+an encryption boundary and it does not imply message plaintext visibility.
+
+### `public.conversations.space_id`
+
+Every conversation belongs to one space.
+
+Rules:
+
+- every DM belongs to one specific space
+- every group chat belongs to one specific space
+- there are no cross-space conversations
+- there are no global DMs outside spaces
+
+## How DMs behave inside spaces
+
+DMs are scoped to a specific space, not to the entire product.
+
+That means:
+
+- the same two users may need different DMs in different spaces
+- DM uniqueness must become `space_id + dm_key`, not global `dm_key`
+- DM membership is still defined in `public.conversation_members`, but the
+  conversation itself must sit inside a parent space
+
+## Space membership vs conversation membership
+
+These are related but not the same thing.
+
+`public.space_members`:
+
+- decides whether a user belongs to the broader project/team/client space
+- carries coarse space role such as `owner`, `admin`, or `member`
+- should be the outer allowlist for entering the space
+
+`public.conversation_members`:
+
+- decides whether a user is an active participant in a specific DM or group
+- carries per-conversation role and participation state
+- should only be valid inside the parent space boundary
+
+Practical v1 rule:
+
+- a conversation member should also be a member of that conversation's parent space
+
+## Space access vs E2EE confidentiality
+
+These are different boundaries and must stay different.
+
+Space access boundary:
+
+- who can enter a space
+- who can list the conversations in that space
+- who can create or administer conversations in that space
+
+DM E2EE confidentiality boundary:
+
+- who can decrypt DM text on a client device
+- which device holds the private keys
+- whether plaintext ever reaches the server
+
+Critical rule:
+
+- space owners and space admins do not gain DM plaintext access by role alone
+
+They may be able to manage access to the space, but they must not gain support,
+operator, or database-side decryption powers from that role.
+
+## Runtime status in this patch
+
+Implemented now:
+
+- explicit schema design for spaces
+- migration draft for `spaces`, `space_members`, and `conversations.space_id`
+- documentation of the access boundary and DM-in-space rules
+- runtime active-space scoping for inbox, activity, and chat entry via `?space=<space_id>`
+- conversation access validation against the parent conversation space
+- space-aware DM/group creation inputs from the inbox flow
+
+Not implemented yet:
+
+- full active-space switcher UI
+- space-aware settings UI
+- realtime filtering refinements by active space
+- full space scoping across every remaining action redirect and secondary workflow
+
+## Query and routing surfaces to scope next
+
+These are the main surfaces that should become more fully selected-space aware next:
+
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  conversation queries, DM reuse, conversation creation, and available-user lookup
+- [actions.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/inbox/actions.ts)
+  new DM/group creation
+- [actions.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/chat/%5BconversationId%5D/actions.ts)
+  conversation-specific updates
+- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/inbox/page.tsx)
+  already scoped; still needs eventual space-switcher integration
+- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/activity/page.tsx)
+  already scoped; still needs eventual space-switcher integration
+- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/chat/%5BconversationId%5D/page.tsx)
+  already scoped on entry; still needs broader action/redirect normalization
+- [inbox-sync.tsx](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/realtime/inbox-sync.tsx)
+- [active-chat-sync.tsx](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/realtime/active-chat-sync.tsx)
+
+## What should come next
+
+1. Add a lightweight active-space switcher and selected-space persistence UX.
+2. Scope the remaining chat action redirects and realtime helpers more explicitly by `space_id`.
+3. Backfill legacy conversations into explicit spaces and then tighten
+   `public.conversations.space_id` to `not null`.

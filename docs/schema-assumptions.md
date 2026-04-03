@@ -9,6 +9,12 @@ This document distinguishes between:
 - schema required by the current running app
 - schema prepared for future work but not yet active in production behavior
 
+The current running app now expects active-space scoping for inbox, activity,
+and chat entry. The explicit multi-space model below is no longer only a
+future foundation: selected-space routing currently depends on
+`public.spaces`, `public.space_members`, and `public.conversations.space_id`,
+even though full space-switcher UX is still not implemented.
+
 ## Tables in active use
 
 - `public.profiles`
@@ -35,6 +41,11 @@ Notes:
 - `user_id` is treated as one profile per auth user and should remain unique.
 - If `avatar_path` is missing, the app falls back to initials/name-based identity rendering.
 - Profile editing writes `display_name` and, when avatar upload succeeds, `avatar_path`.
+- `avatar_path` is now treated as storage-backed avatar location data. New writes store the avatars bucket object path; older absolute URLs are still tolerated for backward compatibility.
+- Profile reads resolve `avatar_path` into a renderable URL server-side, so avatar rendering no longer depends on the database storing a permanently public URL.
+- Replacing or removing an avatar stores the updated `avatar_path` state and attempts to remove the prior avatar object when it was also storage-backed.
+- Managed avatar cleanup is restricted to user-owned object paths in the form `<user_id>/...`.
+- Legacy absolute avatar URLs remain renderable, but they are not automatically deletable because they do not carry a trusted storage object path.
 - Settings language preference writes `preferred_language` when the column exists.
 
 ## `public.conversations`
@@ -51,6 +62,7 @@ Required columns used by current code:
 Optional / hardening support:
 
 - `dm_key`
+- `space_id`
 
 Assumptions:
 
@@ -58,6 +70,8 @@ Assumptions:
 - `created_by` is used for group ownership-sensitive UI like title editing.
 - `last_message_at` drives inbox ordering and recency labels.
 - `dm_key`, when present, is used to make direct-message creation race-safe and reuse an existing DM for the same user pair.
+- `space_id`, once the space model is enabled, makes each conversation belong to exactly one space.
+- direct-message uniqueness is global only in the current implicit-space runtime; once spaces are enabled, DM uniqueness must become space-scoped via `space_id` plus `dm_key`.
 
 ## `public.conversation_members`
 
@@ -228,6 +242,92 @@ Planned columns:
 - `used_one_time_prekey_id`
 - `created_at`
 
+## Prepared v1 space model
+
+These schema elements define the v1 tenancy and access boundary for CHAT.
+They are intentionally separate from DM E2EE confidentiality. Space ownership
+or admin rights do not grant access to encrypted DM plaintext.
+
+### `public.spaces`
+
+Prepared role for space-scoped messaging:
+
+- one top-level container per project, team, or client context
+- owns its own naming and broader settings boundary
+- contains both direct messages and group chats
+- one selected space should become the active app context at runtime
+
+Planned columns:
+
+- `id`
+- `name`
+- `created_by`
+- `created_at`
+- `updated_at`
+
+Current assumptions:
+
+- one auth user can own a space
+- a user can belong to multiple spaces
+- spaces are the outer access boundary for conversations
+- active-space routing resolves against this table at runtime
+
+### `public.space_members`
+
+Prepared role for space access:
+
+- membership table for who can enter a space
+- minimal role support for v1: `owner`, `admin`, `member`
+
+Planned columns:
+
+- `space_id`
+- `user_id`
+- `role`
+- `created_at`
+
+Current assumptions:
+
+- conversation membership should remain inside the parent space membership set
+- space roles are access and administration primitives, not decryption privileges
+- exactly one owner per space is the intended v1 default
+- `space_members` is broader than `conversation_members`; it is the outer access boundary, not the per-chat participant list
+- inbox, activity, and chat access rely on `space_members` to decide which spaces a user may actively enter
+
+### `public.conversations.space_id`
+
+Prepared role for space scoping:
+
+- every DM and every group chat belongs to exactly one space
+- no cross-space conversations
+- no global DMs outside spaces
+
+Current migration shape:
+
+- add `space_id` nullable first for safe backfill
+- backfill legacy conversations into explicit spaces
+- tighten to `not null` as the space-scoped runtime becomes universal
+- conversation membership should only be considered valid when it remains inside the parent space boundary
+- inbox and activity filters already scope by selected `space_id`
+- chat entry already validates that the conversation belongs to the current parent `space_id`
+
+### Query and routing surfaces that still need fuller active-space treatment
+
+These are the main runtime surfaces that already accept or depend on an active
+`spaceId`, but still need fuller UX or redirect normalization:
+
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `getInboxConversations`, `getArchivedConversations`, `getConversationForUser`,
+  `getAvailableUsers`, `findExistingActiveDmConversation`,
+  `createConversationWithMembers`
+- [actions.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/inbox/actions.ts)
+- [actions.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/chat/%5BconversationId%5D/actions.ts)
+- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/inbox/page.tsx)
+- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/activity/page.tsx)
+- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/chat/%5BconversationId%5D/page.tsx)
+- [inbox-sync.tsx](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/realtime/inbox-sync.tsx)
+- [active-chat-sync.tsx](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/realtime/active-chat-sync.tsx)
+
 ## Required migrations before deploy
 
 These schema changes must exist in Supabase for the current app to run safely:
@@ -248,6 +348,14 @@ These schema changes must exist in Supabase for the current app to run safely:
 
 1. `public.conversations.dm_key`
    Source file: [2026-04-03-conversations-dm-key.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-dm-key.sql)
+
+## Required migrations before enabling space-scoped conversations
+
+Do not treat the current app as space-aware until these migrations are applied
+and the runtime query/routing layer is actively scoped to a selected space.
+
+1. `public.spaces`, `public.space_members`, and `public.conversations.space_id`
+   Source file: [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql)
 
 ## Required migrations before enabling DM E2EE bootstrap
 

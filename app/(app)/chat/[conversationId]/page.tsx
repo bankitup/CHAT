@@ -26,13 +26,15 @@ import {
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
+import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
+import { withSpaceParam } from '@/modules/spaces/url';
 import {
   getIdentityLabel,
   IdentityAvatar,
   IdentityAvatarStack,
 } from '@/modules/messaging/ui/identity';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import {
   addGroupParticipantsAction,
   deleteMessageAction,
@@ -67,6 +69,7 @@ type ChatPageProps = {
     deleteMessageId?: string;
     actionMessageId?: string;
     settings?: string;
+    space?: string;
   }>;
 };
 
@@ -281,6 +284,52 @@ function formatParticipantRoleLabel(
   return t.chat.member;
 }
 
+function buildChatHref(input: {
+  conversationId: string;
+  spaceId: string;
+  actionMessageId?: string | null;
+  deleteMessageId?: string | null;
+  editMessageId?: string | null;
+  error?: string | null;
+  replyToMessageId?: string | null;
+  settings?: string | null;
+  hash?: string | null;
+}) {
+  const params = new URLSearchParams();
+
+  if (input.actionMessageId?.trim()) {
+    params.set('actionMessageId', input.actionMessageId.trim());
+  }
+
+  if (input.deleteMessageId?.trim()) {
+    params.set('deleteMessageId', input.deleteMessageId.trim());
+  }
+
+  if (input.editMessageId?.trim()) {
+    params.set('editMessageId', input.editMessageId.trim());
+  }
+
+  if (input.error?.trim()) {
+    params.set('error', input.error.trim());
+  }
+
+  if (input.replyToMessageId?.trim()) {
+    params.set('replyToMessageId', input.replyToMessageId.trim());
+  }
+
+  if (input.settings?.trim()) {
+    params.set('settings', input.settings.trim());
+  }
+
+  const search = params.toString();
+  const baseHref = search
+    ? `/chat/${input.conversationId}?${search}`
+    : `/chat/${input.conversationId}`;
+  const href = withSpaceParam(baseHref, input.spaceId);
+
+  return input.hash ? `${href}${input.hash}` : href;
+}
+
 export default async function ChatPage({
   params,
   searchParams,
@@ -296,7 +345,47 @@ export default async function ChatPage({
     notFound();
   }
 
-  const conversation = await getConversationForUser(conversationId, user.id);
+  const baseConversation = await getConversationForUser(conversationId, user.id);
+
+  if (!baseConversation) {
+    notFound();
+  }
+
+  if (!baseConversation.spaceId) {
+    throw new Error(
+      'Active space routing requires public.conversations.space_id.',
+    );
+  }
+
+  const activeSpaceState = await resolveActiveSpaceForUser({
+    userId: user.id,
+    requestedSpaceId: baseConversation.spaceId,
+  });
+
+  if (!activeSpaceState.activeSpace || activeSpaceState.requestedSpaceWasInvalid) {
+    notFound();
+  }
+
+  const activeSpaceId = activeSpaceState.activeSpace.id;
+
+  if (!query.space || query.space !== activeSpaceId) {
+    redirect(
+      buildChatHref({
+        conversationId,
+        spaceId: activeSpaceId,
+        actionMessageId: query.actionMessageId ?? null,
+        deleteMessageId: query.deleteMessageId ?? null,
+        editMessageId: query.editMessageId ?? null,
+        error: query.error ?? null,
+        replyToMessageId: query.replyToMessageId ?? null,
+        settings: query.settings ?? null,
+      }),
+    );
+  }
+
+  const conversation = await getConversationForUser(conversationId, user.id, {
+    spaceId: activeSpaceId,
+  });
 
   if (!conversation) {
     notFound();
@@ -312,7 +401,7 @@ export default async function ChatPage({
   const participants = await getConversationParticipants(conversationId);
   const availableUsers =
     conversation.kind === 'group' && isSettingsOpen
-      ? await getAvailableUsers(user.id)
+      ? await getAvailableUsers(user.id, { spaceId: activeSpaceId })
       : [];
   const senderProfiles = await getMessageSenderProfiles(
     Array.from(
@@ -539,7 +628,7 @@ export default async function ChatPage({
         <Link
           aria-label={t.chat.backToChats}
           className="back-arrow-link conversation-back"
-          href="/inbox"
+          href={withSpaceParam('/inbox', activeSpaceId)}
         >
           <span aria-hidden="true">←</span>
         </Link>
@@ -547,7 +636,11 @@ export default async function ChatPage({
         <Link
           aria-label={t.chat.openInfoAria(conversationDisplayTitle)}
           className="card chat-header-card chat-header-link"
-          href={`/chat/${conversationId}?settings=open`}
+          href={buildChatHref({
+            conversationId,
+            settings: 'open',
+            spaceId: activeSpaceId,
+          })}
         >
           <div className="chat-header-identity">
             {conversation.kind === 'group' ? (
@@ -587,7 +680,9 @@ export default async function ChatPage({
         </Link>
       </section>
 
-      {query.error ? <p className="notice notice-error">{query.error}</p> : null}
+      {query.error && !isSettingsOpen ? (
+        <p className="notice notice-error">{query.error}</p>
+      ) : null}
 
       <section className="chat-main">
         <section className="message-thread" id="message-thread-scroll">
@@ -689,7 +784,12 @@ export default async function ChatPage({
                                   ? 'message-actions-trigger message-actions-trigger-active'
                                   : 'message-actions-trigger'
                               }
-                              href={`/chat/${conversationId}?actionMessageId=${message.id}#message-${message.id}`}
+                              href={buildChatHref({
+                                actionMessageId: message.id,
+                                conversationId,
+                                hash: `#message-${message.id}`,
+                                spaceId: activeSpaceId,
+                              })}
                             >
                               <span aria-hidden="true">⋯</span>
                             </Link>
@@ -790,7 +890,11 @@ export default async function ChatPage({
                               </button>
                               <Link
                                 className="pill message-edit-cancel"
-                                href={`/chat/${conversationId}#message-${message.id}`}
+                                href={buildChatHref({
+                                  conversationId,
+                                  hash: `#message-${message.id}`,
+                                  spaceId: activeSpaceId,
+                                })}
                               >
                                 {t.chat.cancel}
                               </Link>
@@ -806,7 +910,11 @@ export default async function ChatPage({
                             <div className="message-edit-actions">
                               <Link
                                 className="pill message-edit-cancel"
-                                href={`/chat/${conversationId}#message-${message.id}`}
+                                href={buildChatHref({
+                                  conversationId,
+                                  hash: `#message-${message.id}`,
+                                  spaceId: activeSpaceId,
+                                })}
                               >
                                 {t.chat.cancel}
                               </Link>
@@ -1016,7 +1124,11 @@ export default async function ChatPage({
                             </button>
                             <Link
                               className="pill message-edit-cancel"
-                              href={`/chat/${conversationId}#message-${message.id}`}
+                              href={buildChatHref({
+                                conversationId,
+                                hash: `#message-${message.id}`,
+                                spaceId: activeSpaceId,
+                              })}
                             >
                               {t.chat.cancel}
                             </Link>
@@ -1076,7 +1188,11 @@ export default async function ChatPage({
               </div>
               <Link
                 className="pill composer-reply-cancel"
-                href={`/chat/${conversationId}#message-composer`}
+                href={buildChatHref({
+                  conversationId,
+                  hash: '#message-composer',
+                  spaceId: activeSpaceId,
+                })}
               >
                 {t.chat.cancel}
               </Link>
@@ -1098,6 +1214,7 @@ export default async function ChatPage({
               mentionSuggestionsLabel={t.chat.mentionSuggestions}
               messagePlaceholder={t.chat.messagePlaceholder}
               replyToMessageId={activeReplyTarget?.id ?? null}
+              spaceId={activeSpaceId}
             />
           ) : (
             <form action={sendMessageAction} className="stack composer-form">
@@ -1167,7 +1284,10 @@ export default async function ChatPage({
           <Link
             aria-label={t.chat.closeInfo}
             className="conversation-settings-backdrop"
-            href={`/chat/${conversationId}`}
+            href={buildChatHref({
+              conversationId,
+              spaceId: activeSpaceId,
+            })}
           />
 
           <section className="card stack conversation-settings-card conversation-settings-sheet">
@@ -1177,11 +1297,18 @@ export default async function ChatPage({
               <Link
                 aria-label={t.chat.closeInfo}
                 className="back-arrow-link conversation-settings-back-link"
-                href={`/chat/${conversationId}`}
+                href={buildChatHref({
+                  conversationId,
+                  spaceId: activeSpaceId,
+                })}
               >
                 <span aria-hidden="true">←</span>
               </Link>
             </div>
+
+            {query.error ? (
+              <p className="notice notice-error">{query.error}</p>
+            ) : null}
 
             <section className="conversation-info-summary">
               <div className="conversation-info-identity">
@@ -1527,7 +1654,11 @@ export default async function ChatPage({
           <Link
             aria-label={t.chat.closeMessageActions}
             className="message-sheet-backdrop"
-            href={`/chat/${conversationId}#message-${activeActionMessage.id}`}
+            href={buildChatHref({
+              conversationId,
+              hash: `#message-${activeActionMessage.id}`,
+              spaceId: activeSpaceId,
+            })}
           />
           <section className="message-sheet-card card stack">
             <div className="message-sheet-header">
@@ -1550,7 +1681,11 @@ export default async function ChatPage({
               <Link
                 aria-label={t.chat.closeMessageActions}
                 className="message-sheet-close"
-                href={`/chat/${conversationId}#message-${activeActionMessage.id}`}
+                href={buildChatHref({
+                  conversationId,
+                  hash: `#message-${activeActionMessage.id}`,
+                  spaceId: activeSpaceId,
+                })}
               >
                 <span aria-hidden="true">×</span>
               </Link>
@@ -1608,7 +1743,12 @@ export default async function ChatPage({
               <div className="message-sheet-action-list">
                 <Link
                   className="message-sheet-action"
-                  href={`/chat/${conversationId}?replyToMessageId=${activeActionMessage.id}#message-composer`}
+                  href={buildChatHref({
+                    conversationId,
+                    hash: '#message-composer',
+                    replyToMessageId: activeActionMessage.id,
+                    spaceId: activeSpaceId,
+                  })}
                 >
                   <span className="message-sheet-action-icon" aria-hidden="true">
                     ↩
@@ -1639,7 +1779,12 @@ export default async function ChatPage({
 
                     <Link
                       className="message-sheet-action message-sheet-action-danger"
-                      href={`/chat/${conversationId}?deleteMessageId=${activeActionMessage.id}#message-${activeActionMessage.id}`}
+                      href={buildChatHref({
+                        conversationId,
+                        deleteMessageId: activeActionMessage.id,
+                        hash: `#message-${activeActionMessage.id}`,
+                        spaceId: activeSpaceId,
+                      })}
                     >
                       <span className="message-sheet-action-icon" aria-hidden="true">
                         🗑
@@ -1653,7 +1798,12 @@ export default async function ChatPage({
                   <>
                     <Link
                       className="message-sheet-action"
-                      href={`/chat/${conversationId}?editMessageId=${activeActionMessage.id}#message-${activeActionMessage.id}`}
+                      href={buildChatHref({
+                        conversationId,
+                        editMessageId: activeActionMessage.id,
+                        hash: `#message-${activeActionMessage.id}`,
+                        spaceId: activeSpaceId,
+                      })}
                     >
                       <span className="message-sheet-action-icon" aria-hidden="true">
                         ✎
@@ -1665,7 +1815,12 @@ export default async function ChatPage({
 
                     <Link
                       className="message-sheet-action message-sheet-action-danger"
-                      href={`/chat/${conversationId}?deleteMessageId=${activeActionMessage.id}#message-${activeActionMessage.id}`}
+                      href={buildChatHref({
+                        conversationId,
+                        deleteMessageId: activeActionMessage.id,
+                        hash: `#message-${activeActionMessage.id}`,
+                        spaceId: activeSpaceId,
+                      })}
                     >
                       <span className="message-sheet-action-icon" aria-hidden="true">
                         🗑

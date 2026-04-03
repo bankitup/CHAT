@@ -21,6 +21,7 @@ type NewChatSheetProps = {
   hasAnyUsers: boolean;
   closeHref: string;
   language: AppLanguage;
+  spaceId: string;
 };
 
 type NewChatMode = 'dm' | 'group';
@@ -30,6 +31,7 @@ export function NewChatSheet({
   hasAnyUsers,
   closeHref,
   language,
+  spaceId,
 }: NewChatSheetProps) {
   const t = getTranslations(language);
   const [mode, setMode] = useState<NewChatMode>('dm');
@@ -160,6 +162,7 @@ export function NewChatSheet({
 
           {selectedDmUser ? (
             <form action={createDmAction} className="stack inbox-create-action-block">
+              <input name="spaceId" type="hidden" value={spaceId} />
               <input
                 name="participantUserId"
                 type="hidden"
@@ -182,6 +185,7 @@ export function NewChatSheet({
           </div>
 
           <form action={createGroupAction} className="stack compact-form">
+            <input name="spaceId" type="hidden" value={spaceId} />
             <label className="field">
               <span className="sr-only">{t.inbox.create.groupTitle}</span>
               <input

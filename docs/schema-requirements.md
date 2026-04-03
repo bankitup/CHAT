@@ -72,6 +72,11 @@ Optional but supported:
 
 The code already falls back if `avatar_path` is missing.
 
+Operational note:
+
+- avatar files are expected to live in the configured avatars bucket
+- new `avatar_path` writes store bucket object paths, not baked public URLs
+
 ### `public.message_reactions`
 
 - `id`

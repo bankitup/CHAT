@@ -47,9 +47,12 @@ type LanguageDictionary = {
     profileTitle: string;
     profileSubtitle: string;
     profilePhoto: string;
+    profilePhotoCurrent: string;
+    profilePhotoEmpty: string;
     displayName: string;
     displayNamePlaceholder: string;
     profilePhotoNote: string;
+    removePhoto: string;
     saveChanges: string;
     profileFallback: string;
     languageTitle: string;
@@ -338,9 +341,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileTitle: 'Profile',
       profileSubtitle: 'Photo and name',
       profilePhoto: 'Profile photo',
+      profilePhotoCurrent: 'Current photo is active.',
+      profilePhotoEmpty: 'No profile photo yet. Initials are shown instead.',
       displayName: 'Display name',
       displayNamePlaceholder: 'Your name',
       profilePhotoNote: 'JPG, PNG, WEBP, or GIF, up to 5 MB.',
+      removePhoto: 'Remove photo',
       saveChanges: 'Save changes',
       profileFallback: 'Your profile',
       languageTitle: 'Language',
@@ -639,9 +645,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileTitle: 'Профиль',
       profileSubtitle: 'Фото и имя',
       profilePhoto: 'Фото профиля',
+      profilePhotoCurrent: 'Текущее фото активно.',
+      profilePhotoEmpty: 'Фото профиля ещё нет. Вместо него показываются инициалы.',
       displayName: 'Отображаемое имя',
       displayNamePlaceholder: 'Ваше имя',
       profilePhotoNote: 'JPG, PNG, WEBP или GIF, до 5 МБ.',
+      removePhoto: 'Удалить фото',
       saveChanges: 'Сохранить',
       profileFallback: 'Ваш профиль',
       languageTitle: 'Язык',

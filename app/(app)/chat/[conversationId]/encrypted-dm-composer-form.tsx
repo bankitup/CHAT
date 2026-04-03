@@ -17,6 +17,7 @@ import { getLocalDmE2eeDeviceRecord } from '@/modules/messaging/e2ee/device-stor
 import { reinitializeLocalDmE2eeStateForUser } from '@/modules/messaging/e2ee/lifecycle';
 import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encrypt';
 import { getEncryptedDmComposerErrorMessage } from '@/modules/messaging/e2ee/ui-policy';
+import { withSpaceParam } from '@/modules/spaces/url';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 
@@ -40,6 +41,7 @@ type EncryptedDmComposerFormProps = {
   mentionSuggestionsLabel: string;
   messagePlaceholder: string;
   replyToMessageId?: string | null;
+  spaceId?: string | null;
 };
 
 async function fetchRecipientBundle(conversationId: string) {
@@ -168,6 +170,7 @@ export function EncryptedDmComposerForm({
   mentionSuggestionsLabel,
   messagePlaceholder,
   replyToMessageId,
+  spaceId,
 }: EncryptedDmComposerFormProps) {
   const router = useRouter();
   const t = getTranslations(language);
@@ -269,7 +272,7 @@ export function EncryptedDmComposerForm({
           }
 
           form.reset();
-          router.replace(`/chat/${conversationId}`);
+          router.replace(withSpaceParam(`/chat/${conversationId}`, spaceId));
           router.refresh();
         } catch (error) {
           const nextCode =

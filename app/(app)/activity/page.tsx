@@ -20,7 +20,16 @@ import {
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
+import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
+import { withSpaceParam } from '@/modules/spaces/url';
+import { notFound, redirect } from 'next/navigation';
 import { NotificationReadinessPanel } from '../settings/notification-readiness';
+
+type ActivityPageProps = {
+  searchParams: Promise<{
+    space?: string;
+  }>;
+};
 
 type ActivityItem = {
   conversationId: string;
@@ -123,7 +132,27 @@ function getFallbackIdentityLabel(
   return nextLabel;
 }
 
-export default async function ActivityPage() {
+function buildActivityHref(spaceId: string) {
+  return withSpaceParam('/activity', spaceId);
+}
+
+function buildInboxHref(input: {
+  spaceId: string;
+  view?: 'main' | 'archived';
+}) {
+  const params = new URLSearchParams();
+
+  if (input.view === 'archived') {
+    params.set('view', 'archived');
+  }
+
+  params.set('space', input.spaceId);
+
+  return `/inbox?${params.toString()}`;
+}
+
+export default async function ActivityPage({ searchParams }: ActivityPageProps) {
+  const query = await searchParams;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -133,11 +162,26 @@ export default async function ActivityPage() {
     return null;
   }
 
+  const activeSpaceState = await resolveActiveSpaceForUser({
+    userId: user.id,
+    requestedSpaceId: query.space,
+  });
+
+  if (!activeSpaceState.activeSpace) {
+    notFound();
+  }
+
+  const activeSpaceId = activeSpaceState.activeSpace.id;
+
+  if (!query.space || activeSpaceState.requestedSpaceWasInvalid) {
+    redirect(buildActivityHref(activeSpaceId));
+  }
+
   const language = await getRequestLanguage();
   const t = getTranslations(language);
   const [conversations, archivedConversations] = await Promise.all([
-    getInboxConversations(user.id),
-    getArchivedConversations(user.id),
+    getInboxConversations(user.id, { spaceId: activeSpaceId }),
+    getArchivedConversations(user.id, { spaceId: activeSpaceId }),
   ]);
   const participantIdentities = await getConversationParticipantIdentities(
     conversations.map((conversation) => conversation.conversationId),
@@ -222,7 +266,7 @@ export default async function ActivityPage() {
             <Link
               aria-label={t.inbox.settingsAria}
               className="inbox-settings-trigger"
-              href="/settings"
+              href={withSpaceParam('/settings', activeSpaceId)}
             >
               <span aria-hidden="true">⚙</span>
             </Link>
@@ -255,7 +299,10 @@ export default async function ActivityPage() {
               <p className="muted">{t.activity.unreadSectionBody}</p>
             </div>
             {unreadItems.length > 0 ? (
-              <Link className="pill activity-section-link" href="/inbox">
+              <Link
+                className="pill activity-section-link"
+                href={buildInboxHref({ spaceId: activeSpaceId })}
+              >
                 {t.activity.openChats}
               </Link>
             ) : null}
@@ -267,7 +314,10 @@ export default async function ActivityPage() {
                 <Link
                   key={`unread-${conversation.conversationId}`}
                   className="activity-item"
-                  href={`/chat/${conversation.conversationId}`}
+                  href={withSpaceParam(
+                    `/chat/${conversation.conversationId}`,
+                    activeSpaceId,
+                  )}
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar label={conversation.title} size="sm" />
@@ -316,7 +366,13 @@ export default async function ActivityPage() {
               <p className="muted">{t.activity.recentBody}</p>
             </div>
             {archivedConversations.length > 0 ? (
-              <Link className="pill activity-section-link" href="/inbox?view=archived">
+              <Link
+                className="pill activity-section-link"
+                href={buildInboxHref({
+                  spaceId: activeSpaceId,
+                  view: 'archived',
+                })}
+              >
                 {t.activity.openArchived}
               </Link>
             ) : null}
@@ -328,7 +384,10 @@ export default async function ActivityPage() {
                 <Link
                   key={`recent-${conversation.conversationId}`}
                   className="activity-item activity-item-recent"
-                  href={`/chat/${conversation.conversationId}`}
+                  href={withSpaceParam(
+                    `/chat/${conversation.conversationId}`,
+                    activeSpaceId,
+                  )}
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar label={conversation.title} size="sm" />

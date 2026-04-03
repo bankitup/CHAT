@@ -32,6 +32,7 @@ Prepared or documented but not fully implemented:
 - Signal-style direction using asynchronous prekey setup now and ratcheting later
 - schema for device records, one-time prekeys, message content mode, and ciphertext envelopes
 - rollout checklist and testing guardrails
+- explicit v1 space model for access scoping, with broader space-switcher UX still to come
 
 Intentionally unsupported in v1:
 
@@ -75,6 +76,13 @@ Untrusted for DM plaintext:
 
 The server is allowed to route, store, and order encrypted DM traffic. It is not trusted to decrypt it.
 
+Space access boundary note:
+
+- spaces and space membership define who can enter a project/team/client context
+- inbox, activity, and chat entry are scoped by the selected parent space
+- spaces do not define who can decrypt DM text
+- space owners and space admins must not gain DM plaintext access by role alone
+
 ## 6. Key and data flow
 
 Current implemented flow:
@@ -100,6 +108,7 @@ Current protocol boundary:
 
 The server can see:
 
+- space membership and space-role metadata
 - conversation membership and message ordering metadata
 - sender id
 - sender device record id
@@ -282,6 +291,7 @@ Operational checklist:
 - private keys must never leave the client device
 - no debug path may create plaintext server copies
 - no operator/admin path may read DM plaintext
+- no space owner/admin path may be treated as DM decrypt authority
 - rollout guards must not degrade encrypted DMs into plaintext sends
 - unsupported flows must fail explicitly rather than faking support
 
@@ -290,6 +300,7 @@ Operational checklist:
 - one active device per user in v1
 - browser storage is weaker than native secure storage
 - no multi-device recovery
+- space-scoped access is documented and prepared, but runtime selected-space scoping is not fully implemented yet
 - no group or attachment E2EE
 - current encrypted DM traffic is still bootstrap-style, not ratcheted follow-up messaging
 - atomic encrypted DM send now depends on the `send_dm_e2ee_message_atomic` database function being present; if it is missing, encrypted DM send must fail explicitly rather than falling back to non-atomic behavior

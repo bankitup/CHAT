@@ -1,3 +1,7 @@
+'use client';
+
+import { useState } from 'react';
+
 type IdentityRecord = {
   userId: string;
   displayName: string | null;
@@ -83,8 +87,13 @@ export function IdentityAvatar({
   const toneClass = getStableTone(identity?.userId || label);
   const initials = getIdentityInitials(label);
   const avatarPath = isRenderableAvatarPath(identity?.avatarPath)
-    ? identity?.avatarPath
+    ? (identity?.avatarPath ?? null)
     : null;
+  const [failedAvatarPath, setFailedAvatarPath] = useState<string | null>(null);
+  const [loadedAvatarPath, setLoadedAvatarPath] = useState<string | null>(null);
+  const hasImageError = Boolean(avatarPath && failedAvatarPath === avatarPath);
+  const isImageLoaded = Boolean(avatarPath && loadedAvatarPath === avatarPath);
+  const shouldRenderImage = Boolean(avatarPath && !hasImageError);
 
   return (
     <span
@@ -96,14 +105,35 @@ export function IdentityAvatar({
         className,
       ])}
     >
-      {avatarPath ? (
-        <span
-          className="identity-avatar-image"
-          style={{ backgroundImage: `url("${avatarPath}")` }}
+      <span
+        className={
+          isImageLoaded
+            ? 'identity-avatar-initials identity-avatar-initials-hidden'
+            : 'identity-avatar-initials'
+        }
+      >
+        {initials}
+      </span>
+      {shouldRenderImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt=""
+          className={
+            isImageLoaded
+              ? 'identity-avatar-image identity-avatar-image-ready'
+              : 'identity-avatar-image'
+          }
+          loading="lazy"
+          onError={() => {
+            setFailedAvatarPath(avatarPath);
+            setLoadedAvatarPath(null);
+          }}
+          onLoad={() => {
+            setLoadedAvatarPath(avatarPath);
+          }}
+          src={avatarPath ?? undefined}
         />
-      ) : (
-        <span className="identity-avatar-initials">{initials}</span>
-      )}
+      ) : null}
     </span>
   );
 }

@@ -23,8 +23,11 @@ import {
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
+import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
+import { withSpaceParam } from '@/modules/spaces/url';
 import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
 import Link from 'next/link';
+import { notFound, redirect } from 'next/navigation';
 import {
   restoreConversationAction,
 } from './actions';
@@ -36,6 +39,7 @@ type InboxPageProps = {
     error?: string;
     filter?: string;
     q?: string;
+    space?: string;
     view?: string;
   }>;
 };
@@ -166,6 +170,7 @@ function buildFilterHref(
   filter: InboxFilter,
   query?: string,
   view?: InboxView,
+  spaceId?: string | null,
 ) {
   const params = new URLSearchParams();
 
@@ -175,6 +180,10 @@ function buildFilterHref(
 
   if (view === 'archived') {
     params.set('view', 'archived');
+  }
+
+  if (spaceId?.trim()) {
+    params.set('space', spaceId.trim());
   }
 
   if (query?.trim()) {
@@ -189,11 +198,13 @@ function buildInboxHref({
   filter,
   query,
   create,
+  spaceId,
   view,
 }: {
   filter: InboxFilter;
   query?: string;
   create?: boolean;
+  spaceId?: string | null;
   view?: InboxView;
 }) {
   const params = new URLSearchParams();
@@ -208,6 +219,10 @@ function buildInboxHref({
 
   if (view === 'archived') {
     params.set('view', 'archived');
+  }
+
+  if (spaceId?.trim()) {
+    params.set('space', spaceId.trim());
   }
 
   if (create) {
@@ -233,13 +248,39 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   if (!user) {
     return null;
   }
+  const activeSpaceState = await resolveActiveSpaceForUser({
+    userId: user.id,
+    requestedSpaceId: query.space,
+  });
+
+  if (!activeSpaceState.activeSpace) {
+    notFound();
+  }
+
+  const activeSpaceId = activeSpaceState.activeSpace.id;
+
+  if (
+    !query.space ||
+    activeSpaceState.requestedSpaceWasInvalid
+  ) {
+    redirect(
+      buildInboxHref({
+        filter: activeFilter,
+        query: query.q,
+        create: isCreateOpen,
+        spaceId: activeSpaceId,
+        view: activeView,
+      }),
+    );
+  }
+
   const language = await getRequestLanguage();
   const t = getTranslations(language);
 
   const [conversations, archivedConversations, availableUsers] = await Promise.all([
-    getInboxConversations(user.id),
-    getArchivedConversations(user.id),
-    getAvailableUsers(user.id),
+    getInboxConversations(user.id, { spaceId: activeSpaceId }),
+    getArchivedConversations(user.id, { spaceId: activeSpaceId }),
+    getAvailableUsers(user.id, { spaceId: activeSpaceId }),
   ]);
   const visibleConversations =
     activeView === 'archived' ? archivedConversations : conversations;
@@ -430,7 +471,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             <Link
               aria-label={t.inbox.settingsAria}
               className="inbox-settings-trigger"
-              href="/settings"
+              href={withSpaceParam('/settings', activeSpaceId)}
             >
               <span aria-hidden="true">⚙</span>
             </Link>
@@ -441,6 +482,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 filter: activeFilter,
                 query: query.q,
                 create: true,
+                spaceId: activeSpaceId,
                 view: activeView,
               })}
             >
@@ -473,6 +515,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             {activeFilter !== 'all' ? (
               <input name="filter" type="hidden" value={activeFilter} />
             ) : null}
+            <input name="space" type="hidden" value={activeSpaceId} />
             {activeView === 'archived' ? (
               <input name="view" type="hidden" value="archived" />
             ) : null}
@@ -486,7 +529,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   ? 'inbox-filter-pill inbox-filter-pill-active'
                   : 'inbox-filter-pill'
               }
-              href={buildFilterHref('all', query.q, activeView)}
+              href={buildFilterHref('all', query.q, activeView, activeSpaceId)}
             >
               {t.inbox.filters.all}
             </Link>
@@ -497,7 +540,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   ? 'inbox-filter-pill inbox-filter-pill-active'
                   : 'inbox-filter-pill'
               }
-              href={buildFilterHref('dm', query.q, activeView)}
+              href={buildFilterHref('dm', query.q, activeView, activeSpaceId)}
             >
               {t.inbox.filters.dm}
             </Link>
@@ -508,7 +551,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   ? 'inbox-filter-pill inbox-filter-pill-active'
                   : 'inbox-filter-pill'
               }
-              href={buildFilterHref('groups', query.q, activeView)}
+              href={buildFilterHref('groups', query.q, activeView, activeSpaceId)}
             >
               {t.inbox.filters.groups}
             </Link>
@@ -524,10 +567,12 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                     ? buildInboxHref({
                         filter: activeFilter,
                         query: query.q,
+                        spaceId: activeSpaceId,
                       })
                     : buildInboxHref({
                         filter: activeFilter,
                         query: query.q,
+                        spaceId: activeSpaceId,
                         view: 'archived',
                       })
                 }
@@ -553,7 +598,12 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               {searchTerm ? (
                 <Link
                   className="inbox-search-clear"
-                  href={buildFilterHref(activeFilter, undefined, activeView)}
+                  href={buildFilterHref(
+                    activeFilter,
+                    undefined,
+                    activeView,
+                    activeSpaceId,
+                  )}
                 >
                   {t.inbox.clear}
                 </Link>
@@ -616,7 +666,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               >
                 <Link
                   className="conversation-row-link"
-                  href={`/chat/${conversation.conversationId}`}
+                  href={withSpaceParam(
+                    `/chat/${conversation.conversationId}`,
+                    activeSpaceId,
+                  )}
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar
@@ -708,6 +761,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                       type="hidden"
                       value={conversation.conversationId}
                     />
+                    <input name="spaceId" type="hidden" value={activeSpaceId} />
                     <button
                       className="button button-compact button-secondary conversation-restore-button"
                       type="submit"
@@ -730,6 +784,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             href={buildInboxHref({
               filter: activeFilter,
               query: query.q,
+              spaceId: activeSpaceId,
               view: activeView,
             })}
           />
@@ -740,8 +795,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             closeHref={buildInboxHref({
               filter: activeFilter,
               query: query.q,
+              spaceId: activeSpaceId,
               view: activeView,
             })}
+            spaceId={activeSpaceId}
             language={language}
           />
         </section>

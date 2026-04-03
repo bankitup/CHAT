@@ -1,5 +1,9 @@
 import { logoutAction } from '../actions';
-import { updateLanguagePreferenceAction, updateProfileAction } from './actions';
+import {
+  removeAvatarAction,
+  updateLanguagePreferenceAction,
+  updateProfileAction,
+} from './actions';
 import { NotificationReadinessPanel } from './notification-readiness';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
@@ -49,6 +53,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   const t = getTranslations(language);
   const profileLabel = getProfileLabel(profile.email, profile.displayName, t.settings.heroEyebrow);
   const currentLanguage = (profile.preferredLanguage ?? language) as AppLanguage;
+  const hasAvatar = Boolean(profile.avatarPath);
 
   return (
     <section className="stack settings-screen settings-shell">
@@ -97,6 +102,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               <span className="muted profile-field-note">
                 {t.settings.profilePhotoNote}
               </span>
+              <span className="muted profile-field-note">
+                {hasAvatar
+                  ? t.settings.profilePhotoCurrent
+                  : t.settings.profilePhotoEmpty}
+              </span>
             </label>
 
             <label className="field">
@@ -114,6 +124,17 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               {t.settings.saveChanges}
             </button>
           </form>
+
+          {hasAvatar ? (
+            <form action={removeAvatarAction}>
+              <button
+                className="button button-secondary button-compact"
+                type="submit"
+              >
+                {t.settings.removePhoto}
+              </button>
+            </form>
+          ) : null}
         </section>
 
         <section className="stack settings-section">

@@ -43,6 +43,7 @@ type ConversationRecord = {
   id: string;
   kind: string | null;
   title?: string | null;
+  space_id?: string | null;
   created_by?: string | null;
   last_message_at?: string | null;
   created_at?: string | null;
@@ -65,6 +66,7 @@ type ConversationMembershipLookupRow = {
 
 export type InboxConversation = {
   conversationId: string;
+  spaceId: string | null;
   title: string | null;
   createdBy?: string | null;
   lastMessageAt: string | null;
@@ -369,14 +371,17 @@ export function getConversationParticipantSummary(
 async function getConversationsByVisibility(
   userId: string,
   archived: boolean,
+  options?: {
+    spaceId?: string | null;
+  },
 ) {
   const supabase = await createSupabaseServerClient();
-  const baseSelect =
-    'conversation_id, state, last_read_message_seq, last_read_at, conversations(id, kind, title, created_by, last_message_at, created_at)';
+  const baseMembershipSelect =
+    'conversation_id, state, last_read_message_seq, last_read_at';
   let query = supabase
     .from('conversation_members')
     .select(
-      `conversation_id, state, hidden_at, last_read_message_seq, last_read_at, conversations(id, kind, title, created_by, last_message_at, created_at)`,
+      'conversation_id, state, hidden_at, last_read_message_seq, last_read_at',
     )
     .eq('user_id', userId)
     .eq('state', 'active');
@@ -393,7 +398,7 @@ async function getConversationsByVisibility(
 
       const fallback = await supabase
         .from('conversation_members')
-        .select(baseSelect)
+        .select(baseMembershipSelect)
         .eq('user_id', userId)
         .eq('state', 'active');
 
@@ -402,7 +407,11 @@ async function getConversationsByVisibility(
       }
 
       return mapInboxConversations(
-        (fallback.data ?? []) as ConversationMemberRow[],
+        await attachConversationsToMembershipRows(
+          (fallback.data ?? []) as ConversationMemberRow[],
+          supabase,
+          options,
+        ),
         supabase,
       );
     }
@@ -410,7 +419,83 @@ async function getConversationsByVisibility(
     throw new Error(error.message);
   }
 
-  return mapInboxConversations((data ?? []) as ConversationMemberRow[], supabase);
+  return mapInboxConversations(
+    await attachConversationsToMembershipRows(
+      (data ?? []) as ConversationMemberRow[],
+      supabase,
+      options,
+    ),
+    supabase,
+  );
+}
+
+async function attachConversationsToMembershipRows(
+  rows: ConversationMemberRow[],
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  const conversationIds = Array.from(
+    new Set(rows.map((row) => row.conversation_id).filter(Boolean)),
+  );
+
+  if (conversationIds.length === 0) {
+    return rows.map((row) => ({
+      ...row,
+      conversations: null,
+    })) satisfies ConversationMemberRow[];
+  }
+
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('id, kind, title, space_id, created_by, last_message_at, created_at')
+    .in('id', conversationIds);
+
+  let conversations = (data ?? null) as ConversationRecord[] | null;
+
+  if (error) {
+    if (isMissingColumnErrorMessage(error.message, 'space_id')) {
+      if (options?.spaceId) {
+        throw createSchemaRequirementError(
+          'Active space scoping requires public.conversations.space_id.',
+        );
+      }
+
+      const fallback = await supabase
+        .from('conversations')
+        .select('id, kind, title, created_by, last_message_at, created_at')
+        .in('id', conversationIds);
+
+      if (fallback.error) {
+        throw new Error(fallback.error.message);
+      }
+
+      conversations = (fallback.data ?? null) as ConversationRecord[] | null;
+    } else {
+      throw new Error(error.message);
+    }
+  }
+
+  const conversationById = new Map(
+    ((conversations ?? []) as ConversationRecord[]).map((conversation) => [
+      conversation.id,
+      conversation,
+    ]),
+  );
+
+  const scopedRows = rows.filter((row) => {
+    if (!options?.spaceId) {
+      return true;
+    }
+
+    return (conversationById.get(row.conversation_id)?.space_id ?? null) === options.spaceId;
+  });
+
+  return scopedRows.map((row) => ({
+    ...row,
+    conversations: conversationById.get(row.conversation_id) ?? null,
+  })) satisfies ConversationMemberRow[];
 }
 
 async function mapInboxConversations(
@@ -537,6 +622,7 @@ async function mapInboxConversations(
 
       return {
         conversationId: row.conversation_id,
+        spaceId: conversation?.space_id ?? null,
         kind: conversation?.kind ?? null,
         title: conversation?.title ?? null,
         createdBy: conversation?.created_by ?? null,
@@ -562,24 +648,35 @@ async function mapInboxConversations(
     });
 }
 
-export async function getInboxConversations(userId: string) {
-  return getConversationsByVisibility(userId, false);
+export async function getInboxConversations(
+  userId: string,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  return getConversationsByVisibility(userId, false, options);
 }
 
-export async function getArchivedConversations(userId: string) {
-  return getConversationsByVisibility(userId, true);
+export async function getArchivedConversations(
+  userId: string,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  return getConversationsByVisibility(userId, true, options);
 }
 
 export async function getConversationForUser(
   conversationId: string,
   userId: string,
+  options?: {
+    spaceId?: string | null;
+  },
 ) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('conversation_members')
-    .select(
-      'conversation_id, notification_level, conversations(id, kind, title, created_by, last_message_at, created_at)',
-    )
+    .select('conversation_id, notification_level')
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
     .eq('state', 'active')
@@ -589,9 +686,7 @@ export async function getConversationForUser(
     if (isMissingColumnErrorMessage(error.message, 'notification_level')) {
       const fallback = await supabase
         .from('conversation_members')
-        .select(
-          'conversation_id, conversations(id, kind, title, created_by, last_message_at, created_at)',
-        )
+        .select('conversation_id')
         .eq('conversation_id', conversationId)
         .eq('user_id', userId)
         .eq('state', 'active')
@@ -605,15 +700,26 @@ export async function getConversationForUser(
         return null;
       }
 
-      const fallbackRow = fallback.data as ConversationMemberRow;
-      const fallbackConversation = normalizeConversation(fallbackRow.conversations);
+      const [scopedRow] = await attachConversationsToMembershipRows(
+        [
+          {
+            conversation_id: (fallback.data as { conversation_id: string }).conversation_id,
+            conversations: null,
+          } satisfies ConversationMemberRow,
+        ],
+        supabase,
+        options,
+      );
 
-      if (!fallbackConversation) {
+      const fallbackConversation = normalizeConversation(scopedRow?.conversations ?? null);
+
+      if (!fallbackConversation || !scopedRow) {
         return null;
       }
 
       return {
-        conversationId: fallbackRow.conversation_id,
+        conversationId: scopedRow.conversation_id,
+        spaceId: fallbackConversation.space_id ?? null,
         kind: fallbackConversation.kind,
         title: fallbackConversation.title,
         createdBy: fallbackConversation.created_by ?? null,
@@ -630,22 +736,34 @@ export async function getConversationForUser(
     return null;
   }
 
-  const row = data as ConversationMemberRow;
-  const conversation = normalizeConversation(row.conversations);
+  const [scopedRow] = await attachConversationsToMembershipRows(
+    [
+      {
+        conversation_id: (data as { conversation_id: string }).conversation_id,
+        notification_level:
+          (data as { notification_level?: string | null }).notification_level ?? null,
+        conversations: null,
+      } satisfies ConversationMemberRow,
+    ],
+    supabase,
+    options,
+  );
+  const conversation = normalizeConversation(scopedRow?.conversations ?? null);
 
-  if (!conversation) {
+  if (!conversation || !scopedRow) {
     return null;
   }
 
   return {
-    conversationId: row.conversation_id,
+    conversationId: scopedRow.conversation_id,
+    spaceId: conversation.space_id ?? null,
     kind: conversation.kind,
     title: conversation.title,
     createdBy: conversation.created_by ?? null,
     lastMessageAt: conversation.last_message_at,
     createdAt: conversation.created_at,
     notificationLevel:
-      row.notification_level === 'muted' ? 'muted' : 'default',
+      scopedRow.notification_level === 'muted' ? 'muted' : 'default',
   };
 }
 
@@ -836,6 +954,56 @@ function sanitizeProfileFileName(value: string) {
     .toLowerCase();
 }
 
+function isAbsoluteAvatarUrl(value: string | null | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  return value.startsWith('https://') || value.startsWith('http://');
+}
+
+function isManagedAvatarObjectPath(
+  userId: string,
+  value: string | null | undefined,
+) {
+  const normalizedValue = value?.trim() || null;
+
+  if (!normalizedValue || isAbsoluteAvatarUrl(normalizedValue)) {
+    return false;
+  }
+
+  return normalizedValue.startsWith(`${userId}/`);
+}
+
+async function resolveStoredAvatarPath(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  value: string | null | undefined,
+) {
+  const normalizedValue = value?.trim() || null;
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  if (isAbsoluteAvatarUrl(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  const signed = await supabase.storage
+    .from(PROFILE_AVATAR_BUCKET)
+    .createSignedUrl(normalizedValue, 60 * 60);
+
+  if (!signed.error) {
+    return signed.data.signedUrl;
+  }
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(normalizedValue);
+
+  return publicUrl || null;
+}
+
 function getAttachmentFileName(objectPath: string) {
   const rawName = objectPath.split('/').pop()?.trim() || 'attachment';
 
@@ -880,15 +1048,19 @@ export async function getProfileIdentities(userIds: string[]) {
     .in('user_id', uniqueUserIds);
 
   if (!withDisplayNamesAndAvatars.error) {
-    return ((withDisplayNamesAndAvatars.data ?? []) as {
+    const profiles = ((withDisplayNamesAndAvatars.data ?? []) as {
       user_id: string;
       display_name: string | null;
       avatar_path?: string | null;
-    }[]).map((profile) => ({
-      userId: profile.user_id,
-      displayName: profile.display_name?.trim() || null,
-      avatarPath: profile.avatar_path?.trim() || null,
-    }));
+    }[]);
+
+    return Promise.all(
+      profiles.map(async (profile) => ({
+        userId: profile.user_id,
+        displayName: profile.display_name?.trim() || null,
+        avatarPath: await resolveStoredAvatarPath(supabase, profile.avatar_path),
+      })),
+    );
   }
 
   const withDisplayNames = await supabase
@@ -1286,21 +1458,50 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   );
 }
 
-export async function getAvailableUsers(currentUserId: string) {
+export async function getAvailableUsers(
+  currentUserId: string,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('user_id')
-    .neq('user_id', currentUserId)
-    .order('user_id', { ascending: true });
+  let userIds: string[] = [];
 
-  if (error) {
-    throw new Error(error.message);
+  if (options?.spaceId) {
+    const { data, error } = await supabase
+      .from('space_members')
+      .select('user_id')
+      .eq('space_id', options.spaceId)
+      .neq('user_id', currentUserId)
+      .order('user_id', { ascending: true });
+
+    if (error) {
+      if (isMissingRelationErrorMessage(error.message, 'space_members')) {
+        throw createSchemaRequirementError(
+          'Space-scoped user lookup requires public.space_members.',
+        );
+      }
+
+      throw new Error(error.message);
+    }
+
+    userIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
+  } else {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .neq('user_id', currentUserId)
+      .order('user_id', { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    userIds = ((data ?? []) as { user_id: string }[]).map(
+      (profile) => profile.user_id,
+    );
   }
 
-  const userIds = ((data ?? []) as { user_id: string }[]).map(
-    (profile) => profile.user_id,
-  );
   const identities = await getProfileIdentities(userIds);
   const identityByUserId = new Map(
     identities.map((identity) => [identity.userId, identity]),
@@ -1365,19 +1566,35 @@ export async function getConversationParticipantIdentities(
 export async function findExistingActiveDmConversation(
   creatorUserId: string,
   otherUserId: string,
+  options?: {
+    spaceId?: string | null;
+  },
 ) {
   const supabase = await createSupabaseServerClient();
   const dmConversationKey = buildDmConversationKey(creatorUserId, otherUserId);
-  const { data: keyedMemberships, error: keyedLookupError } = await supabase
+  let keyedLookupQuery = supabase
     .from('conversation_members')
-    .select('conversation_id, conversations!inner(id, kind, dm_key)')
+    .select(
+      options?.spaceId
+        ? 'conversation_id, conversations!inner(id, kind, dm_key, space_id)'
+        : 'conversation_id, conversations!inner(id, kind, dm_key)',
+    )
     .eq('user_id', creatorUserId)
     .eq('state', 'active')
     .eq('conversations.kind', 'dm')
     .eq('conversations.dm_key', dmConversationKey);
 
+  if (options?.spaceId) {
+    keyedLookupQuery = keyedLookupQuery.eq('conversations.space_id', options.spaceId);
+  }
+
+  const { data: keyedMemberships, error: keyedLookupError } = await keyedLookupQuery;
+
   if (keyedLookupError) {
-    if (!isMissingColumnErrorMessage(keyedLookupError.message, 'dm_key')) {
+    if (
+      !isMissingColumnErrorMessage(keyedLookupError.message, 'dm_key') &&
+      !isMissingColumnErrorMessage(keyedLookupError.message, 'space_id')
+    ) {
       throw new Error(keyedLookupError.message);
     }
   } else {
@@ -1385,7 +1602,8 @@ export async function findExistingActiveDmConversation(
       conversation_id: string;
       conversations:
         | { id: string; kind: string | null; dm_key?: string | null }
-        | Array<{ id: string; kind: string | null; dm_key?: string | null }>
+        | { id: string; kind: string | null; dm_key?: string | null; space_id?: string | null }
+        | Array<{ id: string; kind: string | null; dm_key?: string | null; space_id?: string | null }>
         | null;
     }>).find((row) => normalizeConversation(row.conversations)?.kind === 'dm');
 
@@ -1412,15 +1630,34 @@ export async function findExistingActiveDmConversation(
     return null;
   }
 
-  const { data: otherMemberships, error: otherError } = await supabase
+  let otherMembershipQuery = supabase
     .from('conversation_members')
-    .select('conversation_id, conversations!inner(id, kind)')
+    .select(
+      options?.spaceId
+        ? 'conversation_id, conversations!inner(id, kind, space_id)'
+        : 'conversation_id, conversations!inner(id, kind)',
+    )
     .eq('user_id', otherUserId)
     .eq('state', 'active')
     .in('conversation_id', conversationIds)
     .eq('conversations.kind', 'dm');
 
+  if (options?.spaceId) {
+    otherMembershipQuery = otherMembershipQuery.eq(
+      'conversations.space_id',
+      options.spaceId,
+    );
+  }
+
+  const { data: otherMemberships, error: otherError } = await otherMembershipQuery;
+
   if (otherError) {
+    if (options?.spaceId && isMissingColumnErrorMessage(otherError.message, 'space_id')) {
+      throw createSchemaRequirementError(
+        'Space-scoped DM lookup requires public.conversations.space_id.',
+      );
+    }
+
     throw new Error(otherError.message);
   }
 
@@ -1436,6 +1673,7 @@ export async function createConversationWithMembers(input: {
   creatorUserId: string;
   participantUserIds: string[];
   title?: string | null;
+  spaceId?: string | null;
 }) {
   const supabase = await createSupabaseServerClient();
   const conversationId = crypto.randomUUID();
@@ -1472,6 +1710,9 @@ export async function createConversationWithMembers(input: {
     const existingConversationId = await findExistingActiveDmConversation(
       input.creatorUserId,
       participantUserIds[0] ?? '',
+      {
+        spaceId: input.spaceId ?? null,
+      },
     );
 
     if (existingConversationId) {
@@ -1503,9 +1744,13 @@ export async function createConversationWithMembers(input: {
     input.kind === 'dm'
       ? {
           ...conversationPayloadBase,
+          ...(input.spaceId ? { space_id: input.spaceId } : {}),
           dm_key: dmConversationKey,
         }
-      : conversationPayloadBase;
+      : {
+          ...conversationPayloadBase,
+          ...(input.spaceId ? { space_id: input.spaceId } : {}),
+        };
 
   if (conversationPayload.created_by !== input.creatorUserId) {
     throw new Error(
@@ -1544,6 +1789,9 @@ export async function createConversationWithMembers(input: {
       const existingConversationId = await findExistingActiveDmConversation(
         input.creatorUserId,
         participantUserIds[0] ?? '',
+        {
+          spaceId: input.spaceId ?? null,
+        },
       );
 
       if (existingConversationId) {
@@ -1613,13 +1861,31 @@ export async function updateCurrentUserProfile(input: {
   }
 
   const nextDisplayName = input.displayName?.trim() || null;
+  const existingProfileResponse = await supabase
+    .from('profiles')
+    .select('avatar_path')
+    .eq('user_id', input.userId)
+    .maybeSingle();
+
+  if (existingProfileResponse.error) {
+    throw new Error(existingProfileResponse.error.message);
+  }
+
+  const existingAvatarPath =
+    (
+      existingProfileResponse.data as
+        | {
+            avatar_path?: string | null;
+          }
+        | null
+    )?.avatar_path?.trim() || null;
 
   if (nextDisplayName && nextDisplayName.length > 40) {
     throw new Error('Display name can be up to 40 characters.');
   }
 
-  let nextAvatarPath: string | undefined;
-
+  let nextAvatarPath: string | null | undefined;
+  let uploadedAvatarObjectPath: string | null = null;
   if (input.avatarFile && input.avatarFile.size > 0) {
     if (input.avatarFile.size > PROFILE_AVATAR_MAX_SIZE_BYTES) {
       throw new Error('Avatar images can be up to 5 MB.');
@@ -1642,17 +1908,14 @@ export async function updateCurrentUserProfile(input: {
       throw new Error(uploadError.message);
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(objectPath);
-
-    nextAvatarPath = publicUrl;
+    uploadedAvatarObjectPath = objectPath;
+    nextAvatarPath = objectPath;
   }
 
   const profilePayload = {
     user_id: input.userId,
     display_name: nextDisplayName,
-    ...(nextAvatarPath ? { avatar_path: nextAvatarPath } : {}),
+    ...(nextAvatarPath !== undefined ? { avatar_path: nextAvatarPath } : {}),
   };
 
   const { error } = await supabase
@@ -1660,11 +1923,89 @@ export async function updateCurrentUserProfile(input: {
     .upsert(profilePayload, { onConflict: 'user_id' });
 
   if (error) {
+    if (uploadedAvatarObjectPath) {
+      await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([uploadedAvatarObjectPath]);
+    }
+
     if (error.message.includes('row-level security policy')) {
       throw new Error('Profile settings update was blocked by profiles RLS.');
     }
 
     throw new Error(error.message);
+  }
+
+  if (
+    existingAvatarPath &&
+    isManagedAvatarObjectPath(input.userId, existingAvatarPath) &&
+    existingAvatarPath !== uploadedAvatarObjectPath &&
+    uploadedAvatarObjectPath
+  ) {
+    await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([existingAvatarPath]);
+  }
+}
+
+export async function removeCurrentUserAvatar(userId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!userId) {
+    throw new Error('Authenticated user is required to update a profile.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Profile settings debug: no authenticated user found.');
+  }
+
+  if (user.id !== userId) {
+    throw new Error(
+      `Profile settings debug: user mismatch. auth user id=${user.id}, payload user id=${userId}.`,
+    );
+  }
+
+  const existingProfileResponse = await supabase
+    .from('profiles')
+    .select('avatar_path')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existingProfileResponse.error) {
+    throw new Error(existingProfileResponse.error.message);
+  }
+
+  const existingAvatarPath =
+    (
+      existingProfileResponse.data as
+        | {
+            avatar_path?: string | null;
+          }
+        | null
+    )?.avatar_path?.trim() || null;
+
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        user_id: userId,
+        avatar_path: null,
+      },
+      { onConflict: 'user_id' },
+    );
+
+  if (error) {
+    if (error.message.includes('row-level security policy')) {
+      throw new Error('Profile settings update was blocked by profiles RLS.');
+    }
+
+    throw new Error(error.message);
+  }
+
+  if (isManagedAvatarObjectPath(userId, existingAvatarPath)) {
+    await supabase.storage
+      .from(PROFILE_AVATAR_BUCKET)
+      .remove([existingAvatarPath ?? '']);
   }
 }
 
@@ -2053,6 +2394,12 @@ export async function hideConversationForUser(input: {
     .maybeSingle();
 
   if (membershipError) {
+    if (isMissingColumnErrorMessage(membershipError.message, 'hidden_at')) {
+      throw createSchemaRequirementError(
+        'Inbox archive/hide requires public.conversation_members.hidden_at.',
+      );
+    }
+
     throw new Error(membershipError.message);
   }
 

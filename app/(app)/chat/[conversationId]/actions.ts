@@ -582,7 +582,7 @@ export async function addGroupParticipantsAction(formData: FormData) {
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirect(`/chat/${conversationId}`);
+  redirect(`/chat/${conversationId}?settings=open#conversation-settings`);
 }
 
 export async function removeGroupParticipantAction(formData: FormData) {
