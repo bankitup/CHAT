@@ -118,6 +118,16 @@ async function resolveLocalRecordForEncryptedDm(
   const localRecord = await getLocalDmE2eeDeviceRecord(userId);
 
   if (!localRecord?.serverDeviceRecordId) {
+    if (
+      process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+      typeof window !== 'undefined'
+    ) {
+      console.info('[dm-e2ee-bootstrap-client]', 'local-record:stale-server-device-id', {
+        failedValidationBranch: 'stale serverDeviceRecordId',
+        hasLocalRecord: Boolean(localRecord),
+        hasServerDeviceRecordId: Boolean(localRecord?.serverDeviceRecordId),
+      });
+    }
     const error = new Error('dm_e2ee_sender_device_stale') as Error & {
       code?: DmE2eeApiErrorCode | null;
     };

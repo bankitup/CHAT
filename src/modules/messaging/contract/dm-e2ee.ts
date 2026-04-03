@@ -9,9 +9,26 @@ export type DmE2eeApiErrorCode =
   | 'dm_e2ee_recipient_unavailable'
   | 'dm_e2ee_prekey_conflict';
 
+export type DmE2eeBootstrap400ReasonCode =
+  | 'bad payload'
+  | 'missing profile row'
+  | 'profile seed failed'
+  | 'publish failed';
+
+export type DmE2eeBootstrapFailedValidationBranch =
+  | 'incomplete local state'
+  | 'stale serverDeviceRecordId'
+  | 'failed republish'
+  | 'bad payload'
+  | 'missing profile row'
+  | 'profile seed failed'
+  | 'publish failed';
+
 export type DmE2eeApiErrorResponse = {
   error: string;
   code?: DmE2eeApiErrorCode | null;
+  exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
+  failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
 };
 
 export type DmE2eeEnvelopeType =

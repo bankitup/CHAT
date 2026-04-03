@@ -1412,8 +1412,7 @@ export async function publishCurrentUserDmE2eeDevice(
   const deleteExistingPrekeys = await supabase
     .from('device_one_time_prekeys')
     .delete()
-    .eq('device_id', deviceRecordId)
-    .is('claimed_at', null);
+    .eq('device_id', deviceRecordId);
 
   if (deleteExistingPrekeys.error) {
     logDmE2eeBootstrapDiagnostics('publish:delete-prekeys-error', {

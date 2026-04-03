@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { PublishDmE2eeDeviceRequest } from '@/modules/messaging/contract/dm-e2ee';
+import type {
+  DmE2eeBootstrap400ReasonCode,
+  DmE2eeBootstrapFailedValidationBranch,
+  PublishDmE2eeDeviceRequest,
+} from '@/modules/messaging/contract/dm-e2ee';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { publishCurrentUserDmE2eeDevice } from '@/modules/messaging/data/server';
 
@@ -72,19 +76,31 @@ function getMissingBootstrapFields(input: PublishDmE2eeDeviceRequest) {
   return missing;
 }
 
-function classifyDmE2eeDevice400Reason(message: string) {
+function classifyDmE2eeDevice400Reason(
+  message: string,
+): DmE2eeBootstrap400ReasonCode {
   if (
     message.includes('foreign key constraint') &&
     message.includes('user_devices_user_id_fkey')
   ) {
-    return 'user-devices-profile-fk-missing';
+    return 'missing profile row';
   }
 
   if (message.includes('DM E2EE profile seed failed:')) {
-    return 'profile-seed-failed';
+    return 'profile seed failed';
   }
 
-  return 'publish-failed';
+  return 'publish failed';
+}
+
+function create400Diagnostics(input: {
+  exact400ReasonCode: DmE2eeBootstrap400ReasonCode;
+  failedValidationBranch: DmE2eeBootstrapFailedValidationBranch;
+}) {
+  return {
+    exact400ReasonCode: input.exact400ReasonCode,
+    failedValidationBranch: input.failedValidationBranch,
+  };
 }
 
 export async function POST(request: Request) {
@@ -115,15 +131,20 @@ export async function POST(request: Request) {
   const missingFields = getMissingBootstrapFields(input);
 
   if (missingFields.length > 0) {
+    const diagnostics = create400Diagnostics({
+      exact400ReasonCode: 'bad payload',
+      failedValidationBranch: 'bad payload',
+    });
     logDmE2eeDeviceRouteDiagnostics('response:400:payload-invalid', {
       code: 'dm_e2ee_local_state_incomplete',
+      ...diagnostics,
       missingFields,
-      reason: 'payload-validation-failed',
     });
     return NextResponse.json(
       {
         error: 'Encrypted setup payload is incomplete for this device.',
         code: 'dm_e2ee_local_state_incomplete',
+        ...diagnostics,
       },
       { status: 400 },
     );
@@ -145,8 +166,15 @@ export async function POST(request: Request) {
       error instanceof Error ? error.message : 'Unable to publish DM E2EE device.';
     const reason = classifyDmE2eeDevice400Reason(message);
     logDmE2eeDeviceRouteDiagnostics('publish:error', {
-      reason,
       message,
+      ...(reason === 'missing profile row' ||
+      reason === 'profile seed failed' ||
+      reason === 'publish failed'
+        ? create400Diagnostics({
+            exact400ReasonCode: reason,
+            failedValidationBranch: reason,
+          })
+        : {}),
     });
 
     if (message.includes('DM E2EE bootstrap schema is missing')) {
@@ -159,41 +187,58 @@ export async function POST(request: Request) {
       );
     }
 
-    if (reason === 'user-devices-profile-fk-missing') {
+    if (reason === 'missing profile row') {
+      const diagnostics = create400Diagnostics({
+        exact400ReasonCode: 'missing profile row',
+        failedValidationBranch: 'missing profile row',
+      });
       logDmE2eeDeviceRouteDiagnostics('response:400:profile-row-missing', {
         code: 'dm_e2ee_local_state_incomplete',
+        ...diagnostics,
       });
       return NextResponse.json(
         {
           error:
             'Encrypted setup needs a profile identity row before device registration.',
           code: 'dm_e2ee_local_state_incomplete',
+          ...diagnostics,
         },
         { status: 400 },
       );
     }
 
-    if (reason === 'profile-seed-failed') {
+    if (reason === 'profile seed failed') {
+      const diagnostics = create400Diagnostics({
+        exact400ReasonCode: 'profile seed failed',
+        failedValidationBranch: 'profile seed failed',
+      });
       logDmE2eeDeviceRouteDiagnostics('response:400:profile-seed-failed', {
         code: 'dm_e2ee_local_state_incomplete',
+        ...diagnostics,
       });
       return NextResponse.json(
         {
           error: 'Encrypted setup could not prepare local profile identity state.',
           code: 'dm_e2ee_local_state_incomplete',
+          ...diagnostics,
         },
         { status: 400 },
       );
     }
 
+    const diagnostics = create400Diagnostics({
+      exact400ReasonCode: 'publish failed',
+      failedValidationBranch: 'publish failed',
+    });
     logDmE2eeDeviceRouteDiagnostics('response:400:publish-failed', {
       code: 'dm_e2ee_local_state_incomplete',
-      reason,
+      ...diagnostics,
     });
     return NextResponse.json(
       {
         error: 'Unable to refresh encrypted setup on this device.',
         code: 'dm_e2ee_local_state_incomplete',
+        ...diagnostics,
       },
       { status: 400 },
     );

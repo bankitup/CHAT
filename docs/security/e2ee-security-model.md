@@ -170,6 +170,7 @@ Current session/bootstrap state:
 
 - first-contact and repeat sends currently use a prekey-style encrypted path
 - bootstrap publication is cached locally and re-published only when needed
+- a bootstrap re-publish replaces the server-side one-time-prekey batch for the current device before inserting the new batch, including previously claimed rows that are no longer canonical server state
 - stale sender registration can trigger one forced re-publish retry
 - one-time prekey race can trigger one recipient-bundle refresh retry
 - missing one-time prekeys do not authorize plaintext fallback
