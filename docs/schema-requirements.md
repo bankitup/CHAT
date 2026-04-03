@@ -21,6 +21,7 @@ This repo now relies on a few messaging schema fields that must exist in Supabas
 - `created_by`
 - `last_message_at`
 - `created_at`
+- `space_id` (required for current space-scoped inbox/activity/chat entry)
 
 Optional hardening support:
 
@@ -101,6 +102,7 @@ Apply these if the fields are not yet present in your Supabase project:
 
 - [2026-04-03-conversation-member-hidden-at.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-hidden-at.sql)
 - [2026-04-03-conversation-member-notification-level.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-notification-level.sql)
+- [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
 
 ## Defensive behavior currently in code
 

@@ -366,6 +366,10 @@ and the runtime query/routing layer is actively scoped to a selected space.
 2. default `TEST` space seed and backfill of current conversations/members
    Source file: [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
 
+3. production alignment patch when `spaces`/`space_members` already exist but
+   `conversations.space_id` is missing or not backfilled
+   Source file: [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
+
 ## Required migrations before enabling DM E2EE bootstrap
 
 Do not apply these as a user-facing "encrypted messaging is live" claim by themselves. They enable device registration, public prekey publication, and ciphertext DM send storage only.

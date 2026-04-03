@@ -121,6 +121,8 @@ Implemented now:
 - explicit schema design for spaces
 - migration draft for `spaces`, `space_members`, and `conversations.space_id`
 - migration draft to seed a default `TEST` space and backfill current conversations into it
+- narrow operational alignment SQL for environments where spaces exist but
+  `conversations.space_id` is missing or null on legacy rows
 - documentation of the access boundary and DM-in-space rules
 - runtime active-space scoping for inbox, activity, and chat entry via `?space=<space_id>`
 - post-login routing into a minimal space selection screen before messenger entry
@@ -150,6 +152,12 @@ That means:
 - new DM and group activity continues inside the selected space, which will initially be `TEST` for current users
 
 This is a migration and rollout boundary, not a long-term product limit. The purpose is to establish one explicit space before adding broader space selection UX.
+
+Operational SQL references:
+
+- [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql)
+- [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
+- [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
 
 ## Query and routing surfaces to scope next
 
