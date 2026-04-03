@@ -7,6 +7,53 @@ export type UserSpaceRecord = SpaceRecord & {
   role: SpaceRole;
 };
 
+function getSafeSupabaseHostFragment() {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+
+  if (!rawUrl) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(rawUrl).hostname;
+    return hostname.split('.')[0] ?? hostname;
+  } catch {
+    return null;
+  }
+}
+
+function getBuildMarker() {
+  return (
+    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ||
+    process.env.VERCEL_URL ||
+    'local'
+  );
+}
+
+function logSpacesDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_SPACES_SSR !== '1') {
+    return;
+  }
+
+  const base = {
+    build: getBuildMarker(),
+    supabaseProject: getSafeSupabaseHostFragment(),
+  };
+
+  if (details) {
+    console.info('[spaces-ssr]', stage, {
+      ...base,
+      ...details,
+    });
+    return;
+  }
+
+  console.info('[spaces-ssr]', stage, base);
+}
+
 function createSpaceSchemaRequirementError(details: string) {
   return new Error(
     `${details} Apply the documented Supabase changes in /Users/danya/IOS - Apps/CHAT/docs/space-model.md.`,
@@ -29,8 +76,20 @@ function isMissingColumnErrorMessage(message: string, columnName: string) {
   );
 }
 
+export function isSpaceMembersSchemaCacheErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes('space_members') &&
+    (normalizedMessage.includes('schema cache') ||
+      normalizedMessage.includes('could not find the table') ||
+      normalizedMessage.includes('relation'))
+  );
+}
+
 export async function getUserSpaces(userId: string) {
   const supabase = await createSupabaseServerClient();
+  logSpacesDiagnostics('getUserSpaces:start');
+  logSpacesDiagnostics('space_members:query-start', { queried: true });
   const { data: memberships, error: membershipError } = await supabase
     .from('space_members')
     .select('space_id, role, created_at')
@@ -38,6 +97,10 @@ export async function getUserSpaces(userId: string) {
     .order('created_at', { ascending: true });
 
   if (membershipError) {
+    logSpacesDiagnostics('space_members:query-error', {
+      queried: true,
+      message: membershipError.message,
+    });
     if (isMissingRelationErrorMessage(membershipError.message, 'space_members')) {
       throw createSpaceSchemaRequirementError(
         'Active space resolution requires public.space_members.',
@@ -46,6 +109,10 @@ export async function getUserSpaces(userId: string) {
 
     throw new Error(membershipError.message);
   }
+  logSpacesDiagnostics('space_members:query-ok', {
+    queried: true,
+    count: (memberships ?? []).length,
+  });
 
   const membershipRows = (memberships ?? []) as Array<{
     space_id: string;
@@ -58,6 +125,7 @@ export async function getUserSpaces(userId: string) {
   );
 
   if (spaceIds.length === 0) {
+    logSpacesDiagnostics('getUserSpaces:done', { count: 0 });
     return [] as UserSpaceRecord[];
   }
 
@@ -67,6 +135,9 @@ export async function getUserSpaces(userId: string) {
     .in('id', spaceIds);
 
   if (spacesError) {
+    logSpacesDiagnostics('spaces:query-error', {
+      message: spacesError.message,
+    });
     if (isMissingRelationErrorMessage(spacesError.message, 'spaces')) {
       throw createSpaceSchemaRequirementError(
         'Active space resolution requires public.spaces.',
@@ -101,7 +172,7 @@ export async function getUserSpaces(userId: string) {
     ]),
   );
 
-  return membershipRows
+  const resolvedSpaces = membershipRows
     .map((membership) => {
       const space = spaceById.get(membership.space_id);
 
@@ -125,6 +196,9 @@ export async function getUserSpaces(userId: string) {
 
       return (left?.name ?? '').localeCompare(right?.name ?? '');
     }) as UserSpaceRecord[];
+
+  logSpacesDiagnostics('getUserSpaces:done', { count: resolvedSpaces.length });
+  return resolvedSpaces;
 }
 
 export async function resolveActiveSpaceForUser(input: {

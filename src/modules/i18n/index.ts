@@ -47,6 +47,8 @@ type LanguageDictionary = {
     currentActivityNote: string;
     emptyTitle: string;
     emptyBody: string;
+    unavailableTitle: string;
+    unavailableBody: string;
   };
   settings: {
     backToChats: string;
@@ -349,6 +351,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       currentActivityNote: 'Current messaging activity is available here for now.',
       emptyTitle: 'No spaces yet',
       emptyBody: 'Ask the operator to add you to a space first.',
+      unavailableTitle: 'Spaces are temporarily unavailable',
+      unavailableBody: 'Please try again in a moment while space access is being refreshed.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -661,6 +665,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       currentActivityNote: 'Текущая переписка пока доступна здесь.',
       emptyTitle: 'Пока нет пространств',
       emptyBody: 'Попросите оператора добавить вас в пространство.',
+      unavailableTitle: 'Пространства временно недоступны',
+      unavailableBody: 'Попробуйте снова чуть позже, пока доступ к пространствам обновляется.',
     },
     settings: {
       backToChats: 'Назад к чатам',
