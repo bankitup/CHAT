@@ -328,6 +328,13 @@ function createSchemaRequirementError(details: string) {
   );
 }
 
+function createDmE2eeBootstrapPublishError(
+  failurePoint: string,
+  message: string,
+) {
+  return new Error(`[${failurePoint}] ${message}`);
+}
+
 function isMissingRelationErrorMessage(message: string, relationName: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -1315,7 +1322,10 @@ export async function publishCurrentUserDmE2eeDevice(
       );
     }
 
-    throw new Error(profileLookup.error.message);
+    throw createDmE2eeBootstrapPublishError(
+      'profile lookup',
+      profileLookup.error.message,
+    );
   }
 
   if (!profileLookup.data) {
@@ -1338,7 +1348,8 @@ export async function publishCurrentUserDmE2eeDevice(
         );
       }
 
-      throw new Error(
+      throw createDmE2eeBootstrapPublishError(
+        'profile seed insert',
         `DM E2EE profile seed failed: ${profileInsert.error.message}`,
       );
     }
@@ -1383,13 +1394,19 @@ export async function publishCurrentUserDmE2eeDevice(
       );
     }
 
-    throw new Error(userDevices.error.message);
+    throw createDmE2eeBootstrapPublishError(
+      'user device upsert',
+      userDevices.error.message,
+    );
   }
 
   const deviceRecordId = String((userDevices.data as { id: string } | null)?.id ?? '').trim();
 
   if (!deviceRecordId) {
-    throw new Error('Unable to persist DM E2EE device identity.');
+    throw createDmE2eeBootstrapPublishError(
+      'persist device identity',
+      'Unable to persist DM E2EE device identity.',
+    );
   }
   logDmE2eeBootstrapDiagnostics('publish:user-device-ok');
 
@@ -1406,7 +1423,10 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others-error', {
       message: retireOthers.error.message,
     });
-    throw new Error(retireOthers.error.message);
+    throw createDmE2eeBootstrapPublishError(
+      'retire other devices',
+      retireOthers.error.message,
+    );
   }
 
   // A repaired device publish must replace the full server-side prekey batch for
@@ -1433,7 +1453,10 @@ export async function publishCurrentUserDmE2eeDevice(
       );
     }
 
-    throw new Error(deleteExistingPrekeys.error.message);
+    throw createDmE2eeBootstrapPublishError(
+      'delete prekeys',
+      deleteExistingPrekeys.error.message,
+    );
   }
 
   if (input.oneTimePrekeys.length > 0) {
@@ -1451,7 +1474,10 @@ export async function publishCurrentUserDmE2eeDevice(
       logDmE2eeBootstrapDiagnostics('publish:insert-prekeys-error', {
         message: insertedPrekeys.error.message,
       });
-      throw new Error(insertedPrekeys.error.message);
+      throw createDmE2eeBootstrapPublishError(
+        'insert prekeys',
+        insertedPrekeys.error.message,
+      );
     }
   }
 

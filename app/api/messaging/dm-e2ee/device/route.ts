@@ -93,6 +93,15 @@ function classifyDmE2eeDevice400Reason(
   return 'publish failed';
 }
 
+function extractDmE2eeFailurePoint(message: string) {
+  const match = message.match(/^\[([^\]]+)\]\s+/);
+  return match?.[1]?.trim() || null;
+}
+
+function stripDmE2eeFailurePoint(message: string) {
+  return message.replace(/^\[[^\]]+\]\s+/, '');
+}
+
 function create400Diagnostics(input: {
   exact400ReasonCode: DmE2eeBootstrap400ReasonCode;
   failedValidationBranch: DmE2eeBootstrapFailedValidationBranch;
@@ -101,6 +110,22 @@ function create400Diagnostics(input: {
     exact400ReasonCode: input.exact400ReasonCode,
     failedValidationBranch: input.failedValidationBranch,
   };
+}
+
+function getBootstrapAttemptBranch(
+  request: Request,
+  fallback: DmE2eeBootstrapFailedValidationBranch,
+): DmE2eeBootstrapFailedValidationBranch {
+  const attempt = request.headers
+    .get('X-Chat-Dm-E2ee-Bootstrap-Attempt')
+    ?.trim()
+    .toLowerCase();
+
+  if (attempt === 'repair-republish') {
+    return 'failed republish';
+  }
+
+  return fallback;
 }
 
 export async function POST(request: Request) {
@@ -133,7 +158,7 @@ export async function POST(request: Request) {
   if (missingFields.length > 0) {
     const diagnostics = create400Diagnostics({
       exact400ReasonCode: 'bad payload',
-      failedValidationBranch: 'bad payload',
+      failedValidationBranch: getBootstrapAttemptBranch(request, 'bad payload'),
     });
     logDmE2eeDeviceRouteDiagnostics('response:400:payload-invalid', {
       code: 'dm_e2ee_local_state_incomplete',
@@ -162,10 +187,13 @@ export async function POST(request: Request) {
     logDmE2eeDeviceRouteDiagnostics('publish:ok');
     return NextResponse.json(result);
   } catch (error) {
-    const message =
+    const rawMessage =
       error instanceof Error ? error.message : 'Unable to publish DM E2EE device.';
+    const exactFailurePoint = extractDmE2eeFailurePoint(rawMessage);
+    const message = stripDmE2eeFailurePoint(rawMessage);
     const reason = classifyDmE2eeDevice400Reason(message);
     logDmE2eeDeviceRouteDiagnostics('publish:error', {
+      exactFailurePoint,
       message,
       ...(reason === 'missing profile row' ||
       reason === 'profile seed failed' ||
@@ -190,10 +218,14 @@ export async function POST(request: Request) {
     if (reason === 'missing profile row') {
       const diagnostics = create400Diagnostics({
         exact400ReasonCode: 'missing profile row',
-        failedValidationBranch: 'missing profile row',
+        failedValidationBranch: getBootstrapAttemptBranch(
+          request,
+          'missing profile row',
+        ),
       });
       logDmE2eeDeviceRouteDiagnostics('response:400:profile-row-missing', {
         code: 'dm_e2ee_local_state_incomplete',
+        exactFailurePoint,
         ...diagnostics,
       });
       return NextResponse.json(
@@ -201,6 +233,7 @@ export async function POST(request: Request) {
           error:
             'Encrypted setup needs a profile identity row before device registration.',
           code: 'dm_e2ee_local_state_incomplete',
+          exactFailurePoint,
           ...diagnostics,
         },
         { status: 400 },
@@ -210,16 +243,21 @@ export async function POST(request: Request) {
     if (reason === 'profile seed failed') {
       const diagnostics = create400Diagnostics({
         exact400ReasonCode: 'profile seed failed',
-        failedValidationBranch: 'profile seed failed',
+        failedValidationBranch: getBootstrapAttemptBranch(
+          request,
+          'profile seed failed',
+        ),
       });
       logDmE2eeDeviceRouteDiagnostics('response:400:profile-seed-failed', {
         code: 'dm_e2ee_local_state_incomplete',
+        exactFailurePoint,
         ...diagnostics,
       });
       return NextResponse.json(
         {
           error: 'Encrypted setup could not prepare local profile identity state.',
           code: 'dm_e2ee_local_state_incomplete',
+          exactFailurePoint,
           ...diagnostics,
         },
         { status: 400 },
@@ -228,16 +266,18 @@ export async function POST(request: Request) {
 
     const diagnostics = create400Diagnostics({
       exact400ReasonCode: 'publish failed',
-      failedValidationBranch: 'publish failed',
+      failedValidationBranch: getBootstrapAttemptBranch(request, 'publish failed'),
     });
     logDmE2eeDeviceRouteDiagnostics('response:400:publish-failed', {
       code: 'dm_e2ee_local_state_incomplete',
+      exactFailurePoint,
       ...diagnostics,
     });
     return NextResponse.json(
       {
         error: 'Unable to refresh encrypted setup on this device.',
         code: 'dm_e2ee_local_state_incomplete',
+        exactFailurePoint,
         ...diagnostics,
       },
       { status: 400 },

@@ -29,6 +29,7 @@ export type DmE2eeApiErrorResponse = {
   code?: DmE2eeApiErrorCode | null;
   exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
   failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
+  exactFailurePoint?: string | null;
 };
 
 export type DmE2eeEnvelopeType =

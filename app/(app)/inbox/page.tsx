@@ -387,18 +387,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return [] as Awaited<ReturnType<typeof getInboxConversations>>;
       }),
     archivedConversationsPromise,
-    isV1TestBypass
-      ? Promise.resolve([] as Awaited<ReturnType<typeof getAvailableUsers>>).then(
-          (value) => {
-            // Temporary v1 unblocker: avoid space_members lookups on critical SSR entry.
-            logDiagnostics('loader:users-v1-test-bypass-empty');
-            return value;
-          },
-        )
-      : getAvailableUsers(user.id, {
-          spaceId: activeSpaceId,
-          source: 'inbox-page',
-        })
+    getAvailableUsers(user.id, {
+      spaceId: activeSpaceId,
+      source: isV1TestBypass ? 'inbox-page-v1-test-bypass' : 'inbox-page',
+    })
           .then((value) => {
             logDiagnostics('loader:users-ok', { count: value.length });
             return value;

@@ -23,6 +23,7 @@ type DmE2eeBootstrapStatus =
 type EnsureDmE2eeDeviceRegisteredOptions = {
   forcePublish?: boolean;
   allowRepair?: boolean;
+  publishAttempt?: 'initial' | 'manual-refresh' | 'repair-republish';
 };
 
 function shouldLogDmE2eeBootstrapClientDiagnostics() {
@@ -230,9 +231,13 @@ export async function ensureDmE2eeDeviceRegistered(
   options: EnsureDmE2eeDeviceRegisteredOptions = {},
 ) {
   const allowRepair = options.allowRepair !== false;
+  const publishAttempt =
+    options.publishAttempt ??
+    (options.forcePublish ? 'manual-refresh' : 'initial');
   logDmE2eeBootstrapClientDiagnostics('ensure:start', {
     allowRepair,
     forcePublish: Boolean(options.forcePublish),
+    publishAttempt,
     userIdPresent: Boolean(userId),
   });
 
@@ -302,6 +307,7 @@ export async function ensureDmE2eeDeviceRegistered(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Chat-Dm-E2ee-Bootstrap-Attempt': publishAttempt,
     },
     body: JSON.stringify(buildPublishRequest(localRecord)),
   });
@@ -332,6 +338,7 @@ export async function ensureDmE2eeDeviceRegistered(
   let exact400ReasonCode: DmE2eeBootstrap400ReasonCode | null = null;
   let failedValidationBranch: DmE2eeBootstrapFailedValidationBranch | null =
     null;
+  let exactFailurePoint: string | null = null;
 
   try {
     const payload = (await response.json()) as {
@@ -339,22 +346,27 @@ export async function ensureDmE2eeDeviceRegistered(
       error?: string;
       exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
       failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
+      exactFailurePoint?: string | null;
     };
     errorCode = payload.code ?? null;
     errorMessage = payload.error ?? null;
     exact400ReasonCode = payload.exact400ReasonCode ?? null;
     failedValidationBranch = payload.failedValidationBranch ?? null;
+    exactFailurePoint = payload.exactFailurePoint ?? null;
   } catch {
     errorCode = null;
     errorMessage = null;
     exact400ReasonCode = null;
     failedValidationBranch = null;
+    exactFailurePoint = null;
   }
-  logDmE2eeBootstrapClientDiagnostics('publish:error', {
+    logDmE2eeBootstrapClientDiagnostics('publish:error', {
     errorCode,
     errorMessage,
     exact400ReasonCode,
     failedValidationBranch,
+    exactFailurePoint,
+    publishAttempt,
     status: response.status,
   });
 
@@ -374,6 +386,7 @@ export async function ensureDmE2eeDeviceRegistered(
         exact400ReasonCode,
         failedValidationBranch:
           failedValidationBranch ?? 'incomplete local state',
+        exactFailurePoint,
         reason: 'server-reported-local-state-incomplete',
       });
       await deleteLocalDmE2eeDeviceRecord(userId);
@@ -382,18 +395,21 @@ export async function ensureDmE2eeDeviceRegistered(
         failedValidationBranch: 'failed republish',
         allowRepair: false,
         forcePublish: true,
+        publishAttempt: 'repair-republish',
       });
       return ensureDmE2eeDeviceRegistered(userId, {
         forcePublish: true,
         allowRepair: false,
+        publishAttempt: 'repair-republish',
       });
     }
 
-    logDmE2eeBootstrapClientDiagnostics('local-record:repair:failed', {
+      logDmE2eeBootstrapClientDiagnostics('local-record:repair:failed', {
       errorCode,
       errorMessage,
       exact400ReasonCode,
       failedValidationBranch: failedValidationBranch ?? 'failed republish',
+      exactFailurePoint,
     });
     throw createLocalDmE2eeError(
       'dm_e2ee_local_state_incomplete',
