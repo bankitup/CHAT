@@ -14,7 +14,10 @@ import {
   markLocalDmE2eeDeviceRegistrationStale,
 } from '@/modules/messaging/e2ee/device-registration';
 import { getLocalDmE2eeDeviceRecord } from '@/modules/messaging/e2ee/device-store';
-import { reinitializeLocalDmE2eeStateForUser } from '@/modules/messaging/e2ee/lifecycle';
+import {
+  hardResetLocalDmE2eeStateForCurrentDevice,
+  reinitializeLocalDmE2eeStateForUser,
+} from '@/modules/messaging/e2ee/lifecycle';
 import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encrypt';
 import { getEncryptedDmComposerErrorMessage } from '@/modules/messaging/e2ee/ui-policy';
 import { withSpaceParam } from '@/modules/spaces/url';
@@ -189,6 +192,10 @@ export function EncryptedDmComposerForm({
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
   const [isSendingEncrypted, setIsSendingEncrypted] = useState(false);
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
+  const [isResettingSetup, setIsResettingSetup] = useState(false);
+  const showDevResetAction =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
 
   return (
     <form
@@ -397,9 +404,46 @@ export function EncryptedDmComposerForm({
                 {t.chat.refreshEncryptedSetup}
               </button>
             ) : null}
+            {showDevResetAction &&
+            (errorCode === 'dm_e2ee_sender_device_stale' ||
+              errorCode === 'dm_e2ee_local_state_incomplete') ? (
+              <button
+                className="button button-secondary button-compact composer-recovery-button"
+                disabled={isResettingSetup}
+                onClick={async () => {
+                  setIsResettingSetup(true);
+                  try {
+                    // Temporary dev-only escape hatch for stale browser-local E2EE state.
+                    const bootstrap =
+                      await hardResetLocalDmE2eeStateForCurrentDevice(
+                        currentUserId,
+                      );
+
+                    if (bootstrap.status === 'registered') {
+                      setErrorMessage(null);
+                      setErrorCode(null);
+                    } else if (bootstrap.status === 'unsupported') {
+                      setErrorMessage(t.chat.encryptionUnavailableHere);
+                      setErrorCode('dm_e2ee_unsupported_browser');
+                    } else {
+                      setErrorMessage(t.chat.encryptionSetupUnavailable);
+                      setErrorCode('dm_e2ee_schema_missing');
+                    }
+                  } catch {
+                    setErrorMessage(t.chat.encryptionNeedsRefresh);
+                    setErrorCode('dm_e2ee_local_state_incomplete');
+                  } finally {
+                    setIsResettingSetup(false);
+                  }
+                }}
+                type="button"
+              >
+                {t.chat.resetEncryptedSetupDev}
+              </button>
+            ) : null}
             <button
               className="button button-secondary button-compact composer-recovery-button"
-              disabled={isSendingEncrypted || isRefreshingSetup}
+              disabled={isSendingEncrypted || isRefreshingSetup || isResettingSetup}
               onClick={() => {
                 setErrorMessage(null);
                 setErrorCode(null);

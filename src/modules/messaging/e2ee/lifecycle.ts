@@ -99,6 +99,22 @@ export async function reinitializeLocalDmE2eeStateForUser(userId: string) {
   return result;
 }
 
+export async function hardResetLocalDmE2eeStateForCurrentDevice(userId: string) {
+  logDmE2eeLifecycleDiagnostics('hard-reset:start', {
+    userIdPresent: Boolean(userId),
+  });
+  await clearAllLocalDmE2eeState();
+  const result = await ensureDmE2eeDeviceRegistered(userId, {
+    forcePublish: true,
+    publishAttempt: 'manual-refresh',
+  });
+  logDmE2eeLifecycleDiagnostics('hard-reset:done', {
+    status: result.status,
+    published: Boolean(result.result?.deviceRecordId),
+  });
+  return result;
+}
+
 export function invalidateEncryptedDmPreviewForConversation(
   userId: string,
   conversationId: string,

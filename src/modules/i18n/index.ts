@@ -300,6 +300,7 @@ type LanguageDictionary = {
     encryptedEditUnavailable: string;
     retryEncryptedAction: string;
     refreshEncryptedSetup: string;
+    resetEncryptedSetupDev: string;
     reloadConversation: string;
     encryptedAttachmentsUnsupported: string;
     messageReactions: string;
@@ -614,6 +615,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Editing encrypted direct messages is not available yet.',
       retryEncryptedAction: 'Retry',
       refreshEncryptedSetup: 'Refresh encrypted setup',
+      resetEncryptedSetupDev: 'Reset encrypted setup (dev)',
       reloadConversation: 'Reload chat',
       encryptedAttachmentsUnsupported:
         'Encrypted text with attachments is not supported yet in direct messages.',
@@ -932,6 +934,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Редактирование зашифрованных личных сообщений пока недоступно.',
       retryEncryptedAction: 'Повторить',
       refreshEncryptedSetup: 'Обновить настройку шифрования',
+      resetEncryptedSetupDev: 'Сбросить шифрование (dev)',
       reloadConversation: 'Обновить чат',
       encryptedAttachmentsUnsupported:
         'Зашифрованный текст с вложениями в личных чатах пока не поддерживается.',
