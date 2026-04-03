@@ -204,7 +204,12 @@ export async function getUserSpaces(userId: string) {
 export async function resolveActiveSpaceForUser(input: {
   userId: string;
   requestedSpaceId?: string | null;
+  source?: string;
 }) {
+  logSpacesDiagnostics('resolveActiveSpaceForUser:start', {
+    source: input.source ?? 'unknown',
+    hasRequestedSpaceId: Boolean(input.requestedSpaceId?.trim()),
+  });
   const spaces = await getUserSpaces(input.userId);
   const requestedSpaceId = input.requestedSpaceId?.trim() || null;
   const requestedSpace =
@@ -212,6 +217,13 @@ export async function resolveActiveSpaceForUser(input: {
       ? spaces.find((space) => space.id === requestedSpaceId) ?? null
       : null;
   const activeSpace = requestedSpace ?? spaces[0] ?? null;
+
+  logSpacesDiagnostics('resolveActiveSpaceForUser:done', {
+    source: input.source ?? 'unknown',
+    spaceCount: spaces.length,
+    hasActiveSpace: Boolean(activeSpace),
+    requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
+  });
 
   return {
     spaces,

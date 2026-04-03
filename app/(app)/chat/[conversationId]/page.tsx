@@ -27,6 +27,7 @@ import {
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
+import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
   getIdentityLabel,
@@ -357,10 +358,22 @@ export default async function ChatPage({
     );
   }
 
-  const activeSpaceState = await resolveActiveSpaceForUser({
-    userId: user.id,
-    requestedSpaceId: baseConversation.spaceId,
-  });
+  let activeSpaceState: Awaited<ReturnType<typeof resolveActiveSpaceForUser>>;
+  try {
+    activeSpaceState = await resolveActiveSpaceForUser({
+      userId: user.id,
+      requestedSpaceId: baseConversation.spaceId,
+      source: 'chat-page',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+      redirect('/spaces');
+    }
+
+    throw error;
+  }
 
   if (!activeSpaceState.activeSpace || activeSpaceState.requestedSpaceWasInvalid) {
     notFound();

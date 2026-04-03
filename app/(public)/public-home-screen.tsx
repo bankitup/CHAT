@@ -73,14 +73,9 @@ export function PublicHomeScreen({
           }
         >
           {isAuthenticated ? (
-            <>
-              <Link className="pill pill-accent public-home-action-primary" href="/spaces">
-                {t.publicHome.openChats}
-              </Link>
-              <Link className="pill public-home-action-secondary" href="/settings">
-                {t.publicHome.openSettings}
-              </Link>
-            </>
+            <Link className="pill pill-accent public-home-action-primary" href="/spaces">
+              {t.publicHome.openChats}
+            </Link>
           ) : (
             <Link className="pill pill-accent public-home-action-primary" href="/login">
               {t.publicHome.logIn}

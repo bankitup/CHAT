@@ -21,6 +21,7 @@ import {
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
+import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { notFound, redirect } from 'next/navigation';
 import { NotificationReadinessPanel } from '../settings/notification-readiness';
@@ -162,10 +163,22 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     redirect('/spaces');
   }
 
-  const activeSpaceState = await resolveActiveSpaceForUser({
-    userId: user.id,
-    requestedSpaceId: query.space,
-  });
+  let activeSpaceState: Awaited<ReturnType<typeof resolveActiveSpaceForUser>>;
+  try {
+    activeSpaceState = await resolveActiveSpaceForUser({
+      userId: user.id,
+      requestedSpaceId: query.space,
+      source: 'activity-page',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+      redirect('/spaces');
+    }
+
+    throw error;
+  }
 
   if (!activeSpaceState.activeSpace) {
     notFound();

@@ -29,6 +29,7 @@ import {
 } from '@/modules/messaging/ui/identity';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
+import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
 import Link from 'next/link';
@@ -281,10 +282,22 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     redirect('/spaces');
   }
 
-  const activeSpaceState = await resolveActiveSpaceForUser({
-    userId: user.id,
-    requestedSpaceId: query.space,
-  });
+  let activeSpaceState: Awaited<ReturnType<typeof resolveActiveSpaceForUser>>;
+  try {
+    activeSpaceState = await resolveActiveSpaceForUser({
+      userId: user.id,
+      requestedSpaceId: query.space,
+      source: 'inbox-page',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+      redirect('/spaces');
+    }
+
+    throw error;
+  }
 
   if (!activeSpaceState.activeSpace) {
     logDiagnostics('no-active-space-notFound');
