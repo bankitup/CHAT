@@ -1,0 +1,2 @@
+[   97054ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://chat-bwc1.vercel.app/api/messaging/dm-e2ee/bundle?conversationId=43cf97d6-77ba-4ac8-b8a1-be40b5ae437b:0
+[  248122ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://chat-bwc1.vercel.app/api/messaging/dm-e2ee/bundle?conversationId=43cf97d6-77ba-4ac8-b8a1-be40b5ae437b:0

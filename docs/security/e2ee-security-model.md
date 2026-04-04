@@ -124,6 +124,12 @@ The server can see:
 
 The server may also see generic fallback labels in rendered UX logic, but not decrypted DM text.
 
+Current implementation note:
+
+- recipient DM public bundle lookup may fall back to a server-side service-role client when auth-scoped runtime visibility incorrectly hides `public.user_devices` or `public.device_one_time_prekeys`
+- that fallback is limited to public device material and available public one-time prekeys
+- it does not expose private keys, decrypted plaintext, or local decrypted preview cache content
+
 Current secondary-surface fallback policy:
 
 - inbox and activity use generic encrypted labels only

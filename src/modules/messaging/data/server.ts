@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import {
@@ -41,6 +42,22 @@ function createDmE2eeOperationError(
   message: string,
 ) {
   return new DmE2eeOperationError(code, message);
+}
+
+function logDmE2eeRecipientBundleDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_DM_E2EE_BUNDLE !== '1') {
+    return;
+  }
+
+  if (details) {
+    console.info('[dm-e2ee-recipient-bundle]', stage, details);
+    return;
+  }
+
+  console.info('[dm-e2ee-recipient-bundle]', stage);
 }
 
 function logDmE2eeSendDiagnostics(
@@ -1528,16 +1545,40 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
   }
 
   const supabase = await createSupabaseServerClient();
-  const deviceLookup = await supabase
-    .from('user_devices')
-    .select(
-      'id, user_id, device_id, registration_id, identity_key_public, signed_prekey_id, signed_prekey_public, signed_prekey_signature',
-    )
-    .eq('user_id', recipientParticipant.userId)
-    .is('retired_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const serviceRoleSupabase = createSupabaseServiceRoleClient();
+  const lookupRecipientDevice = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  ) =>
+    client
+      .from('user_devices')
+      .select(
+        'id, user_id, device_id, registration_id, identity_key_public, signed_prekey_id, signed_prekey_public, signed_prekey_signature',
+      )
+      .eq('user_id', recipientParticipant.userId)
+      .is('retired_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+  let deviceLookup = await lookupRecipientDevice(supabase);
+  let usedPrivilegedDeviceLookup = false;
+
+  if (
+    !deviceLookup.error &&
+    !deviceLookup.data &&
+    serviceRoleSupabase
+  ) {
+    logDmE2eeRecipientBundleDiagnostics('device-lookup:auth-empty', {
+      conversationId: input.conversationId,
+      recipientUserId: recipientParticipant.userId,
+    });
+    const privilegedLookup = await lookupRecipientDevice(serviceRoleSupabase);
+
+    if (!privilegedLookup.error) {
+      deviceLookup = privilegedLookup;
+      usedPrivilegedDeviceLookup = Boolean(privilegedLookup.data);
+    }
+  }
 
   if (deviceLookup.error) {
     if (
@@ -1569,14 +1610,40 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     signed_prekey_public: string;
     signed_prekey_signature: string;
   };
-  const oneTimePrekeyLookup = await supabase
-    .from('device_one_time_prekeys')
-    .select('prekey_id, public_key')
-    .eq('device_id', device.id)
-    .is('claimed_at', null)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const lookupAvailableOneTimePrekey = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  ) =>
+    client
+      .from('device_one_time_prekeys')
+      .select('prekey_id, public_key')
+      .eq('device_id', device.id)
+      .is('claimed_at', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+  let oneTimePrekeyLookup = await lookupAvailableOneTimePrekey(supabase);
+  let usedPrivilegedPrekeyLookup = false;
+
+  if (
+    !oneTimePrekeyLookup.error &&
+    !oneTimePrekeyLookup.data &&
+    serviceRoleSupabase
+  ) {
+    logDmE2eeRecipientBundleDiagnostics('prekey-lookup:auth-empty', {
+      conversationId: input.conversationId,
+      recipientUserId: recipientParticipant.userId,
+      recipientDeviceRecordId: device.id,
+      usedPrivilegedDeviceLookup,
+    });
+    const privilegedLookup =
+      await lookupAvailableOneTimePrekey(serviceRoleSupabase);
+
+    if (!privilegedLookup.error) {
+      oneTimePrekeyLookup = privilegedLookup;
+      usedPrivilegedPrekeyLookup = Boolean(privilegedLookup.data);
+    }
+  }
 
   if (oneTimePrekeyLookup.error) {
     if (
@@ -1593,6 +1660,15 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
 
     throw new Error(oneTimePrekeyLookup.error.message);
   }
+
+  logDmE2eeRecipientBundleDiagnostics('bundle:resolved', {
+    conversationId: input.conversationId,
+    recipientUserId: recipientParticipant.userId,
+    usedPrivilegedDeviceLookup,
+    usedPrivilegedPrekeyLookup,
+    hasRecipientDevice: true,
+    hasOneTimePrekey: Boolean(oneTimePrekeyLookup.data),
+  });
 
   return {
     conversationId: input.conversationId,
