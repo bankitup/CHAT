@@ -2113,16 +2113,6 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     );
   }
 
-  if (selectedRecipientDevice.user_id !== recipientParticipant.userId) {
-    recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: selected device mismatch';
-    throw createDmE2eeRecipientReadinessError(
-      'dm_e2ee_recipient_unavailable',
-      'Recipient device selection does not match the direct-message participant.',
-      recipientDebugState,
-    );
-  }
-
   if (selectedRecipientDevice.retired_at !== null) {
     recipientDebugState.recipientReadinessFailedReason =
       'recipient readiness: selected device is retired';
@@ -2173,6 +2163,11 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     selectedRecipientDevice.signed_prekey_signature as string;
   const recipientIdentityKeyPublic =
     selectedRecipientDevice.identity_key_public as string;
+  // Enforce one identifier contract in this path:
+  // - user_devices.id (UUID) is the relational device row id for DB lookups
+  // - user_devices.device_id (integer) is protocol metadata returned to the client
+  const selectedRecipientDeviceRowId = selectedRecipientDevice.id;
+  const selectedRecipientLogicalDeviceId = selectedRecipientDevice.device_id;
 
   const lookupAvailableOneTimePrekey = async (
     client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -2180,7 +2175,7 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     client
       .from('device_one_time_prekeys')
       .select('prekey_id, public_key', { count: 'exact' })
-      .eq('device_id', selectedRecipientDevice.id)
+      .eq('device_id', selectedRecipientDeviceRowId)
       .is('claimed_at', null)
       .order('created_at', { ascending: true })
       .limit(1)
@@ -2202,7 +2197,8 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     logDmE2eeRecipientBundleDiagnostics('prekey-lookup:auth-empty', {
       conversationId: input.conversationId,
       recipientUserId: recipientParticipant.userId,
-      recipientDeviceRecordId: selectedRecipientDevice.id,
+      recipientDeviceRecordId: selectedRecipientDeviceRowId,
+      recipientLogicalDeviceId: selectedRecipientLogicalDeviceId,
       usedPrivilegedDeviceLookup,
     });
     const privilegedLookup =
@@ -2268,9 +2264,9 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
   return {
     conversationId: input.conversationId,
     recipient: {
-      deviceRecordId: selectedRecipientDevice.id,
+      deviceRecordId: selectedRecipientDeviceRowId,
       userId: selectedRecipientDevice.user_id,
-      deviceId: selectedRecipientDevice.device_id,
+      deviceId: selectedRecipientLogicalDeviceId,
       registrationId: selectedRecipientDevice.registration_id,
       identityKeyPublic: recipientIdentityKeyPublic,
       signedPrekeyId: recipientSignedPrekeyId,
