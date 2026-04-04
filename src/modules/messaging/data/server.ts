@@ -487,6 +487,18 @@ function getSupabaseErrorDiagnostics(error: unknown) {
   };
 }
 
+function logProfileSettingsDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (details) {
+    console.error('[profile-settings]', stage, details);
+    return;
+  }
+
+  console.error('[profile-settings]', stage);
+}
+
 function isMissingRelationErrorMessage(message: string, relationName: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -1421,6 +1433,31 @@ async function resolveStoredAvatarPath(
 
   if (!signed.error) {
     return signed.data.signedUrl;
+  }
+
+  const serviceSupabase = createSupabaseServiceRoleClient();
+
+  if (serviceSupabase) {
+    const serviceSigned = await serviceSupabase.storage
+      .from(PROFILE_AVATAR_BUCKET)
+      .createSignedUrl(normalizedValue, 60 * 60);
+
+    if (!serviceSigned.error) {
+      console.info('[avatar-storage]', {
+        issue: 'signed-url-service-fallback',
+        bucket: PROFILE_AVATAR_BUCKET,
+        objectPath: normalizedValue,
+      });
+
+      return serviceSigned.data.signedUrl;
+    }
+
+    console.error('[avatar-storage]', {
+      issue: 'signed-url-service-failed',
+      bucket: PROFILE_AVATAR_BUCKET,
+      objectPath: normalizedValue,
+      message: serviceSigned.error.message,
+    });
   }
 
   console.error('[avatar-storage]', {
@@ -3297,6 +3334,11 @@ export async function updateCurrentUserProfile(input: {
     .maybeSingle();
 
   if (existingProfileResponse.error) {
+    logProfileSettingsDiagnostics('profile-lookup-error', {
+      userId: input.userId,
+      ...getSupabaseErrorDiagnostics(existingProfileResponse.error),
+      message: existingProfileResponse.error.message,
+    });
     throw new Error(existingProfileResponse.error.message);
   }
 
@@ -3360,20 +3402,36 @@ export async function updateCurrentUserProfile(input: {
     ...(nextAvatarPath !== undefined ? { avatar_path: nextAvatarPath } : {}),
   };
 
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(profilePayload, { onConflict: 'user_id' });
+  const profileExists = Boolean(existingProfileResponse.data);
+  const profileWrite = profileExists
+    ? await supabase
+        .from('profiles')
+        .update({
+          display_name: nextDisplayName,
+          ...(nextAvatarPath !== undefined ? { avatar_path: nextAvatarPath } : {}),
+        })
+        .eq('user_id', input.userId)
+    : await supabase.from('profiles').insert(profilePayload);
 
-  if (error) {
+  if (profileWrite.error) {
     if (uploadedAvatarObjectPath) {
       await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([uploadedAvatarObjectPath]);
     }
 
-    if (error.message.includes('row-level security policy')) {
+    logProfileSettingsDiagnostics('profile-write-error', {
+      operation: profileExists ? 'update-existing-profile' : 'insert-missing-profile',
+      userId: input.userId,
+      hasDisplayName: nextDisplayName !== null,
+      hasAvatarPath: nextAvatarPath !== undefined,
+      ...getSupabaseErrorDiagnostics(profileWrite.error),
+      message: profileWrite.error.message,
+    });
+
+    if (profileWrite.error.message.includes('row-level security policy')) {
       throw new Error('Profile settings update was blocked by profiles RLS.');
     }
 
-    throw new Error(error.message);
+    throw new Error(profileWrite.error.message);
   }
 
   if (
@@ -3414,6 +3472,11 @@ export async function removeCurrentUserAvatar(userId: string) {
     .maybeSingle();
 
   if (existingProfileResponse.error) {
+    logProfileSettingsDiagnostics('avatar-remove-profile-lookup-error', {
+      userId,
+      ...getSupabaseErrorDiagnostics(existingProfileResponse.error),
+      message: existingProfileResponse.error.message,
+    });
     throw new Error(existingProfileResponse.error.message);
   }
 
@@ -3426,22 +3489,30 @@ export async function removeCurrentUserAvatar(userId: string) {
         | null
     )?.avatar_path?.trim() || null;
 
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(
-      {
+  const profileExists = Boolean(existingProfileResponse.data);
+  const profileWrite = profileExists
+    ? await supabase
+        .from('profiles')
+        .update({ avatar_path: null })
+        .eq('user_id', userId)
+    : await supabase.from('profiles').insert({
         user_id: userId,
         avatar_path: null,
-      },
-      { onConflict: 'user_id' },
-    );
+      });
 
-  if (error) {
-    if (error.message.includes('row-level security policy')) {
+  if (profileWrite.error) {
+    logProfileSettingsDiagnostics('avatar-remove-profile-write-error', {
+      operation: profileExists ? 'update-existing-profile' : 'insert-missing-profile',
+      userId,
+      ...getSupabaseErrorDiagnostics(profileWrite.error),
+      message: profileWrite.error.message,
+    });
+
+    if (profileWrite.error.message.includes('row-level security policy')) {
       throw new Error('Profile settings update was blocked by profiles RLS.');
     }
 
-    throw new Error(error.message);
+    throw new Error(profileWrite.error.message);
   }
 
   if (isManagedAvatarObjectPath(userId, existingAvatarPath)) {
@@ -3475,28 +3546,53 @@ export async function updateCurrentUserLanguagePreference(input: {
     );
   }
 
-  const { error } = await supabase
+  const existingProfileResponse = await supabase
     .from('profiles')
-    .upsert(
-      {
+    .select('user_id')
+    .eq('user_id', input.userId)
+    .maybeSingle();
+
+  if (existingProfileResponse.error) {
+    logProfileSettingsDiagnostics('language-profile-lookup-error', {
+      userId: input.userId,
+      ...getSupabaseErrorDiagnostics(existingProfileResponse.error),
+      message: existingProfileResponse.error.message,
+    });
+    throw new Error(existingProfileResponse.error.message);
+  }
+
+  const profileExists = Boolean(existingProfileResponse.data);
+  const profileWrite = profileExists
+    ? await supabase
+        .from('profiles')
+        .update({
+          preferred_language: input.preferredLanguage,
+        })
+        .eq('user_id', input.userId)
+    : await supabase.from('profiles').insert({
         user_id: input.userId,
         preferred_language: input.preferredLanguage,
-      },
-      { onConflict: 'user_id' },
-    );
+      });
 
-  if (error) {
-    if (isMissingColumnErrorMessage(error.message, 'preferred_language')) {
+  if (profileWrite.error) {
+    logProfileSettingsDiagnostics('language-profile-write-error', {
+      operation: profileExists ? 'update-existing-profile' : 'insert-missing-profile',
+      userId: input.userId,
+      ...getSupabaseErrorDiagnostics(profileWrite.error),
+      message: profileWrite.error.message,
+    });
+
+    if (isMissingColumnErrorMessage(profileWrite.error.message, 'preferred_language')) {
       throw createSchemaRequirementError(
         'Profile language preference requires profiles.preferred_language.',
       );
     }
 
-    if (error.message.includes('row-level security policy')) {
+    if (profileWrite.error.message.includes('row-level security policy')) {
       throw new Error('Language preference update was blocked by profiles RLS.');
     }
 
-    throw new Error(error.message);
+    throw new Error(profileWrite.error.message);
   }
 }
 
