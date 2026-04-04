@@ -75,6 +75,13 @@ function logDmE2eeBootstrapDiagnostics(
   console.info('[dm-e2ee-bootstrap]', stage);
 }
 
+function isDmE2eeDevResetEnabled() {
+  return (
+    process.env.NODE_ENV !== 'production' ||
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+  );
+}
+
 type ConversationRecord = {
   id: string;
   kind: string | null;
@@ -1604,6 +1611,108 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
         oneTimePrekeyLookup.data?.public_key ?? null,
     } satisfies UserDevicePublicBundle,
   } satisfies DmE2eeRecipientBundleResponse;
+}
+
+export async function resetCurrentUserDmE2eeDeviceForDev(input: {
+  userId: string;
+}) {
+  if (!isDmE2eeDevResetEnabled()) {
+    throw new Error('DM E2EE dev reset is disabled.');
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const now = new Date().toISOString();
+  logDmE2eeBootstrapDiagnostics('dev-reset:start', {
+    hasUserId: Boolean(input.userId),
+  });
+
+  const deviceLookup = await supabase
+    .from('user_devices')
+    .select('id')
+    .eq('user_id', input.userId)
+    .is('retired_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (deviceLookup.error) {
+    logDmE2eeBootstrapDiagnostics('dev-reset:device-lookup-error', {
+      message: deviceLookup.error.message,
+    });
+    throw createDmE2eeBootstrapPublishError(
+      'dev reset device lookup',
+      deviceLookup.error.message,
+    );
+  }
+
+  const activeDeviceId = String(
+    (deviceLookup.data as { id: string } | null)?.id ?? '',
+  ).trim();
+
+  if (!activeDeviceId) {
+    logDmE2eeBootstrapDiagnostics('dev-reset:device-not-found');
+    return {
+      foundDevice: false,
+      clearedPrekeys: 0,
+      retiredDevice: false,
+    };
+  }
+
+  logDmE2eeBootstrapDiagnostics('dev-reset:device-found');
+
+  const deletePrekeys = await supabase
+    .from('device_one_time_prekeys')
+    .delete()
+    .eq('device_id', activeDeviceId)
+    .select('id');
+
+  if (deletePrekeys.error) {
+    logDmE2eeBootstrapDiagnostics('dev-reset:delete-prekeys-error', {
+      message: deletePrekeys.error.message,
+    });
+    throw createDmE2eeBootstrapPublishError(
+      'dev reset delete prekeys',
+      deletePrekeys.error.message,
+    );
+  }
+
+  const clearedPrekeys = ((deletePrekeys.data ?? []) as Array<{ id: string }>)
+    .length;
+  logDmE2eeBootstrapDiagnostics('dev-reset:prekeys-cleared', {
+    clearedPrekeys,
+  });
+
+  const retireDevice = await supabase
+    .from('user_devices')
+    .update({
+      retired_at: now,
+      last_seen_at: now,
+    })
+    .eq('id', activeDeviceId)
+    .is('retired_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (retireDevice.error) {
+    logDmE2eeBootstrapDiagnostics('dev-reset:retire-device-error', {
+      message: retireDevice.error.message,
+    });
+    throw createDmE2eeBootstrapPublishError(
+      'dev reset retire device',
+      retireDevice.error.message,
+    );
+  }
+
+  const retiredDevice = Boolean((retireDevice.data as { id: string } | null)?.id);
+  logDmE2eeBootstrapDiagnostics('dev-reset:device-retired', {
+    retiredDevice,
+  });
+
+  return {
+    foundDevice: true,
+    clearedPrekeys,
+    retiredDevice,
+  };
 }
 
 async function getCurrentUserActiveDmE2eeDeviceRecordId(userId: string) {

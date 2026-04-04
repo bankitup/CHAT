@@ -15,7 +15,7 @@ import {
 } from '@/modules/messaging/e2ee/device-registration';
 import { getLocalDmE2eeDeviceRecord } from '@/modules/messaging/e2ee/device-store';
 import {
-  hardResetLocalDmE2eeStateForCurrentDevice,
+  hardResetDmE2eeStateForCurrentDevice,
   reinitializeLocalDmE2eeStateForUser,
 } from '@/modules/messaging/e2ee/lifecycle';
 import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encrypt';
@@ -415,7 +415,7 @@ export function EncryptedDmComposerForm({
                   try {
                     // Temporary dev-only escape hatch for stale browser-local E2EE state.
                     const bootstrap =
-                      await hardResetLocalDmE2eeStateForCurrentDevice(
+                      await hardResetDmE2eeStateForCurrentDevice(
                         currentUserId,
                       );
 

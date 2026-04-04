@@ -36,6 +36,34 @@ function logDmE2eeLifecycleDiagnostics(
   console.info('[dm-e2ee-lifecycle]', stage);
 }
 
+async function resetServerDmE2eeStateForCurrentDevice() {
+  const response = await fetch('/api/messaging/dm-e2ee/reset-device', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const payload = (await response.json()) as {
+    error?: string;
+    foundDevice?: boolean;
+    clearedPrekeys?: number;
+    retiredDevice?: boolean;
+  };
+
+  if (!response.ok) {
+    throw new Error(
+      payload.error || 'Unable to reset encrypted setup on the server.',
+    );
+  }
+
+  return {
+    foundDevice: Boolean(payload.foundDevice),
+    clearedPrekeys: Number(payload.clearedPrekeys ?? 0),
+    retiredDevice: Boolean(payload.retiredDevice),
+  };
+}
+
 export async function clearAllLocalDmE2eeState() {
   if (!supportsBrowserStateCleanup()) {
     return;
@@ -99,11 +127,15 @@ export async function reinitializeLocalDmE2eeStateForUser(userId: string) {
   return result;
 }
 
-export async function hardResetLocalDmE2eeStateForCurrentDevice(userId: string) {
+export async function hardResetDmE2eeStateForCurrentDevice(userId: string) {
   logDmE2eeLifecycleDiagnostics('hard-reset:start', {
     userIdPresent: Boolean(userId),
   });
   await clearAllLocalDmE2eeState();
+  logDmE2eeLifecycleDiagnostics('hard-reset:local-cleared');
+  const serverReset = await resetServerDmE2eeStateForCurrentDevice();
+  logDmE2eeLifecycleDiagnostics('hard-reset:server-cleared', serverReset);
+  logDmE2eeLifecycleDiagnostics('hard-reset:bootstrap-rerun:start');
   const result = await ensureDmE2eeDeviceRegistered(userId, {
     forcePublish: true,
     publishAttempt: 'manual-refresh',

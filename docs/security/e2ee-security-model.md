@@ -230,6 +230,7 @@ Current recovery behavior:
 - retry send or decrypt
 - refresh encrypted setup on the current device
 - development-only hard reset of browser-local DM E2EE state on the current device, followed by fresh bootstrap publication
+- development-only server reset of the current active DM E2EE device record and linked one-time prekeys before fresh bootstrap publication
 - reload chat
 - one safe auto-retry for stale sender device publication
 - one safe auto-retry for prekey race
@@ -237,6 +238,7 @@ Current recovery behavior:
 - device-bootstrap publish now reads for an existing `profiles.user_id` row first and inserts only when missing before writing `user_devices`, to avoid unnecessary profile-write failures while still preventing foreign-key bootstrap failures on fresh accounts
 - one safe local self-repair attempt recreates and re-publishes device bootstrap state when local setup is marked incomplete
 - a temporary development-only reset action may clear browser-local DM E2EE device records and local preview cache before re-running bootstrap from scratch
+- a temporary development-only reset action may also retire the current active server-side device row and clear its linked one-time prekeys before bootstrap re-registers a fresh device
 - local encrypted-state maintenance failures (for example browser IndexedDB cleanup issues) are non-fatal for app-shell routes and must degrade to logged diagnostics rather than route crashes
 
 Unsupported recovery:
