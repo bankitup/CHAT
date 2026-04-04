@@ -3257,6 +3257,7 @@ export async function createConversationWithMembers(input: {
 export async function updateCurrentUserProfile(input: {
   userId: string;
   displayName: string | null;
+  avatarObjectPath?: string | null;
   avatarFile?: File | null;
 }) {
   const supabase = await createSupabaseServerClient();
@@ -3305,7 +3306,16 @@ export async function updateCurrentUserProfile(input: {
 
   let nextAvatarPath: string | null | undefined;
   let uploadedAvatarObjectPath: string | null = null;
-  if (input.avatarFile && input.avatarFile.size > 0) {
+  const requestedAvatarObjectPath = input.avatarObjectPath?.trim() || null;
+
+  if (requestedAvatarObjectPath) {
+    if (!isManagedAvatarObjectPath(input.userId, requestedAvatarObjectPath)) {
+      throw new Error('Avatar upload path is invalid for this user.');
+    }
+
+    uploadedAvatarObjectPath = requestedAvatarObjectPath;
+    nextAvatarPath = requestedAvatarObjectPath;
+  } else if (input.avatarFile && input.avatarFile.size > 0) {
     if (input.avatarFile.size > PROFILE_AVATAR_MAX_SIZE_BYTES) {
       throw new Error('Avatar images can be up to 5 MB.');
     }

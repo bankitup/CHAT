@@ -2,14 +2,11 @@ import { logoutAction } from '../actions';
 import {
   removeAvatarAction,
   updateLanguagePreferenceAction,
-  updateProfileAction,
 } from './actions';
 import { NotificationReadinessPanel } from './notification-readiness';
+import { ProfileSettingsForm } from './profile-settings-form';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import {
-  getCurrentUserProfile,
-  PROFILE_AVATAR_ACCEPT,
-} from '@/modules/messaging/data/server';
+import { getCurrentUserProfile } from '@/modules/messaging/data/server';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
@@ -90,40 +87,24 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <p className="muted">{t.settings.profileSubtitle}</p>
           </div>
 
-          <form action={updateProfileAction} className="stack profile-settings-form">
-            <label className="field profile-avatar-field">
-              <span>{t.settings.profilePhoto}</span>
-              <input
-                className="input profile-file-input"
-                name="avatar"
-                accept={PROFILE_AVATAR_ACCEPT}
-                type="file"
-              />
-              <span className="muted profile-field-note">
-                {t.settings.profilePhotoNote}
-              </span>
-              <span className="muted profile-field-note">
-                {hasAvatar
-                  ? t.settings.profilePhotoCurrent
-                  : t.settings.profilePhotoEmpty}
-              </span>
-            </label>
-
-            <label className="field">
-              <span>{t.settings.displayName}</span>
-              <input
-                className="input"
-                defaultValue={profile.displayName ?? ''}
-                name="displayName"
-                placeholder={t.settings.displayNamePlaceholder}
-                maxLength={40}
-              />
-            </label>
-
-            <button className="button" type="submit">
-              {t.settings.saveChanges}
-            </button>
-          </form>
+          <ProfileSettingsForm
+            userId={profile.userId}
+            defaultDisplayName={profile.displayName ?? ''}
+            hasAvatar={hasAvatar}
+            labels={{
+              profilePhoto: t.settings.profilePhoto,
+              profilePhotoNote: t.settings.profilePhotoNote,
+              profilePhotoCurrent: t.settings.profilePhotoCurrent,
+              profilePhotoEmpty: t.settings.profilePhotoEmpty,
+              displayName: t.settings.displayName,
+              displayNamePlaceholder: t.settings.displayNamePlaceholder,
+              saveChanges: t.settings.saveChanges,
+              avatarTooLarge: t.settings.avatarTooLarge,
+              avatarInvalidType: t.settings.avatarInvalidType,
+              avatarUploading: t.settings.avatarUploading,
+              avatarUploadFailed: t.settings.avatarUploadFailed,
+            }}
+          />
 
           {hasAvatar ? (
             <form action={removeAvatarAction}>

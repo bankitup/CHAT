@@ -23,6 +23,8 @@ export async function updateProfileAction(formData: FormData) {
   const language = await getRequestLanguage();
   const t = getTranslations(language);
   const displayName = String(formData.get('displayName') ?? '').trim();
+  const avatarObjectPath =
+    String(formData.get('avatarObjectPath') ?? '').trim() || null;
   const avatarEntry = formData.get('avatar');
   const avatarFile =
     avatarEntry instanceof File && avatarEntry.size > 0 ? avatarEntry : null;
@@ -40,6 +42,7 @@ export async function updateProfileAction(formData: FormData) {
     await updateCurrentUserProfile({
       userId: user.id,
       displayName: displayName || null,
+      avatarObjectPath,
       avatarFile,
     });
   } catch (error) {

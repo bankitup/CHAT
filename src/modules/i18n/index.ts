@@ -63,6 +63,10 @@ type LanguageDictionary = {
     displayNamePlaceholder: string;
     profilePhotoNote: string;
     removePhoto: string;
+    avatarTooLarge: string;
+    avatarInvalidType: string;
+    avatarUploading: string;
+    avatarUploadFailed: string;
     saveChanges: string;
     profileFallback: string;
     languageTitle: string;
@@ -372,6 +376,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       displayNamePlaceholder: 'Your name',
       profilePhotoNote: 'JPG, PNG, WEBP, or GIF, up to 5 MB.',
       removePhoto: 'Remove photo',
+      avatarTooLarge: 'Avatar images can be up to 5 MB.',
+      avatarInvalidType: 'Avatar must be a JPG, PNG, WEBP, or GIF image.',
+      avatarUploading: 'Uploading photo...',
+      avatarUploadFailed: 'Unable to upload avatar right now.',
       saveChanges: 'Save changes',
       profileFallback: 'Your profile',
       languageTitle: 'Language',
@@ -691,6 +699,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       displayNamePlaceholder: 'Ваше имя',
       profilePhotoNote: 'JPG, PNG, WEBP или GIF, до 5 МБ.',
       removePhoto: 'Удалить фото',
+      avatarTooLarge: 'Изображение профиля может быть до 5 МБ.',
+      avatarInvalidType: 'Аватар должен быть в формате JPG, PNG, WEBP или GIF.',
+      avatarUploading: 'Загружаем фото...',
+      avatarUploadFailed: 'Сейчас не удалось загрузить аватар.',
       saveChanges: 'Сохранить',
       profileFallback: 'Ваш профиль',
       languageTitle: 'Язык',
