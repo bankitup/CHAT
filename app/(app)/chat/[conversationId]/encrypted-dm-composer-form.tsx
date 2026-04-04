@@ -9,6 +9,7 @@ import type {
   DmE2eeBootstrapDebugState,
   DmE2eeBootstrap400ReasonCode,
   DmE2eeBootstrapFailedValidationBranch,
+  DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendRequest,
 } from '@/modules/messaging/contract/dm-e2ee';
@@ -36,7 +37,8 @@ type EncryptedDmDebugFailureDetails = {
   exact400ReasonCode: DmE2eeBootstrap400ReasonCode | null;
   failedValidationBranch: DmE2eeBootstrapFailedValidationBranch | null;
   exactFailurePoint: string | null;
-} & DmE2eeBootstrapDebugState;
+} & DmE2eeBootstrapDebugState &
+  DmE2eeRecipientReadinessDebugState;
 
 type EncryptedDmComposerFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -76,9 +78,11 @@ async function fetchRecipientBundle(conversationId: string) {
     const errorPayload = payload as DmE2eeApiErrorResponse;
     const error = new Error(
       errorPayload.error || 'Unable to load DM encryption material.',
-    ) as Error & DmE2eeBootstrapDebugState & {
-      code?: DmE2eeApiErrorCode | null;
-    };
+    ) as Error &
+      DmE2eeBootstrapDebugState &
+      DmE2eeRecipientReadinessDebugState & {
+        code?: DmE2eeApiErrorCode | null;
+      };
     error.code = errorPayload.code ?? null;
     error.authRetireAttempted = errorPayload.authRetireAttempted ?? null;
     error.authRetireFailed = errorPayload.authRetireFailed ?? null;
@@ -94,6 +98,24 @@ async function fetchRecipientBundle(conversationId: string) {
       errorPayload.serviceRetireErrorStatus ?? null;
     error.currentDeviceRowId = errorPayload.currentDeviceRowId ?? null;
     error.retireTargetIds = errorPayload.retireTargetIds ?? null;
+    error.recipientUserIdChecked = errorPayload.recipientUserIdChecked ?? null;
+    error.recipientDeviceRowsFound = errorPayload.recipientDeviceRowsFound ?? null;
+    error.recipientActiveDeviceRowsFound =
+      errorPayload.recipientActiveDeviceRowsFound ?? null;
+    error.recipientSelectedDeviceRowId =
+      errorPayload.recipientSelectedDeviceRowId ?? null;
+    error.recipientSelectedDeviceRetiredAt =
+      errorPayload.recipientSelectedDeviceRetiredAt ?? null;
+    error.recipientSelectedDeviceIdentityKeyPresent =
+      errorPayload.recipientSelectedDeviceIdentityKeyPresent ?? null;
+    error.recipientSelectedDeviceSignedPrekeyPresent =
+      errorPayload.recipientSelectedDeviceSignedPrekeyPresent ?? null;
+    error.recipientSelectedDeviceSignaturePresent =
+      errorPayload.recipientSelectedDeviceSignaturePresent ?? null;
+    error.recipientSelectedDeviceAvailablePrekeyCount =
+      errorPayload.recipientSelectedDeviceAvailablePrekeyCount ?? null;
+    error.recipientReadinessFailedReason =
+      errorPayload.recipientReadinessFailedReason ?? null;
     throw error;
   }
 
@@ -205,6 +227,24 @@ function getEncryptedDmDebugFailureDetails(
   const serviceRetireErrorStatus = details.serviceRetireErrorStatus ?? null;
   const currentDeviceRowId = details.currentDeviceRowId ?? null;
   const retireTargetIds = details.retireTargetIds ?? null;
+  const recipientUserIdChecked = details.recipientUserIdChecked ?? null;
+  const recipientDeviceRowsFound = details.recipientDeviceRowsFound ?? null;
+  const recipientActiveDeviceRowsFound =
+    details.recipientActiveDeviceRowsFound ?? null;
+  const recipientSelectedDeviceRowId =
+    details.recipientSelectedDeviceRowId ?? null;
+  const recipientSelectedDeviceRetiredAt =
+    details.recipientSelectedDeviceRetiredAt ?? null;
+  const recipientSelectedDeviceIdentityKeyPresent =
+    details.recipientSelectedDeviceIdentityKeyPresent ?? null;
+  const recipientSelectedDeviceSignedPrekeyPresent =
+    details.recipientSelectedDeviceSignedPrekeyPresent ?? null;
+  const recipientSelectedDeviceSignaturePresent =
+    details.recipientSelectedDeviceSignaturePresent ?? null;
+  const recipientSelectedDeviceAvailablePrekeyCount =
+    details.recipientSelectedDeviceAvailablePrekeyCount ?? null;
+  const recipientReadinessFailedReason =
+    details.recipientReadinessFailedReason ?? null;
 
   if (
     !exact400ReasonCode &&
@@ -221,7 +261,17 @@ function getEncryptedDmDebugFailureDetails(
     !serviceRetireErrorCode &&
     !serviceRetireErrorStatus &&
     !currentDeviceRowId &&
-    (!retireTargetIds || retireTargetIds.length === 0)
+    (!retireTargetIds || retireTargetIds.length === 0) &&
+    !recipientUserIdChecked &&
+    recipientDeviceRowsFound === null &&
+    recipientActiveDeviceRowsFound === null &&
+    !recipientSelectedDeviceRowId &&
+    recipientSelectedDeviceRetiredAt === null &&
+    recipientSelectedDeviceIdentityKeyPresent === null &&
+    recipientSelectedDeviceSignedPrekeyPresent === null &&
+    recipientSelectedDeviceSignaturePresent === null &&
+    recipientSelectedDeviceAvailablePrekeyCount === null &&
+    !recipientReadinessFailedReason
   ) {
     return null;
   }
@@ -242,6 +292,16 @@ function getEncryptedDmDebugFailureDetails(
     serviceRetireErrorStatus,
     currentDeviceRowId,
     retireTargetIds,
+    recipientUserIdChecked,
+    recipientDeviceRowsFound,
+    recipientActiveDeviceRowsFound,
+    recipientSelectedDeviceRowId,
+    recipientSelectedDeviceRetiredAt,
+    recipientSelectedDeviceIdentityKeyPresent,
+    recipientSelectedDeviceSignedPrekeyPresent,
+    recipientSelectedDeviceSignaturePresent,
+    recipientSelectedDeviceAvailablePrekeyCount,
+    recipientReadinessFailedReason,
   };
 }
 
@@ -307,7 +367,20 @@ export function EncryptedDmComposerForm({
     Boolean(
       errorDebugDetails?.exact400ReasonCode ||
         errorDebugDetails?.failedValidationBranch ||
-        errorDebugDetails?.exactFailurePoint,
+        errorDebugDetails?.exactFailurePoint ||
+        errorDebugDetails?.recipientReadinessFailedReason ||
+        errorDebugDetails?.recipientUserIdChecked ||
+        typeof errorDebugDetails?.recipientDeviceRowsFound === 'number' ||
+        typeof errorDebugDetails?.recipientActiveDeviceRowsFound === 'number' ||
+        errorDebugDetails?.recipientSelectedDeviceRowId ||
+        typeof errorDebugDetails?.recipientSelectedDeviceIdentityKeyPresent ===
+          'boolean' ||
+        typeof errorDebugDetails?.recipientSelectedDeviceSignedPrekeyPresent ===
+          'boolean' ||
+        typeof errorDebugDetails?.recipientSelectedDeviceSignaturePresent ===
+          'boolean' ||
+        typeof errorDebugDetails?.recipientSelectedDeviceAvailablePrekeyCount ===
+          'number',
     );
 
   return (
@@ -567,6 +640,88 @@ export function EncryptedDmComposerForm({
                 <p className="attachment-helper composer-debug-line">
                   <strong>retire_target_ids:</strong>{' '}
                   <code>{errorDebugDetails.retireTargetIds.join(', ')}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientUserIdChecked ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_user_id_checked:</strong>{' '}
+                  <code>{errorDebugDetails.recipientUserIdChecked}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.recipientDeviceRowsFound === 'number' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_device_rows_found:</strong>{' '}
+                  <code>{String(errorDebugDetails.recipientDeviceRowsFound)}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.recipientActiveDeviceRowsFound === 'number' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_active_device_rows_found:</strong>{' '}
+                  <code>
+                    {String(errorDebugDetails.recipientActiveDeviceRowsFound)}
+                  </code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientSelectedDeviceRowId ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_selected_device_row_id:</strong>{' '}
+                  <code>{errorDebugDetails.recipientSelectedDeviceRowId}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientSelectedDeviceRetiredAt ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_selected_device_retired_at:</strong>{' '}
+                  <code>{errorDebugDetails.recipientSelectedDeviceRetiredAt}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.recipientSelectedDeviceIdentityKeyPresent ===
+              'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_selected_device_identity_key_present:</strong>{' '}
+                  <code>
+                    {String(
+                      errorDebugDetails.recipientSelectedDeviceIdentityKeyPresent,
+                    )}
+                  </code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.recipientSelectedDeviceSignedPrekeyPresent ===
+              'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_selected_device_signed_prekey_present:</strong>{' '}
+                  <code>
+                    {String(
+                      errorDebugDetails.recipientSelectedDeviceSignedPrekeyPresent,
+                    )}
+                  </code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.recipientSelectedDeviceSignaturePresent ===
+              'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_selected_device_signature_present:</strong>{' '}
+                  <code>
+                    {String(
+                      errorDebugDetails.recipientSelectedDeviceSignaturePresent,
+                    )}
+                  </code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.recipientSelectedDeviceAvailablePrekeyCount ===
+              'number' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_selected_device_available_prekey_count:</strong>{' '}
+                  <code>
+                    {String(
+                      errorDebugDetails.recipientSelectedDeviceAvailablePrekeyCount,
+                    )}
+                  </code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientReadinessFailedReason ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_readiness_failed_reason:</strong>{' '}
+                  <code>{errorDebugDetails.recipientReadinessFailedReason}</code>
                 </p>
               ) : null}
             </div>

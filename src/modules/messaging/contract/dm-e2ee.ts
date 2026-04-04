@@ -39,13 +39,27 @@ export type DmE2eeBootstrapDebugState = {
   retireTargetIds?: string[] | null;
 };
 
+export type DmE2eeRecipientReadinessDebugState = {
+  recipientUserIdChecked?: string | null;
+  recipientDeviceRowsFound?: number | null;
+  recipientActiveDeviceRowsFound?: number | null;
+  recipientSelectedDeviceRowId?: string | null;
+  recipientSelectedDeviceRetiredAt?: string | null;
+  recipientSelectedDeviceIdentityKeyPresent?: boolean | null;
+  recipientSelectedDeviceSignedPrekeyPresent?: boolean | null;
+  recipientSelectedDeviceSignaturePresent?: boolean | null;
+  recipientSelectedDeviceAvailablePrekeyCount?: number | null;
+  recipientReadinessFailedReason?: string | null;
+};
+
 export type DmE2eeApiErrorResponse = {
   error: string;
   code?: DmE2eeApiErrorCode | null;
   exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
   failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
   exactFailurePoint?: string | null;
-} & DmE2eeBootstrapDebugState;
+} & DmE2eeBootstrapDebugState &
+  DmE2eeRecipientReadinessDebugState;
 
 export type DmE2eeEnvelopeType =
   | 'prekey_signal_message'

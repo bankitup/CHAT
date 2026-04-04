@@ -11,6 +11,7 @@ import {
 import type {
   DmE2eeApiErrorCode,
   DmE2eeBootstrapDebugState,
+  DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendRequest,
   PublishDmE2eeDeviceRequest,
@@ -43,6 +44,50 @@ function createDmE2eeOperationError(
   message: string,
 ) {
   return new DmE2eeOperationError(code, message);
+}
+
+function applyRecipientReadinessDebugState(
+  error: Error,
+  details?: DmE2eeRecipientReadinessDebugState,
+) {
+  const target = error as Error & DmE2eeRecipientReadinessDebugState;
+  target.recipientUserIdChecked = details?.recipientUserIdChecked ?? null;
+  target.recipientDeviceRowsFound = details?.recipientDeviceRowsFound ?? null;
+  target.recipientActiveDeviceRowsFound =
+    details?.recipientActiveDeviceRowsFound ?? null;
+  target.recipientSelectedDeviceRowId =
+    details?.recipientSelectedDeviceRowId ?? null;
+  target.recipientSelectedDeviceRetiredAt =
+    details?.recipientSelectedDeviceRetiredAt ?? null;
+  target.recipientSelectedDeviceIdentityKeyPresent =
+    details?.recipientSelectedDeviceIdentityKeyPresent ?? null;
+  target.recipientSelectedDeviceSignedPrekeyPresent =
+    details?.recipientSelectedDeviceSignedPrekeyPresent ?? null;
+  target.recipientSelectedDeviceSignaturePresent =
+    details?.recipientSelectedDeviceSignaturePresent ?? null;
+  target.recipientSelectedDeviceAvailablePrekeyCount =
+    details?.recipientSelectedDeviceAvailablePrekeyCount ?? null;
+  target.recipientReadinessFailedReason =
+    details?.recipientReadinessFailedReason ?? null;
+  return target;
+}
+
+function createDmE2eeRecipientReadinessError(
+  code: DmE2eeApiErrorCode,
+  message: string,
+  details?: DmE2eeRecipientReadinessDebugState,
+) {
+  return applyRecipientReadinessDebugState(
+    createDmE2eeOperationError(code, message),
+    details,
+  );
+}
+
+function createDmE2eeRecipientLookupError(
+  message: string,
+  details?: DmE2eeRecipientReadinessDebugState,
+) {
+  return applyRecipientReadinessDebugState(new Error(message), details);
 }
 
 function logDmE2eeRecipientBundleDiagnostics(
@@ -1936,104 +1981,228 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
   const recipientParticipant = participants.find(
     (participant) => participant.userId !== input.userId,
   );
+  const recipientDebugState: DmE2eeRecipientReadinessDebugState = {
+    recipientUserIdChecked: recipientParticipant?.userId ?? null,
+    recipientDeviceRowsFound: null,
+    recipientActiveDeviceRowsFound: null,
+    recipientSelectedDeviceRowId: null,
+    recipientSelectedDeviceRetiredAt: null,
+    recipientSelectedDeviceIdentityKeyPresent: null,
+    recipientSelectedDeviceSignedPrekeyPresent: null,
+    recipientSelectedDeviceSignaturePresent: null,
+    recipientSelectedDeviceAvailablePrekeyCount: null,
+    recipientReadinessFailedReason: null,
+  };
 
   if (!recipientParticipant?.userId) {
-    throw createDmE2eeOperationError(
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: selected device mismatch';
+    throw createDmE2eeRecipientReadinessError(
       'dm_e2ee_recipient_unavailable',
       'Direct-message recipient is not available.',
+      recipientDebugState,
     );
   }
 
   const supabase = await createSupabaseServerClient();
   const serviceRoleSupabase = createSupabaseServiceRoleClient();
-  const lookupRecipientDevice = async (
+  const lookupRecipientDevices = async (
     client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   ) =>
     client
       .from('user_devices')
       .select(
-        'id, user_id, device_id, registration_id, identity_key_public, signed_prekey_id, signed_prekey_public, signed_prekey_signature',
+        'id, user_id, device_id, registration_id, identity_key_public, signed_prekey_id, signed_prekey_public, signed_prekey_signature, retired_at, created_at',
       )
       .eq('user_id', recipientParticipant.userId)
-      .is('retired_at', null)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .returns<
+        {
+          id: string;
+          user_id: string;
+          device_id: number;
+          registration_id: number;
+          identity_key_public: string | null;
+          signed_prekey_id: number | null;
+          signed_prekey_public: string | null;
+          signed_prekey_signature: string | null;
+          retired_at: string | null;
+          created_at: string | null;
+        }[]
+      >();
 
-  let deviceLookup = await lookupRecipientDevice(supabase);
+  let deviceLookup = await lookupRecipientDevices(supabase);
   let usedPrivilegedDeviceLookup = false;
 
   if (
     !deviceLookup.error &&
-    !deviceLookup.data &&
+    (!deviceLookup.data || deviceLookup.data.length === 0) &&
     serviceRoleSupabase
   ) {
     logDmE2eeRecipientBundleDiagnostics('device-lookup:auth-empty', {
       conversationId: input.conversationId,
       recipientUserId: recipientParticipant.userId,
     });
-    const privilegedLookup = await lookupRecipientDevice(serviceRoleSupabase);
+    const privilegedLookup = await lookupRecipientDevices(serviceRoleSupabase);
 
     if (!privilegedLookup.error) {
       deviceLookup = privilegedLookup;
-      usedPrivilegedDeviceLookup = Boolean(privilegedLookup.data);
+      usedPrivilegedDeviceLookup = Array.isArray(privilegedLookup.data)
+        ? privilegedLookup.data.length > 0
+        : false;
     }
   }
 
   if (deviceLookup.error) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: lookup query failed';
     if (
       isMissingRelationErrorMessage(deviceLookup.error.message, 'user_devices') ||
       isMissingColumnErrorMessage(deviceLookup.error.message, 'signed_prekey_public')
     ) {
-      throw createSchemaRequirementError(
+      throw createDmE2eeRecipientLookupError(
         'DM E2EE bootstrap schema is missing.',
+        recipientDebugState,
       );
     }
 
-    throw new Error(deviceLookup.error.message);
-  }
-
-  if (!deviceLookup.data) {
-    throw createDmE2eeOperationError(
-      'dm_e2ee_recipient_device_missing',
-      'Recipient does not have a DM E2EE device registered yet.',
+    throw createDmE2eeRecipientLookupError(
+      deviceLookup.error.message,
+      recipientDebugState,
     );
   }
 
-  const device = deviceLookup.data as {
-    id: string;
-    user_id: string;
-    device_id: number;
-    registration_id: number;
-    identity_key_public: string;
-    signed_prekey_id: number;
-    signed_prekey_public: string;
-    signed_prekey_signature: string;
-  };
+  const recipientDeviceRows = Array.isArray(deviceLookup.data)
+    ? deviceLookup.data
+    : [];
+  const activeRecipientDeviceRows = recipientDeviceRows.filter(
+    (device) => device.retired_at === null,
+  );
+  const selectedRecipientDevice = activeRecipientDeviceRows[0] ?? null;
+  recipientDebugState.recipientDeviceRowsFound = recipientDeviceRows.length;
+  recipientDebugState.recipientActiveDeviceRowsFound =
+    activeRecipientDeviceRows.length;
+  recipientDebugState.recipientSelectedDeviceRowId =
+    selectedRecipientDevice?.id ?? null;
+  recipientDebugState.recipientSelectedDeviceRetiredAt =
+    selectedRecipientDevice?.retired_at ?? null;
+  recipientDebugState.recipientSelectedDeviceIdentityKeyPresent =
+    Boolean(selectedRecipientDevice?.identity_key_public?.trim());
+  recipientDebugState.recipientSelectedDeviceSignedPrekeyPresent =
+    Boolean(selectedRecipientDevice?.signed_prekey_public?.trim());
+  recipientDebugState.recipientSelectedDeviceSignaturePresent =
+    Boolean(selectedRecipientDevice?.signed_prekey_signature?.trim());
+
+  if (recipientDeviceRows.length === 0) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: no device rows found';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_device_missing',
+      'Recipient does not have a DM E2EE device registered yet.',
+      recipientDebugState,
+    );
+  }
+
+  if (activeRecipientDeviceRows.length === 0 || !selectedRecipientDevice) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: no active device rows found';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_device_missing',
+      'Recipient does not have an active DM E2EE device registered yet.',
+      recipientDebugState,
+    );
+  }
+
+  if (selectedRecipientDevice.user_id !== recipientParticipant.userId) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: selected device mismatch';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Recipient device selection does not match the direct-message participant.',
+      recipientDebugState,
+    );
+  }
+
+  if (selectedRecipientDevice.retired_at !== null) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: selected device is retired';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Recipient DM E2EE device is retired.',
+      recipientDebugState,
+    );
+  }
+
+  if (!selectedRecipientDevice.identity_key_public?.trim()) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: identity key missing';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Recipient DM E2EE identity material is incomplete.',
+      recipientDebugState,
+    );
+  }
+
+  if (
+    !Number.isInteger(selectedRecipientDevice.signed_prekey_id) ||
+    !selectedRecipientDevice.signed_prekey_public?.trim()
+  ) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: signed prekey missing';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Recipient DM E2EE signed prekey is missing.',
+      recipientDebugState,
+    );
+  }
+
+  if (!selectedRecipientDevice.signed_prekey_signature?.trim()) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: signed prekey signature missing';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Recipient DM E2EE signed prekey signature is missing.',
+      recipientDebugState,
+    );
+  }
+
+  const recipientSignedPrekeyId = selectedRecipientDevice.signed_prekey_id as number;
+  const recipientSignedPrekeyPublic =
+    selectedRecipientDevice.signed_prekey_public as string;
+  const recipientSignedPrekeySignature =
+    selectedRecipientDevice.signed_prekey_signature as string;
+  const recipientIdentityKeyPublic =
+    selectedRecipientDevice.identity_key_public as string;
+
   const lookupAvailableOneTimePrekey = async (
     client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   ) =>
     client
       .from('device_one_time_prekeys')
-      .select('prekey_id, public_key')
-      .eq('device_id', device.id)
+      .select('prekey_id, public_key', { count: 'exact' })
+      .eq('device_id', selectedRecipientDevice.id)
       .is('claimed_at', null)
       .order('created_at', { ascending: true })
       .limit(1)
-      .maybeSingle();
+      .returns<
+        {
+          prekey_id: number;
+          public_key: string;
+        }[]
+      >();
 
   let oneTimePrekeyLookup = await lookupAvailableOneTimePrekey(supabase);
   let usedPrivilegedPrekeyLookup = false;
 
   if (
     !oneTimePrekeyLookup.error &&
-    !oneTimePrekeyLookup.data &&
+    (!oneTimePrekeyLookup.data || oneTimePrekeyLookup.data.length === 0) &&
     serviceRoleSupabase
   ) {
     logDmE2eeRecipientBundleDiagnostics('prekey-lookup:auth-empty', {
       conversationId: input.conversationId,
       recipientUserId: recipientParticipant.userId,
-      recipientDeviceRecordId: device.id,
+      recipientDeviceRecordId: selectedRecipientDevice.id,
       usedPrivilegedDeviceLookup,
     });
     const privilegedLookup =
@@ -2041,11 +2210,15 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
 
     if (!privilegedLookup.error) {
       oneTimePrekeyLookup = privilegedLookup;
-      usedPrivilegedPrekeyLookup = Boolean(privilegedLookup.data);
+      usedPrivilegedPrekeyLookup = Array.isArray(privilegedLookup.data)
+        ? privilegedLookup.data.length > 0
+        : false;
     }
   }
 
   if (oneTimePrekeyLookup.error) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: lookup query failed';
     if (
       isMissingRelationErrorMessage(
         oneTimePrekeyLookup.error.message,
@@ -2053,12 +2226,33 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
       ) ||
       isMissingColumnErrorMessage(oneTimePrekeyLookup.error.message, 'claimed_at')
     ) {
-      throw createSchemaRequirementError(
+      throw createDmE2eeRecipientLookupError(
         'DM E2EE bootstrap schema is missing.',
+        recipientDebugState,
       );
     }
 
-    throw new Error(oneTimePrekeyLookup.error.message);
+    throw createDmE2eeRecipientLookupError(
+      oneTimePrekeyLookup.error.message,
+      recipientDebugState,
+    );
+  }
+
+  const availablePrekeys = Array.isArray(oneTimePrekeyLookup.data)
+    ? oneTimePrekeyLookup.data
+    : [];
+  const availablePrekeyCount = oneTimePrekeyLookup.count ?? 0;
+  recipientDebugState.recipientSelectedDeviceAvailablePrekeyCount =
+    availablePrekeyCount;
+
+  if (availablePrekeyCount < 1 || availablePrekeys.length === 0) {
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: no available one-time prekeys';
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Recipient does not have available one-time prekeys for encrypted direct messages.',
+      recipientDebugState,
+    );
   }
 
   logDmE2eeRecipientBundleDiagnostics('bundle:resolved', {
@@ -2066,25 +2260,24 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     recipientUserId: recipientParticipant.userId,
     usedPrivilegedDeviceLookup,
     usedPrivilegedPrekeyLookup,
+    ...recipientDebugState,
     hasRecipientDevice: true,
-    hasOneTimePrekey: Boolean(oneTimePrekeyLookup.data),
+    hasOneTimePrekey: availablePrekeys.length > 0,
   });
 
   return {
     conversationId: input.conversationId,
     recipient: {
-      deviceRecordId: device.id,
-      userId: device.user_id,
-      deviceId: device.device_id,
-      registrationId: device.registration_id,
-      identityKeyPublic: device.identity_key_public,
-      signedPrekeyId: device.signed_prekey_id,
-      signedPrekeyPublic: device.signed_prekey_public,
-      signedPrekeySignature: device.signed_prekey_signature,
-      oneTimePrekeyId:
-        oneTimePrekeyLookup.data?.prekey_id ?? null,
-      oneTimePrekeyPublic:
-        oneTimePrekeyLookup.data?.public_key ?? null,
+      deviceRecordId: selectedRecipientDevice.id,
+      userId: selectedRecipientDevice.user_id,
+      deviceId: selectedRecipientDevice.device_id,
+      registrationId: selectedRecipientDevice.registration_id,
+      identityKeyPublic: recipientIdentityKeyPublic,
+      signedPrekeyId: recipientSignedPrekeyId,
+      signedPrekeyPublic: recipientSignedPrekeyPublic,
+      signedPrekeySignature: recipientSignedPrekeySignature,
+      oneTimePrekeyId: availablePrekeys[0]?.prekey_id ?? null,
+      oneTimePrekeyPublic: availablePrekeys[0]?.public_key ?? null,
     } satisfies UserDevicePublicBundle,
   } satisfies DmE2eeRecipientBundleResponse;
 }

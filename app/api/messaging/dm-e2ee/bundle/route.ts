@@ -1,11 +1,44 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { DmE2eeApiErrorResponse } from '@/modules/messaging/contract/dm-e2ee';
+import type {
+  DmE2eeApiErrorResponse,
+  DmE2eeRecipientReadinessDebugState,
+} from '@/modules/messaging/contract/dm-e2ee';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import {
   getCurrentUserDmE2eeRecipientBundle,
   isDmE2eeOperationError,
 } from '@/modules/messaging/data/server';
+
+function extractRecipientReadinessDebugState(
+  error: unknown,
+): DmE2eeRecipientReadinessDebugState {
+  if (!(error instanceof Error)) {
+    return {};
+  }
+
+  const details = error as Error & DmE2eeRecipientReadinessDebugState;
+
+  return {
+    recipientUserIdChecked: details.recipientUserIdChecked ?? null,
+    recipientDeviceRowsFound: details.recipientDeviceRowsFound ?? null,
+    recipientActiveDeviceRowsFound:
+      details.recipientActiveDeviceRowsFound ?? null,
+    recipientSelectedDeviceRowId: details.recipientSelectedDeviceRowId ?? null,
+    recipientSelectedDeviceRetiredAt:
+      details.recipientSelectedDeviceRetiredAt ?? null,
+    recipientSelectedDeviceIdentityKeyPresent:
+      details.recipientSelectedDeviceIdentityKeyPresent ?? null,
+    recipientSelectedDeviceSignedPrekeyPresent:
+      details.recipientSelectedDeviceSignedPrekeyPresent ?? null,
+    recipientSelectedDeviceSignaturePresent:
+      details.recipientSelectedDeviceSignaturePresent ?? null,
+    recipientSelectedDeviceAvailablePrekeyCount:
+      details.recipientSelectedDeviceAvailablePrekeyCount ?? null,
+    recipientReadinessFailedReason:
+      details.recipientReadinessFailedReason ?? null,
+  };
+}
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
@@ -56,6 +89,7 @@ export async function GET(request: Request) {
       : message.includes('schema is missing')
         ? 'dm_e2ee_schema_missing'
         : null;
+    const recipientDebugState = extractRecipientReadinessDebugState(error);
 
     return NextResponse.json(
       {
@@ -67,6 +101,7 @@ export async function GET(request: Request) {
               ? message
               : 'Unable to prepare encrypted direct message setup.',
         code,
+        ...recipientDebugState,
       } satisfies DmE2eeApiErrorResponse,
       { status: code === 'dm_e2ee_schema_missing' ? 409 : 400 },
     );
