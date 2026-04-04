@@ -193,12 +193,18 @@ async function ensureLocalDmE2eeDeviceRecord(userId: string) {
   const existing = await getLocalDmE2eeDeviceRecord(userId);
 
   if (existing) {
-    return existing;
+    return {
+      record: existing,
+      wasCreated: false,
+    };
   }
 
   const created = await createLocalDmE2eeDeviceRecord(userId);
   await saveLocalDmE2eeDeviceRecord(created);
-  return created;
+  return {
+    record: created,
+    wasCreated: true,
+  };
 }
 
 function isLocalDmE2eeDeviceRecordUsable(record: LocalDmE2eeDeviceRecord) {
@@ -275,8 +281,14 @@ export async function ensureDmE2eeDeviceRegistered(
     };
   }
 
-  let localRecord = await ensureLocalDmE2eeDeviceRecord(userId);
+  const initialLocalDeviceState = await ensureLocalDmE2eeDeviceRecord(userId);
+  let localRecord = initialLocalDeviceState.record;
   logDmE2eeBootstrapClientDiagnostics('local-record:loaded', {
+    currentUserId: userId,
+    localDeviceCreatedNow: initialLocalDeviceState.wasCreated,
+    localDeviceCreatedAt: localRecord.createdAt,
+    localDeviceLogicalId: localRecord.deviceId,
+    serverDeviceRecordId: localRecord.serverDeviceRecordId,
     hasServerDeviceRecordId: Boolean(localRecord.serverDeviceRecordId),
     oneTimePrekeyCount: localRecord.oneTimePrekeys.length,
     usable: isLocalDmE2eeDeviceRecordUsable(localRecord),
@@ -285,12 +297,17 @@ export async function ensureDmE2eeDeviceRegistered(
   if (!isLocalDmE2eeDeviceRecordUsable(localRecord)) {
     if (allowRepair) {
       logDmE2eeBootstrapClientDiagnostics('local-record:repair:start', {
+        currentUserId: userId,
         failedValidationBranch: 'incomplete local state',
         reason: 'local-record-unusable',
       });
       await deleteLocalDmE2eeDeviceRecord(userId);
-      localRecord = await ensureLocalDmE2eeDeviceRecord(userId);
+      localRecord = (await ensureLocalDmE2eeDeviceRecord(userId)).record;
       logDmE2eeBootstrapClientDiagnostics('local-record:repair:rebuilt', {
+        currentUserId: userId,
+        localDeviceCreatedAt: localRecord.createdAt,
+        localDeviceLogicalId: localRecord.deviceId,
+        serverDeviceRecordId: localRecord.serverDeviceRecordId,
         failedValidationBranch: 'incomplete local state',
         hasServerDeviceRecordId: Boolean(localRecord.serverDeviceRecordId),
         oneTimePrekeyCount: localRecord.oneTimePrekeys.length,
@@ -311,6 +328,8 @@ export async function ensureDmE2eeDeviceRegistered(
 
   if (localRecord.serverDeviceRecordId && !options.forcePublish) {
     logDmE2eeBootstrapClientDiagnostics('publish:skip-already-registered', {
+      currentUserId: userId,
+      reusedExistingServerDeviceRecordId: localRecord.serverDeviceRecordId,
       serverDeviceRecordIdPresent: true,
     });
     return {
@@ -337,7 +356,12 @@ export async function ensureDmE2eeDeviceRegistered(
   if (response.ok) {
     const result = (await response.json()) as PublishDmE2eeDeviceResult;
     logDmE2eeBootstrapClientDiagnostics('publish:ok', {
+      currentUserId: userId,
+      previousServerDeviceRecordId: localRecord.serverDeviceRecordId,
+      sameServerDeviceRecordReused:
+        localRecord.serverDeviceRecordId === result.deviceRecordId,
       deviceRecordIdPresent: Boolean(result.deviceRecordId),
+      serverDeviceRecordId: result.deviceRecordId,
       publishedPrekeyCount: result.publishedPrekeyCount,
     });
     await saveLocalDmE2eeDeviceRecord({

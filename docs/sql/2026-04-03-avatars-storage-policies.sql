@@ -18,6 +18,9 @@ set
 
 alter table storage.objects enable row level security;
 
+drop policy if exists avatars_select_own_prefix on storage.objects;
+drop policy if exists avatars_select_own on storage.objects;
+drop policy if exists avatars_read_own_prefix on storage.objects;
 drop policy if exists avatars_select_authenticated on storage.objects;
 create policy avatars_select_authenticated
 on storage.objects

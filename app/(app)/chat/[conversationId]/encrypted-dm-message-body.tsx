@@ -50,11 +50,22 @@ export function EncryptedDmMessageBody({
   const [failureKind, setFailureKind] = useState<EncryptedDmFailureKind>('unavailable');
   const [retryNonce, setRetryNonce] = useState(0);
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
+  const diagnosticsEnabled =
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
 
   useEffect(() => {
     let cancelled = false;
 
     if (!envelope) {
+      if (diagnosticsEnabled) {
+        console.info('[dm-e2ee-history-client]', 'decrypt:no-envelope', {
+          currentUserId,
+          conversationId,
+          clientId,
+          messageId,
+        });
+      }
       setPlaintext(null);
       setIsUnavailable(true);
       setFailureKind('unavailable');
@@ -66,6 +77,21 @@ export function EncryptedDmMessageBody({
         const localRecord = await getLocalDmE2eeDeviceRecordByServerDeviceId(
           envelope.recipientDeviceRecordId,
         );
+
+        if (diagnosticsEnabled) {
+          console.info('[dm-e2ee-history-client]', 'decrypt:local-record-lookup', {
+            currentUserId,
+            conversationId,
+            clientId,
+            messageId,
+            envelopeRecipientDeviceRecordId: envelope.recipientDeviceRecordId,
+            envelopeSenderDeviceRecordId: envelope.senderDeviceRecordId,
+            localRecordFound: Boolean(localRecord),
+            localRecordUserId: localRecord?.userId ?? null,
+            localRecordServerDeviceRecordId:
+              localRecord?.serverDeviceRecordId ?? null,
+          });
+        }
 
         if (!localRecord) {
           throw new Error('Local DM E2EE device record is missing.');
@@ -94,6 +120,18 @@ export function EncryptedDmMessageBody({
           });
         }
       } catch (error) {
+        if (diagnosticsEnabled) {
+          console.info('[dm-e2ee-history-client]', 'decrypt:error', {
+            currentUserId,
+            conversationId,
+            clientId,
+            messageId,
+            envelopeRecipientDeviceRecordId:
+              envelope?.recipientDeviceRecordId ?? null,
+            failureKind: classifyEncryptedDmFailure(error),
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
         if (!cancelled) {
           setPlaintext(null);
           setIsUnavailable(true);
@@ -108,6 +146,7 @@ export function EncryptedDmMessageBody({
   }, [
     clientId,
     conversationId,
+    diagnosticsEnabled,
     envelope,
     messageCreatedAt,
     messageId,

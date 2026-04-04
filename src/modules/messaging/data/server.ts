@@ -1508,108 +1508,155 @@ export async function getProfileIdentities(userIds: string[]) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const withIdentityFallbacksAndAvatars = await supabase
-    .from('profiles')
-    .select('user_id, display_name, username, email_local_part, avatar_path')
-    .in('user_id', uniqueUserIds);
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const loadProfiles = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+    ids: string[],
+  ) => {
+    const withIdentityFallbacksAndAvatars = await client
+      .from('profiles')
+      .select('user_id, display_name, username, email_local_part, avatar_path')
+      .in('user_id', ids);
 
-  if (!withIdentityFallbacksAndAvatars.error) {
-    const profiles = ((withIdentityFallbacksAndAvatars.data ?? []) as {
-      user_id: string;
-      display_name: string | null;
-      username?: string | null;
-      email_local_part?: string | null;
-      avatar_path?: string | null;
-    }[]);
+    if (!withIdentityFallbacksAndAvatars.error) {
+      const profiles = ((withIdentityFallbacksAndAvatars.data ?? []) as {
+        user_id: string;
+        display_name: string | null;
+        username?: string | null;
+        email_local_part?: string | null;
+        avatar_path?: string | null;
+      }[]);
 
-    return Promise.all(
-      profiles.map(async (profile) => ({
+      return Promise.all(
+        profiles.map(async (profile) => ({
+          userId: profile.user_id,
+          displayName: profile.display_name?.trim() || null,
+          username: profile.username?.trim() || null,
+          emailLocalPart: profile.email_local_part?.trim() || null,
+          avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
+        })),
+      );
+    }
+
+    const withDisplayNamesAndAvatars = await client
+      .from('profiles')
+      .select('user_id, display_name, avatar_path')
+      .in('user_id', ids);
+
+    if (!withDisplayNamesAndAvatars.error) {
+      const profiles = ((withDisplayNamesAndAvatars.data ?? []) as {
+        user_id: string;
+        display_name: string | null;
+        avatar_path?: string | null;
+      }[]);
+
+      return Promise.all(
+        profiles.map(async (profile) => ({
+          userId: profile.user_id,
+          displayName: profile.display_name?.trim() || null,
+          username: null,
+          emailLocalPart: null,
+          avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
+        })),
+      );
+    }
+
+    const withIdentityFallbacks = await client
+      .from('profiles')
+      .select('user_id, display_name, username, email_local_part')
+      .in('user_id', ids);
+
+    if (!withIdentityFallbacks.error) {
+      return ((withIdentityFallbacks.data ?? []) as {
+        user_id: string;
+        display_name: string | null;
+        username?: string | null;
+        email_local_part?: string | null;
+      }[]).map((profile) => ({
         userId: profile.user_id,
         displayName: profile.display_name?.trim() || null,
         username: profile.username?.trim() || null,
         emailLocalPart: profile.email_local_part?.trim() || null,
-        avatarPath: await resolveStoredAvatarPath(supabase, profile.avatar_path),
-      })),
-    );
-  }
+        avatarPath: null,
+      }));
+    }
 
-  const withDisplayNamesAndAvatars = await supabase
-    .from('profiles')
-    .select('user_id, display_name, avatar_path')
-    .in('user_id', uniqueUserIds);
+    const withDisplayNames = await client
+      .from('profiles')
+      .select('user_id, display_name')
+      .in('user_id', ids);
 
-  if (!withDisplayNamesAndAvatars.error) {
-    const profiles = ((withDisplayNamesAndAvatars.data ?? []) as {
-      user_id: string;
-      display_name: string | null;
-      avatar_path?: string | null;
-    }[]);
-
-    return Promise.all(
-      profiles.map(async (profile) => ({
+    if (!withDisplayNames.error) {
+      return ((withDisplayNames.data ?? []) as {
+        user_id: string;
+        display_name: string | null;
+      }[]).map((profile) => ({
         userId: profile.user_id,
         displayName: profile.display_name?.trim() || null,
         username: null,
         emailLocalPart: null,
-        avatarPath: await resolveStoredAvatarPath(supabase, profile.avatar_path),
-      })),
-    );
-  }
+        avatarPath: null,
+      }));
+    }
 
-  const withIdentityFallbacks = await supabase
-    .from('profiles')
-    .select('user_id, display_name, username, email_local_part')
-    .in('user_id', uniqueUserIds);
+    const fallback = await client.from('profiles').select('user_id').in('user_id', ids);
 
-  if (!withIdentityFallbacks.error) {
-    return ((withIdentityFallbacks.data ?? []) as {
-      user_id: string;
-      display_name: string | null;
-      username?: string | null;
-      email_local_part?: string | null;
-    }[]).map((profile) => ({
+    if (fallback.error) {
+      throw new Error(fallback.error.message);
+    }
+
+    return ((fallback.data ?? []) as { user_id: string }[]).map((profile) => ({
       userId: profile.user_id,
-      displayName: profile.display_name?.trim() || null,
-      username: profile.username?.trim() || null,
-      emailLocalPart: profile.email_local_part?.trim() || null,
-      avatarPath: null,
-    }));
-  }
-
-  const withDisplayNames = await supabase
-    .from('profiles')
-    .select('user_id, display_name')
-    .in('user_id', uniqueUserIds);
-
-  if (!withDisplayNames.error) {
-    return ((withDisplayNames.data ?? []) as {
-      user_id: string;
-      display_name: string | null;
-    }[]).map((profile) => ({
-      userId: profile.user_id,
-      displayName: profile.display_name?.trim() || null,
+      displayName: null,
       username: null,
       emailLocalPart: null,
       avatarPath: null,
     }));
+  };
+  const mergeIdentity = (
+    base: MessageSenderProfile | undefined,
+    fallback: MessageSenderProfile,
+  ) => ({
+    userId: fallback.userId,
+    displayName: base?.displayName ?? fallback.displayName ?? null,
+    username: base?.username ?? fallback.username ?? null,
+    emailLocalPart: base?.emailLocalPart ?? fallback.emailLocalPart ?? null,
+    avatarPath: base?.avatarPath ?? fallback.avatarPath ?? null,
+  });
+
+  const authProfiles = await loadProfiles(supabase, uniqueUserIds);
+  const profilesByUserId = new Map(
+    authProfiles.map((profile) => [profile.userId, profile]),
+  );
+
+  const missingUserIds = uniqueUserIds.filter(
+    (userId) => !profilesByUserId.has(userId),
+  );
+
+  if (missingUserIds.length > 0 && serviceSupabase) {
+    // DM titles and avatars must reflect the counterpart's current public profile
+    // identity even when auth-scoped profile reads are narrower than chat UX needs.
+    const fallbackProfiles = await loadProfiles(serviceSupabase, missingUserIds);
+
+    for (const profile of fallbackProfiles) {
+      profilesByUserId.set(
+        profile.userId,
+        mergeIdentity(profilesByUserId.get(profile.userId), profile),
+      );
+    }
   }
 
-  const fallback = await supabase
-    .from('profiles')
-    .select('user_id')
-    .in('user_id', uniqueUserIds);
+  const orderedProfiles: MessageSenderProfile[] = [];
 
-  if (fallback.error) {
-    throw new Error(fallback.error.message);
+  for (const userId of uniqueUserIds) {
+    const profile = profilesByUserId.get(userId);
+
+    if (profile) {
+      orderedProfiles.push(profile);
+    }
   }
 
-  return ((fallback.data ?? []) as { user_id: string }[]).map((profile) => ({
-    userId: profile.user_id,
-    displayName: null,
-    username: null,
-    emailLocalPart: null,
-    avatarPath: null,
-  }));
+  return orderedProfiles;
 }
 
 export async function getCurrentUserProfile(userId: string, email?: string | null) {
@@ -2791,6 +2838,19 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   userId: string;
   messageIds: string[];
 }) {
+  const diagnosticsEnabled = process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
+  const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+
+    if (details) {
+      console.info('[dm-e2ee-history]', stage, details);
+      return;
+    }
+
+    console.info('[dm-e2ee-history]', stage);
+  };
   const uniqueMessageIds = Array.from(
     new Set(input.messageIds.map((value) => value.trim()).filter(Boolean)),
   );
@@ -2802,8 +2862,16 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   const activeDeviceRecordId = await getCurrentUserActiveDmE2eeDeviceRecordId(
     input.userId,
   );
+  logDiagnostics('envelopes:active-device-resolved', {
+    currentUserId: input.userId,
+    activeDeviceRecordId,
+    messageCount: uniqueMessageIds.length,
+  });
 
   if (!activeDeviceRecordId) {
+    logDiagnostics('envelopes:no-active-device', {
+      currentUserId: input.userId,
+    });
     return new Map<string, StoredDmE2eeEnvelope>();
   }
 
@@ -2831,8 +2899,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     throw new Error(response.error.message);
   }
 
-  return new Map(
-    ((response.data ?? []) as MessageE2eeEnvelopeRow[]).map((row) => {
+  const envelopes: Array<[string, StoredDmE2eeEnvelope]> = ((response.data ?? []) as MessageE2eeEnvelopeRow[]).map((row) => {
       const messageRecord = normalizeJoinedRecord(row.messages);
 
       return [
@@ -2849,9 +2916,16 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
           usedOneTimePrekeyId: row.used_one_time_prekey_id ?? null,
           createdAt: row.created_at ?? null,
         } satisfies StoredDmE2eeEnvelope,
-      ];
-    }),
-  );
+      ] as [string, StoredDmE2eeEnvelope];
+    });
+  logDiagnostics('envelopes:loaded', {
+    currentUserId: input.userId,
+    activeDeviceRecordId,
+    requestedMessageCount: uniqueMessageIds.length,
+    envelopeCount: envelopes.length,
+  });
+
+  return new Map(envelopes);
 }
 
 export async function getAvailableUsers(
@@ -2915,8 +2989,8 @@ export async function getAvailableUsers(
   }
 
   const identities = await getProfileIdentities(userIds);
-  const identityByUserId = new Map(
-    identities.map((identity) => [identity.userId, identity]),
+  const identityByUserId = new Map<string, MessageSenderProfile>(
+    identities.map((identity) => [identity.userId, identity] as const),
   );
 
   return userIds.map((userId) => {
@@ -2961,8 +3035,8 @@ export async function getConversationParticipantIdentities(
   const identities = await getProfileIdentities(
     memberships.map((membership) => membership.user_id),
   );
-  const identityByUserId = new Map(
-    identities.map((identity) => [identity.userId, identity]),
+  const identityByUserId = new Map<string, MessageSenderProfile>(
+    identities.map((identity) => [identity.userId, identity] as const),
   );
 
   return memberships.map((membership) => {

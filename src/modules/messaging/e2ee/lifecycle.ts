@@ -80,6 +80,18 @@ export async function clearAllLocalDmE2eeState() {
   }
 }
 
+export async function clearLocalDmE2eePublicSessionArtifacts() {
+  if (!supportsBrowserStateCleanup()) {
+    return;
+  }
+
+  try {
+    clearAllLocalEncryptedDmPreviews();
+  } catch (error) {
+    console.error('Unable to clear public DM E2EE session artifacts.', error);
+  }
+}
+
 export async function clearLocalDmE2eeStateForUser(userId: string) {
   if (!supportsBrowserStateCleanup()) {
     return;

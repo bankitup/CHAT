@@ -49,9 +49,9 @@ MVP read rule:
 The app currently tries:
 
 1. signed URL generation for stored object paths
-2. public URL fallback if signed URL generation is unavailable
+2. server-side signed URL fallback through privileged service access if auth-scoped signed URL generation is blocked at runtime
 
-This keeps the rendering path working across either private or public bucket setups, as long as the configured storage policies allow the intended read access.
+This keeps the rendering path compatible with a private bucket while still letting authenticated users see other users' avatars in chat surfaces.
 
 ## Write / replace / remove behavior
 

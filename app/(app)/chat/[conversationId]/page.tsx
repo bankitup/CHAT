@@ -457,14 +457,14 @@ export default async function ChatPage({
       .filter((message) => isEncryptedDmTextMessage(message))
       .map((message) => message.id),
   });
-  const senderNames = new Map(
+  const senderNames = new Map<string, string>(
     senderProfiles.map((profile) => [
       profile.userId,
       resolvePublicIdentityLabel(profile, t.chat.unknownUser),
-    ]),
+    ] as const),
   );
-  const senderIdentities = new Map(
-    senderProfiles.map((profile) => [profile.userId, profile]),
+  const senderIdentities = new Map<string, (typeof senderProfiles)[number]>(
+    senderProfiles.map((profile) => [profile.userId, profile] as const),
   );
   const messagesById = new Map(messages.map((message) => [message.id, message]));
   const otherParticipants = participants.filter(
