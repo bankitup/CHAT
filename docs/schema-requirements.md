@@ -29,7 +29,7 @@ Optional hardening support:
 
 Notes:
 
-- `dm_key` is used for race-safe DM uniqueness when the column exists.
+- `dm_key` is the canonical unordered DM pair key. Strict one-DM-per-pair enforcement depends on the cleanup-aware migration in `docs/sql/2026-04-04-dm-uniqueness-hardening.sql`.
 
 ### `public.conversation_members`
 
@@ -106,6 +106,7 @@ Apply these if the fields are not yet present in your Supabase project:
 - [2026-04-03-conversation-member-hidden-at.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-hidden-at.sql)
 - [2026-04-03-conversation-member-notification-level.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversation-member-notification-level.sql)
 - [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
+- [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
 - [2026-04-03-messages-shell-e2ee-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-shell-e2ee-v1-align.sql)
 - [2026-04-03-avatars-storage-policies.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-avatars-storage-policies.sql)
 

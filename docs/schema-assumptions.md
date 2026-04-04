@@ -353,7 +353,7 @@ These schema changes must exist in Supabase for the current app to run safely:
 ## Recommended hardening before broader testing
 
 1. `public.conversations.dm_key`
-   Source file: [2026-04-03-conversations-dm-key.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-dm-key.sql)
+   Source file: [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
 
 ## Required migrations before enabling space-scoped conversations
 
