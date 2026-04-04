@@ -1434,24 +1434,72 @@ export async function publishCurrentUserDmE2eeDevice(
   }
   logDmE2eeBootstrapDiagnostics('publish:user-device-ok');
 
-  const retireOthers = await supabase
-    .from('user_devices')
-    .update({
-      retired_at: now,
-    })
-    .eq('user_id', input.userId)
-    .neq('id', deviceRecordId)
-    .is('retired_at', null);
+  const serviceRoleSupabase = createSupabaseServiceRoleClient();
+  const retireOtherDevices = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  ) =>
+    client
+      .from('user_devices')
+      .update({
+        retired_at: now,
+      })
+      .eq('user_id', input.userId)
+      .neq('id', deviceRecordId)
+      .is('retired_at', null);
+
+  const countOtherActiveDevices = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  ) =>
+    client
+      .from('user_devices')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', input.userId)
+      .neq('id', deviceRecordId)
+      .is('retired_at', null);
+
+  const otherActiveDevices = await countOtherActiveDevices(supabase);
+
+  if (!otherActiveDevices.error) {
+    logDmE2eeBootstrapDiagnostics('publish:retire-others:prepare', {
+      deviceRecordIdPresent: Boolean(deviceRecordId),
+      otherActiveDeviceCount: otherActiveDevices.count ?? 0,
+    });
+  }
+
+  let retireOthers = await retireOtherDevices(supabase);
+  let usedPrivilegedRetireOthers = false;
+
+  if (retireOthers.error && serviceRoleSupabase) {
+    logDmE2eeBootstrapDiagnostics('publish:retire-others:auth-failed', {
+      message: retireOthers.error.message,
+      otherActiveDeviceCount: otherActiveDevices.count ?? null,
+    });
+    const privilegedRetireOthers =
+      await retireOtherDevices(serviceRoleSupabase);
+
+    if (!privilegedRetireOthers.error) {
+      retireOthers = privilegedRetireOthers;
+      usedPrivilegedRetireOthers = true;
+    }
+  }
 
   if (retireOthers.error) {
     logDmE2eeBootstrapDiagnostics('publish:retire-others-error', {
       message: retireOthers.error.message,
+      deviceRecordIdPresent: Boolean(deviceRecordId),
+      otherActiveDeviceCount: otherActiveDevices.count ?? null,
+      usedPrivilegedRetireOthers,
     });
     throw createDmE2eeBootstrapPublishError(
       'retire other devices',
       retireOthers.error.message,
     );
   }
+
+  logDmE2eeBootstrapDiagnostics('publish:retire-others:ok', {
+    otherActiveDeviceCount: otherActiveDevices.count ?? 0,
+    usedPrivilegedRetireOthers,
+  });
 
   // A repaired device publish must replace the full server-side prekey batch for
   // this device record. Keeping previously claimed rows around can block

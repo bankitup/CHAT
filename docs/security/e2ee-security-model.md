@@ -129,6 +129,8 @@ Current implementation note:
 - recipient DM public bundle lookup may fall back to a server-side service-role client when auth-scoped runtime visibility incorrectly hides `public.user_devices` or `public.device_one_time_prekeys`
 - that fallback is limited to public device material and available public one-time prekeys
 - it does not expose private keys, decrypted plaintext, or local decrypted preview cache content
+- current-device publish/republish may also use a server-side service-role fallback for retiring other active `public.user_devices` rows for the same user when auth-scoped runtime policy evaluation blocks that one-device v1 maintenance step
+- that fallback is limited to public device registration metadata; it does not expose private keys, decrypted plaintext, or decrypted preview cache content
 
 Current secondary-surface fallback policy:
 
