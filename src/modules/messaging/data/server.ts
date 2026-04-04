@@ -13,6 +13,7 @@ import type {
   DmE2eeBootstrapDebugState,
   DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
+  DmE2eeSendDebugState,
   DmE2eeSendRequest,
   PublishDmE2eeDeviceRequest,
   PublishDmE2eeDeviceResult,
@@ -101,6 +102,35 @@ function createDmE2eeRecipientLookupError(
   details?: DmE2eeRecipientReadinessDebugState,
 ) {
   return applyRecipientReadinessDebugState(new Error(message), details);
+}
+
+function applyDmE2eeSendDebugState(
+  error: Error,
+  details?: DmE2eeSendDebugState,
+) {
+  const target = error as Error & DmE2eeSendDebugState;
+  target.sendExactFailureStage = details?.sendExactFailureStage ?? null;
+  target.sendFailedOperation = details?.sendFailedOperation ?? null;
+  target.sendReasonCode = details?.sendReasonCode ?? null;
+  target.sendErrorMessage = details?.sendErrorMessage ?? null;
+  target.sendErrorCode = details?.sendErrorCode ?? null;
+  target.sendErrorDetails = details?.sendErrorDetails ?? null;
+  target.sendErrorHint = details?.sendErrorHint ?? null;
+  target.sendSelectedConversationId = details?.sendSelectedConversationId ?? null;
+  target.sendSenderUserId = details?.sendSenderUserId ?? null;
+  target.sendRecipientUserId = details?.sendRecipientUserId ?? null;
+  target.sendSelectedSenderDeviceRowId =
+    details?.sendSelectedSenderDeviceRowId ?? null;
+  target.sendSelectedRecipientDeviceRowId =
+    details?.sendSelectedRecipientDeviceRowId ?? null;
+  return target;
+}
+
+function createDmE2eeSendProofError(
+  message: string,
+  details?: DmE2eeSendDebugState,
+) {
+  return applyDmE2eeSendDebugState(new Error(message), details);
 }
 
 function logDmE2eeRecipientBundleDiagnostics(
@@ -3877,6 +3907,21 @@ export async function sendTextMessage(input: {
 export async function sendEncryptedDmTextMessage(
   input: DmE2eeSendRequest & { senderId: string },
 ) {
+  const sendDebugState: DmE2eeSendDebugState = {
+    sendExactFailureStage: 'send:start',
+    sendFailedOperation: null,
+    sendReasonCode: null,
+    sendErrorMessage: null,
+    sendErrorCode: null,
+    sendErrorDetails: null,
+    sendErrorHint: null,
+    sendSelectedConversationId: input.conversationId,
+    sendSenderUserId: input.senderId,
+    sendRecipientUserId: null,
+    sendSelectedSenderDeviceRowId: input.senderDeviceRecordId,
+    sendSelectedRecipientDeviceRowId:
+      input.envelopes[0]?.recipientDeviceRecordId ?? null,
+  };
   logDmE2eeSendDiagnostics('start', {
     hasConversationId: Boolean(input.conversationId),
     hasSenderDeviceRecordId: Boolean(input.senderDeviceRecordId),
@@ -3888,18 +3933,49 @@ export async function sendEncryptedDmTextMessage(
   );
 
   if (!conversation) {
-    throw new Error('This chat is no longer available.');
+    sendDebugState.sendExactFailureStage = 'send:conversation-missing';
+    sendDebugState.sendFailedOperation = 'conversation lookup';
+    sendDebugState.sendReasonCode = 'send: selected conversation unavailable';
+    sendDebugState.sendErrorMessage = 'This chat is no longer available.';
+    throw createDmE2eeSendProofError(
+      'This chat is no longer available.',
+      sendDebugState,
+    );
   }
 
   if (conversation.kind !== 'dm') {
-    throw new Error('Encrypted DM send is only available for direct chats.');
+    sendDebugState.sendExactFailureStage = 'send:conversation-not-dm';
+    sendDebugState.sendFailedOperation = 'conversation kind check';
+    sendDebugState.sendReasonCode = 'send: selected conversation unavailable';
+    sendDebugState.sendErrorMessage =
+      'Encrypted DM send is only available for direct chats.';
+    throw createDmE2eeSendProofError(
+      'Encrypted DM send is only available for direct chats.',
+      sendDebugState,
+    );
   }
 
+  sendDebugState.sendExactFailureStage = 'send:conversation-ok';
+
+  const participants = await getConversationParticipants(input.conversationId);
+  sendDebugState.sendRecipientUserId =
+    participants.find((participant) => participant.userId !== input.senderId)
+      ?.userId ?? null;
+
   if (!input.envelopes.length) {
-    throw new Error('Encrypted DM send requires at least one ciphertext envelope.');
+    sendDebugState.sendExactFailureStage = 'send:missing-envelopes';
+    sendDebugState.sendFailedOperation = 'envelope validation';
+    sendDebugState.sendReasonCode = 'send: envelope build failed';
+    sendDebugState.sendErrorMessage =
+      'Encrypted DM send requires at least one ciphertext envelope.';
+    throw createDmE2eeSendProofError(
+      'Encrypted DM send requires at least one ciphertext envelope.',
+      sendDebugState,
+    );
   }
 
   const supabase = await createSupabaseServerClient();
+  sendDebugState.sendExactFailureStage = 'send:sender-device-lookup';
   const deviceOwnership = await supabase
     .from('user_devices')
     .select('id')
@@ -3909,26 +3985,59 @@ export async function sendEncryptedDmTextMessage(
     .maybeSingle();
 
   if (deviceOwnership.error) {
+    const diagnostics = getSupabaseErrorDiagnostics(deviceOwnership.error);
+    sendDebugState.sendFailedOperation = 'sender device lookup';
+    sendDebugState.sendReasonCode = 'send: sender device lookup failed';
+    sendDebugState.sendErrorMessage = deviceOwnership.error.message;
+    sendDebugState.sendErrorCode =
+      typeof diagnostics.error_code === 'string'
+        ? diagnostics.error_code
+        : null;
+    sendDebugState.sendErrorDetails =
+      typeof diagnostics.error_details === 'string'
+        ? diagnostics.error_details
+        : null;
+    sendDebugState.sendErrorHint =
+      typeof diagnostics.error_hint === 'string'
+        ? diagnostics.error_hint
+        : null;
     if (
       isMissingRelationErrorMessage(deviceOwnership.error.message, 'user_devices') ||
       isMissingColumnErrorMessage(deviceOwnership.error.message, 'retired_at')
     ) {
-      throw createSchemaRequirementError(
-        'DM E2EE bootstrap schema is missing.',
+      sendDebugState.sendExactFailureStage = 'send:sender-device-lookup:schema';
+      throw createDmE2eeSendProofError(
+        createSchemaRequirementError(
+          'DM E2EE bootstrap schema is missing.',
+        ).message,
+        sendDebugState,
       );
     }
 
-    throw new Error(deviceOwnership.error.message);
+    sendDebugState.sendExactFailureStage = 'send:sender-device-lookup:error';
+    throw createDmE2eeSendProofError(
+      deviceOwnership.error.message,
+      sendDebugState,
+    );
   }
 
   if (!deviceOwnership.data) {
-    throw createDmE2eeOperationError(
-      'dm_e2ee_sender_device_stale',
-      'Sending device is not registered for DM E2EE.',
+    sendDebugState.sendExactFailureStage = 'send:sender-device-lookup:stale';
+    sendDebugState.sendFailedOperation = 'sender device ownership';
+    sendDebugState.sendReasonCode = 'send: sender device lookup failed';
+    sendDebugState.sendErrorMessage =
+      'Sending device is not registered for DM E2EE.';
+    throw applyDmE2eeSendDebugState(
+      createDmE2eeOperationError(
+        'dm_e2ee_sender_device_stale',
+        'Sending device is not registered for DM E2EE.',
+      ),
+      sendDebugState,
     );
   }
   logDmE2eeSendDiagnostics('sender-device-ok');
 
+  sendDebugState.sendExactFailureStage = 'send:rpc';
   const rpcResult = await supabase.rpc('send_dm_e2ee_message_atomic', {
     p_conversation_id: input.conversationId,
     p_reply_to_message_id: input.replyToMessageId ?? null,
@@ -3938,8 +4047,24 @@ export async function sendEncryptedDmTextMessage(
   });
 
   if (rpcResult.error) {
+    const diagnostics = getSupabaseErrorDiagnostics(rpcResult.error);
+    sendDebugState.sendFailedOperation = 'send_dm_e2ee_message_atomic';
+    sendDebugState.sendErrorMessage = rpcResult.error.message;
+    sendDebugState.sendErrorCode =
+      typeof diagnostics.error_code === 'string'
+        ? diagnostics.error_code
+        : null;
+    sendDebugState.sendErrorDetails =
+      typeof diagnostics.error_details === 'string'
+        ? diagnostics.error_details
+        : null;
+    sendDebugState.sendErrorHint =
+      typeof diagnostics.error_hint === 'string'
+        ? diagnostics.error_hint
+        : null;
     logDmE2eeSendDiagnostics('rpc-error', {
       message: rpcResult.error.message,
+      ...sendDebugState,
     });
     if (
       isMissingRelationErrorMessage(rpcResult.error.message, 'message_e2ee_envelopes') ||
@@ -3954,22 +4079,37 @@ export async function sendEncryptedDmTextMessage(
       isMissingColumnErrorMessage(rpcResult.error.message, 'ciphertext') ||
       isMissingColumnErrorMessage(rpcResult.error.message, 'claimed_at')
     ) {
-      throw createSchemaRequirementError(
-        'DM E2EE send schema is missing.',
+      sendDebugState.sendExactFailureStage = 'send:rpc:schema';
+      sendDebugState.sendReasonCode = 'send: rpc schema failed';
+      throw createDmE2eeSendProofError(
+        createSchemaRequirementError(
+          'DM E2EE send schema is missing.',
+        ).message,
+        sendDebugState,
       );
     }
 
     if (rpcResult.error.message.includes('dm_e2ee_prekey_conflict')) {
-      throw createDmE2eeOperationError(
-        'dm_e2ee_prekey_conflict',
-        'Recipient prekey was already used. Refresh and try sending again.',
+      sendDebugState.sendExactFailureStage = 'send:rpc:prekey-conflict';
+      sendDebugState.sendReasonCode = 'send: envelope build failed';
+      throw applyDmE2eeSendDebugState(
+        createDmE2eeOperationError(
+          'dm_e2ee_prekey_conflict',
+          'Recipient prekey was already used. Refresh and try sending again.',
+        ),
+        sendDebugState,
       );
     }
 
     if (rpcResult.error.message.includes('dm_e2ee_sender_device_stale')) {
-      throw createDmE2eeOperationError(
-        'dm_e2ee_sender_device_stale',
-        'Sending device is not registered for DM E2EE.',
+      sendDebugState.sendExactFailureStage = 'send:rpc:sender-device-stale';
+      sendDebugState.sendReasonCode = 'send: sender device lookup failed';
+      throw applyDmE2eeSendDebugState(
+        createDmE2eeOperationError(
+          'dm_e2ee_sender_device_stale',
+          'Sending device is not registered for DM E2EE.',
+        ),
+        sendDebugState,
       );
     }
 
@@ -3977,28 +4117,49 @@ export async function sendEncryptedDmTextMessage(
       rpcResult.error.message.includes('dm_e2ee_conversation_unavailable') ||
       rpcResult.error.message.includes('dm_e2ee_recipient_unavailable')
     ) {
-      throw createDmE2eeOperationError(
-        'dm_e2ee_recipient_unavailable',
-        'Recipient encrypted setup is unavailable for this direct chat.',
+      sendDebugState.sendExactFailureStage = 'send:rpc:recipient-unavailable';
+      sendDebugState.sendReasonCode = 'send: recipient bundle missing';
+      throw applyDmE2eeSendDebugState(
+        createDmE2eeOperationError(
+          'dm_e2ee_recipient_unavailable',
+          'Recipient encrypted setup is unavailable for this direct chat.',
+        ),
+        sendDebugState,
       );
     }
 
     if (rpcResult.error.message.includes('dm_e2ee_missing_envelopes')) {
-      throw createDmE2eeOperationError(
-        'dm_e2ee_local_state_incomplete',
-        'Local encrypted payload was incomplete. Refresh encrypted setup and try again.',
+      sendDebugState.sendExactFailureStage = 'send:rpc:missing-envelopes';
+      sendDebugState.sendReasonCode = 'send: envelope build failed';
+      throw applyDmE2eeSendDebugState(
+        createDmE2eeOperationError(
+          'dm_e2ee_local_state_incomplete',
+          'Local encrypted payload was incomplete. Refresh encrypted setup and try again.',
+        ),
+        sendDebugState,
       );
     }
 
     if (rpcResult.error.message.includes('row-level security policy')) {
-      throw createSchemaRequirementError(
-        'DM E2EE send is blocked by database policy. Apply the latest atomic send SQL patch.',
+      sendDebugState.sendExactFailureStage = 'send:rpc:rls';
+      sendDebugState.sendReasonCode = 'send: post-send update failed';
+      throw createDmE2eeSendProofError(
+        createSchemaRequirementError(
+          'DM E2EE send is blocked by database policy. Apply the latest atomic send SQL patch.',
+        ).message,
+        sendDebugState,
       );
     }
 
-    throw new Error(rpcResult.error.message);
+    sendDebugState.sendExactFailureStage = 'send:rpc:error';
+    sendDebugState.sendReasonCode = 'send: message row insert failed';
+    throw createDmE2eeSendProofError(
+      rpcResult.error.message,
+      sendDebugState,
+    );
   }
 
+  sendDebugState.sendExactFailureStage = 'send:rpc:ok';
   const row = Array.isArray(rpcResult.data)
     ? (rpcResult.data[0] as
         | { message_id?: string | null; created_at?: string | null; client_id?: string | null }
@@ -4010,7 +4171,15 @@ export async function sendEncryptedDmTextMessage(
   const messageId = String(row?.message_id ?? '').trim();
 
   if (!messageId) {
-    throw new Error('Encrypted DM send did not return a persisted message id.');
+    sendDebugState.sendExactFailureStage = 'send:rpc:missing-message-id';
+    sendDebugState.sendFailedOperation = 'atomic send result';
+    sendDebugState.sendReasonCode = 'send: message row insert failed';
+    sendDebugState.sendErrorMessage =
+      'Encrypted DM send did not return a persisted message id.';
+    throw createDmE2eeSendProofError(
+      'Encrypted DM send did not return a persisted message id.',
+      sendDebugState,
+    );
   }
 
   logDmE2eeSendDiagnostics('done', {

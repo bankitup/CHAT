@@ -11,6 +11,7 @@ import type {
   DmE2eeBootstrapFailedValidationBranch,
   DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
+  DmE2eeSendDebugState,
   DmE2eeSendRequest,
 } from '@/modules/messaging/contract/dm-e2ee';
 import {
@@ -38,7 +39,8 @@ type EncryptedDmDebugFailureDetails = {
   failedValidationBranch: DmE2eeBootstrapFailedValidationBranch | null;
   exactFailurePoint: string | null;
 } & DmE2eeBootstrapDebugState &
-  DmE2eeRecipientReadinessDebugState;
+  DmE2eeRecipientReadinessDebugState &
+  DmE2eeSendDebugState;
 
 type EncryptedDmComposerFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -149,7 +151,9 @@ async function postEncryptedDmMessage(input: DmE2eeSendRequest) {
   if (!response.ok) {
     const error = new Error(
       payload.error || 'Unable to send encrypted message.',
-    ) as Error & DmE2eeBootstrapDebugState & {
+    ) as Error &
+      DmE2eeBootstrapDebugState &
+      DmE2eeSendDebugState & {
       code?: DmE2eeApiErrorCode | null;
     };
     error.code = payload.code ?? null;
@@ -165,6 +169,20 @@ async function postEncryptedDmMessage(input: DmE2eeSendRequest) {
     error.serviceRetireErrorStatus = payload.serviceRetireErrorStatus ?? null;
     error.currentDeviceRowId = payload.currentDeviceRowId ?? null;
     error.retireTargetIds = payload.retireTargetIds ?? null;
+    error.sendExactFailureStage = payload.sendExactFailureStage ?? null;
+    error.sendFailedOperation = payload.sendFailedOperation ?? null;
+    error.sendReasonCode = payload.sendReasonCode ?? null;
+    error.sendErrorMessage = payload.sendErrorMessage ?? null;
+    error.sendErrorCode = payload.sendErrorCode ?? null;
+    error.sendErrorDetails = payload.sendErrorDetails ?? null;
+    error.sendErrorHint = payload.sendErrorHint ?? null;
+    error.sendSelectedConversationId = payload.sendSelectedConversationId ?? null;
+    error.sendSenderUserId = payload.sendSenderUserId ?? null;
+    error.sendRecipientUserId = payload.sendRecipientUserId ?? null;
+    error.sendSelectedSenderDeviceRowId =
+      payload.sendSelectedSenderDeviceRowId ?? null;
+    error.sendSelectedRecipientDeviceRowId =
+      payload.sendSelectedRecipientDeviceRowId ?? null;
     throw error;
   }
 }
@@ -241,6 +259,20 @@ function getEncryptedDmDebugFailureDetails(
   const serviceRetireErrorStatus = details.serviceRetireErrorStatus ?? null;
   const currentDeviceRowId = details.currentDeviceRowId ?? null;
   const retireTargetIds = details.retireTargetIds ?? null;
+  const sendExactFailureStage = details.sendExactFailureStage ?? null;
+  const sendFailedOperation = details.sendFailedOperation ?? null;
+  const sendReasonCode = details.sendReasonCode ?? null;
+  const sendErrorMessage = details.sendErrorMessage ?? null;
+  const sendErrorCode = details.sendErrorCode ?? null;
+  const sendErrorDetails = details.sendErrorDetails ?? null;
+  const sendErrorHint = details.sendErrorHint ?? null;
+  const sendSelectedConversationId = details.sendSelectedConversationId ?? null;
+  const sendSenderUserId = details.sendSenderUserId ?? null;
+  const sendRecipientUserId = details.sendRecipientUserId ?? null;
+  const sendSelectedSenderDeviceRowId =
+    details.sendSelectedSenderDeviceRowId ?? null;
+  const sendSelectedRecipientDeviceRowId =
+    details.sendSelectedRecipientDeviceRowId ?? null;
   const recipientBundleQueryStage = details.recipientBundleQueryStage ?? null;
   const recipientUserIdChecked = details.recipientUserIdChecked ?? null;
   const recipientDeviceRowsFound = details.recipientDeviceRowsFound ?? null;
@@ -289,6 +321,18 @@ function getEncryptedDmDebugFailureDetails(
     !serviceRetireErrorStatus &&
     !currentDeviceRowId &&
     (!retireTargetIds || retireTargetIds.length === 0) &&
+    !sendExactFailureStage &&
+    !sendFailedOperation &&
+    !sendReasonCode &&
+    !sendErrorMessage &&
+    !sendErrorCode &&
+    !sendErrorDetails &&
+    !sendErrorHint &&
+    !sendSelectedConversationId &&
+    !sendSenderUserId &&
+    !sendRecipientUserId &&
+    !sendSelectedSenderDeviceRowId &&
+    !sendSelectedRecipientDeviceRowId &&
     !recipientBundleQueryStage &&
     !recipientUserIdChecked &&
     recipientDeviceRowsFound === null &&
@@ -327,6 +371,18 @@ function getEncryptedDmDebugFailureDetails(
     serviceRetireErrorStatus,
     currentDeviceRowId,
     retireTargetIds,
+    sendExactFailureStage,
+    sendFailedOperation,
+    sendReasonCode,
+    sendErrorMessage,
+    sendErrorCode,
+    sendErrorDetails,
+    sendErrorHint,
+    sendSelectedConversationId,
+    sendSenderUserId,
+    sendRecipientUserId,
+    sendSelectedSenderDeviceRowId,
+    sendSelectedRecipientDeviceRowId,
     recipientBundleQueryStage,
     recipientUserIdChecked,
     recipientDeviceRowsFound,
@@ -411,6 +467,18 @@ export function EncryptedDmComposerForm({
       errorDebugDetails?.exact400ReasonCode ||
         errorDebugDetails?.failedValidationBranch ||
         errorDebugDetails?.exactFailurePoint ||
+        errorDebugDetails?.sendExactFailureStage ||
+        errorDebugDetails?.sendFailedOperation ||
+        errorDebugDetails?.sendReasonCode ||
+        errorDebugDetails?.sendErrorMessage ||
+        errorDebugDetails?.sendErrorCode ||
+        errorDebugDetails?.sendErrorDetails ||
+        errorDebugDetails?.sendErrorHint ||
+        errorDebugDetails?.sendSelectedConversationId ||
+        errorDebugDetails?.sendSenderUserId ||
+        errorDebugDetails?.sendRecipientUserId ||
+        errorDebugDetails?.sendSelectedSenderDeviceRowId ||
+        errorDebugDetails?.sendSelectedRecipientDeviceRowId ||
         errorDebugDetails?.recipientReadinessFailedReason ||
         errorDebugDetails?.recipientBundleQueryStage ||
         errorDebugDetails?.recipientUserIdChecked ||
@@ -691,6 +759,78 @@ export function EncryptedDmComposerForm({
                 <p className="attachment-helper composer-debug-line">
                   <strong>retire_target_ids:</strong>{' '}
                   <code>{errorDebugDetails.retireTargetIds.join(', ')}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendExactFailureStage ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_exact_failure_stage:</strong>{' '}
+                  <code>{errorDebugDetails.sendExactFailureStage}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendFailedOperation ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_failed_operation:</strong>{' '}
+                  <code>{errorDebugDetails.sendFailedOperation}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendReasonCode ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_reason_code:</strong>{' '}
+                  <code>{errorDebugDetails.sendReasonCode}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendErrorMessage ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_error_message:</strong>{' '}
+                  <code>{errorDebugDetails.sendErrorMessage}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendErrorCode ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_error_code:</strong>{' '}
+                  <code>{errorDebugDetails.sendErrorCode}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendErrorDetails ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_error_details:</strong>{' '}
+                  <code>{errorDebugDetails.sendErrorDetails}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendErrorHint ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_error_hint:</strong>{' '}
+                  <code>{errorDebugDetails.sendErrorHint}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendSelectedConversationId ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_selected_conversation_id:</strong>{' '}
+                  <code>{errorDebugDetails.sendSelectedConversationId}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendSenderUserId ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_sender_user_id:</strong>{' '}
+                  <code>{errorDebugDetails.sendSenderUserId}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendRecipientUserId ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_recipient_user_id:</strong>{' '}
+                  <code>{errorDebugDetails.sendRecipientUserId}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendSelectedSenderDeviceRowId ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_selected_sender_device_row_id:</strong>{' '}
+                  <code>{errorDebugDetails.sendSelectedSenderDeviceRowId}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.sendSelectedRecipientDeviceRowId ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>send_selected_recipient_device_row_id:</strong>{' '}
+                  <code>{errorDebugDetails.sendSelectedRecipientDeviceRowId}</code>
                 </p>
               ) : null}
               {errorDebugDetails?.recipientBundleQueryStage ? (

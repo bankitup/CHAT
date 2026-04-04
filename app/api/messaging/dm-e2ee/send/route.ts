@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type {
   DmE2eeApiErrorResponse,
+  DmE2eeSendDebugState,
   DmE2eeSendRequest,
 } from '@/modules/messaging/contract/dm-e2ee';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
@@ -24,6 +25,31 @@ function logDmE2eeSendRouteDiagnostics(
   }
 
   console.info('[api-dm-e2ee-send]', stage);
+}
+
+function extractSendDebugState(error: unknown): DmE2eeSendDebugState {
+  if (!(error instanceof Error)) {
+    return {};
+  }
+
+  const details = error as Error & DmE2eeSendDebugState;
+
+  return {
+    sendExactFailureStage: details.sendExactFailureStage ?? null,
+    sendFailedOperation: details.sendFailedOperation ?? null,
+    sendReasonCode: details.sendReasonCode ?? null,
+    sendErrorMessage: details.sendErrorMessage ?? null,
+    sendErrorCode: details.sendErrorCode ?? null,
+    sendErrorDetails: details.sendErrorDetails ?? null,
+    sendErrorHint: details.sendErrorHint ?? null,
+    sendSelectedConversationId: details.sendSelectedConversationId ?? null,
+    sendSenderUserId: details.sendSenderUserId ?? null,
+    sendRecipientUserId: details.sendRecipientUserId ?? null,
+    sendSelectedSenderDeviceRowId:
+      details.sendSelectedSenderDeviceRowId ?? null,
+    sendSelectedRecipientDeviceRowId:
+      details.sendSelectedRecipientDeviceRowId ?? null,
+  };
 }
 
 export async function POST(request: Request) {
@@ -69,10 +95,12 @@ export async function POST(request: Request) {
       : message.includes('schema is missing')
         ? 'dm_e2ee_schema_missing'
         : null;
+    const sendDebugState = extractSendDebugState(error);
 
     logDmE2eeSendRouteDiagnostics('send:error', {
       message,
       code,
+      ...sendDebugState,
     });
 
     return NextResponse.json(
@@ -88,6 +116,7 @@ export async function POST(request: Request) {
               ? message
               : 'Unable to send encrypted message right now.',
         code,
+        ...sendDebugState,
       } satisfies DmE2eeApiErrorResponse,
       { status: code === 'dm_e2ee_schema_missing' ? 409 : 400 },
     );

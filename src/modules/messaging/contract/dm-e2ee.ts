@@ -60,6 +60,21 @@ export type DmE2eeRecipientReadinessDebugState = {
   recipientReadinessFailedReason?: string | null;
 };
 
+export type DmE2eeSendDebugState = {
+  sendExactFailureStage?: string | null;
+  sendFailedOperation?: string | null;
+  sendReasonCode?: string | null;
+  sendErrorMessage?: string | null;
+  sendErrorCode?: string | null;
+  sendErrorDetails?: string | null;
+  sendErrorHint?: string | null;
+  sendSelectedConversationId?: string | null;
+  sendSenderUserId?: string | null;
+  sendRecipientUserId?: string | null;
+  sendSelectedSenderDeviceRowId?: string | null;
+  sendSelectedRecipientDeviceRowId?: string | null;
+};
+
 export type DmE2eeApiErrorResponse = {
   error: string;
   code?: DmE2eeApiErrorCode | null;
@@ -67,7 +82,8 @@ export type DmE2eeApiErrorResponse = {
   failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
   exactFailurePoint?: string | null;
 } & DmE2eeBootstrapDebugState &
-  DmE2eeRecipientReadinessDebugState;
+  DmE2eeRecipientReadinessDebugState &
+  DmE2eeSendDebugState;
 
 export type DmE2eeEnvelopeType =
   | 'prekey_signal_message'
