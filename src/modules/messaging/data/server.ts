@@ -1277,16 +1277,17 @@ export async function getConversationMemberReadStates(conversationId: string) {
 }
 
 export async function getConversationParticipants(conversationId: string) {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from('conversation_members')
-    .select('user_id, role, state')
-    .eq('conversation_id', conversationId)
-    .eq('state', 'active');
+  const membershipRows = await getActiveConversationMembershipRows([conversationId], {
+    includeRole: true,
+  });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  const data = membershipRows
+    .filter((membership) => membership.conversation_id === conversationId)
+    .map((membership) => ({
+      user_id: membership.user_id,
+      role: membership.role ?? null,
+      state: membership.state ?? null,
+    }));
 
   const memberships = ((data ?? []) as {
     user_id: string;
@@ -1317,6 +1318,68 @@ export async function getConversationParticipants(conversationId: string) {
 
     return left.userId.localeCompare(right.userId);
   }) satisfies ConversationParticipant[];
+}
+
+async function getActiveConversationMembershipRows(
+  conversationIds: string[],
+  options?: {
+    includeRole?: boolean;
+  },
+) {
+  type ConversationMembershipRow = {
+    conversation_id: string;
+    user_id: string;
+    role?: string | null;
+    state?: string | null;
+  };
+  const uniqueConversationIds = Array.from(
+    new Set(conversationIds.map((value) => value.trim()).filter(Boolean)),
+  );
+
+  if (uniqueConversationIds.length === 0) {
+    return [] as ConversationMembershipRow[];
+  }
+
+  const select = options?.includeRole
+    ? 'conversation_id, user_id, role, state'
+    : 'conversation_id, user_id';
+  const supabase = await createSupabaseServerClient();
+  const authResponse = await supabase
+    .from('conversation_members')
+    .select(select)
+    .in('conversation_id', uniqueConversationIds)
+    .eq('state', 'active');
+
+  if (authResponse.error) {
+    throw new Error(authResponse.error.message);
+  }
+
+  const mergedRows = new Map<
+    string,
+    ConversationMembershipRow
+  >(
+    ((authResponse.data ?? []) as unknown as ConversationMembershipRow[]).map(
+      (row) => [`${row.conversation_id}:${row.user_id}`, row] as const,
+    ),
+  );
+
+  const serviceSupabase = createSupabaseServiceRoleClient();
+
+  if (serviceSupabase) {
+    const serviceResponse = await serviceSupabase
+      .from('conversation_members')
+      .select(select)
+      .in('conversation_id', uniqueConversationIds)
+      .eq('state', 'active');
+
+    if (!serviceResponse.error) {
+      for (const row of (serviceResponse.data ?? []) as unknown as ConversationMembershipRow[]) {
+        mergedRows.set(`${row.conversation_id}:${row.user_id}`, row);
+      }
+    }
+  }
+
+  return Array.from(mergedRows.values());
 }
 
 async function getActiveGroupMembership(
@@ -1413,6 +1476,9 @@ function getAvatarBucketRequirementErrorMessage() {
   return 'Avatar uploads are not available right now.';
 }
 
+const PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
+const avatarDiagnosticsEnabled = process.env.CHAT_DEBUG_AVATARS === '1';
+
 async function resolveStoredAvatarPath(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   value: string | null | undefined,
@@ -1429,9 +1495,16 @@ async function resolveStoredAvatarPath(
 
   const signed = await supabase.storage
     .from(PROFILE_AVATAR_BUCKET)
-    .createSignedUrl(normalizedValue, 60 * 60);
+    .createSignedUrl(normalizedValue, PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS);
 
   if (!signed.error) {
+    if (avatarDiagnosticsEnabled) {
+      console.info('[avatar-storage]', {
+        issue: 'signed-url-auth-ok',
+        bucket: PROFILE_AVATAR_BUCKET,
+        objectPath: normalizedValue,
+      });
+    }
     return signed.data.signedUrl;
   }
 
@@ -1440,7 +1513,7 @@ async function resolveStoredAvatarPath(
   if (serviceSupabase) {
     const serviceSigned = await serviceSupabase.storage
       .from(PROFILE_AVATAR_BUCKET)
-      .createSignedUrl(normalizedValue, 60 * 60);
+      .createSignedUrl(normalizedValue, PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS);
 
     if (!serviceSigned.error) {
       console.info('[avatar-storage]', {
@@ -3017,21 +3090,7 @@ export async function getConversationParticipantIdentities(
     return [] as ConversationParticipantIdentity[];
   }
 
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from('conversation_members')
-    .select('conversation_id, user_id')
-    .in('conversation_id', uniqueConversationIds)
-    .eq('state', 'active');
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const memberships = (data ?? []) as {
-    conversation_id: string;
-    user_id: string;
-  }[];
+  const memberships = await getActiveConversationMembershipRows(uniqueConversationIds);
   const identities = await getProfileIdentities(
     memberships.map((membership) => membership.user_id),
   );

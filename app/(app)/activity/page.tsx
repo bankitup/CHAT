@@ -347,6 +347,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     <GroupIdentityAvatar label={conversation.title} size="sm" />
                   ) : (
                     <IdentityAvatar
+                      diagnosticsSurface="activity:unread-item"
                       identity={conversation.primaryParticipant}
                       label={conversation.title}
                       size="sm"
@@ -417,6 +418,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     <GroupIdentityAvatar label={conversation.title} size="sm" />
                   ) : (
                     <IdentityAvatar
+                      diagnosticsSurface="activity:recent-item"
                       identity={conversation.primaryParticipant}
                       label={conversation.title}
                       size="sm"

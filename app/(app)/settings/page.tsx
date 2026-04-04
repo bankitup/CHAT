@@ -57,6 +57,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       <section className="stack settings-hero">
         <div className="profile-settings-summary settings-hero-summary">
           <IdentityAvatar
+            diagnosticsSurface="settings:profile-summary"
             identity={{
               userId: profile.userId,
               displayName: profile.displayName,

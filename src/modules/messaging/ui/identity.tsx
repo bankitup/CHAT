@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 export { getIdentityLabel } from './identity-label';
 
 type IdentityRecord = {
@@ -14,6 +14,7 @@ type IdentityAvatarProps = {
   label: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  diagnosticsSurface?: string;
 };
 
 type IdentityAvatarStackProps = {
@@ -77,6 +78,7 @@ export function IdentityAvatar({
   label,
   size = 'md',
   className,
+  diagnosticsSurface,
 }: IdentityAvatarProps) {
   const toneClass = getStableTone(identity?.userId || label);
   const initials = getIdentityInitials(label);
@@ -88,6 +90,34 @@ export function IdentityAvatar({
   const hasImageError = Boolean(avatarPath && failedAvatarPath === avatarPath);
   const isImageLoaded = Boolean(avatarPath && loadedAvatarPath === avatarPath);
   const shouldRenderImage = Boolean(avatarPath && !hasImageError);
+  const diagnosticsEnabled =
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_AVATARS === '1';
+
+  useEffect(() => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+
+    console.info('[avatar-render]', {
+      stage: 'identity-avatar:resolved',
+      surface: diagnosticsSurface ?? 'unknown',
+      userId: identity?.userId ?? null,
+      label,
+      hasAvatarUrl: Boolean(avatarPath),
+      avatarUrl: avatarPath,
+      fallingBackToInitials: !avatarPath || hasImageError,
+      imageLoaded: isImageLoaded,
+    });
+  }, [
+    avatarPath,
+    diagnosticsEnabled,
+    diagnosticsSurface,
+    hasImageError,
+    identity?.userId,
+    isImageLoaded,
+    label,
+  ]);
 
   return (
     <span
@@ -119,10 +149,28 @@ export function IdentityAvatar({
           }
           loading="lazy"
           onError={() => {
+            if (diagnosticsEnabled) {
+              console.info('[avatar-render]', {
+                stage: 'identity-avatar:image-error',
+                surface: diagnosticsSurface ?? 'unknown',
+                userId: identity?.userId ?? null,
+                label,
+                avatarUrl: avatarPath,
+              });
+            }
             setFailedAvatarPath(avatarPath);
             setLoadedAvatarPath(null);
           }}
           onLoad={() => {
+            if (diagnosticsEnabled) {
+              console.info('[avatar-render]', {
+                stage: 'identity-avatar:image-loaded',
+                surface: diagnosticsSurface ?? 'unknown',
+                userId: identity?.userId ?? null,
+                label,
+                avatarUrl: avatarPath,
+              });
+            }
             setLoadedAvatarPath(avatarPath);
           }}
           src={avatarPath ?? undefined}

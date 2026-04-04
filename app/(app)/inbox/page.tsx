@@ -773,6 +773,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                     />
                   ) : (
                     <IdentityAvatar
+                      diagnosticsSurface="inbox:conversation-row"
                       identity={conversation.participants[0]}
                       label={conversation.title}
                       size="sm"

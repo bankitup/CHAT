@@ -143,6 +143,7 @@ export function NewChatSheet({
                   >
                     <div className="user-row">
                       <IdentityAvatar
+                        diagnosticsSurface="inbox:new-chat-dm"
                         identity={availableUser}
                         label={availableUser.label}
                         size="sm"
@@ -227,6 +228,7 @@ export function NewChatSheet({
                     >
                       <div className="user-row">
                         <IdentityAvatar
+                          diagnosticsSurface="inbox:new-chat-group"
                           identity={availableUser}
                           label={availableUser.label}
                           size="sm"

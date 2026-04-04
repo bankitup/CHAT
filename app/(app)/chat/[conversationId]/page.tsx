@@ -662,6 +662,7 @@ export default async function ChatPage({
               />
             ) : (
               <IdentityAvatar
+                diagnosticsSurface="chat:header"
                 identity={directParticipantIdentity}
                 label={directConversationDisplayTitle}
                 size="lg"
@@ -1319,6 +1320,7 @@ export default async function ChatPage({
                   />
                 ) : (
                   <IdentityAvatar
+                    diagnosticsSurface="chat:info-summary"
                     identity={directParticipantIdentity}
                     label={directConversationDisplayTitle}
                     size="lg"
@@ -1391,6 +1393,7 @@ export default async function ChatPage({
                   >
                     <div className="conversation-member-identity">
                       <IdentityAvatar
+                        diagnosticsSurface="chat:participant-item"
                         identity={participant.identity}
                         label={participant.label}
                         size="sm"
@@ -1523,6 +1526,7 @@ export default async function ChatPage({
                                 <span className="checkbox-copy">
                                   <span className="checkbox-identity">
                                     <IdentityAvatar
+                                      diagnosticsSurface="chat:add-participant"
                                       identity={participant}
                                       label={participant.label}
                                       size="sm"
