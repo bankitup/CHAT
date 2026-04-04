@@ -27,8 +27,14 @@ type ProfileSettingsFormProps = {
     avatarInvalidType: string;
     avatarUploading: string;
     avatarUploadFailed: string;
+    avatarStorageUnavailable: string;
+    profileUpdateFailed: string;
   };
 };
+
+function isBucketNotFoundStorageErrorMessage(message: string | null | undefined) {
+  return (message ?? '').toLowerCase().includes('bucket not found');
+}
 
 function getAvatarClientValidationError(
   file: File,
@@ -95,7 +101,11 @@ export function ProfileSettingsForm({
       });
 
     if (error) {
-      setLocalError(error.message?.trim() || labels.avatarUploadFailed);
+      setLocalError(
+        isBucketNotFoundStorageErrorMessage(error.message)
+          ? labels.avatarStorageUnavailable
+          : labels.avatarUploadFailed,
+      );
       setIsUploadingAvatar(false);
       return;
     }

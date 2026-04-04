@@ -103,6 +103,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               avatarInvalidType: t.settings.avatarInvalidType,
               avatarUploading: t.settings.avatarUploading,
               avatarUploadFailed: t.settings.avatarUploadFailed,
+              avatarStorageUnavailable: t.settings.avatarStorageUnavailable,
+              profileUpdateFailed: t.settings.profileUpdateFailed,
             }}
           />
 

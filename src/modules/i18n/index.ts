@@ -67,6 +67,8 @@ type LanguageDictionary = {
     avatarInvalidType: string;
     avatarUploading: string;
     avatarUploadFailed: string;
+    avatarStorageUnavailable: string;
+    profileUpdateFailed: string;
     saveChanges: string;
     profileFallback: string;
     languageTitle: string;
@@ -380,6 +382,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarInvalidType: 'Avatar must be a JPG, PNG, WEBP, or GIF image.',
       avatarUploading: 'Uploading photo...',
       avatarUploadFailed: 'Unable to upload avatar right now.',
+      avatarStorageUnavailable: 'Avatar uploads are not available right now.',
+      profileUpdateFailed: 'Unable to update your profile right now.',
       saveChanges: 'Save changes',
       profileFallback: 'Your profile',
       languageTitle: 'Language',
@@ -703,6 +707,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarInvalidType: 'Аватар должен быть в формате JPG, PNG, WEBP или GIF.',
       avatarUploading: 'Загружаем фото...',
       avatarUploadFailed: 'Сейчас не удалось загрузить аватар.',
+      avatarStorageUnavailable: 'Загрузка аватаров сейчас недоступна.',
+      profileUpdateFailed: 'Сейчас не удалось обновить профиль.',
       saveChanges: 'Сохранить',
       profileFallback: 'Ваш профиль',
       languageTitle: 'Язык',

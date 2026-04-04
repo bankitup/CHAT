@@ -1392,7 +1392,13 @@ function isBucketNotFoundStorageErrorMessage(message: string) {
 }
 
 function getAvatarBucketRequirementErrorMessage() {
-  return `Avatar upload bucket "${PROFILE_AVATAR_BUCKET}" was not found. Create this Supabase Storage bucket and apply /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-03-avatars-storage-policies.sql.`;
+  console.error('[avatar-storage]', {
+    issue: 'bucket-not-found',
+    bucket: PROFILE_AVATAR_BUCKET,
+    setupSql: 'docs/sql/2026-04-03-avatars-storage-policies.sql',
+  });
+
+  return 'Avatar uploads are not available right now.';
 }
 
 async function resolveStoredAvatarPath(
@@ -1417,11 +1423,14 @@ async function resolveStoredAvatarPath(
     return signed.data.signedUrl;
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(normalizedValue);
+  console.error('[avatar-storage]', {
+    issue: 'signed-url-failed',
+    bucket: PROFILE_AVATAR_BUCKET,
+    objectPath: normalizedValue,
+    message: signed.error.message,
+  });
 
-  return publicUrl || null;
+  return null;
 }
 
 function getAttachmentFileName(objectPath: string) {

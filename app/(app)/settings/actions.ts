@@ -19,6 +19,31 @@ function redirectWithMessage(
   redirect(`/settings?${params.toString()}`);
 }
 
+function getProfileSettingsErrorMessage(
+  error: unknown,
+  fallbackMessage: string,
+  storageUnavailableMessage: string,
+) {
+  const rawMessage = error instanceof Error ? error.message : '';
+  const normalized = rawMessage.toLowerCase();
+
+  if (normalized.includes('avatar uploads are not available right now')) {
+    return storageUnavailableMessage;
+  }
+
+  if (
+    normalized.includes('row-level security policy') ||
+    normalized.includes('profiles rls') ||
+    normalized.includes('avatar upload path is invalid') ||
+    normalized.includes('no authenticated user') ||
+    normalized.includes('user mismatch')
+  ) {
+    return fallbackMessage;
+  }
+
+  return rawMessage || fallbackMessage;
+}
+
 export async function updateProfileAction(formData: FormData) {
   const language = await getRequestLanguage();
   const t = getTranslations(language);
@@ -48,7 +73,11 @@ export async function updateProfileAction(formData: FormData) {
   } catch (error) {
     redirectWithMessage(
       'error',
-      error instanceof Error ? error.message : 'Unable to update your profile.',
+      getProfileSettingsErrorMessage(
+        error,
+        t.settings.profileUpdateFailed,
+        t.settings.avatarStorageUnavailable,
+      ),
     );
   }
 
@@ -76,7 +105,11 @@ export async function removeAvatarAction() {
   } catch (error) {
     redirectWithMessage(
       'error',
-      error instanceof Error ? error.message : 'Unable to update your profile.',
+      getProfileSettingsErrorMessage(
+        error,
+        t.settings.profileUpdateFailed,
+        t.settings.avatarStorageUnavailable,
+      ),
     );
   }
 
