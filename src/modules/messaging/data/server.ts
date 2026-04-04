@@ -1491,6 +1491,7 @@ export async function publishCurrentUserDmE2eeDevice(
   logDmE2eeBootstrapDiagnostics('publish:retire-others:prepare', {
     current_device_row_id: deviceRecordId,
     other_device_count: otherActiveDevices.otherDeviceCount,
+    retire_target_ids: otherActiveDevices.otherDeviceIds,
     auth_retire_attempted: false,
     auth_retire_failed: false,
     service_retire_attempted: false,
@@ -1502,6 +1503,7 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others:current-device-included', {
       current_device_row_id: deviceRecordId,
       other_device_count: otherActiveDevices.otherDeviceCount,
+      retire_target_ids: otherActiveDevices.otherDeviceIds,
     });
     throw createDmE2eeBootstrapPublishError(
       'retire other devices: current device included by mistake',
@@ -1513,6 +1515,7 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others:none-found', {
       current_device_row_id: deviceRecordId,
       other_device_count: 0,
+      retire_target_ids: [],
       auth_retire_attempted: false,
       auth_retire_failed: false,
       service_retire_attempted: false,
@@ -1523,6 +1526,7 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others:auth-attempt', {
       current_device_row_id: deviceRecordId,
       other_device_count: otherActiveDevices.otherDeviceCount,
+      retire_target_ids: otherActiveDevices.otherDeviceIds,
       auth_retire_attempted: true,
       auth_retire_failed: false,
       service_retire_attempted: false,
@@ -1540,6 +1544,7 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others:auth-failed', {
       current_device_row_id: deviceRecordId,
       other_device_count: otherActiveDevices.otherDeviceCount,
+      retire_target_ids: otherActiveDevices.otherDeviceIds,
       auth_retire_attempted: true,
       auth_retire_failed: true,
       service_retire_attempted: Boolean(serviceRoleSupabase),
@@ -1549,18 +1554,39 @@ export async function publishCurrentUserDmE2eeDevice(
     });
 
     if (!serviceRoleSupabase) {
+      logDmE2eeBootstrapDiagnostics('publish:retire-others:service-unavailable', {
+        current_device_row_id: deviceRecordId,
+        other_device_count: otherActiveDevices.otherDeviceCount,
+        retire_target_ids: otherActiveDevices.otherDeviceIds,
+        auth_retire_attempted: true,
+        auth_retire_failed: true,
+        service_retire_attempted: false,
+        service_retire_succeeded: false,
+        service_retire_failed: false,
+      });
       throw createDmE2eeBootstrapPublishError(
         'retire other devices: auth step failed',
         retireOthers.error.message,
       );
     }
 
+    logDmE2eeBootstrapDiagnostics('publish:retire-others:service-entered', {
+      current_device_row_id: deviceRecordId,
+      other_device_count: otherActiveDevices.otherDeviceCount,
+      retire_target_ids: otherActiveDevices.otherDeviceIds,
+      auth_retire_attempted: true,
+      auth_retire_failed: true,
+      service_retire_attempted: true,
+      service_retire_succeeded: false,
+      service_retire_failed: false,
+    });
     const privilegedRetireOthers = await retireOtherDevices(serviceRoleSupabase);
 
     if (privilegedRetireOthers.error) {
       logDmE2eeBootstrapDiagnostics('publish:retire-others:service-failed', {
         current_device_row_id: deviceRecordId,
         other_device_count: otherActiveDevices.otherDeviceCount,
+        retire_target_ids: otherActiveDevices.otherDeviceIds,
         auth_retire_attempted: true,
         auth_retire_failed: true,
         service_retire_attempted: true,
@@ -1579,6 +1605,7 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others:service-succeeded', {
       current_device_row_id: deviceRecordId,
       other_device_count: otherActiveDevices.otherDeviceCount,
+      retire_target_ids: otherActiveDevices.otherDeviceIds,
       auth_retire_attempted: true,
       auth_retire_failed: true,
       service_retire_attempted: true,
@@ -1597,6 +1624,7 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others:verify-error', {
       current_device_row_id: deviceRecordId,
       other_device_count: otherActiveDevices.otherDeviceCount,
+      retire_target_ids: otherActiveDevices.otherDeviceIds,
       auth_retire_attempted: otherActiveDevices.otherDeviceCount > 0,
       auth_retire_failed: Boolean(retireOthers.error),
       service_retire_attempted: usedPrivilegedRetireOthers,
@@ -1605,7 +1633,9 @@ export async function publishCurrentUserDmE2eeDevice(
       message: verifyRemainingOtherActiveDevices.error.message,
     });
     throw createDmE2eeBootstrapPublishError(
-      'retire other devices: update returned unexpected result',
+      usedPrivilegedRetireOthers
+        ? 'retire other devices: rows still active after fallback'
+        : 'retire other devices: update returned unexpected result',
       verifyRemainingOtherActiveDevices.error.message,
     );
   }
@@ -1618,6 +1648,7 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:retire-others:remaining-active', {
       current_device_row_id: deviceRecordId,
       other_device_count: otherActiveDevices.otherDeviceCount,
+      retire_target_ids: otherActiveDevices.otherDeviceIds,
       remaining_other_device_count: remainingOtherActiveDevices.otherDeviceCount,
       auth_retire_attempted: otherActiveDevices.otherDeviceCount > 0,
       auth_retire_failed: false,
@@ -1626,7 +1657,9 @@ export async function publishCurrentUserDmE2eeDevice(
       service_retire_failed: false,
     });
     throw createDmE2eeBootstrapPublishError(
-      'retire other devices: update returned unexpected result',
+      usedPrivilegedRetireOthers
+        ? 'retire other devices: rows still active after fallback'
+        : 'retire other devices: update returned unexpected result',
       'Other active device rows remained after the retire-others update.',
     );
   }
@@ -1634,6 +1667,7 @@ export async function publishCurrentUserDmE2eeDevice(
   logDmE2eeBootstrapDiagnostics('publish:retire-others:ok', {
     current_device_row_id: deviceRecordId,
     other_device_count: otherActiveDevices.otherDeviceCount,
+    retire_target_ids: otherActiveDevices.otherDeviceIds,
     auth_retire_attempted: otherActiveDevices.otherDeviceCount > 0,
     auth_retire_failed: false,
     service_retire_attempted: usedPrivilegedRetireOthers,
