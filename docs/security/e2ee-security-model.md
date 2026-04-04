@@ -139,7 +139,7 @@ Current secondary-surface fallback policy:
 - reply references to encrypted DM text use a generic `Reply to encrypted message` label
 - these labels must never be backed by server-readable decrypted content
 - development-only encrypted setup UI may surface sanitized bootstrap diagnostics such as `exact400ReasonCode`, `failedValidationBranch`, and `exactFailurePoint`; it must not surface private keys, decrypted text, ciphertext bodies, or raw payload contents
-- development-only encrypted setup UI may also surface sanitized retire-step debug booleans and server device row ids for the current user/device bootstrap path; these diagnostics must remain dev-only and must not include private key material, decrypted content, or raw ciphertext payloads
+- development-only encrypted setup UI may also surface sanitized retire-step debug booleans, fallback-entry reasons, service-fallback error metadata, and server device row ids for the current user/device bootstrap path; these diagnostics must remain dev-only and must not include private key material, decrypted content, or raw ciphertext payloads
 
 ## 8. What the server cannot see
 

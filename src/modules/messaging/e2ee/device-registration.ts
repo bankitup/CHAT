@@ -363,9 +363,14 @@ export async function ensureDmE2eeDeviceRegistered(
   let exactFailurePoint: string | null = null;
   let authRetireAttempted: boolean | null = null;
   let authRetireFailed: boolean | null = null;
+  let serviceRetireAvailable: boolean | null = null;
+  let serviceRetireSkipReason: string | null = null;
   let serviceRetireAttempted: boolean | null = null;
   let serviceRetireSucceeded: boolean | null = null;
   let serviceRetireFailed: boolean | null = null;
+  let serviceRetireErrorMessage: string | null = null;
+  let serviceRetireErrorCode: string | null = null;
+  let serviceRetireErrorStatus: string | null = null;
   let currentDeviceRowId: string | null = null;
   let retireTargetIds: string[] | null = null;
 
@@ -378,9 +383,14 @@ export async function ensureDmE2eeDeviceRegistered(
       exactFailurePoint?: string | null;
       authRetireAttempted?: boolean | null;
       authRetireFailed?: boolean | null;
+      serviceRetireAvailable?: boolean | null;
+      serviceRetireSkipReason?: string | null;
       serviceRetireAttempted?: boolean | null;
       serviceRetireSucceeded?: boolean | null;
       serviceRetireFailed?: boolean | null;
+      serviceRetireErrorMessage?: string | null;
+      serviceRetireErrorCode?: string | null;
+      serviceRetireErrorStatus?: string | null;
       currentDeviceRowId?: string | null;
       retireTargetIds?: string[] | null;
     };
@@ -391,9 +401,14 @@ export async function ensureDmE2eeDeviceRegistered(
     exactFailurePoint = payload.exactFailurePoint ?? null;
     authRetireAttempted = payload.authRetireAttempted ?? null;
     authRetireFailed = payload.authRetireFailed ?? null;
+    serviceRetireAvailable = payload.serviceRetireAvailable ?? null;
+    serviceRetireSkipReason = payload.serviceRetireSkipReason ?? null;
     serviceRetireAttempted = payload.serviceRetireAttempted ?? null;
     serviceRetireSucceeded = payload.serviceRetireSucceeded ?? null;
     serviceRetireFailed = payload.serviceRetireFailed ?? null;
+    serviceRetireErrorMessage = payload.serviceRetireErrorMessage ?? null;
+    serviceRetireErrorCode = payload.serviceRetireErrorCode ?? null;
+    serviceRetireErrorStatus = payload.serviceRetireErrorStatus ?? null;
     currentDeviceRowId = payload.currentDeviceRowId ?? null;
     retireTargetIds = payload.retireTargetIds ?? null;
   } catch {
@@ -404,9 +419,14 @@ export async function ensureDmE2eeDeviceRegistered(
     exactFailurePoint = null;
     authRetireAttempted = null;
     authRetireFailed = null;
+    serviceRetireAvailable = null;
+    serviceRetireSkipReason = null;
     serviceRetireAttempted = null;
     serviceRetireSucceeded = null;
     serviceRetireFailed = null;
+    serviceRetireErrorMessage = null;
+    serviceRetireErrorCode = null;
+    serviceRetireErrorStatus = null;
     currentDeviceRowId = null;
     retireTargetIds = null;
   }
@@ -418,9 +438,14 @@ export async function ensureDmE2eeDeviceRegistered(
     exactFailurePoint,
     authRetireAttempted,
     authRetireFailed,
+    serviceRetireAvailable,
+    serviceRetireSkipReason,
     serviceRetireAttempted,
     serviceRetireSucceeded,
     serviceRetireFailed,
+    serviceRetireErrorMessage,
+    serviceRetireErrorCode,
+    serviceRetireErrorStatus,
     currentDeviceRowId,
     retireTargetIds,
     publishAttempt,
@@ -477,9 +502,14 @@ export async function ensureDmE2eeDeviceRegistered(
         exactFailurePoint,
         authRetireAttempted,
         authRetireFailed,
+        serviceRetireAvailable,
+        serviceRetireSkipReason,
         serviceRetireAttempted,
         serviceRetireSucceeded,
         serviceRetireFailed,
+        serviceRetireErrorMessage,
+        serviceRetireErrorCode,
+        serviceRetireErrorStatus,
         currentDeviceRowId,
         retireTargetIds,
       },

@@ -82,9 +82,16 @@ async function fetchRecipientBundle(conversationId: string) {
     error.code = errorPayload.code ?? null;
     error.authRetireAttempted = errorPayload.authRetireAttempted ?? null;
     error.authRetireFailed = errorPayload.authRetireFailed ?? null;
+    error.serviceRetireAvailable = errorPayload.serviceRetireAvailable ?? null;
+    error.serviceRetireSkipReason = errorPayload.serviceRetireSkipReason ?? null;
     error.serviceRetireAttempted = errorPayload.serviceRetireAttempted ?? null;
     error.serviceRetireSucceeded = errorPayload.serviceRetireSucceeded ?? null;
     error.serviceRetireFailed = errorPayload.serviceRetireFailed ?? null;
+    error.serviceRetireErrorMessage =
+      errorPayload.serviceRetireErrorMessage ?? null;
+    error.serviceRetireErrorCode = errorPayload.serviceRetireErrorCode ?? null;
+    error.serviceRetireErrorStatus =
+      errorPayload.serviceRetireErrorStatus ?? null;
     error.currentDeviceRowId = errorPayload.currentDeviceRowId ?? null;
     error.retireTargetIds = errorPayload.retireTargetIds ?? null;
     throw error;
@@ -112,9 +119,14 @@ async function postEncryptedDmMessage(input: DmE2eeSendRequest) {
     error.code = payload.code ?? null;
     error.authRetireAttempted = payload.authRetireAttempted ?? null;
     error.authRetireFailed = payload.authRetireFailed ?? null;
+    error.serviceRetireAvailable = payload.serviceRetireAvailable ?? null;
+    error.serviceRetireSkipReason = payload.serviceRetireSkipReason ?? null;
     error.serviceRetireAttempted = payload.serviceRetireAttempted ?? null;
     error.serviceRetireSucceeded = payload.serviceRetireSucceeded ?? null;
     error.serviceRetireFailed = payload.serviceRetireFailed ?? null;
+    error.serviceRetireErrorMessage = payload.serviceRetireErrorMessage ?? null;
+    error.serviceRetireErrorCode = payload.serviceRetireErrorCode ?? null;
+    error.serviceRetireErrorStatus = payload.serviceRetireErrorStatus ?? null;
     error.currentDeviceRowId = payload.currentDeviceRowId ?? null;
     error.retireTargetIds = payload.retireTargetIds ?? null;
     throw error;
@@ -183,9 +195,14 @@ function getEncryptedDmDebugFailureDetails(
   const exactFailurePoint = details.exactFailurePoint ?? null;
   const authRetireAttempted = details.authRetireAttempted ?? null;
   const authRetireFailed = details.authRetireFailed ?? null;
+  const serviceRetireAvailable = details.serviceRetireAvailable ?? null;
+  const serviceRetireSkipReason = details.serviceRetireSkipReason ?? null;
   const serviceRetireAttempted = details.serviceRetireAttempted ?? null;
   const serviceRetireSucceeded = details.serviceRetireSucceeded ?? null;
   const serviceRetireFailed = details.serviceRetireFailed ?? null;
+  const serviceRetireErrorMessage = details.serviceRetireErrorMessage ?? null;
+  const serviceRetireErrorCode = details.serviceRetireErrorCode ?? null;
+  const serviceRetireErrorStatus = details.serviceRetireErrorStatus ?? null;
   const currentDeviceRowId = details.currentDeviceRowId ?? null;
   const retireTargetIds = details.retireTargetIds ?? null;
 
@@ -195,9 +212,14 @@ function getEncryptedDmDebugFailureDetails(
     !exactFailurePoint &&
     authRetireAttempted === null &&
     authRetireFailed === null &&
+    serviceRetireAvailable === null &&
+    !serviceRetireSkipReason &&
     serviceRetireAttempted === null &&
     serviceRetireSucceeded === null &&
     serviceRetireFailed === null &&
+    !serviceRetireErrorMessage &&
+    !serviceRetireErrorCode &&
+    !serviceRetireErrorStatus &&
     !currentDeviceRowId &&
     (!retireTargetIds || retireTargetIds.length === 0)
   ) {
@@ -210,9 +232,14 @@ function getEncryptedDmDebugFailureDetails(
     exactFailurePoint,
     authRetireAttempted,
     authRetireFailed,
+    serviceRetireAvailable,
+    serviceRetireSkipReason,
     serviceRetireAttempted,
     serviceRetireSucceeded,
     serviceRetireFailed,
+    serviceRetireErrorMessage,
+    serviceRetireErrorCode,
+    serviceRetireErrorStatus,
     currentDeviceRowId,
     retireTargetIds,
   };
@@ -482,6 +509,18 @@ export function EncryptedDmComposerForm({
                   <code>{String(errorDebugDetails.authRetireFailed)}</code>
                 </p>
               ) : null}
+              {typeof errorDebugDetails?.serviceRetireAvailable === 'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_available:</strong>{' '}
+                  <code>{String(errorDebugDetails.serviceRetireAvailable)}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.serviceRetireSkipReason ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_skip_reason:</strong>{' '}
+                  <code>{errorDebugDetails.serviceRetireSkipReason}</code>
+                </p>
+              ) : null}
               {typeof errorDebugDetails?.serviceRetireAttempted === 'boolean' ? (
                 <p className="attachment-helper composer-debug-line">
                   <strong>service_retire_attempted:</strong>{' '}
@@ -498,6 +537,24 @@ export function EncryptedDmComposerForm({
                 <p className="attachment-helper composer-debug-line">
                   <strong>service_retire_failed:</strong>{' '}
                   <code>{String(errorDebugDetails.serviceRetireFailed)}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.serviceRetireErrorMessage ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_error_message:</strong>{' '}
+                  <code>{errorDebugDetails.serviceRetireErrorMessage}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.serviceRetireErrorCode ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_error_code:</strong>{' '}
+                  <code>{errorDebugDetails.serviceRetireErrorCode}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.serviceRetireErrorStatus ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_error_status:</strong>{' '}
+                  <code>{errorDebugDetails.serviceRetireErrorStatus}</code>
                 </p>
               ) : null}
               {errorDebugDetails?.currentDeviceRowId ? (

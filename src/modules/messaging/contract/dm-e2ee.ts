@@ -27,9 +27,14 @@ export type DmE2eeBootstrapFailedValidationBranch =
 export type DmE2eeBootstrapDebugState = {
   authRetireAttempted?: boolean | null;
   authRetireFailed?: boolean | null;
+  serviceRetireAvailable?: boolean | null;
+  serviceRetireSkipReason?: string | null;
   serviceRetireAttempted?: boolean | null;
   serviceRetireSucceeded?: boolean | null;
   serviceRetireFailed?: boolean | null;
+  serviceRetireErrorMessage?: string | null;
+  serviceRetireErrorCode?: string | null;
+  serviceRetireErrorStatus?: string | null;
   currentDeviceRowId?: string | null;
   retireTargetIds?: string[] | null;
 };

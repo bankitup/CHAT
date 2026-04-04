@@ -123,9 +123,14 @@ function extractBootstrapDebugState(error: unknown): DmE2eeBootstrapDebugState {
   return {
     authRetireAttempted: details.authRetireAttempted ?? null,
     authRetireFailed: details.authRetireFailed ?? null,
+    serviceRetireAvailable: details.serviceRetireAvailable ?? null,
+    serviceRetireSkipReason: details.serviceRetireSkipReason ?? null,
     serviceRetireAttempted: details.serviceRetireAttempted ?? null,
     serviceRetireSucceeded: details.serviceRetireSucceeded ?? null,
     serviceRetireFailed: details.serviceRetireFailed ?? null,
+    serviceRetireErrorMessage: details.serviceRetireErrorMessage ?? null,
+    serviceRetireErrorCode: details.serviceRetireErrorCode ?? null,
+    serviceRetireErrorStatus: details.serviceRetireErrorStatus ?? null,
     currentDeviceRowId: details.currentDeviceRowId ?? null,
     retireTargetIds: details.retireTargetIds ?? null,
   };
@@ -247,6 +252,7 @@ export async function POST(request: Request) {
       logDmE2eeDeviceRouteDiagnostics('response:400:profile-row-missing', {
         code: 'dm_e2ee_local_state_incomplete',
         exactFailurePoint,
+        ...debugState,
         ...diagnostics,
       });
       return NextResponse.json(
@@ -273,6 +279,7 @@ export async function POST(request: Request) {
       logDmE2eeDeviceRouteDiagnostics('response:400:profile-seed-failed', {
         code: 'dm_e2ee_local_state_incomplete',
         exactFailurePoint,
+        ...debugState,
         ...diagnostics,
       });
       return NextResponse.json(
@@ -294,6 +301,7 @@ export async function POST(request: Request) {
     logDmE2eeDeviceRouteDiagnostics('response:400:publish-failed', {
       code: 'dm_e2ee_local_state_incomplete',
       exactFailurePoint,
+      ...debugState,
       ...diagnostics,
     });
     return NextResponse.json(
