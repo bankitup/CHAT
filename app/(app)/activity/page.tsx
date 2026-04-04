@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
-  formatPersonFallbackLabel,
   getLocaleForLanguage,
   getTranslations,
   type AppLanguage,
@@ -11,6 +10,7 @@ import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getArchivedConversations,
   getConversationDisplayName,
+  getDirectMessageDisplayName,
   getConversationParticipantIdentities,
   getInboxConversations,
 } from '@/modules/messaging/data/server';
@@ -19,7 +19,7 @@ import {
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
-import { getIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
   resolveV1TestSpaceFallback,
   resolveActiveSpaceForUser,
@@ -117,23 +117,6 @@ function formatActivityTimestamp(value: string | null, language: AppLanguage) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(new Date(value));
-}
-
-function getFallbackIdentityLabel(
-  language: AppLanguage,
-  userId: string,
-  fallbackLabels: Map<string, string>,
-) {
-  const existing = fallbackLabels.get(userId);
-
-  if (existing) {
-    return existing;
-  }
-
-  const nextLabel = formatPersonFallbackLabel(language, fallbackLabels.size + 1);
-  fallbackLabels.set(userId, nextLabel);
-
-  return nextLabel;
 }
 
 function buildInboxHref(input: {
@@ -238,9 +221,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       map.set(identity.conversationId, existing);
       return map;
     },
-    new Map<string, typeof participantIdentities>(),
+    new Map<string, (typeof participantIdentities)[number][]>(),
   );
-  const fallbackIdentityLabels = new Map<string, string>();
   const activityItems = conversations.map((conversation) => {
     const participantOptions =
       participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
@@ -248,10 +230,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       (participant) => participant.userId !== user.id,
     );
     const otherParticipantLabels = otherParticipants.map((participant) =>
-      getIdentityLabel(
-        participant,
-        getFallbackIdentityLabel(language, participant.userId, fallbackIdentityLabels),
-      ),
+      resolvePublicIdentityLabel(participant, t.chat.unknownUser),
     );
     const isGroupConversation = conversation.kind === 'group';
     const title = isGroupConversation
@@ -264,7 +243,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             group: language === 'ru' ? 'Новая группа' : 'New group',
           },
         })
-      : otherParticipantLabels[0] || (language === 'ru' ? 'Новый чат' : 'New chat');
+      : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
     const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
 
     return {

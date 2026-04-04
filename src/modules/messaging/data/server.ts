@@ -274,12 +274,18 @@ export type MessageAttachment = {
 export type MessageSenderProfile = {
   userId: string;
   displayName: string | null;
+  username?: string | null;
+  email?: string | null;
+  emailLocalPart?: string | null;
   avatarPath?: string | null;
 };
 
 export type AvailableUser = {
   userId: string;
   displayName: string | null;
+  username?: string | null;
+  email?: string | null;
+  emailLocalPart?: string | null;
   avatarPath?: string | null;
 };
 
@@ -312,6 +318,9 @@ export type ConversationParticipantIdentity = {
   conversationId: string;
   userId: string;
   displayName: string | null;
+  username?: string | null;
+  email?: string | null;
+  emailLocalPart?: string | null;
   avatarPath?: string | null;
 };
 
@@ -320,8 +329,8 @@ type ConversationNameInput = {
   title?: string | null;
   participantLabels: string[];
   fallbackTitles?: {
-    dm: string;
-    group: string;
+    dm?: string;
+    group?: string;
   };
 };
 
@@ -662,6 +671,14 @@ export function getConversationDisplayName({
   }
 
   return labels[0] || fallbackTitles?.dm || 'New chat';
+}
+
+export function getDirectMessageDisplayName(
+  participantLabels: string[],
+  fallbackLabel: string,
+) {
+  const labels = uniqueNonEmptyLabels(participantLabels);
+  return labels[0] || fallbackLabel.trim() || 'Unknown user';
 }
 
 export function getConversationParticipantSummary(

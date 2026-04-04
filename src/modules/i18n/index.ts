@@ -236,6 +236,7 @@ type LanguageDictionary = {
     yesterday: string;
     earlier: string;
     unknown: string;
+    unknownUser: string;
     unknownSender: string;
     someone: string;
     you: string;
@@ -543,6 +544,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       yesterday: 'Yesterday',
       earlier: 'Earlier',
       unknown: 'Unknown',
+      unknownUser: 'Unknown user',
       unknownSender: 'Unknown sender',
       someone: 'Someone',
       you: 'You',
@@ -858,6 +860,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       yesterday: 'Вчера',
       earlier: 'Раньше',
       unknown: 'Неизвестно',
+      unknownUser: 'Неизвестный пользователь',
       unknownSender: 'Неизвестный отправитель',
       someone: 'Кто-то',
       you: 'Вы',

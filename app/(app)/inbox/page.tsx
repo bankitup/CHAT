@@ -1,6 +1,5 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
-  formatPersonFallbackLabel,
   getLocaleForLanguage,
   getTranslations,
   type AppLanguage,
@@ -14,6 +13,7 @@ import {
   getAvailableUsers,
   getArchivedConversations,
   getConversationDisplayName,
+  getDirectMessageDisplayName,
   getConversationParticipantIdentities,
   getInboxConversations,
   getInboxConversationsStable,
@@ -26,7 +26,7 @@ import {
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
-import { getIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
@@ -149,28 +149,6 @@ function formatRecency(value: string | null, language: AppLanguage) {
     month: 'short',
     day: 'numeric',
   }).format(target);
-}
-
-function getFallbackIdentityLabel(
-  language: AppLanguage,
-  userId: string,
-  fallbackLabels: Map<string, string>,
-  kind: 'person' | 'member' = 'person',
-) {
-  const existing = fallbackLabels.get(userId);
-
-  if (existing) {
-    return existing;
-  }
-
-  const nextLabel = formatPersonFallbackLabel(
-    language,
-    fallbackLabels.size + 1,
-    kind,
-  );
-  fallbackLabels.set(userId, nextLabel);
-
-  return nextLabel;
 }
 
 function buildFilterHref(
@@ -423,20 +401,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       map.set(identity.conversationId, existing);
       return map;
     },
-    new Map<string, typeof participantIdentities>(),
+    new Map<string, (typeof participantIdentities)[number][]>(),
   );
-  const fallbackIdentityLabels = new Map<string, string>();
   const availableUserEntries = availableUsers.map((availableUser) => ({
     ...availableUser,
-    label: getIdentityLabel(
-      availableUser,
-      getFallbackIdentityLabel(
-        language,
-        availableUser.userId,
-        fallbackIdentityLabels,
-        'member',
-      ),
-    ),
+    label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
   }));
   const filteredAvailableUserEntries = availableUserEntries.filter(
     (availableUser) => {
@@ -454,10 +423,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       (participant) => participant.userId !== user.id,
     );
     const otherParticipantLabels = otherParticipants.map((participant) =>
-      getIdentityLabel(
-        participant,
-        getFallbackIdentityLabel(language, participant.userId, fallbackIdentityLabels),
-      ),
+      resolvePublicIdentityLabel(participant, t.chat.unknownUser),
     );
     const isGroupConversation = conversation.kind === 'group';
     const title = isGroupConversation
@@ -470,7 +436,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             group: language === 'ru' ? 'Новая группа' : 'New group',
           },
         })
-      : otherParticipantLabels[0] || (language === 'ru' ? 'Новый чат' : 'New chat');
+      : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
     const preview = getInboxPreviewText(conversation, {
       deletedMessage: t.chat.deletedMessage,
       voiceMessage: t.chat.voiceMessage,

@@ -13,6 +13,7 @@ import {
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   getConversationDisplayName,
+  getDirectMessageDisplayName,
   getCurrentUserDmE2eeEnvelopesForMessages,
   getConversationForUser,
   getConversationMessages,
@@ -36,7 +37,7 @@ import {
   IdentityAvatar,
   IdentityAvatarStack,
 } from '@/modules/messaging/ui/identity';
-import { getIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
@@ -148,33 +149,6 @@ function formatLongDate(value: string | null, language: AppLanguage, t: ReturnTy
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
-}
-
-function createFallbackSenderName(
-  senderId: string | null,
-  currentUserId: string,
-  fallbackNames: Map<string, string>,
-  language: AppLanguage,
-  t: ReturnType<typeof getTranslations>,
-) {
-  if (!senderId) {
-    return t.chat.unknownSender;
-  }
-
-  if (senderId === currentUserId) {
-    return t.chat.you;
-  }
-
-  const existing = fallbackNames.get(senderId);
-
-  if (existing) {
-    return existing;
-  }
-
-  const nextName = formatPersonFallbackLabel(language, fallbackNames.size + 1);
-  fallbackNames.set(senderId, nextName);
-
-  return nextName;
 }
 
 function getMessageSnippet(
@@ -483,43 +457,43 @@ export default async function ChatPage({
       .map((message) => message.id),
   });
   const senderNames = new Map(
-    senderProfiles.map((profile) => [profile.userId, profile.displayName]),
+    senderProfiles.map((profile) => [
+      profile.userId,
+      resolvePublicIdentityLabel(profile, t.chat.unknownUser),
+    ]),
   );
   const senderIdentities = new Map(
     senderProfiles.map((profile) => [profile.userId, profile]),
   );
-  const fallbackNames = new Map<string, string>();
   const messagesById = new Map(messages.map((message) => [message.id, message]));
   const otherParticipants = participants.filter(
     (participant) => participant.userId !== user.id,
   );
   const otherParticipantLabels = otherParticipants.map((participant) =>
-    getIdentityLabel(
+    resolvePublicIdentityLabel(
       senderIdentities.get(participant.userId),
-      createFallbackSenderName(
-        participant.userId,
-        user.id,
-        fallbackNames,
-        language,
-        t,
-      ),
+      t.chat.unknownUser,
     ),
   );
   const directParticipantIdentity = otherParticipants[0]
     ? senderIdentities.get(otherParticipants[0].userId)
     : null;
   const conversationDisplayTitle = getConversationDisplayName({
-    kind: conversation.kind ?? null,
+    kind: conversation.kind === 'group' ? conversation.kind : null,
     title: conversation.title,
-    participantLabels: otherParticipantLabels,
+    participantLabels:
+      conversation.kind === 'group' ? otherParticipantLabels : [],
     fallbackTitles: {
-      dm: t.chat.directChat,
       group: language === 'ru' ? 'Новая группа' : 'New group',
     },
   });
-  const currentUserDisplayLabel = getIdentityLabel(
+  const directConversationDisplayTitle =
+    conversation.kind === 'dm'
+      ? getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser)
+      : conversationDisplayTitle;
+  const currentUserDisplayLabel = resolvePublicIdentityLabel(
     senderIdentities.get(user.id),
-    t.chat.someone,
+    t.chat.unknownUser,
   );
   const groupMemberSummary =
     conversation.kind === 'group'
@@ -555,16 +529,7 @@ export default async function ChatPage({
     );
   const participantItems = participants.map((participant) => {
     const identity = senderIdentities.get(participant.userId);
-    const label = getIdentityLabel(
-      identity,
-      createFallbackSenderName(
-        participant.userId,
-        user.id,
-        fallbackNames,
-        language,
-        t,
-      ),
-    );
+    const label = resolvePublicIdentityLabel(identity, t.chat.unknownUser);
 
     return {
       userId: participant.userId,
@@ -589,15 +554,9 @@ export default async function ChatPage({
     .filter((availableUser) => !activeParticipantUserIds.has(availableUser.userId))
     .map((availableUser) => ({
       ...availableUser,
-      label: getIdentityLabel(
-        senderIdentities.get(availableUser.userId),
-        createFallbackSenderName(
-          availableUser.userId,
-          user.id,
-          fallbackNames,
-          language,
-          t,
-        ),
+      label: resolvePublicIdentityLabel(
+        senderIdentities.get(availableUser.userId) ?? availableUser,
+        t.chat.unknownUser,
       ),
     }));
   const latestVisibleMessageSeq =
@@ -612,14 +571,7 @@ export default async function ChatPage({
     .reverse()
     .find((message) => message.sender_id === user.id && !message.deleted_at);
   const activeActionMessageSenderLabel = activeActionMessage
-    ? senderNames.get(activeActionMessage.sender_id ?? '') ||
-      createFallbackSenderName(
-        activeActionMessage.sender_id,
-        user.id,
-        fallbackNames,
-        language,
-        t,
-      )
+    ? senderNames.get(activeActionMessage.sender_id ?? '') || t.chat.unknownUser
     : null;
   const activeActionMessageIsOwn =
     activeActionMessage?.sender_id === user.id && !activeActionMessage.deleted_at;
@@ -691,7 +643,7 @@ export default async function ChatPage({
         </Link>
 
         <Link
-          aria-label={t.chat.openInfoAria(conversationDisplayTitle)}
+          aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
           className="card chat-header-card chat-header-link"
           href={buildChatHref({
             conversationId,
@@ -710,14 +662,14 @@ export default async function ChatPage({
             ) : (
               <IdentityAvatar
                 identity={directParticipantIdentity}
-                label={conversationDisplayTitle}
+                label={directConversationDisplayTitle}
                 size="lg"
               />
             )}
 
             <div className="stack chat-header-copy">
               <h1 className="conversation-screen-title">
-                {conversationDisplayTitle}
+                {directConversationDisplayTitle}
               </h1>
               {conversation.kind === 'group' ? (
                 <p className="muted chat-member-summary">{groupMemberSummary}</p>
@@ -879,13 +831,7 @@ export default async function ChatPage({
 
                                 return (
                                   senderNames.get(repliedMessage.sender_id ?? '') ||
-                                  createFallbackSenderName(
-                                    repliedMessage.sender_id,
-                                    user.id,
-                                    fallbackNames,
-                                    language,
-                                    t,
-                                  )
+                                  t.chat.unknownUser
                                 );
                               })()}
                             </span>
@@ -1222,13 +1168,7 @@ export default async function ChatPage({
                   {activeReplyTarget.deleted_at
                     ? t.chat.deletedMessage
                     : senderNames.get(activeReplyTarget.sender_id ?? '') ||
-                      createFallbackSenderName(
-                        activeReplyTarget.sender_id,
-                        user.id,
-                        fallbackNames,
-                        language,
-                        t,
-                      )}
+                      t.chat.unknownUser}
                 </span>
                 <span className="composer-reply-snippet">
                   {activeReplyTarget.deleted_at
@@ -1379,13 +1319,13 @@ export default async function ChatPage({
                 ) : (
                   <IdentityAvatar
                     identity={directParticipantIdentity}
-                    label={conversationDisplayTitle}
+                    label={directConversationDisplayTitle}
                     size="lg"
                   />
                 )}
 
                 <div className="stack conversation-info-copy">
-                  <h3 className="conversation-info-title">{conversationDisplayTitle}</h3>
+                  <h3 className="conversation-info-title">{directConversationDisplayTitle}</h3>
                   <p className="muted conversation-info-subtitle">
                     {conversation.kind === 'group'
                       ? groupMemberSummary
@@ -1510,7 +1450,7 @@ export default async function ChatPage({
                     <div className="stack conversation-settings-panel-copy">
                       <h4 className="conversation-settings-subtitle">{t.chat.name}</h4>
                       <p className="conversation-settings-static conversation-settings-title-preview">
-                        {conversationDisplayTitle}
+                        {directConversationDisplayTitle}
                       </p>
                       {!canEditGroupTitle ? (
                         <p className="muted conversation-settings-note">
