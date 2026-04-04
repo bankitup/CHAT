@@ -42,11 +42,15 @@ export function AppShellFrame({
 
   return (
     <main
-      className={
-        showBottomNav
-          ? 'page page-mobile app-shell app-shell-with-nav'
-          : 'page page-mobile app-shell'
-      }
+      className={[
+        'page',
+        'page-mobile',
+        'app-shell',
+        showBottomNav ? 'app-shell-with-nav' : null,
+        isChatRoute ? 'app-shell-chat-route' : null,
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
       <div className="stack app-shell-content">{children}</div>
