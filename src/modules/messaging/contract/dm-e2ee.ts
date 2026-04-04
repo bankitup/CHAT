@@ -40,15 +40,23 @@ export type DmE2eeBootstrapDebugState = {
 };
 
 export type DmE2eeRecipientReadinessDebugState = {
+  recipientBundleQueryStage?: string | null;
   recipientUserIdChecked?: string | null;
   recipientDeviceRowsFound?: number | null;
   recipientActiveDeviceRowsFound?: number | null;
   recipientSelectedDeviceRowId?: string | null;
+  recipientSelectedDeviceLogicalId?: number | null;
   recipientSelectedDeviceRetiredAt?: string | null;
   recipientSelectedDeviceIdentityKeyPresent?: boolean | null;
   recipientSelectedDeviceSignedPrekeyPresent?: boolean | null;
   recipientSelectedDeviceSignaturePresent?: boolean | null;
   recipientSelectedDeviceAvailablePrekeyCount?: number | null;
+  recipientPrekeyQueryDeviceRef?: string | null;
+  recipientBundleQueryErrorMessage?: string | null;
+  recipientBundleQueryErrorCode?: string | null;
+  recipientBundleQueryErrorDetails?: string | null;
+  recipientMismatchLeft?: string | null;
+  recipientMismatchRight?: string | null;
   recipientReadinessFailedReason?: string | null;
 };
 

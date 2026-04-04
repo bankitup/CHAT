@@ -20,11 +20,14 @@ function extractRecipientReadinessDebugState(
   const details = error as Error & DmE2eeRecipientReadinessDebugState;
 
   return {
+    recipientBundleQueryStage: details.recipientBundleQueryStage ?? null,
     recipientUserIdChecked: details.recipientUserIdChecked ?? null,
     recipientDeviceRowsFound: details.recipientDeviceRowsFound ?? null,
     recipientActiveDeviceRowsFound:
       details.recipientActiveDeviceRowsFound ?? null,
     recipientSelectedDeviceRowId: details.recipientSelectedDeviceRowId ?? null,
+    recipientSelectedDeviceLogicalId:
+      details.recipientSelectedDeviceLogicalId ?? null,
     recipientSelectedDeviceRetiredAt:
       details.recipientSelectedDeviceRetiredAt ?? null,
     recipientSelectedDeviceIdentityKeyPresent:
@@ -35,6 +38,16 @@ function extractRecipientReadinessDebugState(
       details.recipientSelectedDeviceSignaturePresent ?? null,
     recipientSelectedDeviceAvailablePrekeyCount:
       details.recipientSelectedDeviceAvailablePrekeyCount ?? null,
+    recipientPrekeyQueryDeviceRef:
+      details.recipientPrekeyQueryDeviceRef ?? null,
+    recipientBundleQueryErrorMessage:
+      details.recipientBundleQueryErrorMessage ?? null,
+    recipientBundleQueryErrorCode:
+      details.recipientBundleQueryErrorCode ?? null,
+    recipientBundleQueryErrorDetails:
+      details.recipientBundleQueryErrorDetails ?? null,
+    recipientMismatchLeft: details.recipientMismatchLeft ?? null,
+    recipientMismatchRight: details.recipientMismatchRight ?? null,
     recipientReadinessFailedReason:
       details.recipientReadinessFailedReason ?? null,
   };

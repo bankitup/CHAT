@@ -98,12 +98,16 @@ async function fetchRecipientBundle(conversationId: string) {
       errorPayload.serviceRetireErrorStatus ?? null;
     error.currentDeviceRowId = errorPayload.currentDeviceRowId ?? null;
     error.retireTargetIds = errorPayload.retireTargetIds ?? null;
+    error.recipientBundleQueryStage =
+      errorPayload.recipientBundleQueryStage ?? null;
     error.recipientUserIdChecked = errorPayload.recipientUserIdChecked ?? null;
     error.recipientDeviceRowsFound = errorPayload.recipientDeviceRowsFound ?? null;
     error.recipientActiveDeviceRowsFound =
       errorPayload.recipientActiveDeviceRowsFound ?? null;
     error.recipientSelectedDeviceRowId =
       errorPayload.recipientSelectedDeviceRowId ?? null;
+    error.recipientSelectedDeviceLogicalId =
+      errorPayload.recipientSelectedDeviceLogicalId ?? null;
     error.recipientSelectedDeviceRetiredAt =
       errorPayload.recipientSelectedDeviceRetiredAt ?? null;
     error.recipientSelectedDeviceIdentityKeyPresent =
@@ -114,6 +118,16 @@ async function fetchRecipientBundle(conversationId: string) {
       errorPayload.recipientSelectedDeviceSignaturePresent ?? null;
     error.recipientSelectedDeviceAvailablePrekeyCount =
       errorPayload.recipientSelectedDeviceAvailablePrekeyCount ?? null;
+    error.recipientPrekeyQueryDeviceRef =
+      errorPayload.recipientPrekeyQueryDeviceRef ?? null;
+    error.recipientBundleQueryErrorMessage =
+      errorPayload.recipientBundleQueryErrorMessage ?? null;
+    error.recipientBundleQueryErrorCode =
+      errorPayload.recipientBundleQueryErrorCode ?? null;
+    error.recipientBundleQueryErrorDetails =
+      errorPayload.recipientBundleQueryErrorDetails ?? null;
+    error.recipientMismatchLeft = errorPayload.recipientMismatchLeft ?? null;
+    error.recipientMismatchRight = errorPayload.recipientMismatchRight ?? null;
     error.recipientReadinessFailedReason =
       errorPayload.recipientReadinessFailedReason ?? null;
     throw error;
@@ -227,12 +241,15 @@ function getEncryptedDmDebugFailureDetails(
   const serviceRetireErrorStatus = details.serviceRetireErrorStatus ?? null;
   const currentDeviceRowId = details.currentDeviceRowId ?? null;
   const retireTargetIds = details.retireTargetIds ?? null;
+  const recipientBundleQueryStage = details.recipientBundleQueryStage ?? null;
   const recipientUserIdChecked = details.recipientUserIdChecked ?? null;
   const recipientDeviceRowsFound = details.recipientDeviceRowsFound ?? null;
   const recipientActiveDeviceRowsFound =
     details.recipientActiveDeviceRowsFound ?? null;
   const recipientSelectedDeviceRowId =
     details.recipientSelectedDeviceRowId ?? null;
+  const recipientSelectedDeviceLogicalId =
+    details.recipientSelectedDeviceLogicalId ?? null;
   const recipientSelectedDeviceRetiredAt =
     details.recipientSelectedDeviceRetiredAt ?? null;
   const recipientSelectedDeviceIdentityKeyPresent =
@@ -243,6 +260,16 @@ function getEncryptedDmDebugFailureDetails(
     details.recipientSelectedDeviceSignaturePresent ?? null;
   const recipientSelectedDeviceAvailablePrekeyCount =
     details.recipientSelectedDeviceAvailablePrekeyCount ?? null;
+  const recipientPrekeyQueryDeviceRef =
+    details.recipientPrekeyQueryDeviceRef ?? null;
+  const recipientBundleQueryErrorMessage =
+    details.recipientBundleQueryErrorMessage ?? null;
+  const recipientBundleQueryErrorCode =
+    details.recipientBundleQueryErrorCode ?? null;
+  const recipientBundleQueryErrorDetails =
+    details.recipientBundleQueryErrorDetails ?? null;
+  const recipientMismatchLeft = details.recipientMismatchLeft ?? null;
+  const recipientMismatchRight = details.recipientMismatchRight ?? null;
   const recipientReadinessFailedReason =
     details.recipientReadinessFailedReason ?? null;
 
@@ -262,15 +289,23 @@ function getEncryptedDmDebugFailureDetails(
     !serviceRetireErrorStatus &&
     !currentDeviceRowId &&
     (!retireTargetIds || retireTargetIds.length === 0) &&
+    !recipientBundleQueryStage &&
     !recipientUserIdChecked &&
     recipientDeviceRowsFound === null &&
     recipientActiveDeviceRowsFound === null &&
     !recipientSelectedDeviceRowId &&
+    recipientSelectedDeviceLogicalId === null &&
     recipientSelectedDeviceRetiredAt === null &&
     recipientSelectedDeviceIdentityKeyPresent === null &&
     recipientSelectedDeviceSignedPrekeyPresent === null &&
     recipientSelectedDeviceSignaturePresent === null &&
     recipientSelectedDeviceAvailablePrekeyCount === null &&
+    !recipientPrekeyQueryDeviceRef &&
+    !recipientBundleQueryErrorMessage &&
+    !recipientBundleQueryErrorCode &&
+    !recipientBundleQueryErrorDetails &&
+    !recipientMismatchLeft &&
+    !recipientMismatchRight &&
     !recipientReadinessFailedReason
   ) {
     return null;
@@ -292,15 +327,23 @@ function getEncryptedDmDebugFailureDetails(
     serviceRetireErrorStatus,
     currentDeviceRowId,
     retireTargetIds,
+    recipientBundleQueryStage,
     recipientUserIdChecked,
     recipientDeviceRowsFound,
     recipientActiveDeviceRowsFound,
     recipientSelectedDeviceRowId,
+    recipientSelectedDeviceLogicalId,
     recipientSelectedDeviceRetiredAt,
     recipientSelectedDeviceIdentityKeyPresent,
     recipientSelectedDeviceSignedPrekeyPresent,
     recipientSelectedDeviceSignaturePresent,
     recipientSelectedDeviceAvailablePrekeyCount,
+    recipientPrekeyQueryDeviceRef,
+    recipientBundleQueryErrorMessage,
+    recipientBundleQueryErrorCode,
+    recipientBundleQueryErrorDetails,
+    recipientMismatchLeft,
+    recipientMismatchRight,
     recipientReadinessFailedReason,
   };
 }
@@ -369,10 +412,12 @@ export function EncryptedDmComposerForm({
         errorDebugDetails?.failedValidationBranch ||
         errorDebugDetails?.exactFailurePoint ||
         errorDebugDetails?.recipientReadinessFailedReason ||
+        errorDebugDetails?.recipientBundleQueryStage ||
         errorDebugDetails?.recipientUserIdChecked ||
         typeof errorDebugDetails?.recipientDeviceRowsFound === 'number' ||
         typeof errorDebugDetails?.recipientActiveDeviceRowsFound === 'number' ||
         errorDebugDetails?.recipientSelectedDeviceRowId ||
+        typeof errorDebugDetails?.recipientSelectedDeviceLogicalId === 'number' ||
         typeof errorDebugDetails?.recipientSelectedDeviceIdentityKeyPresent ===
           'boolean' ||
         typeof errorDebugDetails?.recipientSelectedDeviceSignedPrekeyPresent ===
@@ -380,7 +425,13 @@ export function EncryptedDmComposerForm({
         typeof errorDebugDetails?.recipientSelectedDeviceSignaturePresent ===
           'boolean' ||
         typeof errorDebugDetails?.recipientSelectedDeviceAvailablePrekeyCount ===
-          'number',
+          'number' ||
+        errorDebugDetails?.recipientPrekeyQueryDeviceRef ||
+        errorDebugDetails?.recipientBundleQueryErrorMessage ||
+        errorDebugDetails?.recipientBundleQueryErrorCode ||
+        errorDebugDetails?.recipientBundleQueryErrorDetails ||
+        errorDebugDetails?.recipientMismatchLeft ||
+        errorDebugDetails?.recipientMismatchRight,
     );
 
   return (
@@ -642,6 +693,12 @@ export function EncryptedDmComposerForm({
                   <code>{errorDebugDetails.retireTargetIds.join(', ')}</code>
                 </p>
               ) : null}
+              {errorDebugDetails?.recipientBundleQueryStage ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_bundle_query_stage:</strong>{' '}
+                  <code>{errorDebugDetails.recipientBundleQueryStage}</code>
+                </p>
+              ) : null}
               {errorDebugDetails?.recipientUserIdChecked ? (
                 <p className="attachment-helper composer-debug-line">
                   <strong>recipient_user_id_checked:</strong>{' '}
@@ -666,6 +723,14 @@ export function EncryptedDmComposerForm({
                 <p className="attachment-helper composer-debug-line">
                   <strong>recipient_selected_device_row_id:</strong>{' '}
                   <code>{errorDebugDetails.recipientSelectedDeviceRowId}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.recipientSelectedDeviceLogicalId === 'number' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_selected_device_logical_id:</strong>{' '}
+                  <code>
+                    {String(errorDebugDetails.recipientSelectedDeviceLogicalId)}
+                  </code>
                 </p>
               ) : null}
               {errorDebugDetails?.recipientSelectedDeviceRetiredAt ? (
@@ -716,6 +781,42 @@ export function EncryptedDmComposerForm({
                       errorDebugDetails.recipientSelectedDeviceAvailablePrekeyCount,
                     )}
                   </code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientPrekeyQueryDeviceRef ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_prekey_query_device_ref:</strong>{' '}
+                  <code>{errorDebugDetails.recipientPrekeyQueryDeviceRef}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientBundleQueryErrorMessage ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_bundle_query_error_message:</strong>{' '}
+                  <code>{errorDebugDetails.recipientBundleQueryErrorMessage}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientBundleQueryErrorCode ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_bundle_query_error_code:</strong>{' '}
+                  <code>{errorDebugDetails.recipientBundleQueryErrorCode}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientBundleQueryErrorDetails ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_bundle_query_error_details:</strong>{' '}
+                  <code>{errorDebugDetails.recipientBundleQueryErrorDetails}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientMismatchLeft ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_mismatch_left:</strong>{' '}
+                  <code>{errorDebugDetails.recipientMismatchLeft}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.recipientMismatchRight ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>recipient_mismatch_right:</strong>{' '}
+                  <code>{errorDebugDetails.recipientMismatchRight}</code>
                 </p>
               ) : null}
               {errorDebugDetails?.recipientReadinessFailedReason ? (
