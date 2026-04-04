@@ -3474,6 +3474,23 @@ main {
   gap: 6px;
 }
 
+.composer-debug-details {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(180, 35, 24, 0.08);
+  border: 1px solid rgba(180, 35, 24, 0.12);
+}
+
+.composer-debug-line {
+  color: rgba(91, 100, 112, 0.94);
+}
+
+.composer-debug-line code {
+  font-size: 0.72rem;
+}
+
 .composer-recovery-button {
   min-height: 34px;
   padding: 7px 11px;

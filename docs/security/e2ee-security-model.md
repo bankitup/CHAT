@@ -136,6 +136,7 @@ Current secondary-surface fallback policy:
 - unread encrypted DM list surfaces may use a generic `New encrypted message` label
 - reply references to encrypted DM text use a generic `Reply to encrypted message` label
 - these labels must never be backed by server-readable decrypted content
+- development-only encrypted setup UI may surface sanitized bootstrap diagnostics such as `exact400ReasonCode`, `failedValidationBranch`, and `exactFailurePoint`; it must not surface private keys, decrypted text, ciphertext bodies, or raw payload contents
 
 ## 8. What the server cannot see
 

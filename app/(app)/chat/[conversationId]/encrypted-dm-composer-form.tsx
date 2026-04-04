@@ -6,6 +6,8 @@ import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeApiErrorResponse,
+  DmE2eeBootstrap400ReasonCode,
+  DmE2eeBootstrapFailedValidationBranch,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendRequest,
 } from '@/modules/messaging/contract/dm-e2ee';
@@ -27,6 +29,12 @@ import { ComposerTypingTextarea } from './composer-typing-textarea';
 type MentionParticipant = {
   userId: string;
   label: string;
+};
+
+type EncryptedDmDebugFailureDetails = {
+  exact400ReasonCode: DmE2eeBootstrap400ReasonCode | null;
+  failedValidationBranch: DmE2eeBootstrapFailedValidationBranch | null;
+  exactFailurePoint: string | null;
 };
 
 type EncryptedDmComposerFormProps = {
@@ -133,12 +141,45 @@ async function resolveLocalRecordForEncryptedDm(
     }
     const error = new Error('dm_e2ee_sender_device_stale') as Error & {
       code?: DmE2eeApiErrorCode | null;
+      exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
+      failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
+      exactFailurePoint?: string | null;
     };
     error.code = 'dm_e2ee_sender_device_stale';
+    error.exact400ReasonCode = null;
+    error.failedValidationBranch = 'stale serverDeviceRecordId';
+    error.exactFailurePoint = null;
     throw error;
   }
 
   return localRecord;
+}
+
+function getEncryptedDmDebugFailureDetails(
+  error: unknown,
+): EncryptedDmDebugFailureDetails | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const details = error as Error & EncryptedDmDebugFailureDetails;
+  const exact400ReasonCode = details.exact400ReasonCode ?? null;
+  const failedValidationBranch = details.failedValidationBranch ?? null;
+  const exactFailurePoint = details.exactFailurePoint ?? null;
+
+  if (
+    !exact400ReasonCode &&
+    !failedValidationBranch &&
+    !exactFailurePoint
+  ) {
+    return null;
+  }
+
+  return {
+    exact400ReasonCode,
+    failedValidationBranch,
+    exactFailurePoint,
+  };
 }
 
 function getEncryptedDmErrorMessage(
@@ -190,12 +231,21 @@ export function EncryptedDmComposerForm({
   const formRef = useRef<HTMLFormElement | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
+  const [errorDebugDetails, setErrorDebugDetails] =
+    useState<EncryptedDmDebugFailureDetails | null>(null);
   const [isSendingEncrypted, setIsSendingEncrypted] = useState(false);
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
   const [isResettingSetup, setIsResettingSetup] = useState(false);
   const showDevResetAction =
     process.env.NODE_ENV !== 'production' ||
     process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
+  const showDebugFailureDetails =
+    showDevResetAction &&
+    Boolean(
+      errorDebugDetails?.exact400ReasonCode ||
+        errorDebugDetails?.failedValidationBranch ||
+        errorDebugDetails?.exactFailurePoint,
+    );
 
   return (
     <form
@@ -216,6 +266,7 @@ export function EncryptedDmComposerForm({
           event.preventDefault();
           setErrorMessage(t.chat.encryptionRolloutUnavailable);
           setErrorCode('dm_e2ee_rollout_disabled');
+          setErrorDebugDetails(null);
           return;
         }
 
@@ -224,9 +275,11 @@ export function EncryptedDmComposerForm({
             event.preventDefault();
             setErrorMessage(t.chat.encryptedAttachmentsUnsupported);
             setErrorCode(null);
+            setErrorDebugDetails(null);
           } else {
             setErrorMessage(null);
             setErrorCode(null);
+            setErrorDebugDetails(null);
           }
 
           return;
@@ -236,6 +289,7 @@ export function EncryptedDmComposerForm({
         setIsSendingEncrypted(true);
         setErrorMessage(null);
         setErrorCode(null);
+        setErrorDebugDetails(null);
 
         try {
           let retriedAfterRepublish = false;
@@ -300,6 +354,7 @@ export function EncryptedDmComposerForm({
                 : null;
           setErrorCode(nextCode);
           setErrorMessage(getEncryptedDmErrorMessage(error, t));
+          setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
         } finally {
           setIsSendingEncrypted(false);
         }
@@ -359,6 +414,28 @@ export function EncryptedDmComposerForm({
       {errorMessage ? (
         <div className="composer-encryption-status composer-encryption-status-error">
           <p className="attachment-helper attachment-helper-error">{errorMessage}</p>
+          {showDebugFailureDetails ? (
+            <div className="composer-debug-details" role="note">
+              {errorDebugDetails?.exact400ReasonCode ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>exact400ReasonCode:</strong>{' '}
+                  <code>{errorDebugDetails.exact400ReasonCode}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.failedValidationBranch ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>failedValidationBranch:</strong>{' '}
+                  <code>{errorDebugDetails.failedValidationBranch}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.exactFailurePoint ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>exactFailurePoint:</strong>{' '}
+                  <code>{errorDebugDetails.exactFailurePoint}</code>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="composer-encryption-actions">
             {errorCode === 'dm_e2ee_prekey_conflict' ? (
               <button
@@ -385,16 +462,20 @@ export function EncryptedDmComposerForm({
                     if (bootstrap.status === 'registered') {
                       setErrorMessage(null);
                       setErrorCode(null);
+                      setErrorDebugDetails(null);
                     } else if (bootstrap.status === 'unsupported') {
                       setErrorMessage(t.chat.encryptionUnavailableHere);
                       setErrorCode('dm_e2ee_unsupported_browser');
+                      setErrorDebugDetails(null);
                     } else {
                       setErrorMessage(t.chat.encryptionSetupUnavailable);
                       setErrorCode('dm_e2ee_schema_missing');
+                      setErrorDebugDetails(null);
                     }
-                  } catch {
+                  } catch (error) {
                     setErrorMessage(t.chat.encryptionNeedsRefresh);
                     setErrorCode('dm_e2ee_local_state_incomplete');
+                    setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
                   } finally {
                     setIsRefreshingSetup(false);
                   }
@@ -422,16 +503,20 @@ export function EncryptedDmComposerForm({
                     if (bootstrap.status === 'registered') {
                       setErrorMessage(null);
                       setErrorCode(null);
+                      setErrorDebugDetails(null);
                     } else if (bootstrap.status === 'unsupported') {
                       setErrorMessage(t.chat.encryptionUnavailableHere);
                       setErrorCode('dm_e2ee_unsupported_browser');
+                      setErrorDebugDetails(null);
                     } else {
                       setErrorMessage(t.chat.encryptionSetupUnavailable);
                       setErrorCode('dm_e2ee_schema_missing');
+                      setErrorDebugDetails(null);
                     }
-                  } catch {
+                  } catch (error) {
                     setErrorMessage(t.chat.encryptionNeedsRefresh);
                     setErrorCode('dm_e2ee_local_state_incomplete');
+                    setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
                   } finally {
                     setIsResettingSetup(false);
                   }
@@ -447,6 +532,7 @@ export function EncryptedDmComposerForm({
               onClick={() => {
                 setErrorMessage(null);
                 setErrorCode(null);
+                setErrorDebugDetails(null);
                 router.refresh();
               }}
               type="button"

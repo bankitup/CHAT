@@ -52,11 +52,22 @@ function logDmE2eeBootstrapClientDiagnostics(
 function createLocalDmE2eeError(
   code: DmE2eeApiErrorCode,
   message: string,
+  details?: {
+    exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
+    failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
+    exactFailurePoint?: string | null;
+  },
 ) {
   const error = new Error(message) as Error & {
     code?: DmE2eeApiErrorCode;
+    exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
+    failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
+    exactFailurePoint?: string | null;
   };
   error.code = code;
+  error.exact400ReasonCode = details?.exact400ReasonCode ?? null;
+  error.failedValidationBranch = details?.failedValidationBranch ?? null;
+  error.exactFailurePoint = details?.exactFailurePoint ?? null;
   return error;
 }
 
@@ -283,6 +294,9 @@ export async function ensureDmE2eeDeviceRegistered(
       throw createLocalDmE2eeError(
         'dm_e2ee_local_state_incomplete',
         'Local DM E2EE device state is incomplete on this device.',
+        {
+          failedValidationBranch: 'incomplete local state',
+        },
       );
     }
   }
@@ -414,6 +428,11 @@ export async function ensureDmE2eeDeviceRegistered(
     throw createLocalDmE2eeError(
       'dm_e2ee_local_state_incomplete',
       errorMessage || 'Local DM E2EE setup is incomplete on this device.',
+      {
+        exact400ReasonCode,
+        failedValidationBranch: failedValidationBranch ?? 'failed republish',
+        exactFailurePoint,
+      },
     );
   }
 
