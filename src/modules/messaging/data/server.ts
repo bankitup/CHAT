@@ -1462,6 +1462,31 @@ export async function getProfileIdentities(userIds: string[]) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const withIdentityFallbacksAndAvatars = await supabase
+    .from('profiles')
+    .select('user_id, display_name, username, email_local_part, avatar_path')
+    .in('user_id', uniqueUserIds);
+
+  if (!withIdentityFallbacksAndAvatars.error) {
+    const profiles = ((withIdentityFallbacksAndAvatars.data ?? []) as {
+      user_id: string;
+      display_name: string | null;
+      username?: string | null;
+      email_local_part?: string | null;
+      avatar_path?: string | null;
+    }[]);
+
+    return Promise.all(
+      profiles.map(async (profile) => ({
+        userId: profile.user_id,
+        displayName: profile.display_name?.trim() || null,
+        username: profile.username?.trim() || null,
+        emailLocalPart: profile.email_local_part?.trim() || null,
+        avatarPath: await resolveStoredAvatarPath(supabase, profile.avatar_path),
+      })),
+    );
+  }
+
   const withDisplayNamesAndAvatars = await supabase
     .from('profiles')
     .select('user_id, display_name, avatar_path')
@@ -1478,9 +1503,31 @@ export async function getProfileIdentities(userIds: string[]) {
       profiles.map(async (profile) => ({
         userId: profile.user_id,
         displayName: profile.display_name?.trim() || null,
+        username: null,
+        emailLocalPart: null,
         avatarPath: await resolveStoredAvatarPath(supabase, profile.avatar_path),
       })),
     );
+  }
+
+  const withIdentityFallbacks = await supabase
+    .from('profiles')
+    .select('user_id, display_name, username, email_local_part')
+    .in('user_id', uniqueUserIds);
+
+  if (!withIdentityFallbacks.error) {
+    return ((withIdentityFallbacks.data ?? []) as {
+      user_id: string;
+      display_name: string | null;
+      username?: string | null;
+      email_local_part?: string | null;
+    }[]).map((profile) => ({
+      userId: profile.user_id,
+      displayName: profile.display_name?.trim() || null,
+      username: profile.username?.trim() || null,
+      emailLocalPart: profile.email_local_part?.trim() || null,
+      avatarPath: null,
+    }));
   }
 
   const withDisplayNames = await supabase
@@ -1495,6 +1542,8 @@ export async function getProfileIdentities(userIds: string[]) {
     }[]).map((profile) => ({
       userId: profile.user_id,
       displayName: profile.display_name?.trim() || null,
+      username: null,
+      emailLocalPart: null,
       avatarPath: null,
     }));
   }
@@ -1511,6 +1560,8 @@ export async function getProfileIdentities(userIds: string[]) {
   return ((fallback.data ?? []) as { user_id: string }[]).map((profile) => ({
     userId: profile.user_id,
     displayName: null,
+    username: null,
+    emailLocalPart: null,
     avatarPath: null,
   }));
 }
@@ -2828,6 +2879,8 @@ export async function getAvailableUsers(
     return {
       userId,
       displayName: identity?.displayName ?? null,
+      username: identity?.username ?? null,
+      emailLocalPart: identity?.emailLocalPart ?? null,
       avatarPath: identity?.avatarPath ?? null,
     };
   }) satisfies AvailableUser[];
@@ -2873,6 +2926,8 @@ export async function getConversationParticipantIdentities(
       conversationId: membership.conversation_id,
       userId: membership.user_id,
       displayName: identity?.displayName ?? null,
+      username: identity?.username ?? null,
+      emailLocalPart: identity?.emailLocalPart ?? null,
       avatarPath: identity?.avatarPath ?? null,
     };
   }) satisfies ConversationParticipantIdentity[];

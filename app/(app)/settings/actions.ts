@@ -52,6 +52,7 @@ export async function updateProfileAction(formData: FormData) {
   revalidatePath('/settings');
   revalidatePath('/inbox');
   revalidatePath('/activity');
+  revalidatePath('/', 'layout');
   redirectWithMessage('message', t.settings.profileUpdated);
 }
 
@@ -79,6 +80,7 @@ export async function removeAvatarAction() {
   revalidatePath('/settings');
   revalidatePath('/inbox');
   revalidatePath('/activity');
+  revalidatePath('/', 'layout');
   redirectWithMessage('message', t.settings.profileUpdated);
 }
 
