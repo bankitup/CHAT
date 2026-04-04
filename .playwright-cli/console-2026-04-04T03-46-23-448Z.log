@@ -1,0 +1,6 @@
+[   45266ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://chat-bwc1.vercel.app/api/messaging/dm-e2ee/device:0
+[   46440ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://chat-bwc1.vercel.app/api/messaging/dm-e2ee/device:0
+[   46441ms] [ERROR] DM E2EE boundary step failed. Error: Unable to refresh encrypted setup on this device.
+    at o (https://chat-bwc1.vercel.app/_next/static/chunks/0qr686g4jvu9p.js?dpl=dpl_5boTf6UnM37FViAt7ThNnX19sWKa:1:32884)
+    at f (https://chat-bwc1.vercel.app/_next/static/chunks/0qr686g4jvu9p.js?dpl=dpl_5boTf6UnM37FViAt7ThNnX19sWKa:1:37934)
+    at async https://chat-bwc1.vercel.app/_next/static/chunks/0d8ue8gyos121.js?dpl=dpl_5boTf6UnM37FViAt7ThNnX19sWKa:1:515 @ https://chat-bwc1.vercel.app/_next/static/chunks/0d8ue8gyos121.js?dpl=dpl_5boTf6UnM37FViAt7ThNnX19sWKa:0

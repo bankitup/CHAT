@@ -2044,9 +2044,14 @@ export async function createConversationWithMembers(input: {
 }) {
   const supabase = await createSupabaseServerClient();
   const conversationId = crypto.randomUUID();
+  const normalizedSpaceId = input.spaceId?.trim() || null;
 
   if (!input.creatorUserId) {
     throw new Error('Authenticated user is required to create a conversation.');
+  }
+
+  if (!normalizedSpaceId) {
+    throw new Error('Active space is required to create a conversation.');
   }
 
   const {
@@ -2078,7 +2083,7 @@ export async function createConversationWithMembers(input: {
       input.creatorUserId,
       participantUserIds[0] ?? '',
       {
-        spaceId: input.spaceId ?? null,
+        spaceId: normalizedSpaceId,
       },
     );
 
@@ -2111,13 +2116,18 @@ export async function createConversationWithMembers(input: {
     input.kind === 'dm'
       ? {
           ...conversationPayloadBase,
-          ...(input.spaceId ? { space_id: input.spaceId } : {}),
+          space_id: normalizedSpaceId,
           dm_key: dmConversationKey,
         }
       : {
           ...conversationPayloadBase,
-          ...(input.spaceId ? { space_id: input.spaceId } : {}),
+          space_id: normalizedSpaceId,
         };
+
+  const conversationPayloadWithoutDmKey = {
+    ...conversationPayloadBase,
+    space_id: normalizedSpaceId,
+  };
 
   if (conversationPayload.created_by !== input.creatorUserId) {
     throw new Error(
@@ -2144,7 +2154,7 @@ export async function createConversationWithMembers(input: {
   ) {
     const { error: fallbackConversationError } = await supabase
       .from('conversations')
-      .insert(conversationPayloadBase);
+      .insert(conversationPayloadWithoutDmKey);
     conversationError = fallbackConversationError;
   }
 
@@ -2157,7 +2167,7 @@ export async function createConversationWithMembers(input: {
         input.creatorUserId,
         participantUserIds[0] ?? '',
         {
-          spaceId: input.spaceId ?? null,
+          spaceId: normalizedSpaceId,
         },
       );
 
