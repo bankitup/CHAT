@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type {
   DmE2eeBootstrap400ReasonCode,
+  DmE2eeBootstrapDebugState,
   DmE2eeBootstrapFailedValidationBranch,
   PublishDmE2eeDeviceRequest,
 } from '@/modules/messaging/contract/dm-e2ee';
@@ -112,6 +113,24 @@ function create400Diagnostics(input: {
   };
 }
 
+function extractBootstrapDebugState(error: unknown): DmE2eeBootstrapDebugState {
+  if (!(error instanceof Error)) {
+    return {};
+  }
+
+  const details = error as Error & DmE2eeBootstrapDebugState;
+
+  return {
+    authRetireAttempted: details.authRetireAttempted ?? null,
+    authRetireFailed: details.authRetireFailed ?? null,
+    serviceRetireAttempted: details.serviceRetireAttempted ?? null,
+    serviceRetireSucceeded: details.serviceRetireSucceeded ?? null,
+    serviceRetireFailed: details.serviceRetireFailed ?? null,
+    currentDeviceRowId: details.currentDeviceRowId ?? null,
+    retireTargetIds: details.retireTargetIds ?? null,
+  };
+}
+
 function getBootstrapAttemptBranch(
   request: Request,
   fallback: DmE2eeBootstrapFailedValidationBranch,
@@ -189,12 +208,14 @@ export async function POST(request: Request) {
   } catch (error) {
     const rawMessage =
       error instanceof Error ? error.message : 'Unable to publish DM E2EE device.';
+    const debugState = extractBootstrapDebugState(error);
     const exactFailurePoint = extractDmE2eeFailurePoint(rawMessage);
     const message = stripDmE2eeFailurePoint(rawMessage);
     const reason = classifyDmE2eeDevice400Reason(message);
     logDmE2eeDeviceRouteDiagnostics('publish:error', {
       exactFailurePoint,
       message,
+      ...debugState,
       ...(reason === 'missing profile row' ||
       reason === 'profile seed failed' ||
       reason === 'publish failed'
@@ -234,6 +255,7 @@ export async function POST(request: Request) {
             'Encrypted setup needs a profile identity row before device registration.',
           code: 'dm_e2ee_local_state_incomplete',
           exactFailurePoint,
+          ...debugState,
           ...diagnostics,
         },
         { status: 400 },
@@ -258,6 +280,7 @@ export async function POST(request: Request) {
           error: 'Encrypted setup could not prepare local profile identity state.',
           code: 'dm_e2ee_local_state_incomplete',
           exactFailurePoint,
+          ...debugState,
           ...diagnostics,
         },
         { status: 400 },
@@ -278,6 +301,7 @@ export async function POST(request: Request) {
         error: 'Unable to refresh encrypted setup on this device.',
         code: 'dm_e2ee_local_state_incomplete',
         exactFailurePoint,
+        ...debugState,
         ...diagnostics,
       },
       { status: 400 },

@@ -24,13 +24,23 @@ export type DmE2eeBootstrapFailedValidationBranch =
   | 'profile seed failed'
   | 'publish failed';
 
+export type DmE2eeBootstrapDebugState = {
+  authRetireAttempted?: boolean | null;
+  authRetireFailed?: boolean | null;
+  serviceRetireAttempted?: boolean | null;
+  serviceRetireSucceeded?: boolean | null;
+  serviceRetireFailed?: boolean | null;
+  currentDeviceRowId?: string | null;
+  retireTargetIds?: string[] | null;
+};
+
 export type DmE2eeApiErrorResponse = {
   error: string;
   code?: DmE2eeApiErrorCode | null;
   exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
   failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
   exactFailurePoint?: string | null;
-};
+} & DmE2eeBootstrapDebugState;
 
 export type DmE2eeEnvelopeType =
   | 'prekey_signal_message'

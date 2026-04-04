@@ -6,6 +6,7 @@ import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeApiErrorResponse,
+  DmE2eeBootstrapDebugState,
   DmE2eeBootstrap400ReasonCode,
   DmE2eeBootstrapFailedValidationBranch,
   DmE2eeRecipientBundleResponse,
@@ -35,7 +36,7 @@ type EncryptedDmDebugFailureDetails = {
   exact400ReasonCode: DmE2eeBootstrap400ReasonCode | null;
   failedValidationBranch: DmE2eeBootstrapFailedValidationBranch | null;
   exactFailurePoint: string | null;
-};
+} & DmE2eeBootstrapDebugState;
 
 type EncryptedDmComposerFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -75,10 +76,17 @@ async function fetchRecipientBundle(conversationId: string) {
     const errorPayload = payload as DmE2eeApiErrorResponse;
     const error = new Error(
       errorPayload.error || 'Unable to load DM encryption material.',
-    ) as Error & {
+    ) as Error & DmE2eeBootstrapDebugState & {
       code?: DmE2eeApiErrorCode | null;
     };
     error.code = errorPayload.code ?? null;
+    error.authRetireAttempted = errorPayload.authRetireAttempted ?? null;
+    error.authRetireFailed = errorPayload.authRetireFailed ?? null;
+    error.serviceRetireAttempted = errorPayload.serviceRetireAttempted ?? null;
+    error.serviceRetireSucceeded = errorPayload.serviceRetireSucceeded ?? null;
+    error.serviceRetireFailed = errorPayload.serviceRetireFailed ?? null;
+    error.currentDeviceRowId = errorPayload.currentDeviceRowId ?? null;
+    error.retireTargetIds = errorPayload.retireTargetIds ?? null;
     throw error;
   }
 
@@ -98,10 +106,17 @@ async function postEncryptedDmMessage(input: DmE2eeSendRequest) {
   if (!response.ok) {
     const error = new Error(
       payload.error || 'Unable to send encrypted message.',
-    ) as Error & {
+    ) as Error & DmE2eeBootstrapDebugState & {
       code?: DmE2eeApiErrorCode | null;
     };
     error.code = payload.code ?? null;
+    error.authRetireAttempted = payload.authRetireAttempted ?? null;
+    error.authRetireFailed = payload.authRetireFailed ?? null;
+    error.serviceRetireAttempted = payload.serviceRetireAttempted ?? null;
+    error.serviceRetireSucceeded = payload.serviceRetireSucceeded ?? null;
+    error.serviceRetireFailed = payload.serviceRetireFailed ?? null;
+    error.currentDeviceRowId = payload.currentDeviceRowId ?? null;
+    error.retireTargetIds = payload.retireTargetIds ?? null;
     throw error;
   }
 }
@@ -144,7 +159,7 @@ async function resolveLocalRecordForEncryptedDm(
       exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
       failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
       exactFailurePoint?: string | null;
-    };
+    } & DmE2eeBootstrapDebugState;
     error.code = 'dm_e2ee_sender_device_stale';
     error.exact400ReasonCode = null;
     error.failedValidationBranch = 'stale serverDeviceRecordId';
@@ -166,11 +181,25 @@ function getEncryptedDmDebugFailureDetails(
   const exact400ReasonCode = details.exact400ReasonCode ?? null;
   const failedValidationBranch = details.failedValidationBranch ?? null;
   const exactFailurePoint = details.exactFailurePoint ?? null;
+  const authRetireAttempted = details.authRetireAttempted ?? null;
+  const authRetireFailed = details.authRetireFailed ?? null;
+  const serviceRetireAttempted = details.serviceRetireAttempted ?? null;
+  const serviceRetireSucceeded = details.serviceRetireSucceeded ?? null;
+  const serviceRetireFailed = details.serviceRetireFailed ?? null;
+  const currentDeviceRowId = details.currentDeviceRowId ?? null;
+  const retireTargetIds = details.retireTargetIds ?? null;
 
   if (
     !exact400ReasonCode &&
     !failedValidationBranch &&
-    !exactFailurePoint
+    !exactFailurePoint &&
+    authRetireAttempted === null &&
+    authRetireFailed === null &&
+    serviceRetireAttempted === null &&
+    serviceRetireSucceeded === null &&
+    serviceRetireFailed === null &&
+    !currentDeviceRowId &&
+    (!retireTargetIds || retireTargetIds.length === 0)
   ) {
     return null;
   }
@@ -179,6 +208,13 @@ function getEncryptedDmDebugFailureDetails(
     exact400ReasonCode,
     failedValidationBranch,
     exactFailurePoint,
+    authRetireAttempted,
+    authRetireFailed,
+    serviceRetireAttempted,
+    serviceRetireSucceeded,
+    serviceRetireFailed,
+    currentDeviceRowId,
+    retireTargetIds,
   };
 }
 
@@ -432,6 +468,48 @@ export function EncryptedDmComposerForm({
                 <p className="attachment-helper composer-debug-line">
                   <strong>exactFailurePoint:</strong>{' '}
                   <code>{errorDebugDetails.exactFailurePoint}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.authRetireAttempted === 'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>auth_retire_attempted:</strong>{' '}
+                  <code>{String(errorDebugDetails.authRetireAttempted)}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.authRetireFailed === 'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>auth_retire_failed:</strong>{' '}
+                  <code>{String(errorDebugDetails.authRetireFailed)}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.serviceRetireAttempted === 'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_attempted:</strong>{' '}
+                  <code>{String(errorDebugDetails.serviceRetireAttempted)}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.serviceRetireSucceeded === 'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_succeeded:</strong>{' '}
+                  <code>{String(errorDebugDetails.serviceRetireSucceeded)}</code>
+                </p>
+              ) : null}
+              {typeof errorDebugDetails?.serviceRetireFailed === 'boolean' ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>service_retire_failed:</strong>{' '}
+                  <code>{String(errorDebugDetails.serviceRetireFailed)}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.currentDeviceRowId ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>current_device_row_id:</strong>{' '}
+                  <code>{errorDebugDetails.currentDeviceRowId}</code>
+                </p>
+              ) : null}
+              {errorDebugDetails?.retireTargetIds?.length ? (
+                <p className="attachment-helper composer-debug-line">
+                  <strong>retire_target_ids:</strong>{' '}
+                  <code>{errorDebugDetails.retireTargetIds.join(', ')}</code>
                 </p>
               ) : null}
             </div>

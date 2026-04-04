@@ -10,6 +10,7 @@ import {
 } from '@/modules/messaging/data/visibility';
 import type {
   DmE2eeApiErrorCode,
+  DmE2eeBootstrapDebugState,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendRequest,
   PublishDmE2eeDeviceRequest,
@@ -355,8 +356,18 @@ function createSchemaRequirementError(details: string) {
 function createDmE2eeBootstrapPublishError(
   failurePoint: string,
   message: string,
+  details?: DmE2eeBootstrapDebugState,
 ) {
-  return new Error(`[${failurePoint}] ${message}`);
+  const error = new Error(`[${failurePoint}] ${message}`) as Error &
+    DmE2eeBootstrapDebugState;
+  error.authRetireAttempted = details?.authRetireAttempted ?? null;
+  error.authRetireFailed = details?.authRetireFailed ?? null;
+  error.serviceRetireAttempted = details?.serviceRetireAttempted ?? null;
+  error.serviceRetireSucceeded = details?.serviceRetireSucceeded ?? null;
+  error.serviceRetireFailed = details?.serviceRetireFailed ?? null;
+  error.currentDeviceRowId = details?.currentDeviceRowId ?? null;
+  error.retireTargetIds = details?.retireTargetIds ?? null;
+  return error;
 }
 
 function isMissingRelationErrorMessage(message: string, relationName: string) {
@@ -1481,6 +1492,9 @@ export async function publishCurrentUserDmE2eeDevice(
     throw createDmE2eeBootstrapPublishError(
       'retire other devices: prepare failed',
       otherActiveDevicesLookup.error.message,
+      {
+        currentDeviceRowId: deviceRecordId,
+      },
     );
   }
 
@@ -1508,6 +1522,10 @@ export async function publishCurrentUserDmE2eeDevice(
     throw createDmE2eeBootstrapPublishError(
       'retire other devices: current device included by mistake',
       'The current device row was unexpectedly included in the retire-others candidate set.',
+      {
+        currentDeviceRowId: deviceRecordId,
+        retireTargetIds: otherActiveDevices.otherDeviceIds,
+      },
     );
   }
 
@@ -1567,6 +1585,15 @@ export async function publishCurrentUserDmE2eeDevice(
       throw createDmE2eeBootstrapPublishError(
         'retire other devices: auth step failed',
         retireOthers.error.message,
+        {
+          authRetireAttempted: true,
+          authRetireFailed: true,
+          serviceRetireAttempted: false,
+          serviceRetireSucceeded: false,
+          serviceRetireFailed: false,
+          currentDeviceRowId: deviceRecordId,
+          retireTargetIds: otherActiveDevices.otherDeviceIds,
+        },
       );
     }
 
@@ -1597,6 +1624,15 @@ export async function publishCurrentUserDmE2eeDevice(
       throw createDmE2eeBootstrapPublishError(
         'retire other devices: service fallback failed',
         privilegedRetireOthers.error.message,
+        {
+          authRetireAttempted: true,
+          authRetireFailed: true,
+          serviceRetireAttempted: true,
+          serviceRetireSucceeded: false,
+          serviceRetireFailed: true,
+          currentDeviceRowId: deviceRecordId,
+          retireTargetIds: otherActiveDevices.otherDeviceIds,
+        },
       );
     }
 
@@ -1637,6 +1673,15 @@ export async function publishCurrentUserDmE2eeDevice(
         ? 'retire other devices: rows still active after fallback'
         : 'retire other devices: update returned unexpected result',
       verifyRemainingOtherActiveDevices.error.message,
+      {
+        authRetireAttempted: otherActiveDevices.otherDeviceCount > 0,
+        authRetireFailed: false,
+        serviceRetireAttempted: usedPrivilegedRetireOthers,
+        serviceRetireSucceeded: usedPrivilegedRetireOthers,
+        serviceRetireFailed: false,
+        currentDeviceRowId: deviceRecordId,
+        retireTargetIds: otherActiveDevices.otherDeviceIds,
+      },
     );
   }
 
@@ -1661,6 +1706,15 @@ export async function publishCurrentUserDmE2eeDevice(
         ? 'retire other devices: rows still active after fallback'
         : 'retire other devices: update returned unexpected result',
       'Other active device rows remained after the retire-others update.',
+      {
+        authRetireAttempted: otherActiveDevices.otherDeviceCount > 0,
+        authRetireFailed: false,
+        serviceRetireAttempted: usedPrivilegedRetireOthers,
+        serviceRetireSucceeded: usedPrivilegedRetireOthers,
+        serviceRetireFailed: false,
+        currentDeviceRowId: deviceRecordId,
+        retireTargetIds: otherActiveDevices.otherDeviceIds,
+      },
     );
   }
 

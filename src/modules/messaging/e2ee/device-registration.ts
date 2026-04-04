@@ -1,5 +1,6 @@
 import type {
   DmE2eeApiErrorCode,
+  DmE2eeBootstrapDebugState,
   PublishDmE2eeDeviceRequest,
   PublishDmE2eeDeviceResult,
   DmE2eeBootstrap400ReasonCode,
@@ -56,18 +57,25 @@ function createLocalDmE2eeError(
     exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
     failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
     exactFailurePoint?: string | null;
-  },
+  } & DmE2eeBootstrapDebugState,
 ) {
   const error = new Error(message) as Error & {
     code?: DmE2eeApiErrorCode;
     exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
     failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
     exactFailurePoint?: string | null;
-  };
+  } & DmE2eeBootstrapDebugState;
   error.code = code;
   error.exact400ReasonCode = details?.exact400ReasonCode ?? null;
   error.failedValidationBranch = details?.failedValidationBranch ?? null;
   error.exactFailurePoint = details?.exactFailurePoint ?? null;
+  error.authRetireAttempted = details?.authRetireAttempted ?? null;
+  error.authRetireFailed = details?.authRetireFailed ?? null;
+  error.serviceRetireAttempted = details?.serviceRetireAttempted ?? null;
+  error.serviceRetireSucceeded = details?.serviceRetireSucceeded ?? null;
+  error.serviceRetireFailed = details?.serviceRetireFailed ?? null;
+  error.currentDeviceRowId = details?.currentDeviceRowId ?? null;
+  error.retireTargetIds = details?.retireTargetIds ?? null;
   return error;
 }
 
@@ -353,6 +361,13 @@ export async function ensureDmE2eeDeviceRegistered(
   let failedValidationBranch: DmE2eeBootstrapFailedValidationBranch | null =
     null;
   let exactFailurePoint: string | null = null;
+  let authRetireAttempted: boolean | null = null;
+  let authRetireFailed: boolean | null = null;
+  let serviceRetireAttempted: boolean | null = null;
+  let serviceRetireSucceeded: boolean | null = null;
+  let serviceRetireFailed: boolean | null = null;
+  let currentDeviceRowId: string | null = null;
+  let retireTargetIds: string[] | null = null;
 
   try {
     const payload = (await response.json()) as {
@@ -361,18 +376,39 @@ export async function ensureDmE2eeDeviceRegistered(
       exact400ReasonCode?: DmE2eeBootstrap400ReasonCode | null;
       failedValidationBranch?: DmE2eeBootstrapFailedValidationBranch | null;
       exactFailurePoint?: string | null;
+      authRetireAttempted?: boolean | null;
+      authRetireFailed?: boolean | null;
+      serviceRetireAttempted?: boolean | null;
+      serviceRetireSucceeded?: boolean | null;
+      serviceRetireFailed?: boolean | null;
+      currentDeviceRowId?: string | null;
+      retireTargetIds?: string[] | null;
     };
     errorCode = payload.code ?? null;
     errorMessage = payload.error ?? null;
     exact400ReasonCode = payload.exact400ReasonCode ?? null;
     failedValidationBranch = payload.failedValidationBranch ?? null;
     exactFailurePoint = payload.exactFailurePoint ?? null;
+    authRetireAttempted = payload.authRetireAttempted ?? null;
+    authRetireFailed = payload.authRetireFailed ?? null;
+    serviceRetireAttempted = payload.serviceRetireAttempted ?? null;
+    serviceRetireSucceeded = payload.serviceRetireSucceeded ?? null;
+    serviceRetireFailed = payload.serviceRetireFailed ?? null;
+    currentDeviceRowId = payload.currentDeviceRowId ?? null;
+    retireTargetIds = payload.retireTargetIds ?? null;
   } catch {
     errorCode = null;
     errorMessage = null;
     exact400ReasonCode = null;
     failedValidationBranch = null;
     exactFailurePoint = null;
+    authRetireAttempted = null;
+    authRetireFailed = null;
+    serviceRetireAttempted = null;
+    serviceRetireSucceeded = null;
+    serviceRetireFailed = null;
+    currentDeviceRowId = null;
+    retireTargetIds = null;
   }
     logDmE2eeBootstrapClientDiagnostics('publish:error', {
     errorCode,
@@ -380,6 +416,13 @@ export async function ensureDmE2eeDeviceRegistered(
     exact400ReasonCode,
     failedValidationBranch,
     exactFailurePoint,
+    authRetireAttempted,
+    authRetireFailed,
+    serviceRetireAttempted,
+    serviceRetireSucceeded,
+    serviceRetireFailed,
+    currentDeviceRowId,
+    retireTargetIds,
     publishAttempt,
     status: response.status,
   });
@@ -432,6 +475,13 @@ export async function ensureDmE2eeDeviceRegistered(
         exact400ReasonCode,
         failedValidationBranch: failedValidationBranch ?? 'failed republish',
         exactFailurePoint,
+        authRetireAttempted,
+        authRetireFailed,
+        serviceRetireAttempted,
+        serviceRetireSucceeded,
+        serviceRetireFailed,
+        currentDeviceRowId,
+        retireTargetIds,
       },
     );
   }
