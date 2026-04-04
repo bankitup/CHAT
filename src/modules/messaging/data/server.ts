@@ -2850,11 +2850,55 @@ export async function findExistingActiveDmConversation(
     throw new Error(otherError.message);
   }
 
-  const match = ((otherMemberships ?? []) as ConversationMembershipLookupRow[]).find(
-    (row) => normalizeConversation(row.conversations)?.kind === 'dm',
-  );
+  const candidateConversationIds = ((otherMemberships ?? []) as ConversationMembershipLookupRow[])
+    .filter((row) => normalizeConversation(row.conversations)?.kind === 'dm')
+    .map((row) => row.conversation_id)
+    .filter(Boolean);
 
-  return match?.conversation_id ?? null;
+  if (candidateConversationIds.length === 0) {
+    return null;
+  }
+
+  const { data: candidateMembers, error: candidateMembersError } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, user_id')
+    .in('conversation_id', candidateConversationIds)
+    .eq('state', 'active');
+
+  if (candidateMembersError) {
+    throw new Error(candidateMembersError.message);
+  }
+
+  const expectedUserIds = new Set([creatorUserId, otherUserId]);
+  const memberIdsByConversation = new Map<string, Set<string>>();
+
+  for (const row of (candidateMembers ?? []) as Array<{
+    conversation_id: string;
+    user_id: string;
+  }>) {
+    const memberIds =
+      memberIdsByConversation.get(row.conversation_id) ?? new Set<string>();
+    memberIds.add(row.user_id);
+    memberIdsByConversation.set(row.conversation_id, memberIds);
+  }
+
+  const exactPairConversationId = candidateConversationIds.find((conversationId) => {
+    const memberIds = memberIdsByConversation.get(conversationId);
+
+    if (!memberIds || memberIds.size !== expectedUserIds.size) {
+      return false;
+    }
+
+    for (const userId of expectedUserIds) {
+      if (!memberIds.has(userId)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  return exactPairConversationId ?? null;
 }
 
 export async function createConversationWithMembers(input: {
