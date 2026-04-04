@@ -230,6 +230,9 @@ type LanguageDictionary = {
     inbox: string;
     inboxNote: string;
     hideFromInbox: string;
+    deleteChat: string;
+    deleteChatNote: string;
+    deleteChatButton: string;
     noMessagesYet: string;
     unreadMessages: string;
     today: string;
@@ -538,6 +541,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       inbox: 'Inbox',
       inboxNote: 'Hide this chat from your inbox only.',
       hideFromInbox: 'Hide from inbox',
+      deleteChat: 'Delete chat',
+      deleteChatNote: 'Delete this direct chat and its current message history.',
+      deleteChatButton: 'Delete chat',
       noMessagesYet: 'No messages yet',
       unreadMessages: 'Unread messages',
       today: 'Today',
@@ -854,6 +860,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       inbox: 'Входящие',
       inboxNote: 'Скрыть этот чат только из списка.',
       hideFromInbox: 'Скрыть из чатов',
+      deleteChat: 'Удалить чат',
+      deleteChatNote: 'Удалить этот личный чат и его текущую историю сообщений.',
+      deleteChatButton: 'Удалить чат',
       noMessagesYet: 'Пока нет сообщений',
       unreadMessages: 'Непрочитанные сообщения',
       today: 'Сегодня',

@@ -43,6 +43,7 @@ import { notFound, redirect } from 'next/navigation';
 import {
   addGroupParticipantsAction,
   deleteMessageAction,
+  deleteDirectConversationAction,
   editMessageAction,
   hideConversationAction,
   leaveGroupAction,
@@ -1618,30 +1619,67 @@ export default async function ChatPage({
               </form>
             </section>
 
-            <section className="conversation-settings-panel stack">
-              <div className="stack conversation-settings-panel-copy">
-                <h3 className="card-title">{t.chat.inbox}</h3>
-                <p className="muted conversation-settings-note">
-                  {t.chat.inboxNote}
-                </p>
-              </div>
+            {conversation.kind === 'dm' ? (
+              <section className="conversation-settings-panel stack">
+                <div className="stack conversation-settings-panel-copy">
+                  <h3 className="card-title">{t.chat.deleteChat}</h3>
+                  <p className="muted conversation-settings-note">
+                    {t.chat.deleteChatNote}
+                  </p>
+                </div>
 
-              <div className="conversation-manage-actions">
-                <form action={hideConversationAction}>
-                  <input
-                    name="conversationId"
-                    type="hidden"
-                    value={conversationId}
-                  />
-                  <button
-                    className="button button-compact button-secondary"
-                    type="submit"
-                  >
-                    {t.chat.hideFromInbox}
-                  </button>
-                </form>
-              </div>
-            </section>
+                <div className="conversation-manage-actions">
+                  <form action={deleteDirectConversationAction}>
+                    <input
+                      name="conversationId"
+                      type="hidden"
+                      value={conversationId}
+                    />
+                    <input
+                      name="spaceId"
+                      type="hidden"
+                      value={activeSpaceId ?? ''}
+                    />
+                    <button
+                      className="button button-compact button-danger-subtle"
+                      type="submit"
+                    >
+                      {t.chat.deleteChatButton}
+                    </button>
+                  </form>
+                </div>
+              </section>
+            ) : (
+              <section className="conversation-settings-panel stack">
+                <div className="stack conversation-settings-panel-copy">
+                  <h3 className="card-title">{t.chat.inbox}</h3>
+                  <p className="muted conversation-settings-note">
+                    {t.chat.inboxNote}
+                  </p>
+                </div>
+
+                <div className="conversation-manage-actions">
+                  <form action={hideConversationAction}>
+                    <input
+                      name="conversationId"
+                      type="hidden"
+                      value={conversationId}
+                    />
+                    <input
+                      name="spaceId"
+                      type="hidden"
+                      value={activeSpaceId ?? ''}
+                    />
+                    <button
+                      className="button button-compact button-secondary"
+                      type="submit"
+                    >
+                      {t.chat.hideFromInbox}
+                    </button>
+                  </form>
+                </div>
+              </section>
+            )}
           </section>
         </section>
       ) : null}

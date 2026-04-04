@@ -13,6 +13,7 @@ import {
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   editMessage,
+  deleteDirectConversationForUser,
   hideConversationForUser,
   isSupportedChatAttachmentType,
   leaveGroupConversation,
@@ -500,6 +501,47 @@ export async function hideConversationAction(formData: FormData) {
   }
 
   revalidatePath('/inbox');
+  revalidatePath(`/chat/${conversationId}`);
+  redirectToInbox(spaceId);
+}
+
+export async function deleteDirectConversationAction(formData: FormData) {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
+
+  if (!conversationId) {
+    redirectToInbox(spaceId);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    redirect('/login');
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    redirectToInbox(spaceId);
+  }
+
+  try {
+    await deleteDirectConversationForUser({
+      conversationId,
+      userId: user.id,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unable to delete this chat.';
+
+    redirectWithSettingsError(conversationId, message, spaceId);
+  }
+
+  revalidatePath('/inbox');
+  revalidatePath('/activity');
   revalidatePath(`/chat/${conversationId}`);
   redirectToInbox(spaceId);
 }

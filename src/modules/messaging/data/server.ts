@@ -3805,6 +3805,157 @@ export async function hideConversationForUser(input: {
   return { updated: true };
 }
 
+export async function deleteDirectConversationForUser(input: {
+  conversationId: string;
+  userId: string;
+}) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Direct chat delete requires an authenticated user.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Direct chat delete debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Direct chat delete debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const conversation = await getConversationForUser(input.conversationId, input.userId);
+
+  if (!conversation) {
+    throw new Error('This direct chat is no longer available.');
+  }
+
+  if (conversation.kind !== 'dm') {
+    throw new Error('Delete chat is currently available for direct chats only.');
+  }
+
+  const serviceSupabase = createSupabaseServiceRoleClient();
+
+  if (!serviceSupabase) {
+    throw new Error('Delete chat requires server-side service access.');
+  }
+
+  const { data: messageRows, error: messageRowsError } = await serviceSupabase
+    .from('messages')
+    .select('id')
+    .eq('conversation_id', input.conversationId);
+
+  if (messageRowsError) {
+    throw new Error(messageRowsError.message);
+  }
+
+  const messageIds = ((messageRows ?? []) as Array<{ id: string }>).map((row) => row.id);
+
+  if (messageIds.length > 0) {
+    const { error: reactionsError } = await serviceSupabase
+      .from('message_reactions')
+      .delete()
+      .in('message_id', messageIds);
+
+    if (reactionsError && !isMissingRelationErrorMessage(reactionsError.message, 'message_reactions')) {
+      throw new Error(reactionsError.message);
+    }
+
+    const { data: attachmentRows, error: attachmentRowsError } = await serviceSupabase
+      .from('message_attachments')
+      .select('bucket, object_path')
+      .in('message_id', messageIds);
+
+    if (attachmentRowsError && !isMissingRelationErrorMessage(attachmentRowsError.message, 'message_attachments')) {
+      throw new Error(attachmentRowsError.message);
+    }
+
+    const { error: attachmentsError } = await serviceSupabase
+      .from('message_attachments')
+      .delete()
+      .in('message_id', messageIds);
+
+    if (attachmentsError && !isMissingRelationErrorMessage(attachmentsError.message, 'message_attachments')) {
+      throw new Error(attachmentsError.message);
+    }
+
+    const { error: envelopesError } = await serviceSupabase
+      .from('message_e2ee_envelopes')
+      .delete()
+      .in('message_id', messageIds);
+
+    if (envelopesError && !isMissingRelationErrorMessage(envelopesError.message, 'message_e2ee_envelopes')) {
+      throw new Error(envelopesError.message);
+    }
+
+    const { error: messagesError } = await serviceSupabase
+      .from('messages')
+      .delete()
+      .eq('conversation_id', input.conversationId);
+
+    if (messagesError) {
+      throw new Error(messagesError.message);
+    }
+
+    const storageObjectsByBucket = new Map<string, string[]>();
+
+    for (const row of (attachmentRows ?? []) as Array<{
+      bucket: string | null;
+      object_path: string | null;
+    }>) {
+      const bucket = row.bucket?.trim();
+      const objectPath = row.object_path?.trim();
+
+      if (!bucket || !objectPath) {
+        continue;
+      }
+
+      const existing = storageObjectsByBucket.get(bucket) ?? [];
+      existing.push(objectPath);
+      storageObjectsByBucket.set(bucket, existing);
+    }
+
+    for (const [bucket, objectPaths] of storageObjectsByBucket) {
+      const uniqueObjectPaths = Array.from(new Set(objectPaths.filter(Boolean)));
+
+      if (uniqueObjectPaths.length === 0) {
+        continue;
+      }
+
+      await serviceSupabase.storage.from(bucket).remove(uniqueObjectPaths);
+    }
+  }
+
+  const { error: membersError } = await serviceSupabase
+    .from('conversation_members')
+    .delete()
+    .eq('conversation_id', input.conversationId);
+
+  if (membersError) {
+    throw new Error(membersError.message);
+  }
+
+  const { error: conversationDeleteError } = await serviceSupabase
+    .from('conversations')
+    .delete()
+    .eq('id', input.conversationId)
+    .eq('kind', 'dm');
+
+  if (conversationDeleteError) {
+    throw new Error(conversationDeleteError.message);
+  }
+
+  return {
+    deleted: true,
+    deletedMessageCount: messageIds.length,
+  };
+}
+
 export async function restoreConversationForUser(input: {
   conversationId: string;
   userId: string;
