@@ -370,6 +370,26 @@ function createDmE2eeBootstrapPublishError(
   return error;
 }
 
+function getSupabaseErrorDiagnostics(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return {};
+  }
+
+  const details = error as {
+    code?: string | null;
+    status?: number | null;
+    details?: string | null;
+    hint?: string | null;
+  };
+
+  return {
+    error_code: details.code ?? null,
+    error_status: details.status ?? null,
+    error_details: details.details ?? null,
+    error_hint: details.hint ?? null,
+  };
+}
+
 function isMissingRelationErrorMessage(message: string, relationName: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -1569,6 +1589,7 @@ export async function publishCurrentUserDmE2eeDevice(
       service_retire_succeeded: false,
       service_retire_failed: false,
       message: retireOthers.error.message,
+      ...getSupabaseErrorDiagnostics(retireOthers.error),
     });
 
     if (!serviceRoleSupabase) {
@@ -1620,6 +1641,7 @@ export async function publishCurrentUserDmE2eeDevice(
         service_retire_succeeded: false,
         service_retire_failed: true,
         message: privilegedRetireOthers.error.message,
+        ...getSupabaseErrorDiagnostics(privilegedRetireOthers.error),
       });
       throw createDmE2eeBootstrapPublishError(
         'retire other devices: service fallback failed',
