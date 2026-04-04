@@ -73,7 +73,7 @@ Assumptions:
 - `kind` is used as a conversation-type discriminator (`dm` or `group`).
 - `created_by` is used for group ownership-sensitive UI like title editing.
 - `last_message_at` drives inbox ordering and recency labels.
-- `dm_key`, when present, is used to make direct-message creation race-safe and reuse an existing DM for the same user pair.
+- `dm_key`, when present, is the canonical unordered DM pair key (`sorted(user_a,user_b).join(':')`) used to make direct-message creation race-safe and reuse exactly one DM for the same pair.
 - `space_id`, once the space model is enabled, makes each conversation belong to exactly one space.
 - direct-message uniqueness is global only in the current implicit-space runtime; once spaces are enabled, DM uniqueness must become space-scoped via `space_id` plus `dm_key`.
 
@@ -404,7 +404,7 @@ Operational alignment note for partial production rollouts:
 - Missing `conversation_members.hidden_at` no longer causes a raw confusing crash on the main inbox path, but archive-related behavior still requires the migration.
 - Missing `conversation_members.notification_level` falls back to `default` for conversation loading, but preference updates still require the migration.
 - If `messages.kind` is restricted to older values, voice-message inserts require the migration before they can be stored safely.
-- If `conversations.dm_key` is missing, direct-message creation still falls back to active-member lookup, but race-safe DM uniqueness depends on the migration.
+- If `conversations.dm_key` is missing, direct-message creation still falls back to active-member lookup, but race-safe one-DM-per-pair enforcement depends on the migration set in [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql).
 - DM text E2EE is only partially active today. Direct-message text can now be uploaded as ciphertext for the DM-only encrypted send path, and the current device can decrypt those encrypted DM messages in-thread. Inbox rows may use a device-local decrypted preview cache when available; the server still cannot read DM preview text.
 - DM search remains server-blind for encrypted text. Current search continues to work for conversation and participant identity, but not encrypted DM plaintext.
 - Runtime rollout is also gated by environment configuration:

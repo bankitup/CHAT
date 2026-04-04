@@ -115,4 +115,4 @@ Apply these if the fields are not yet present in your Supabase project:
 - If `public.conversation_members.last_read_message_seq` or `last_read_at` are missing, read-state queries fall back to `null` values instead of crashing.
 - If `public.conversation_members.hidden_at` is missing, the main inbox falls back to non-archived loading, and archive actions now fail with a clear migration message.
 - If `public.conversation_members.notification_level` is missing, conversation loading falls back to `default`, and preference updates now fail with a clear migration message.
-- If `public.conversations.dm_key` is missing, DM creation still falls back to active-member lookup, but stronger duplicate-DM prevention depends on the migration in `docs/sql/2026-04-03-conversations-dm-key.sql`.
+- If `public.conversations.dm_key` is missing, DM creation still falls back to active-member lookup, but strict one-DM-per-pair enforcement depends on `docs/sql/2026-04-04-dm-uniqueness-hardening.sql`.

@@ -208,11 +208,6 @@ type ConversationMemberRow = {
   conversations: ConversationRecord | ConversationRecord[] | null;
 };
 
-type ConversationMembershipLookupRow = {
-  conversation_id: string;
-  conversations: { id: string; kind: string | null } | { id: string; kind: string | null }[] | null;
-};
-
 export type InboxConversation = {
   conversationId: string;
   spaceId: string | null;
@@ -533,6 +528,120 @@ function uniqueNonEmptyLabels(labels: string[]) {
 
 function buildDmConversationKey(leftUserId: string, rightUserId: string) {
   return [leftUserId, rightUserId].filter(Boolean).sort().join(':');
+}
+
+type DmConversationLookupCandidate = {
+  conversationId: string;
+  createdAt: string | null;
+  lastMessageAt: string | null;
+};
+
+async function selectCanonicalExactPairDmConversationId(input: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  candidateRows: Array<{
+    conversation_id: string;
+    conversations:
+      | {
+          id: string;
+          kind: string | null;
+          created_at?: string | null;
+          last_message_at?: string | null;
+        }
+      | Array<{
+          id: string;
+          kind: string | null;
+          created_at?: string | null;
+          last_message_at?: string | null;
+        }>
+      | null;
+  }>;
+  expectedUserIds: string[];
+}) {
+  const candidateConversations = input.candidateRows
+    .map((row) => {
+      const conversation = normalizeConversation(row.conversations);
+
+      if (!conversation || conversation.kind !== 'dm') {
+        return null;
+      }
+
+      return {
+        conversationId: row.conversation_id,
+        createdAt: conversation.created_at ?? null,
+        lastMessageAt: conversation.last_message_at ?? null,
+      } satisfies DmConversationLookupCandidate;
+    })
+    .filter((row): row is DmConversationLookupCandidate => Boolean(row));
+
+  if (candidateConversations.length === 0) {
+    return null;
+  }
+
+  const { data: candidateMembers, error: candidateMembersError } = await input.supabase
+    .from('conversation_members')
+    .select('conversation_id, user_id')
+    .in(
+      'conversation_id',
+      candidateConversations.map((conversation) => conversation.conversationId),
+    )
+    .eq('state', 'active');
+
+  if (candidateMembersError) {
+    throw new Error(candidateMembersError.message);
+  }
+
+  const expectedUserIds = new Set(input.expectedUserIds);
+  const memberIdsByConversation = new Map<string, Set<string>>();
+
+  for (const row of (candidateMembers ?? []) as Array<{
+    conversation_id: string;
+    user_id: string;
+  }>) {
+    const memberIds =
+      memberIdsByConversation.get(row.conversation_id) ?? new Set<string>();
+    memberIds.add(row.user_id);
+    memberIdsByConversation.set(row.conversation_id, memberIds);
+  }
+
+  const exactPairCandidates = candidateConversations.filter((conversation) => {
+    const memberIds = memberIdsByConversation.get(conversation.conversationId);
+
+    if (!memberIds || memberIds.size !== expectedUserIds.size) {
+      return false;
+    }
+
+    for (const userId of expectedUserIds) {
+      if (!memberIds.has(userId)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  if (exactPairCandidates.length === 0) {
+    return null;
+  }
+
+  exactPairCandidates.sort((left, right) => {
+    const leftRank = left.lastMessageAt ?? left.createdAt ?? '';
+    const rightRank = right.lastMessageAt ?? right.createdAt ?? '';
+
+    if (leftRank !== rightRank) {
+      return rightRank.localeCompare(leftRank);
+    }
+
+    const leftCreatedAt = left.createdAt ?? '';
+    const rightCreatedAt = right.createdAt ?? '';
+
+    if (leftCreatedAt !== rightCreatedAt) {
+      return leftCreatedAt.localeCompare(rightCreatedAt);
+    }
+
+    return left.conversationId.localeCompare(right.conversationId);
+  });
+
+  return exactPairCandidates[0]?.conversationId ?? null;
 }
 
 export function getConversationDisplayName({
@@ -2765,8 +2874,8 @@ export async function findExistingActiveDmConversation(
     .from('conversation_members')
     .select(
       options?.spaceId
-        ? 'conversation_id, conversations!inner(id, kind, dm_key, space_id)'
-        : 'conversation_id, conversations!inner(id, kind, dm_key)',
+        ? 'conversation_id, conversations!inner(id, kind, dm_key, space_id, created_at, last_message_at)'
+        : 'conversation_id, conversations!inner(id, kind, dm_key, created_at, last_message_at)',
     )
     .eq('user_id', creatorUserId)
     .eq('state', 'active')
@@ -2787,17 +2896,34 @@ export async function findExistingActiveDmConversation(
       throw new Error(keyedLookupError.message);
     }
   } else {
-    const keyedMatch = ((keyedMemberships ?? []) as Array<{
+    const keyedMatch = await selectCanonicalExactPairDmConversationId({
+      supabase,
+      candidateRows: ((keyedMemberships ?? []) as Array<{
       conversation_id: string;
       conversations:
-        | { id: string; kind: string | null; dm_key?: string | null }
-        | { id: string; kind: string | null; dm_key?: string | null; space_id?: string | null }
-        | Array<{ id: string; kind: string | null; dm_key?: string | null; space_id?: string | null }>
+        | {
+            id: string;
+            kind: string | null;
+            dm_key?: string | null;
+            space_id?: string | null;
+            created_at?: string | null;
+            last_message_at?: string | null;
+          }
+        | Array<{
+            id: string;
+            kind: string | null;
+            dm_key?: string | null;
+            space_id?: string | null;
+            created_at?: string | null;
+            last_message_at?: string | null;
+          }>
         | null;
-    }>).find((row) => normalizeConversation(row.conversations)?.kind === 'dm');
+      }>),
+      expectedUserIds: [creatorUserId, otherUserId],
+    });
 
-    if (keyedMatch?.conversation_id) {
-      return keyedMatch.conversation_id;
+    if (keyedMatch) {
+      return keyedMatch;
     }
   }
 
@@ -2823,8 +2949,8 @@ export async function findExistingActiveDmConversation(
     .from('conversation_members')
     .select(
       options?.spaceId
-        ? 'conversation_id, conversations!inner(id, kind, space_id)'
-        : 'conversation_id, conversations!inner(id, kind)',
+        ? 'conversation_id, conversations!inner(id, kind, space_id, created_at, last_message_at)'
+        : 'conversation_id, conversations!inner(id, kind, created_at, last_message_at)',
     )
     .eq('user_id', otherUserId)
     .eq('state', 'active')
@@ -2850,55 +2976,29 @@ export async function findExistingActiveDmConversation(
     throw new Error(otherError.message);
   }
 
-  const candidateConversationIds = ((otherMemberships ?? []) as ConversationMembershipLookupRow[])
-    .filter((row) => normalizeConversation(row.conversations)?.kind === 'dm')
-    .map((row) => row.conversation_id)
-    .filter(Boolean);
-
-  if (candidateConversationIds.length === 0) {
-    return null;
-  }
-
-  const { data: candidateMembers, error: candidateMembersError } = await supabase
-    .from('conversation_members')
-    .select('conversation_id, user_id')
-    .in('conversation_id', candidateConversationIds)
-    .eq('state', 'active');
-
-  if (candidateMembersError) {
-    throw new Error(candidateMembersError.message);
-  }
-
-  const expectedUserIds = new Set([creatorUserId, otherUserId]);
-  const memberIdsByConversation = new Map<string, Set<string>>();
-
-  for (const row of (candidateMembers ?? []) as Array<{
-    conversation_id: string;
-    user_id: string;
-  }>) {
-    const memberIds =
-      memberIdsByConversation.get(row.conversation_id) ?? new Set<string>();
-    memberIds.add(row.user_id);
-    memberIdsByConversation.set(row.conversation_id, memberIds);
-  }
-
-  const exactPairConversationId = candidateConversationIds.find((conversationId) => {
-    const memberIds = memberIdsByConversation.get(conversationId);
-
-    if (!memberIds || memberIds.size !== expectedUserIds.size) {
-      return false;
-    }
-
-    for (const userId of expectedUserIds) {
-      if (!memberIds.has(userId)) {
-        return false;
-      }
-    }
-
-    return true;
+  return selectCanonicalExactPairDmConversationId({
+    supabase,
+    candidateRows: (otherMemberships ?? []) as Array<{
+      conversation_id: string;
+      conversations:
+        | {
+            id: string;
+            kind: string | null;
+            space_id?: string | null;
+            created_at?: string | null;
+            last_message_at?: string | null;
+          }
+        | Array<{
+            id: string;
+            kind: string | null;
+            space_id?: string | null;
+            created_at?: string | null;
+            last_message_at?: string | null;
+          }>
+        | null;
+    }>,
+    expectedUserIds: [creatorUserId, otherUserId],
   });
-
-  return exactPairConversationId ?? null;
 }
 
 export async function createConversationWithMembers(input: {
@@ -2942,6 +3042,10 @@ export async function createConversationWithMembers(input: {
 
   if (participantUserIds.length === 0) {
     throw new Error('At least one participant is required.');
+  }
+
+  if (input.kind === 'dm' && participantUserIds.length !== 1) {
+    throw new Error('Direct-message creation requires exactly one other participant.');
   }
 
   if (input.kind === 'dm') {
