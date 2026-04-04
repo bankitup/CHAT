@@ -63,7 +63,6 @@ export function AppShellFrame({
               }
               href={navSpaceHref('/inbox')}
             >
-              <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.chats}</span>
             </Link>
 
@@ -76,7 +75,6 @@ export function AppShellFrame({
               }
               href={navSpaceHref('/inbox?filter=dm')}
             >
-              <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.dms}</span>
             </Link>
 
@@ -89,7 +87,6 @@ export function AppShellFrame({
               }
               href={navSpaceHref('/activity')}
             >
-              <span className="app-bottom-nav-dot" aria-hidden="true" />
               <span className="app-bottom-nav-label">{t.shell.activity}</span>
             </Link>
           </div>

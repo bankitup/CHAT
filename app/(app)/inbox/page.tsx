@@ -769,14 +769,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar
                       label={conversation.title}
-                      size="sm"
+                      size="md"
                     />
                   ) : (
                     <IdentityAvatar
                       diagnosticsSurface="inbox:conversation-row"
                       identity={conversation.participants[0]}
                       label={conversation.title}
-                      size="sm"
+                      size="md"
                     />
                   )}
 

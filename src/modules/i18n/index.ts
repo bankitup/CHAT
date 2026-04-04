@@ -348,10 +348,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Primary navigation',
-      chats: 'Chats',
+      chats: 'Home',
       dms: 'DMs',
       activity: 'Activity',
-      openChats: 'Open chats',
+      openChats: 'Open home',
       openDms: 'Open direct messages',
       openActivity: 'Open activity',
     },
@@ -442,7 +442,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       availableNote: 'You can turn this on now. Message alerts are coming soon.',
     },
     inbox: {
-      title: 'Chats',
+      title: 'Home',
       dmTitle: 'DMs',
       subtitleNew: (count) => `${count} new`,
       subtitleDmNew: (count) => `${count} new direct ${count === 1 ? 'chat' : 'chats'}`,
@@ -673,10 +673,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Основная навигация',
-      chats: 'Чаты',
+      chats: 'Главная',
       dms: 'Личные',
       activity: 'Активность',
-      openChats: 'Открыть чаты',
+      openChats: 'Открыть главную',
       openDms: 'Открыть личные чаты',
       openActivity: 'Открыть активность',
     },
@@ -767,7 +767,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       availableNote: 'Можно включить уже сейчас. Оповещения о сообщениях появятся позже.',
     },
     inbox: {
-      title: 'Чаты',
+      title: 'Главная',
       dmTitle: 'Личные',
       subtitleNew: (count) => `${count} новых`,
       subtitleDmNew: (count) => `${count} новых ${getRussianCountWord(count, ['личный чат', 'личных чата', 'личных чатов'])}`,
