@@ -87,6 +87,21 @@ type LanguageDictionary = {
     languageRussian: string;
     languageSaveEnglish: string;
     languageSaveRussian: string;
+    statusTitle: string;
+    statusSubtitle: string;
+    statusEmpty: string;
+    statusEmoji: string;
+    statusText: string;
+    statusEmojiPlaceholder: string;
+    statusTextPlaceholder: string;
+    statusSave: string;
+    statusEdit: string;
+    statusClear: string;
+    statusUpdated: string;
+    statusTextHint: string;
+    statusEmojiTooLong: string;
+    statusTextTooLong: string;
+    statusUpdateFailed: string;
     logoutTitle: string;
     logoutSubtitle: string;
     logoutButton: string;
@@ -473,6 +488,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       languageRussian: 'Russian',
       languageSaveEnglish: 'Use English',
       languageSaveRussian: 'Use Russian',
+      statusTitle: 'Status',
+      statusSubtitle: 'A short note for your profile and future chat surfaces.',
+      statusEmpty: 'No status set yet.',
+      statusEmoji: 'Emoji',
+      statusText: 'Status text',
+      statusEmojiPlaceholder: '✨',
+      statusTextPlaceholder: 'Heads down, in calls, available later...',
+      statusSave: 'Save status',
+      statusEdit: 'Edit status',
+      statusClear: 'Clear status',
+      statusUpdated: 'Status updated.',
+      statusTextHint: 'Keep it short, up to 80 characters.',
+      statusEmojiTooLong: 'Emoji status can be up to 16 characters.',
+      statusTextTooLong: 'Status text can be up to 80 characters.',
+      statusUpdateFailed: 'Unable to update your status right now.',
       logoutTitle: 'Log out',
       logoutSubtitle: 'Sign out on this device',
       logoutButton: 'Log out',
@@ -875,6 +905,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       languageRussian: 'Русский',
       languageSaveEnglish: 'Использовать English',
       languageSaveRussian: 'Использовать русский',
+      statusTitle: 'Статус',
+      statusSubtitle: 'Короткая заметка для профиля и будущих поверхностей чатов.',
+      statusEmpty: 'Статус пока не задан.',
+      statusEmoji: 'Эмодзи',
+      statusText: 'Текст статуса',
+      statusEmojiPlaceholder: '✨',
+      statusTextPlaceholder: 'На созвоне, занят, доступен позже...',
+      statusSave: 'Сохранить статус',
+      statusEdit: 'Изменить статус',
+      statusClear: 'Очистить статус',
+      statusUpdated: 'Статус обновлён.',
+      statusTextHint: 'Коротко, до 80 символов.',
+      statusEmojiTooLong: 'Эмодзи-статус может быть до 16 символов.',
+      statusTextTooLong: 'Текст статуса может быть до 80 символов.',
+      statusUpdateFailed: 'Сейчас не удалось обновить статус.',
       logoutTitle: 'Выйти',
       logoutSubtitle: 'Выйти на этом устройстве',
       logoutButton: 'Выйти',

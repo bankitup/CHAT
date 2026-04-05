@@ -380,6 +380,9 @@ export type CurrentUserProfile = {
   displayName: string | null;
   avatarPath: string | null;
   preferredLanguage: AppLanguage | null;
+  statusEmoji: string | null;
+  statusText: string | null;
+  statusUpdatedAt: string | null;
 };
 
 export type ConversationReadState = {
@@ -2259,18 +2262,51 @@ export async function getCurrentUserProfile(userId: string, email?: string | nul
   const supabase = await createSupabaseServerClient();
   const [identity] = await getProfileIdentities([userId]);
   let preferredLanguage: AppLanguage | null = null;
+  let statusEmoji: string | null = null;
+  let statusText: string | null = null;
+  let statusUpdatedAt: string | null = null;
 
   const withLanguage = await supabase
     .from('profiles')
-    .select('preferred_language')
+    .select('preferred_language, status_emoji, status_text, status_updated_at')
     .eq('user_id', userId)
     .maybeSingle();
 
   if (!withLanguage.error) {
-    const rawLanguage = (
-      withLanguage.data as { preferred_language?: string | null } | null
-    )?.preferred_language;
+    const row = withLanguage.data as
+      | {
+          preferred_language?: string | null;
+          status_emoji?: string | null;
+          status_text?: string | null;
+          status_updated_at?: string | null;
+        }
+      | null;
+    const rawLanguage = row?.preferred_language;
     preferredLanguage = rawLanguage ? normalizeLanguage(rawLanguage) : null;
+    statusEmoji = row?.status_emoji?.trim() || null;
+    statusText = row?.status_text?.trim() || null;
+    statusUpdatedAt = row?.status_updated_at?.trim() || null;
+  } else if (
+    isMissingColumnErrorMessage(withLanguage.error.message, 'status_emoji') ||
+    isMissingColumnErrorMessage(withLanguage.error.message, 'status_text') ||
+    isMissingColumnErrorMessage(withLanguage.error.message, 'status_updated_at')
+  ) {
+    const languageOnly = await supabase
+      .from('profiles')
+      .select('preferred_language')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!languageOnly.error) {
+      const rawLanguage = (
+        languageOnly.data as { preferred_language?: string | null } | null
+      )?.preferred_language;
+      preferredLanguage = rawLanguage ? normalizeLanguage(rawLanguage) : null;
+    } else if (
+      !isMissingColumnErrorMessage(languageOnly.error.message, 'preferred_language')
+    ) {
+      throw new Error(languageOnly.error.message);
+    }
   } else if (!isMissingColumnErrorMessage(withLanguage.error.message, 'preferred_language')) {
     throw new Error(withLanguage.error.message);
   }
@@ -2281,6 +2317,9 @@ export async function getCurrentUserProfile(userId: string, email?: string | nul
     displayName: identity?.displayName ?? null,
     avatarPath: identity?.avatarPath ?? null,
     preferredLanguage,
+    statusEmoji,
+    statusText,
+    statusUpdatedAt,
   } satisfies CurrentUserProfile;
 }
 
@@ -4383,6 +4422,99 @@ export async function updateCurrentUserProfile(input: {
     (uploadedAvatarObjectPath || shouldRemoveAvatar)
   ) {
     await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([existingAvatarPath]);
+  }
+}
+
+export async function updateCurrentUserStatus(input: {
+  userId: string;
+  statusEmoji: string | null;
+  statusText: string | null;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Authenticated user is required to update status.');
+  }
+
+  const user = await requireRequestViewer('Profile status debug');
+
+  if (!user?.id) {
+    throw new Error('Profile status debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Profile status debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const nextStatusEmoji = input.statusEmoji?.trim() || null;
+  const nextStatusText = input.statusText?.trim() || null;
+  const nextStatusUpdatedAt =
+    nextStatusEmoji || nextStatusText ? new Date().toISOString() : null;
+
+  if (nextStatusEmoji && nextStatusEmoji.length > 16) {
+    throw new Error('Status emoji can be up to 16 characters.');
+  }
+
+  if (nextStatusText && nextStatusText.length > 80) {
+    throw new Error('Status text can be up to 80 characters.');
+  }
+
+  const existingProfileResponse = await supabase
+    .from('profiles')
+    .select('user_id')
+    .eq('user_id', input.userId)
+    .maybeSingle();
+
+  if (existingProfileResponse.error) {
+    logProfileSettingsDiagnostics('status-profile-lookup-error', {
+      userId: input.userId,
+      ...getSupabaseErrorDiagnostics(existingProfileResponse.error),
+      message: existingProfileResponse.error.message,
+    });
+    throw new Error(existingProfileResponse.error.message);
+  }
+
+  const profileExists = Boolean(existingProfileResponse.data);
+  const statusPayload = {
+    status_emoji: nextStatusEmoji,
+    status_text: nextStatusText,
+    status_updated_at: nextStatusUpdatedAt,
+  };
+  const profileWrite = profileExists
+    ? await supabase
+        .from('profiles')
+        .update(statusPayload)
+        .eq('user_id', input.userId)
+    : await supabase.from('profiles').insert({
+        user_id: input.userId,
+        ...statusPayload,
+      });
+
+  if (profileWrite.error) {
+    logProfileSettingsDiagnostics('status-profile-write-error', {
+      operation: profileExists ? 'update-existing-profile' : 'insert-missing-profile',
+      userId: input.userId,
+      ...getSupabaseErrorDiagnostics(profileWrite.error),
+      message: profileWrite.error.message,
+    });
+
+    if (
+      isMissingColumnErrorMessage(profileWrite.error.message, 'status_emoji') ||
+      isMissingColumnErrorMessage(profileWrite.error.message, 'status_text') ||
+      isMissingColumnErrorMessage(profileWrite.error.message, 'status_updated_at')
+    ) {
+      throw createSchemaRequirementError(
+        'Profile status requires profiles.status_emoji, profiles.status_text, and profiles.status_updated_at.',
+      );
+    }
+
+    if (profileWrite.error.message.includes('row-level security policy')) {
+      throw new Error('Profile status update was blocked by profiles RLS.');
+    }
+
+    throw new Error(profileWrite.error.message);
   }
 }
 

@@ -1,6 +1,7 @@
 import { logoutAction } from '../actions';
 import { updateLanguagePreferenceAction } from './actions';
 import { ProfileSettingsForm } from './profile-settings-form';
+import { ProfileStatusForm } from './profile-status-form';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
@@ -174,6 +175,31 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
                 avatarEditorLoadFailed: t.settings.avatarEditorLoadFailed,
                 avatarEditorApplyBeforeSave: t.settings.avatarEditorApplyBeforeSave,
               }}
+            />
+          </section>
+
+          <section className="card stack settings-surface settings-home-card">
+            <ProfileStatusForm
+              defaultStatusEmoji={profile.statusEmoji ?? ''}
+              defaultStatusText={profile.statusText ?? ''}
+              labels={{
+                statusTitle: t.settings.statusTitle,
+                statusSubtitle: t.settings.statusSubtitle,
+                statusEmpty: t.settings.statusEmpty,
+                statusEmoji: t.settings.statusEmoji,
+                statusText: t.settings.statusText,
+                statusEmojiPlaceholder: t.settings.statusEmojiPlaceholder,
+                statusTextPlaceholder: t.settings.statusTextPlaceholder,
+                statusSave: t.settings.statusSave,
+                statusEdit: t.settings.statusEdit,
+                statusClear: t.settings.statusClear,
+                cancelEdit: t.settings.cancelEdit,
+                statusTextHint: t.settings.statusTextHint,
+                statusEmojiTooLong: t.settings.statusEmojiTooLong,
+                statusTextTooLong: t.settings.statusTextTooLong,
+              }}
+              language={language}
+              statusUpdatedAt={profile.statusUpdatedAt}
             />
           </section>
         </section>

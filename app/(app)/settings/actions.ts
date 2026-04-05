@@ -9,6 +9,7 @@ import {
   removeCurrentUserAvatar,
   updateCurrentUserLanguagePreference,
   updateCurrentUserProfile,
+  updateCurrentUserStatus,
 } from '@/modules/messaging/data/server';
 import {
   logControlledUiError,
@@ -162,4 +163,47 @@ export async function updateLanguagePreferenceAction(formData: FormData) {
   }
 
   redirectWithMessage('message', t.settings.languageUpdated);
+}
+
+export async function updateProfileStatusAction(formData: FormData) {
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
+  const statusEmoji = String(formData.get('statusEmoji') ?? '').trim();
+  const statusText = String(formData.get('statusText') ?? '').trim();
+  const user = await getRequestViewer();
+
+  if (!user?.id) {
+    redirectWithMessage('error', t.login.managedAccess);
+  }
+
+  if (statusEmoji.length > 16) {
+    redirectWithMessage('error', t.settings.statusEmojiTooLong);
+  }
+
+  if (statusText.length > 80) {
+    redirectWithMessage('error', t.settings.statusTextTooLong);
+  }
+
+  try {
+    await updateCurrentUserStatus({
+      userId: user.id,
+      statusEmoji: statusEmoji || null,
+      statusText: statusText || null,
+    });
+  } catch (error) {
+    redirectWithMessage(
+      'error',
+      getProfileSettingsErrorMessage(
+        error,
+        t.settings.statusUpdateFailed,
+        t.settings.statusUpdateFailed,
+      ),
+    );
+  }
+
+  revalidatePath('/settings');
+  revalidatePath('/inbox');
+  revalidatePath('/activity');
+  revalidatePath('/', 'layout');
+  redirectWithMessage('message', t.settings.statusUpdated);
 }
