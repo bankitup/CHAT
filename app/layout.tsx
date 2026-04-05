@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { getCookieLanguage } from '@/modules/i18n/server';
 import './globals.css';
 
@@ -44,7 +45,10 @@ export default async function RootLayout({
 
   return (
     <html lang={language}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
