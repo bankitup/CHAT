@@ -14,7 +14,7 @@ import {
 } from '@/modules/messaging/profile-avatar';
 import { updateProfileAction } from './actions';
 
-const AVATAR_EDITOR_PREVIEW_SIZE = 260;
+const AVATAR_EDITOR_PREVIEW_SIZE = 236;
 const AVATAR_EDITOR_OUTPUT_SIZE = 512;
 const AVATAR_EDITOR_MIN_ZOOM = 1;
 const AVATAR_EDITOR_MAX_ZOOM = 3;
