@@ -433,37 +433,43 @@ export default async function ChatPage({
 
   const isSettingsOpen = query.settings === 'open';
   const hasSettingsSavedState = query.saved === '1';
-  const messages = await getConversationMessages(conversationId);
-  const readState = await getConversationReadState(conversationId, user.id);
-  const memberReadStates = await getConversationMemberReadStates(conversationId);
-  const participants = await getConversationParticipants(conversationId);
+  const [messages, readState, memberReadStates, participants] =
+    await Promise.all([
+      getConversationMessages(conversationId),
+      getConversationReadState(conversationId, user.id),
+      getConversationMemberReadStates(conversationId),
+      getConversationParticipants(conversationId),
+    ]);
   // Temporary v1 unblocker: do not trigger space_members-backed available user lookup in TEST bypass flow.
   const availableUsers =
     conversation.kind === 'group' && isSettingsOpen && !isV1TestBypass
       ? await getAvailableUsers(user.id, { spaceId: activeSpaceId })
       : [];
-  const senderProfiles = await getMessageSenderProfiles(
-    Array.from(
-      new Set([
-        ...messages.map((message) => message.sender_id ?? ''),
-        ...participants.map((participant) => participant.userId),
-        ...availableUsers.map((availableUser) => availableUser.userId),
-      ]),
-    ),
+  const messageIds = messages.map((message) => message.id);
+  const encryptedMessageIds = messages
+    .filter((message) => isEncryptedDmTextMessage(message))
+    .map((message) => message.id);
+  const senderProfileIds = Array.from(
+    new Set([
+      ...messages.map((message) => message.sender_id ?? ''),
+      ...participants.map((participant) => participant.userId),
+      ...availableUsers.map((availableUser) => availableUser.userId),
+    ]),
   );
-  const reactionsByMessage = await getGroupedReactionsForMessages(
-    messages.map((message) => message.id),
-    user.id,
-  );
-  const attachmentsByMessage = await getMessageAttachments(
-    messages.map((message) => message.id),
-  );
-  const e2eeEnvelopesByMessage = await getCurrentUserDmE2eeEnvelopesForMessages({
-    userId: user.id,
-    messageIds: messages
-      .filter((message) => isEncryptedDmTextMessage(message))
-      .map((message) => message.id),
-  });
+  const [
+    senderProfiles,
+    reactionsByMessage,
+    attachmentsByMessage,
+    e2eeEnvelopesByMessage,
+  ] = await Promise.all([
+    getMessageSenderProfiles(senderProfileIds),
+    getGroupedReactionsForMessages(messageIds, user.id),
+    getMessageAttachments(messageIds),
+    getCurrentUserDmE2eeEnvelopesForMessages({
+      userId: user.id,
+      messageIds: encryptedMessageIds,
+    }),
+  ]);
   const senderNames = new Map<string, string>(
     senderProfiles.map((profile) => [
       profile.userId,

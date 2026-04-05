@@ -29,7 +29,7 @@ export function AppShellFrame({
   const isSettingsRoute = pathname.startsWith('/settings');
   const activeSpaceId = searchParams.get('space');
   const navSpaceHref = (pathname: string) =>
-    activeSpaceId ? withSpaceParam(pathname, activeSpaceId) : '/spaces';
+    activeSpaceId ? withSpaceParam(pathname, activeSpaceId) : pathname;
   const showBottomNav = !isChatRoute && !isSpacesRoute;
   const activeTab = isActivityRoute
     ? 'activity'

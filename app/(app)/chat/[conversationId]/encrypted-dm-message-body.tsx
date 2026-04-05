@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import { reinitializeLocalDmE2eeStateForUser } from '@/modules/messaging/e2ee/lifecycle';
 import { decryptStoredDmEnvelope } from '@/modules/messaging/e2ee/prekey-encrypt';
@@ -45,6 +45,7 @@ export function EncryptedDmMessageBody({
   shouldCachePreview = false,
 }: EncryptedDmMessageBodyProps) {
   const router = useRouter();
+  const [, startRefreshTransition] = useTransition();
   const [plaintext, setPlaintext] = useState<string | null>(null);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [failureKind, setFailureKind] = useState<EncryptedDmFailureKind>('unavailable');
@@ -205,7 +206,11 @@ export function EncryptedDmMessageBody({
           ) : null}
           <button
             className="button button-secondary button-compact message-encryption-action"
-            onClick={() => router.refresh()}
+            onClick={() => {
+              startRefreshTransition(() => {
+                router.refresh();
+              });
+            }}
             type="button"
           >
             {reloadConversationLabel}

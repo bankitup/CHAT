@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import type {
   DmE2eeApiErrorCode,
@@ -449,6 +449,7 @@ export function EncryptedDmComposerForm({
   spaceId,
 }: EncryptedDmComposerFormProps) {
   const router = useRouter();
+  const [, startNavigationTransition] = useTransition();
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -598,8 +599,9 @@ export function EncryptedDmComposerForm({
           }
 
           form.reset();
-          router.replace(withSpaceParam(`/chat/${conversationId}`, spaceId));
-          router.refresh();
+          startNavigationTransition(() => {
+            router.replace(withSpaceParam(`/chat/${conversationId}`, spaceId));
+          });
         } catch (error) {
           const nextCode =
             error instanceof Error && 'code' in error
@@ -1064,7 +1066,9 @@ export function EncryptedDmComposerForm({
                 setErrorMessage(null);
                 setErrorCode(null);
                 setErrorDebugDetails(null);
-                router.refresh();
+                startNavigationTransition(() => {
+                  router.refresh();
+                });
               }}
               type="button"
             >

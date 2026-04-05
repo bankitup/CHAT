@@ -145,10 +145,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     return null;
   }
 
-  if (!query.space?.trim()) {
-    redirect('/spaces');
-  }
-
   let activeSpaceId: string | null = null;
   const explicitV1TestSpace = await resolveV1TestSpaceFallback({
     requestedSpaceId: query.space,

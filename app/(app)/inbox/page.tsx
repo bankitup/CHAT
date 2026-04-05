@@ -257,11 +257,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   }
   logDiagnostics('auth-ok');
 
-  if (!query.space?.trim()) {
-    logDiagnostics('missing-space-redirect');
-    redirect('/spaces');
-  }
-
   let activeSpaceId: string;
   const explicitV1TestSpace = await resolveV1TestSpaceFallback({
     requestedSpaceId: query.space,

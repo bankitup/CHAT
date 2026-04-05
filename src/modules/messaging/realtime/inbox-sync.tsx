@@ -2,7 +2,7 @@
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useTransition } from 'react';
 
 type InboxRealtimeSyncProps = {
   conversationIds: string[];
@@ -14,6 +14,7 @@ export function InboxRealtimeSync({
   userId,
 }: InboxRealtimeSyncProps) {
   const router = useRouter();
+  const [, startRefreshTransition] = useTransition();
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -32,9 +33,25 @@ export function InboxRealtimeSync({
       }
 
       refreshTimeoutRef.current = setTimeout(() => {
-        router.refresh();
         refreshTimeoutRef.current = null;
+        startRefreshTransition(() => {
+          router.refresh();
+        });
       }, 220);
+    };
+
+    const scheduleForegroundRefresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+
+      scheduleRefresh();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        scheduleRefresh();
+      }
     };
 
     const scheduleMessageRefresh = (payload: {
@@ -88,15 +105,19 @@ export function InboxRealtimeSync({
     );
 
     channel.subscribe();
+    window.addEventListener('focus', scheduleForegroundRefresh);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
 
+      window.removeEventListener('focus', scheduleForegroundRefresh);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       void supabase.removeChannel(channel);
     };
-  }, [conversationIds, router, userId]);
+  }, [conversationIds, router, startRefreshTransition, userId]);
 
   return null;
 }

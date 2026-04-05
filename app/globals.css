@@ -1870,7 +1870,7 @@ main {
 }
 
 .settings-hero {
-  gap: 9px;
+  gap: 8px;
   padding: 4px 2px 2px;
 }
 
@@ -1880,7 +1880,7 @@ main {
 }
 
 .settings-hero-copy {
-  gap: 3px;
+  gap: 2px;
 }
 
 .settings-hero-title {
@@ -1889,12 +1889,6 @@ main {
   font-size: clamp(1.95rem, 8vw, 2.45rem);
   line-height: 0.98;
   letter-spacing: -0.05em;
-}
-
-.settings-hero-note {
-  font-size: 0.84rem;
-  line-height: 1.38;
-  color: rgba(91, 100, 112, 0.88);
 }
 
 .settings-hero-pills {
@@ -2310,11 +2304,12 @@ main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  padding: 10px 0 2px;
+  gap: 14px;
+  padding: 12px 0 4px;
 }
 
 .profile-inline-avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2322,6 +2317,16 @@ main {
   border: 0;
   background: transparent;
   cursor: default;
+  border-radius: 999px;
+}
+
+.profile-inline-avatar .identity-avatar {
+  width: 72px;
+  height: 72px;
+  font-size: 1.28rem;
+  box-shadow:
+    0 10px 24px rgba(17, 24, 39, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .profile-inline-avatar-editable {
@@ -2330,8 +2335,29 @@ main {
 
 .profile-inline-avatar-editable .identity-avatar {
   box-shadow:
-    0 0 0 3px rgba(31, 111, 235, 0.08),
-    0 10px 20px rgba(17, 24, 39, 0.06);
+    0 0 0 4px rgba(31, 111, 235, 0.08),
+    0 14px 28px rgba(17, 24, 39, 0.08);
+}
+
+.profile-inline-avatar-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.96);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(48, 126, 245, 0.98), rgba(31, 111, 235, 0.98));
+  color: #fff;
+  font-size: 0.72rem;
+  line-height: 1;
+  box-shadow:
+    0 8px 18px rgba(31, 111, 235, 0.18),
+    0 1px 2px rgba(17, 24, 39, 0.08);
 }
 
 .profile-inline-copy {

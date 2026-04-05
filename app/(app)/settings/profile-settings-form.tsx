@@ -281,6 +281,11 @@ export function ProfileSettingsForm({
               label={visibleDisplayName || labels.profilePhoto}
               size="lg"
             />
+            {isEditing ? (
+              <span aria-hidden="true" className="profile-inline-avatar-badge">
+                ✎
+              </span>
+            ) : null}
           </button>
 
           <div className="stack profile-inline-copy">

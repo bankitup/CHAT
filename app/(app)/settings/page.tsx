@@ -66,7 +66,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           />
 
           <div className="stack profile-settings-copy settings-hero-copy">
-            <p className="eyebrow">{t.shell.home}</p>
             <h1 className="settings-hero-title">{profileLabel}</h1>
             <p className="muted profile-settings-email">
               {profile.email ?? t.settings.profileFallback}
@@ -81,7 +80,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             </span>
           ) : null}
         </div>
-        <p className="muted settings-hero-note">{t.settings.heroNote}</p>
       </section>
 
       {params.error ? <p className="notice notice-error">{params.error}</p> : null}

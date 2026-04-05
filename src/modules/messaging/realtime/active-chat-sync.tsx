@@ -2,7 +2,7 @@
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useTransition } from 'react';
 
 type ActiveChatRealtimeSyncProps = {
   conversationId: string;
@@ -14,6 +14,7 @@ export function ActiveChatRealtimeSync({
   messageIds,
 }: ActiveChatRealtimeSyncProps) {
   const router = useRouter();
+  const [, startRefreshTransition] = useTransition();
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -28,9 +29,25 @@ export function ActiveChatRealtimeSync({
       }
 
       refreshTimeoutRef.current = setTimeout(() => {
-        router.refresh();
         refreshTimeoutRef.current = null;
+        startRefreshTransition(() => {
+          router.refresh();
+        });
       }, 180);
+    };
+
+    const scheduleForegroundRefresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+
+      scheduleRefresh();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        scheduleRefresh();
+      }
     };
 
     const scheduleReactionRefresh = (payload: {
@@ -73,14 +90,19 @@ export function ActiveChatRealtimeSync({
       }, scheduleReactionRefresh)
       .subscribe();
 
+    window.addEventListener('focus', scheduleForegroundRefresh);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
 
+      window.removeEventListener('focus', scheduleForegroundRefresh);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       void supabase.removeChannel(channel);
     };
-  }, [conversationId, messageIds, router]);
+  }, [conversationId, messageIds, router, startRefreshTransition]);
 
   return null;
 }
