@@ -9,6 +9,19 @@ import type {
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { publishCurrentUserDmE2eeDevice } from '@/modules/messaging/data/server';
 
+function isMissingDmE2eeSchemaMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedMessage.includes('user_devices') ||
+    normalizedMessage.includes('device_one_time_prekeys') ||
+    normalizedMessage.includes('identity_key_public') ||
+    normalizedMessage.includes('signed_prekey_public') ||
+    normalizedMessage.includes('signed_prekey_signature') ||
+    normalizedMessage.includes('retired_at')
+  );
+}
+
 function logDmE2eeDeviceRouteDiagnostics(
   stage: string,
   details?: Record<string, unknown>,
@@ -315,4 +328,64 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+}
+
+export async function GET() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+
+  if (
+    !isDmE2eeEnabledForUser(user.id, user.email ?? null, {
+      source: 'api-dm-e2ee-device:get',
+    })
+  ) {
+    return NextResponse.json(
+      {
+        error: 'Encrypted direct messages are not enabled for this account yet.',
+        code: 'dm_e2ee_rollout_disabled',
+      },
+      { status: 403 },
+    );
+  }
+
+  const { data, error } = await supabase
+    .from('user_devices')
+    .select('id, device_id, retired_at')
+    .eq('user_id', user.id)
+    .is('retired_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    if (isMissingDmE2eeSchemaMessage(error.message)) {
+      return NextResponse.json(
+        {
+          error: 'DM E2EE bootstrap schema is missing.',
+          code: 'dm_e2ee_schema_missing',
+        },
+        { status: 409 },
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Unable to inspect encrypted device state right now.',
+      },
+      { status: 400 },
+    );
+  }
+
+  const activeDeviceRowIds = ((data ?? []) as Array<{ id?: string | null }>)
+    .map((row) => row.id?.trim() || null)
+    .filter((value): value is string => Boolean(value));
+
+  return NextResponse.json({
+    activeDeviceRowIds,
+    hasActiveDevice: activeDeviceRowIds.length > 0,
+  });
 }

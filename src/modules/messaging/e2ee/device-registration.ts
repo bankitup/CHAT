@@ -27,6 +27,11 @@ type EnsureDmE2eeDeviceRegisteredOptions = {
   publishAttempt?: 'initial' | 'manual-refresh' | 'repair-republish';
 };
 
+type DmE2eeServerDeviceState = {
+  activeDeviceRowIds: string[];
+  hasActiveDevice: boolean;
+};
+
 function shouldLogDmE2eeBootstrapClientDiagnostics() {
   return (
     typeof window !== 'undefined' &&
@@ -251,6 +256,47 @@ function buildPublishRequest(
   };
 }
 
+async function fetchServerDmE2eeDeviceState() {
+  const response = await fetch('/api/messaging/dm-e2ee/device', {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  const payload = (await response.json()) as {
+    activeDeviceRowIds?: string[] | null;
+    code?: string | null;
+    error?: string | null;
+    hasActiveDevice?: boolean | null;
+  };
+
+  if (!response.ok) {
+    if (payload.code === 'dm_e2ee_schema_missing') {
+      return {
+        status: 'schema-missing' as const,
+        state: null,
+      };
+    }
+
+    throw new Error(
+      payload.error || 'Unable to inspect encrypted device state.',
+    );
+  }
+
+  return {
+    status: 'ok' as const,
+    state: {
+      activeDeviceRowIds: Array.isArray(payload.activeDeviceRowIds)
+        ? payload.activeDeviceRowIds
+            .map((value) => value?.trim())
+            .filter((value): value is string => Boolean(value))
+        : [],
+      hasActiveDevice: Boolean(payload.hasActiveDevice),
+    } satisfies DmE2eeServerDeviceState,
+  };
+}
+
 export async function ensureDmE2eeDeviceRegistered(
   userId: string,
   options: EnsureDmE2eeDeviceRegisteredOptions = {},
@@ -327,6 +373,30 @@ export async function ensureDmE2eeDeviceRegistered(
   }
 
   if (localRecord.serverDeviceRecordId && !options.forcePublish) {
+    const serverState = await fetchServerDmE2eeDeviceState();
+
+    if (serverState.status === 'schema-missing') {
+      return {
+        status: 'schema-missing',
+        result: null,
+      } satisfies {
+        status: DmE2eeBootstrapStatus;
+        result: null;
+      };
+    }
+
+    const serverStillMatches =
+      serverState.state.hasActiveDevice &&
+      serverState.state.activeDeviceRowIds.includes(localRecord.serverDeviceRecordId);
+
+    if (!serverStillMatches) {
+      logDmE2eeBootstrapClientDiagnostics('publish:stale-server-state', {
+        currentUserId: userId,
+        localServerDeviceRecordId: localRecord.serverDeviceRecordId,
+        activeDeviceRowIds: serverState.state.activeDeviceRowIds,
+        hasActiveDevice: serverState.state.hasActiveDevice,
+      });
+    } else {
     logDmE2eeBootstrapClientDiagnostics('publish:skip-already-registered', {
       currentUserId: userId,
       reusedExistingServerDeviceRecordId: localRecord.serverDeviceRecordId,
@@ -342,6 +412,7 @@ export async function ensureDmE2eeDeviceRegistered(
       status: DmE2eeBootstrapStatus;
       result: PublishDmE2eeDeviceResult;
     };
+    }
   }
 
   const response = await fetch('/api/messaging/dm-e2ee/device', {
