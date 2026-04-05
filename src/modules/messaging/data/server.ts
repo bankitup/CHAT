@@ -192,6 +192,7 @@ type ConversationRecord = {
   id: string;
   kind: string | null;
   title?: string | null;
+  avatar_path?: string | null;
   space_id?: string | null;
   created_by?: string | null;
   last_message_at?: string | null;
@@ -212,6 +213,7 @@ export type InboxConversation = {
   conversationId: string;
   spaceId: string | null;
   title: string | null;
+  avatarPath: string | null;
   createdBy?: string | null;
   lastMessageAt: string | null;
   createdAt: string | null;
@@ -864,13 +866,16 @@ async function attachConversationsToMembershipRows(
 
   const { data, error } = await supabase
     .from('conversations')
-    .select('id, kind, title, space_id, created_by, last_message_at, created_at')
+    .select('id, kind, title, avatar_path, space_id, created_by, last_message_at, created_at')
     .in('id', conversationIds);
 
   let conversations = (data ?? null) as ConversationRecord[] | null;
 
   if (error) {
-    if (isMissingColumnErrorMessage(error.message, 'space_id')) {
+    if (
+      isMissingColumnErrorMessage(error.message, 'space_id') ||
+      isMissingColumnErrorMessage(error.message, 'avatar_path')
+    ) {
       if (options?.spaceId) {
         throw createSchemaRequirementError(
           'Active space scoping requires public.conversations.space_id.',
@@ -1022,8 +1027,8 @@ async function mapInboxConversations(
     }
   }
 
-  return rows
-    .map((row) => {
+  const mappedRows = await Promise.all(
+    rows.map(async (row) => {
       const conversation = normalizeConversation(row.conversations);
       const lastReadMessageSeq =
         typeof row.last_read_message_seq === 'number'
@@ -1040,6 +1045,10 @@ async function mapInboxConversations(
         spaceId: conversation?.space_id ?? null,
         kind: conversation?.kind ?? null,
         title: conversation?.title ?? null,
+        avatarPath: await resolveStoredAvatarPath(
+          supabase,
+          conversation?.avatar_path ?? null,
+        ),
         createdBy: conversation?.created_by ?? null,
         lastMessageAt: conversation?.last_message_at ?? null,
         createdAt: conversation?.created_at ?? null,
@@ -1054,13 +1063,15 @@ async function mapInboxConversations(
         latestMessageDeletedAt: latestMessage?.deletedAt ?? null,
         unreadCount,
       };
-    })
-    .sort((left, right) => {
-      const leftValue = left.lastMessageAt ?? left.createdAt ?? '';
-      const rightValue = right.lastMessageAt ?? right.createdAt ?? '';
+    }),
+  );
 
-      return rightValue.localeCompare(leftValue);
-    });
+  return mappedRows.sort((left, right) => {
+    const leftValue = left.lastMessageAt ?? left.createdAt ?? '';
+    const rightValue = right.lastMessageAt ?? right.createdAt ?? '';
+
+    return rightValue.localeCompare(leftValue);
+  });
 }
 
 export async function getInboxConversations(
@@ -1146,6 +1157,10 @@ export async function getConversationForUser(
         spaceId: fallbackConversation.space_id ?? null,
         kind: fallbackConversation.kind,
         title: fallbackConversation.title,
+        avatarPath: await resolveStoredAvatarPath(
+          supabase,
+          fallbackConversation.avatar_path ?? null,
+        ),
         createdBy: fallbackConversation.created_by ?? null,
         lastMessageAt: fallbackConversation.last_message_at,
         createdAt: fallbackConversation.created_at,
@@ -1183,6 +1198,10 @@ export async function getConversationForUser(
     spaceId: conversation.space_id ?? null,
     kind: conversation.kind,
     title: conversation.title,
+    avatarPath: await resolveStoredAvatarPath(
+      supabase,
+      conversation.avatar_path ?? null,
+    ),
     createdBy: conversation.created_by ?? null,
     lastMessageAt: conversation.last_message_at,
     createdAt: conversation.created_at,
@@ -1460,6 +1479,19 @@ function isManagedAvatarObjectPath(
   }
 
   return normalizedValue.startsWith(`${userId}/`);
+}
+
+function isManagedConversationAvatarObjectPath(
+  conversationId: string,
+  value: string | null | undefined,
+) {
+  const normalizedValue = value?.trim() || null;
+
+  if (!normalizedValue || isAbsoluteAvatarUrl(normalizedValue)) {
+    return false;
+  }
+
+  return normalizedValue.startsWith(`conversations/${conversationId}/`);
 }
 
 function isBucketNotFoundStorageErrorMessage(message: string) {
@@ -5052,6 +5084,178 @@ export async function updateConversationTitle(input: {
     }
 
     throw new Error(error.message);
+  }
+}
+
+export async function updateConversationIdentity(input: {
+  conversationId: string;
+  userId: string;
+  title: string;
+  avatarFile?: File | null;
+  removeAvatar?: boolean;
+}) {
+  const supabase = await createSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Authenticated user is required to edit group settings.');
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    throw new Error('Conversation settings debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Conversation settings debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const nextTitle = input.title.trim();
+
+  if (!nextTitle) {
+    throw new Error('Group title cannot be empty.');
+  }
+
+  if (nextTitle.length > 80) {
+    throw new Error('Group title can be up to 80 characters.');
+  }
+
+  const existingConversationResponse = await supabase
+    .from('conversations')
+    .select('kind, created_by, avatar_path')
+    .eq('id', input.conversationId)
+    .maybeSingle();
+
+  let existingConversation = existingConversationResponse.data as
+    | {
+        kind?: string | null;
+        created_by?: string | null;
+        avatar_path?: string | null;
+      }
+    | null;
+
+  if (existingConversationResponse.error) {
+    if (isMissingColumnErrorMessage(existingConversationResponse.error.message, 'avatar_path')) {
+      const fallbackConversationResponse = await supabase
+        .from('conversations')
+        .select('kind, created_by')
+        .eq('id', input.conversationId)
+        .maybeSingle();
+
+      if (fallbackConversationResponse.error) {
+        throw new Error(fallbackConversationResponse.error.message);
+      }
+
+      existingConversation = (fallbackConversationResponse.data as
+        | {
+            kind?: string | null;
+            created_by?: string | null;
+          }
+        | null) ?? null;
+    } else {
+      throw new Error(existingConversationResponse.error.message);
+    }
+  }
+
+  if (!existingConversation || existingConversation.kind !== 'group') {
+    throw new Error('Only group chats support editable chat identity.');
+  }
+
+  if ((existingConversation.created_by ?? null) !== input.userId) {
+    throw new Error('Only the group owner can edit chat identity.');
+  }
+
+  const existingAvatarPath = existingConversation.avatar_path?.trim() || null;
+  const avatarFile = input.avatarFile && input.avatarFile.size > 0 ? input.avatarFile : null;
+  const shouldRemoveAvatar = Boolean(input.removeAvatar) && !avatarFile;
+  let nextAvatarPath: string | null | undefined;
+  let uploadedAvatarObjectPath: string | null = null;
+
+  if (avatarFile) {
+    if (avatarFile.size > PROFILE_AVATAR_MAX_SIZE_BYTES) {
+      throw new Error('Avatar images can be up to 5 MB.');
+    }
+
+    if (!SUPPORTED_PROFILE_AVATAR_TYPES.has(avatarFile.type)) {
+      throw new Error('Avatar must be a JPG, PNG, WEBP, or GIF image.');
+    }
+
+    const serviceSupabase = createSupabaseServiceRoleClient();
+
+    if (!serviceSupabase) {
+      throw new Error('Chat avatar uploads are not available right now.');
+    }
+
+    const fileName = sanitizeProfileFileName(avatarFile.name);
+    const objectPath = `conversations/${input.conversationId}/${crypto.randomUUID()}-${fileName}`;
+    const { error: uploadError } = await serviceSupabase.storage
+      .from(PROFILE_AVATAR_BUCKET)
+      .upload(objectPath, avatarFile, {
+        upsert: false,
+        contentType: avatarFile.type,
+      });
+
+    if (uploadError) {
+      if (isBucketNotFoundStorageErrorMessage(uploadError.message)) {
+        throw new Error(getAvatarBucketRequirementErrorMessage());
+      }
+
+      throw new Error(uploadError.message);
+    }
+
+    uploadedAvatarObjectPath = objectPath;
+    nextAvatarPath = objectPath;
+  } else if (shouldRemoveAvatar) {
+    nextAvatarPath = null;
+  }
+
+  const updatePayload = {
+    title: nextTitle,
+    ...(nextAvatarPath !== undefined ? { avatar_path: nextAvatarPath } : {}),
+  };
+
+  const { error } = await supabase
+    .from('conversations')
+    .update(updatePayload)
+    .eq('id', input.conversationId)
+    .eq('kind', 'group')
+    .eq('created_by', input.userId);
+
+  if (error) {
+    if (uploadedAvatarObjectPath) {
+      await createSupabaseServiceRoleClient()
+        ?.storage.from(PROFILE_AVATAR_BUCKET)
+        .remove([uploadedAvatarObjectPath]);
+    }
+
+    if (isMissingColumnErrorMessage(error.message, 'avatar_path')) {
+      throw createSchemaRequirementError(
+        'Editable group avatars require public.conversations.avatar_path.',
+      );
+    }
+
+    if (error.message.includes('row-level security policy')) {
+      throw new Error(
+        'Conversation settings debug: identity update blocked by conversations RLS.',
+      );
+    }
+
+    throw new Error(error.message);
+  }
+
+  if (
+    existingAvatarPath &&
+    isManagedConversationAvatarObjectPath(input.conversationId, existingAvatarPath) &&
+    existingAvatarPath !== uploadedAvatarObjectPath &&
+    (uploadedAvatarObjectPath || shouldRemoveAvatar)
+  ) {
+    await createSupabaseServiceRoleClient()
+      ?.storage.from(PROFILE_AVATAR_BUCKET)
+      .remove([existingAvatarPath]);
   }
 }
 

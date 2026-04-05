@@ -28,6 +28,7 @@ type IdentityAvatarStackProps = {
 
 type GroupIdentityAvatarProps = {
   label: string;
+  avatarPath?: string | null;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 };
@@ -294,9 +295,25 @@ export function IdentityAvatarStack({
 
 export function GroupIdentityAvatar({
   label,
+  avatarPath,
   size = 'md',
   className,
 }: GroupIdentityAvatarProps) {
+  if (avatarPath) {
+    return (
+      <IdentityAvatar
+        className={className}
+        identity={{
+          userId: `group:${label}`,
+          displayName: label,
+          avatarPath,
+        }}
+        label={label}
+        size={size}
+      />
+    );
+  }
+
   const toneClass = getStableTone(`group:${label}`);
   const initials = getIdentityInitials(label);
 

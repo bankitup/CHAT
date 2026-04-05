@@ -24,6 +24,7 @@ import {
   sendMessageWithAttachment,
   sendTextMessage,
   toggleMessageReaction,
+  updateConversationIdentity,
   updateConversationNotificationLevel,
   updateConversationTitle,
 } from '@/modules/messaging/data/server';
@@ -474,7 +475,60 @@ export async function updateConversationTitleAction(formData: FormData) {
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectToChat(conversationId, spaceId);
+  redirectWithSettingsSaved(conversationId, spaceId);
+}
+
+export async function updateConversationIdentityAction(formData: FormData) {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
+  const title = String(formData.get('title') ?? '').trim();
+  const removeAvatar = String(formData.get('removeAvatar') ?? '').trim() === '1';
+  const avatarEntry = formData.get('avatar');
+  const avatarFile =
+    avatarEntry instanceof File && avatarEntry.size > 0 ? avatarEntry : null;
+
+  if (!conversationId) {
+    redirectToInbox(spaceId);
+  }
+
+  if (!title) {
+    redirectWithSettingsError(conversationId, 'Group title cannot be empty.', spaceId);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    redirectToInbox(spaceId);
+  }
+
+  try {
+    await updateConversationIdentity({
+      conversationId,
+      userId: user.id,
+      title,
+      avatarFile,
+      removeAvatar,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unable to update chat settings.';
+
+    redirectWithSettingsError(conversationId, message, spaceId);
+  }
+
+  revalidatePath('/inbox');
+  revalidatePath('/activity');
+  revalidatePath(`/chat/${conversationId}`);
+  redirectWithSettingsSaved(conversationId, spaceId);
 }
 
 export async function hideConversationAction(formData: FormData) {
@@ -610,7 +664,7 @@ export async function updateConversationNotificationLevelAction(
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirectToChat(conversationId, spaceId);
+  redirectWithSettingsSaved(conversationId, spaceId);
 }
 
 export async function markConversationReadAction(formData: FormData) {

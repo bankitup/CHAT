@@ -3045,6 +3045,73 @@ main {
   gap: 0;
 }
 
+.conversation-group-identity-form {
+  gap: 10px;
+}
+
+.conversation-group-identity-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.conversation-group-avatar-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.conversation-group-avatar-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(31, 111, 235, 0.96);
+  color: white;
+  font-size: 0.72rem;
+  box-shadow: 0 8px 18px rgba(31, 111, 235, 0.2);
+}
+
+.conversation-group-identity-fields {
+  gap: 7px;
+  min-width: 0;
+}
+
+.conversation-group-identity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.conversation-group-identity-cancel {
+  min-height: 30px;
+  padding-inline: 10px;
+}
+
+.conversation-settings-group-identity-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.conversation-settings-group-identity-copy {
+  gap: 3px;
+  min-width: 0;
+}
+
 .conversation-member-list {
   display: grid;
   gap: 0;

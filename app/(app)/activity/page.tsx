@@ -13,6 +13,7 @@ import {
   getDirectMessageDisplayName,
   getConversationParticipantIdentities,
   getInboxConversations,
+  type InboxConversation,
 } from '@/modules/messaging/data/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import {
@@ -38,6 +39,7 @@ type ActivityPageProps = {
 type ActivityItem = {
   conversationId: string;
   title: string;
+  groupAvatarPath: string | null;
   preview: string | null;
   recencyLabel: string;
   timestampLabel: string;
@@ -203,7 +205,10 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
   const language = await getRequestLanguage();
   const t = getTranslations(language);
-  const [conversations, archivedConversations] = await Promise.all([
+  const [conversations, archivedConversations]: [
+    InboxConversation[],
+    InboxConversation[],
+  ] = await Promise.all([
     getInboxConversations(user.id, { spaceId: activeSpaceId }),
     getArchivedConversations(user.id, { spaceId: activeSpaceId }),
   ]);
@@ -245,6 +250,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     return {
       conversationId: conversation.conversationId,
       title,
+      groupAvatarPath: conversation.avatarPath,
       preview: getInboxPreviewText(conversation, {
         deletedMessage: t.chat.deletedMessage,
         voiceMessage: t.chat.voiceMessage,
@@ -333,7 +339,11 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   prefetch
                 >
                   {conversation.isGroupConversation ? (
-                    <GroupIdentityAvatar label={conversation.title} size="sm" />
+                    <GroupIdentityAvatar
+                      avatarPath={conversation.groupAvatarPath}
+                      label={conversation.title}
+                      size="sm"
+                    />
                   ) : (
                     <IdentityAvatar
                       diagnosticsSurface="activity:unread-item"
@@ -406,7 +416,11 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   prefetch
                 >
                   {conversation.isGroupConversation ? (
-                    <GroupIdentityAvatar label={conversation.title} size="sm" />
+                    <GroupIdentityAvatar
+                      avatarPath={conversation.groupAvatarPath}
+                      label={conversation.title}
+                      size="sm"
+                    />
                   ) : (
                     <IdentityAvatar
                       diagnosticsSurface="activity:recent-item"

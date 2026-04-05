@@ -34,8 +34,8 @@ import {
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
+  GroupIdentityAvatar,
   IdentityAvatar,
-  IdentityAvatarStack,
 } from '@/modules/messaging/ui/identity';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import Link from 'next/link';
@@ -51,7 +51,6 @@ import {
   sendMessageAction,
   toggleReactionAction,
   updateConversationNotificationLevelAction,
-  updateConversationTitleAction,
 } from './actions';
 import { AutoGrowTextarea } from './auto-grow-textarea';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
@@ -63,6 +62,7 @@ import { MarkConversationRead } from './mark-conversation-read';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
+import { GroupChatSettingsForm } from './group-chat-settings-form';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
 
@@ -720,11 +720,10 @@ export default async function ChatPage({
         >
           <div className="chat-header-identity">
             {conversation.kind === 'group' ? (
-              <IdentityAvatarStack
-                identities={otherParticipants.map((participant) =>
-                  senderIdentities.get(participant.userId),
-                )}
-                labels={otherParticipantLabels}
+              <GroupIdentityAvatar
+                avatarPath={conversation.avatarPath}
+                label={directConversationDisplayTitle}
+                size="lg"
               />
             ) : (
               <IdentityAvatar
@@ -1401,11 +1400,10 @@ export default async function ChatPage({
             <section className="conversation-info-summary">
               <div className="conversation-info-identity">
                 {conversation.kind === 'group' ? (
-                  <IdentityAvatarStack
-                    identities={otherParticipants.map((participant) =>
-                      senderIdentities.get(participant.userId),
-                    )}
-                    labels={otherParticipantLabels}
+                  <GroupIdentityAvatar
+                    avatarPath={conversation.avatarPath}
+                    label={directConversationDisplayTitle}
+                    size="lg"
                   />
                 ) : (
                   <IdentityAvatar
@@ -1539,45 +1537,53 @@ export default async function ChatPage({
                 </div>
 
                 <div className="conversation-group-actions">
-                  <section className="stack conversation-settings-subsection">
-                    <div className="stack conversation-settings-panel-copy">
-                      <h4 className="conversation-settings-subtitle">{t.chat.name}</h4>
-                      <p className="conversation-settings-static conversation-settings-title-preview">
-                        {directConversationDisplayTitle}
-                      </p>
-                      {!canEditGroupTitle ? (
-                        <p className="muted conversation-settings-note">
-                          {t.chat.ownerOnly}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {canEditGroupTitle ? (
-                      <form
-                        action={updateConversationTitleAction}
-                        className="conversation-title-form"
-                      >
-                        <input
-                          name="conversationId"
-                          type="hidden"
-                          value={conversationId}
-                        />
-                        <label className="field">
-                          <span className="sr-only">{t.chat.name}</span>
-                          <input
-                            className="input"
-                            defaultValue={conversation.title?.trim() || ''}
-                            name="title"
-                            placeholder={t.chat.groupNamePlaceholder}
-                            required
+                  {canEditGroupTitle ? (
+                    <GroupChatSettingsForm
+                      conversationId={conversationId}
+                      defaultAvatarPath={conversation.avatarPath}
+                      defaultTitle={conversation.title?.trim() || ''}
+                      labels={{
+                        title: t.chat.chatIdentity,
+                        subtitle: t.chat.chatIdentityNote,
+                        name: t.chat.name,
+                        namePlaceholder: t.chat.groupNamePlaceholder,
+                        nameRequired: t.chat.groupNameRequired,
+                        changePhoto: t.chat.changePhoto,
+                        removePhoto: t.chat.removePhoto,
+                        saveChanges: t.chat.saveChanges,
+                        cancelEdit: t.chat.cancel,
+                        avatarDraftReady: t.chat.chatAvatarDraftReady,
+                        avatarRemovedDraft: t.chat.chatAvatarRemovedDraft,
+                        avatarUploading: t.chat.avatarUploading,
+                        avatarTooLarge: t.chat.avatarTooLarge,
+                        avatarInvalidType: t.chat.avatarInvalidType,
+                        avatarUploadFailed: t.chat.avatarUploadFailed,
+                        avatarStorageUnavailable: t.chat.avatarStorageUnavailable,
+                      }}
+                      spaceId={activeSpaceId}
+                    />
+                  ) : (
+                    <section className="stack conversation-settings-subsection">
+                      <div className="stack conversation-settings-panel-copy">
+                        <h4 className="conversation-settings-subtitle">{t.chat.chatIdentity}</h4>
+                        <div className="conversation-settings-static conversation-settings-group-identity-preview">
+                          <GroupIdentityAvatar
+                            avatarPath={conversation.avatarPath}
+                            label={directConversationDisplayTitle}
+                            size="md"
                           />
-                        </label>
-                        <button className="button button-compact" type="submit">
-                          {t.chat.saveName}
-                        </button>
-                      </form>
-                    ) : null}
-                  </section>
+                          <div className="stack conversation-settings-group-identity-copy">
+                            <p className="conversation-settings-title-preview">
+                              {directConversationDisplayTitle}
+                            </p>
+                            <p className="muted conversation-settings-note">
+                              {t.chat.ownerOnly}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  )}
 
                   <section className="stack conversation-settings-subsection conversation-participant-manager">
                     <div className="stack conversation-settings-panel-copy">

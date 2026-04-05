@@ -17,6 +17,7 @@ import {
   getConversationParticipantIdentities,
   getInboxConversations,
   getInboxConversationsStable,
+  type InboxConversation,
 } from '@/modules/messaging/data/server';
 import {
   loadArchivedConversationsForSsr,
@@ -58,6 +59,7 @@ type ConversationListItem = {
   conversationId: string;
   isGroupConversation: boolean;
   title: string;
+  groupAvatarPath: string | null;
   preview: string | null;
   latestMessageId: string | null;
   latestMessageContentMode: string | null;
@@ -342,7 +344,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     logDiagnostics('loader:archived-skip-main-view');
   }
 
-  const [conversations, archivedConversations, availableUsers] = await Promise.all([
+  const [conversations, archivedConversations, availableUsers]: [
+    InboxConversation[],
+    InboxConversation[],
+    Awaited<ReturnType<typeof getAvailableUsers>>,
+  ] = await Promise.all([
     loadInboxConversationsForSsr({
       view: 'main',
       loadPrecise: () => getInboxConversations(user.id, { spaceId: activeSpaceId }),
@@ -382,7 +388,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           }),
   ]);
   logDiagnostics('loader:all-ok');
-  const visibleConversations =
+  const visibleConversations: InboxConversation[] =
     activeView === 'archived' ? archivedConversations : conversations;
   const participantIdentities = await getConversationParticipantIdentities(
     visibleConversations.map((conversation) => conversation.conversationId),
@@ -455,6 +461,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       conversationId: conversation.conversationId,
       isGroupConversation,
       title,
+      groupAvatarPath: conversation.avatarPath,
       preview,
       latestMessageId: conversation.latestMessageId,
       latestMessageContentMode: conversation.latestMessageContentMode,
@@ -868,6 +875,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar
+                      avatarPath={conversation.groupAvatarPath}
                       label={conversation.title}
                       size={isPrimaryChatsView ? 'lg' : 'md'}
                     />

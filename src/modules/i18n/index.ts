@@ -235,10 +235,23 @@ type LanguageDictionary = {
     inThisChat: string;
     groupSection: string;
     nameAndPeople: string;
+    chatIdentity: string;
+    chatIdentityNote: string;
     name: string;
     ownerOnly: string;
     groupNamePlaceholder: string;
+    groupNameRequired: string;
     saveName: string;
+    saveChanges: string;
+    changePhoto: string;
+    removePhoto: string;
+    avatarTooLarge: string;
+    avatarInvalidType: string;
+    avatarUploading: string;
+    avatarUploadFailed: string;
+    avatarStorageUnavailable: string;
+    chatAvatarDraftReady: string;
+    chatAvatarRemovedDraft: string;
     addPeople: string;
     everyoneIsHere: string;
     leaveGroup: string;
@@ -572,10 +585,23 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       inThisChat: 'In this chat',
       groupSection: 'Group',
       nameAndPeople: 'Name and people.',
+      chatIdentity: 'Chat identity',
+      chatIdentityNote: 'Name and photo for this group.',
       name: 'Name',
       ownerOnly: 'Owner only.',
       groupNamePlaceholder: 'Enter a group name',
+      groupNameRequired: 'Group title cannot be empty.',
       saveName: 'Save name',
+      saveChanges: 'Save changes',
+      changePhoto: 'Change photo',
+      removePhoto: 'Remove photo',
+      avatarTooLarge: 'Avatar images can be up to 5 MB.',
+      avatarInvalidType: 'Avatar must be a JPG, PNG, WEBP, or GIF image.',
+      avatarUploading: 'Saving…',
+      avatarUploadFailed: 'Unable to update chat photo right now.',
+      avatarStorageUnavailable: 'Chat photo uploads are not available right now.',
+      chatAvatarDraftReady: 'Photo will update when you save.',
+      chatAvatarRemovedDraft: 'Photo will be removed when you save.',
       addPeople: 'Add people',
       everyoneIsHere: 'Everyone is already here.',
       leaveGroup: 'Leave group',
@@ -917,10 +943,23 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       inThisChat: 'В этом чате',
       groupSection: 'Группа',
       nameAndPeople: 'Название и участники.',
+      chatIdentity: 'Оформление чата',
+      chatIdentityNote: 'Название и фото для этой группы.',
       name: 'Название',
       ownerOnly: 'Только владелец.',
       groupNamePlaceholder: 'Введите название группы',
+      groupNameRequired: 'Название группы не может быть пустым.',
       saveName: 'Сохранить',
+      saveChanges: 'Сохранить изменения',
+      changePhoto: 'Сменить фото',
+      removePhoto: 'Удалить фото',
+      avatarTooLarge: 'Изображение аватара может быть до 5 МБ.',
+      avatarInvalidType: 'Аватар должен быть в формате JPG, PNG, WEBP или GIF.',
+      avatarUploading: 'Сохранение…',
+      avatarUploadFailed: 'Сейчас не удалось обновить фото чата.',
+      avatarStorageUnavailable: 'Загрузка фото чата сейчас недоступна.',
+      chatAvatarDraftReady: 'Фото обновится после сохранения.',
+      chatAvatarRemovedDraft: 'Фото будет удалено после сохранения.',
       addPeople: 'Добавить людей',
       everyoneIsHere: 'Все уже здесь.',
       leaveGroup: 'Покинуть группу',
