@@ -50,23 +50,26 @@ function parseSafeDate(value: string | null) {
 }
 
 function shouldClassifySelfHistoryGap(input: {
-  currentUserId: string;
   localRecord: LocalDmE2eeDeviceRecord | null;
   messageCreatedAt: string | null;
-  messageSenderId: string | null;
+  viewerJoinedAt: string | null;
 }) {
-  if (input.messageSenderId !== input.currentUserId || !input.localRecord) {
+  if (!input.localRecord) {
     return false;
   }
 
   const messageCreatedAt = parseSafeDate(input.messageCreatedAt);
   const localDeviceCreatedAt = parseSafeDate(input.localRecord.createdAt);
+  const viewerJoinedAt = parseSafeDate(input.viewerJoinedAt);
 
-  if (!messageCreatedAt || !localDeviceCreatedAt) {
+  if (!messageCreatedAt || !localDeviceCreatedAt || !viewerJoinedAt) {
     return false;
   }
 
-  return localDeviceCreatedAt.getTime() > messageCreatedAt.getTime();
+  return (
+    localDeviceCreatedAt.getTime() > messageCreatedAt.getTime() &&
+    viewerJoinedAt.getTime() <= messageCreatedAt.getTime()
+  );
 }
 
 export function EncryptedDmMessageBody({
@@ -213,10 +216,9 @@ export function EncryptedDmMessageBody({
           nextDiagnosticCode = 'local-device-record-missing';
         } else if (
           shouldClassifySelfHistoryGap({
-            currentUserId,
             localRecord: currentLocalRecord,
             messageCreatedAt,
-            messageSenderId,
+            viewerJoinedAt: historyDiagnosticHint.viewerJoinedAt,
           })
         ) {
           nextDiagnosticCode = 'same-user-new-device-history-gap';
@@ -362,10 +364,9 @@ export function EncryptedDmMessageBody({
         if (
           nextDiagnosticCode === 'decrypt-failed' &&
           shouldClassifySelfHistoryGap({
-            currentUserId,
             localRecord: currentLocalRecord,
             messageCreatedAt,
-            messageSenderId,
+            viewerJoinedAt: historyDiagnosticHint.viewerJoinedAt,
           })
         ) {
           nextDiagnosticCode = 'same-user-new-device-history-gap';

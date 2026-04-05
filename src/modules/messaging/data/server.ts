@@ -1,9 +1,11 @@
 import 'server-only';
 
+import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
+import { DM_E2EE_CURRENT_DEVICE_COOKIE } from '@/modules/messaging/e2ee/current-device-cookie';
 import {
   applyConversationVisibility,
   isHiddenAtVisibilityRuntimeError,
@@ -3252,16 +3254,34 @@ export async function resetCurrentUserDmE2eeDeviceForDev(input: {
   };
 }
 
-async function getCurrentUserActiveDmE2eeDeviceRecordId(userId: string) {
+async function getCurrentUserActiveDmE2eeDeviceInfo(userId: string) {
   const supabase = await createSupabaseServerClient();
-  const response = await supabase
-    .from('user_devices')
-    .select('id')
-    .eq('user_id', userId)
-    .is('retired_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const cookieStore = await cookies();
+  const hintedDeviceRecordId =
+    cookieStore.get(DM_E2EE_CURRENT_DEVICE_COOKIE)?.value?.trim() || null;
+  const resolveDevice = async (hintedId: string | null) =>
+    hintedId
+      ? supabase
+          .from('user_devices')
+          .select('id, created_at')
+          .eq('user_id', userId)
+          .eq('id', hintedId)
+          .is('retired_at', null)
+          .maybeSingle()
+      : supabase
+          .from('user_devices')
+          .select('id, created_at')
+          .eq('user_id', userId)
+          .is('retired_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+  let response = await resolveDevice(hintedDeviceRecordId);
+
+  if (!response.error && !response.data && hintedDeviceRecordId) {
+    response = await resolveDevice(null);
+  }
 
   if (response.error) {
     if (
@@ -3274,9 +3294,18 @@ async function getCurrentUserActiveDmE2eeDeviceRecordId(userId: string) {
     throw new Error(response.error.message);
   }
 
-  return ((response.data as { id?: string | null } | null)?.id ?? null) as
-    | string
+  const row = response.data as
+    | { id?: string | null; created_at?: string | null }
     | null;
+
+  return {
+    createdAt: row?.created_at ?? null,
+    id: (row?.id ?? null) as string | null,
+    selectionSource:
+      hintedDeviceRecordId && row?.id === hintedDeviceRecordId
+        ? 'cookie'
+        : 'latest-active',
+  } as const;
 }
 
 export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
@@ -3303,19 +3332,22 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
 
   if (uniqueMessageIds.length === 0) {
     return {
+      activeDeviceCreatedAt: null,
       activeDeviceRecordId: null,
       envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
+      selectionSource: null,
     };
   }
 
-  const activeDeviceRecordId = await getCurrentUserActiveDmE2eeDeviceRecordId(
-    input.userId,
-  );
+  const activeDevice = await getCurrentUserActiveDmE2eeDeviceInfo(input.userId);
+  const activeDeviceRecordId = activeDevice?.id ?? null;
   logDiagnostics('envelopes:active-device-resolved', {
     currentUserId: input.userId,
     activeDeviceRecordId,
+    activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
     debugRequestId: input.debugRequestId ?? null,
     messageCount: uniqueMessageIds.length,
+    selectionSource: activeDevice?.selectionSource ?? null,
   });
 
   if (!activeDeviceRecordId) {
@@ -3324,8 +3356,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       debugRequestId: input.debugRequestId ?? null,
     });
     return {
+      activeDeviceCreatedAt: null,
       activeDeviceRecordId: null,
       envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
+      selectionSource: null,
     };
   }
 
@@ -3348,8 +3382,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       isMissingColumnErrorMessage(response.error.message, 'ciphertext')
     ) {
       return {
+        activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
         activeDeviceRecordId,
         envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
+        selectionSource: activeDevice?.selectionSource ?? null,
       };
     }
 
@@ -3398,15 +3434,19 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   logDiagnostics('envelopes:loaded', {
     currentUserId: input.userId,
     activeDeviceRecordId,
+    activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
     debugRequestId: input.debugRequestId ?? null,
     malformedEnvelopeCount,
     requestedMessageCount: uniqueMessageIds.length,
     envelopeCount: envelopes.length,
+    selectionSource: activeDevice?.selectionSource ?? null,
   });
 
   return {
+    activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
     activeDeviceRecordId,
     envelopesByMessage: new Map(envelopes),
+    selectionSource: activeDevice?.selectionSource ?? null,
   };
 }
 

@@ -11,6 +11,7 @@ import {
   clearLocalEncryptedDmPreviewsExceptUser,
   clearLocalEncryptedDmPreviewsForUser,
 } from './preview-cache';
+import { clearCurrentDmE2eeDeviceCookie } from './current-device-cookie';
 import { ensureDmE2eeDeviceRegistered } from './device-registration';
 
 function supportsBrowserStateCleanup() {
@@ -70,6 +71,7 @@ export async function clearAllLocalDmE2eeState() {
   }
 
   try {
+    clearCurrentDmE2eeDeviceCookie();
     clearAllLocalEncryptedDmPreviews();
 
     if (typeof window.indexedDB !== 'undefined') {
@@ -86,6 +88,7 @@ export async function clearLocalDmE2eePublicSessionArtifacts() {
   }
 
   try {
+    clearCurrentDmE2eeDeviceCookie();
     clearAllLocalEncryptedDmPreviews();
   } catch (error) {
     console.error('Unable to clear public DM E2EE session artifacts.', error);
@@ -98,6 +101,7 @@ export async function clearLocalDmE2eeStateForUser(userId: string) {
   }
 
   try {
+    clearCurrentDmE2eeDeviceCookie();
     clearLocalEncryptedDmPreviewsForUser(userId);
 
     if (typeof window.indexedDB !== 'undefined') {

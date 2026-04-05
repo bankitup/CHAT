@@ -13,6 +13,7 @@ import {
   updateLocalDmE2eeDeviceRecord,
   type LocalDmE2eeDeviceRecord,
 } from './device-store';
+import { persistCurrentDmE2eeDeviceCookie } from './current-device-cookie';
 
 const ONE_TIME_PREKEY_BATCH_SIZE = 12;
 
@@ -483,6 +484,7 @@ export async function ensureDmE2eeDeviceRegistered(
         reusedExistingServerDeviceRecordId: localRecord.serverDeviceRecordId,
         serverDeviceRecordIdPresent: true,
       });
+      persistCurrentDmE2eeDeviceCookie(localRecord.serverDeviceRecordId);
       return {
         status: 'registered',
         result: {
@@ -523,6 +525,7 @@ export async function ensureDmE2eeDeviceRegistered(
         serverDeviceRecordId: result.deviceRecordId,
         lastPublishedAt: new Date().toISOString(),
       });
+      persistCurrentDmE2eeDeviceCookie(result.deviceRecordId);
 
       const verifiedServerState = await inspectCurrentUserDmE2eeDeviceState();
 

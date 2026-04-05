@@ -763,6 +763,41 @@ export default async function ChatPage({
     const missingEnvelopeMessageIds = encryptedMessageIds.filter(
       (messageId) => !e2eeEnvelopesByMessage.has(messageId),
     );
+    const activeDeviceCreatedAtDate = parseSafeDate(
+      e2eeEnvelopeHistory.activeDeviceCreatedAt ?? null,
+    );
+    const missingEnvelopeDiagnostics = missingEnvelopeMessageIds.map((messageId) => {
+      const message = messagesById.get(messageId) ?? null;
+      const messageCreatedAt = message?.created_at ?? null;
+      const messageCreatedAtDate = parseSafeDate(messageCreatedAt);
+      const sameUserNewDevice =
+        messageCreatedAtDate !== null &&
+        activeDeviceCreatedAtDate !== null &&
+        currentUserJoinedAtDate !== null &&
+        messageCreatedAtDate.getTime() >= currentUserJoinedAtDate.getTime() &&
+        activeDeviceCreatedAtDate.getTime() > messageCreatedAtDate.getTime();
+      const policyBlocked =
+        messageCreatedAtDate !== null &&
+        currentUserJoinedAtDate !== null &&
+        message?.sender_id !== user.id &&
+        messageCreatedAtDate.getTime() < currentUserJoinedAtDate.getTime();
+
+      return {
+        backfillAttempted: false,
+        backfillResult: sameUserNewDevice
+          ? 'skipped-unsupported-v1-no-cross-device-recovery'
+          : policyBlocked
+            ? 'not-applicable-policy-blocked'
+            : 'not-attempted-no-history-sync-path',
+        currentDeviceRowId: e2eeEnvelopeHistory.activeDeviceRecordId ?? null,
+        currentDeviceRowSelectionSource: e2eeEnvelopeHistory.selectionSource ?? null,
+        envelopeFoundForCurrentDevice: false,
+        memberJoinedAt: currentUserConversationJoinedAt,
+        messageCreatedAt,
+        messageId,
+        sameUserNewDevice,
+      };
+    });
     const policyBlockedMessageIds = encryptedMessageIds.filter(
       (messageId) =>
         encryptedHistoryHintsByMessage.get(messageId)?.code ===
@@ -780,8 +815,12 @@ export default async function ChatPage({
       historyWindowLimit: threadHistoryLimit,
       lastMessageId: lastMessage?.id ?? null,
       messageCount: messages.length,
+      missingEnvelopeDiagnostics,
       missingEnvelopeCount: missingEnvelopeMessageIds.length,
       missingEnvelopeMessageIds,
+      selectedActiveDeviceCreatedAt: e2eeEnvelopeHistory.activeDeviceCreatedAt ?? null,
+      selectedActiveDeviceRowId: e2eeEnvelopeHistory.activeDeviceRecordId ?? null,
+      selectedActiveDeviceSelectionSource: e2eeEnvelopeHistory.selectionSource ?? null,
       policyBlockedCount: policyBlockedMessageIds.length,
       policyBlockedMessageIds,
       vercelUrl: threadDeploymentMarker.vercelUrl,
