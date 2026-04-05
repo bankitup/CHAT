@@ -3427,6 +3427,27 @@ main {
   scroll-padding-bottom: var(--chat-thread-scroll-reserve);
 }
 
+.message-history-loader {
+  display: flex;
+  justify-content: center;
+  min-height: 10px;
+  padding: 2px 0 4px;
+}
+
+.message-history-loader-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 3px 9px;
+  border: 1px solid rgba(221, 228, 238, 0.86);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(91, 100, 112, 0.88);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .message-day-separator {
   position: sticky;
   top: 0;

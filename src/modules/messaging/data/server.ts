@@ -3942,37 +3942,83 @@ export async function updateCurrentUserLanguagePreference(input: {
   }
 }
 
-export async function getConversationMessages(conversationId: string) {
+export async function getConversationMessages(
+  conversationId: string,
+  options?: {
+    limitLatest?: number | null;
+  },
+) {
   const supabase = await createSupabaseServerClient();
-  const response = await supabase
-    .from('messages')
-    .select(
-      'id, conversation_id, sender_id, sender_device_id, reply_to_message_id, seq, kind, client_id, body, content_mode, edited_at, deleted_at, created_at',
-    )
-    .eq('conversation_id', conversationId)
-    .order('seq', { ascending: true });
+  const normalizedLimit =
+    typeof options?.limitLatest === 'number' &&
+    Number.isFinite(options.limitLatest) &&
+    options.limitLatest > 0
+      ? Math.floor(options.limitLatest)
+      : null;
+  const queryLimit = normalizedLimit !== null ? normalizedLimit + 1 : null;
+  const response =
+    queryLimit !== null
+      ? await supabase
+          .from('messages')
+          .select(
+            'id, conversation_id, sender_id, sender_device_id, reply_to_message_id, seq, kind, client_id, body, content_mode, edited_at, deleted_at, created_at',
+          )
+          .eq('conversation_id', conversationId)
+          .order('seq', { ascending: false })
+          .limit(queryLimit)
+      : await supabase
+          .from('messages')
+          .select(
+            'id, conversation_id, sender_id, sender_device_id, reply_to_message_id, seq, kind, client_id, body, content_mode, edited_at, deleted_at, created_at',
+          )
+          .eq('conversation_id', conversationId)
+          .order('seq', { ascending: false });
+
+  const normalizeMessages = (data: ConversationMessage[]) => {
+    const hasMoreOlder =
+      normalizedLimit !== null && data.length > normalizedLimit;
+    const pagedRows =
+      normalizedLimit !== null && hasMoreOlder
+        ? data.slice(0, normalizedLimit)
+        : data;
+
+    return {
+      hasMoreOlder,
+      messages: [...pagedRows].reverse(),
+    };
+  };
 
   if (response.error) {
     if (isMissingColumnErrorMessage(response.error.message, 'content_mode')) {
-      const fallback = await supabase
-        .from('messages')
-        .select(
-          'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
-        )
-        .eq('conversation_id', conversationId)
-        .order('seq', { ascending: true });
+      const fallback =
+        queryLimit !== null
+          ? await supabase
+              .from('messages')
+              .select(
+                'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
+              )
+              .eq('conversation_id', conversationId)
+              .order('seq', { ascending: false })
+              .limit(queryLimit)
+          : await supabase
+              .from('messages')
+              .select(
+                'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
+              )
+              .eq('conversation_id', conversationId)
+              .order('seq', { ascending: false });
 
       if (fallback.error) {
         throw new Error(fallback.error.message);
       }
 
-      return (fallback.data ?? []) as ConversationMessage[];
+      return normalizeMessages((fallback.data ?? []) as ConversationMessage[]);
     }
 
     throw new Error(response.error.message);
   }
 
-  return (response.data ?? []) as ConversationMessage[];
+  return normalizeMessages((response.data ?? []) as ConversationMessage[]);
 }
 
 export async function getMessageSenderProfiles(userIds: string[]) {

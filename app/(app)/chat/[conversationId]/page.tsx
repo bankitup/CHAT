@@ -64,6 +64,7 @@ import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
+import { ProgressiveHistoryLoader } from './progressive-history-loader';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
@@ -88,8 +89,24 @@ type ChatPageProps = {
     actionMessageId?: string;
     settings?: string;
     space?: string;
+    history?: string;
   }>;
 };
+
+const THREAD_HISTORY_PAGE_SIZE = 26;
+
+function getNormalizedThreadHistoryLimit(value: string | undefined) {
+  const parsed = Number(value?.trim() ?? '');
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return THREAD_HISTORY_PAGE_SIZE;
+  }
+
+  return Math.max(
+    THREAD_HISTORY_PAGE_SIZE,
+    Math.ceil(parsed / THREAD_HISTORY_PAGE_SIZE) * THREAD_HISTORY_PAGE_SIZE,
+  );
+}
 
 function formatMessageTimestamp(value: string | null, language: AppLanguage) {
   const parsedDate = parseSafeDate(value);
@@ -641,9 +658,12 @@ export default async function ChatPage({
   const isSettingsOpen =
     query.details === 'open' || query.settings === 'open';
   const hasSettingsSavedState = query.saved === '1';
-  const [messages, readState, memberReadStates, participants] =
+  const threadHistoryLimit = getNormalizedThreadHistoryLimit(query.history);
+  const [{ messages, hasMoreOlder }, readState, memberReadStates, participants] =
     await Promise.all([
-      getConversationMessages(conversationId),
+      getConversationMessages(conversationId, {
+        limitLatest: threadHistoryLimit,
+      }),
       getConversationReadState(conversationId, user.id),
       getConversationMemberReadStates(conversationId),
       getConversationParticipants(conversationId),
@@ -930,6 +950,15 @@ export default async function ChatPage({
 
       <section className="chat-main">
         <section className="message-thread" id="message-thread-scroll">
+          <ProgressiveHistoryLoader
+            conversationId={conversationId}
+            currentLimit={threadHistoryLimit}
+            hasMoreOlder={hasMoreOlder}
+            idleLabel={t.chat.olderMessagesAutoLoad}
+            loadingLabel={t.chat.loadingOlderMessages}
+            pageSize={THREAD_HISTORY_PAGE_SIZE}
+            targetId="message-thread-scroll"
+          />
           <AutoScrollToLatest
             bottomSentinelId="message-thread-bottom-sentinel"
             conversationId={conversationId}
