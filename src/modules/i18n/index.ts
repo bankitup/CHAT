@@ -295,6 +295,7 @@ type LanguageDictionary = {
     sendFailed: string;
     edited: string;
     sent: string;
+    delivered: string;
     seen: string;
     openMessageActions: string;
     closeMessageActions: string;
@@ -645,6 +646,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       sendFailed: 'Failed to send',
       edited: 'Edited',
       sent: 'Sent',
+      delivered: 'Delivered',
       seen: 'Seen',
       openMessageActions: 'Open message actions',
       closeMessageActions: 'Close message actions',
@@ -1004,6 +1006,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       sendFailed: 'Не отправилось',
       edited: 'Изменено',
       sent: 'Отправлено',
+      delivered: 'Доставлено',
       seen: 'Просмотрено',
       openMessageActions: 'Открыть действия с сообщением',
       closeMessageActions: 'Закрыть действия с сообщением',

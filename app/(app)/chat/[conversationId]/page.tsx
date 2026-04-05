@@ -55,6 +55,7 @@ import {
 import { AutoGrowTextarea } from './auto-grow-textarea';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import { ConversationPresenceStatus } from './conversation-presence-status';
+import { ConversationPresenceProvider } from './conversation-presence-provider';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
@@ -63,6 +64,7 @@ import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
 import { GroupChatSettingsForm } from './group-chat-settings-form';
+import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
 
@@ -207,8 +209,6 @@ function getOutgoingMessageStatus(input: {
     return 'seen' as const;
   }
 
-  // Honest limitation: the current backend exposes persistence and read state,
-  // but not a distinct message-delivered receipt from the recipient device yet.
   return 'sent' as const;
 }
 
@@ -634,9 +634,8 @@ export default async function ChatPage({
     conversation.kind === 'dm'
       ? memberReadStates.find((state) => state.userId !== user.id) ?? null
       : null;
-  const latestOwnVisibleMessage = [...messages]
-    .reverse()
-    .find((message) => message.sender_id === user.id && !message.deleted_at);
+  const otherParticipantUserId =
+    conversation.kind === 'dm' ? otherParticipants[0]?.userId ?? null : null;
   const activeActionMessageSenderLabel = activeActionMessage
     ? senderNames.get(activeActionMessage.sender_id ?? '') || t.chat.unknownUser
     : null;
@@ -772,6 +771,444 @@ export default async function ChatPage({
             <div className="chat-empty-state" aria-label={t.chat.noMessagesYet}>
               <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
             </div>
+          ) : otherParticipantUserId ? (
+            <ConversationPresenceProvider
+              conversationId={conversationId}
+              currentUserId={user.id}
+              otherUserId={otherParticipantUserId}
+            >
+              {timelineItems.map((item) => {
+                if (item.type === 'separator') {
+                  return (
+                    <div
+                      key={item.key}
+                      className="message-day-separator"
+                      aria-label={item.label}
+                    >
+                      <span className="message-day-label">{item.label}</span>
+                    </div>
+                  );
+                }
+
+                if (item.type === 'unread') {
+                  return (
+                    <div
+                      key={item.key}
+                      className="message-unread-separator"
+                      aria-label={item.label}
+                    >
+                      <span className="message-unread-label">{item.label}</span>
+                    </div>
+                  );
+                }
+
+                const { message } = item;
+                const isOwnMessage = message.sender_id === user.id;
+                const isDeletedMessage = Boolean(message.deleted_at);
+                const messageSeq = getMessageSeq(message.seq);
+                const isLatestConversationMessage =
+                  latestVisibleMessageSeq !== null &&
+                  Number.isFinite(messageSeq) &&
+                  messageSeq === latestVisibleMessageSeq;
+                const isMessageInEditMode =
+                  activeEditMessageId === message.id &&
+                  isOwnMessage &&
+                  !isDeletedMessage &&
+                  !isEncryptedDmTextMessage(message);
+                const isMessageInDeleteMode =
+                  activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
+                const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
+                const otherParticipantReadSeq =
+                  otherParticipantReadState?.lastReadMessageSeq ?? null;
+                const showSeenState =
+                  conversation.kind === 'dm' &&
+                  isOwnMessage &&
+                  !isDeletedMessage &&
+                  otherParticipantReadSeq !== null &&
+                  Number.isFinite(messageSeq) &&
+                  otherParticipantReadSeq >= messageSeq;
+                const outgoingMessageStatus = getOutgoingMessageStatus({
+                  isOwnMessage,
+                  isSeen: showSeenState,
+                  isDeletedMessage,
+                });
+                const isMessageActionActive = activeActionMessage?.id === message.id;
+
+                return (
+                  <article
+                    key={item.key}
+                    className={isOwnMessage ? 'message-row message-row-own' : 'message-row'}
+                  >
+                    <div
+                      className={
+                        isDeletedMessage
+                          ? isOwnMessage
+                            ? 'message-card message-card-own message-card-deleted'
+                            : 'message-card message-card-deleted'
+                          : isOwnMessage
+                            ? 'message-card message-card-own'
+                            : 'message-card'
+                      }
+                      id={`message-${message.id}`}
+                    >
+                      {!isDeletedMessage ? (
+                        <div
+                          className={
+                            isOwnMessage
+                              ? 'message-header message-header-own'
+                              : 'message-header'
+                          }
+                        >
+                          <div className="message-header-side">
+                            {!isDeletedMessage ? (
+                              <Link
+                                aria-label={t.chat.openMessageActions}
+                                className={
+                                  isMessageActionActive
+                                    ? 'message-actions-trigger message-actions-trigger-active'
+                                    : 'message-actions-trigger'
+                                }
+                                href={buildChatHref({
+                                  actionMessageId: message.id,
+                                  conversationId,
+                                  hash: `#message-${message.id}`,
+                                  spaceId: activeSpaceId,
+                                })}
+                              >
+                                <span aria-hidden="true">⋯</span>
+                              </Link>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                      <div
+                        className={
+                          isOwnMessage
+                            ? 'message-bubble message-bubble-own'
+                            : 'message-bubble'
+                        }
+                      >
+                        {message.reply_to_message_id && !isDeletedMessage ? (
+                          <div className="message-reply-reference">
+                            <span className="message-reply-sender">
+                              {(() => {
+                                const repliedMessage = messagesById.get(
+                                  message.reply_to_message_id,
+                                );
+
+                                if (!repliedMessage) {
+                                  return t.chat.earlierMessage;
+                                }
+
+                                if (repliedMessage.deleted_at) {
+                                  return t.chat.deletedMessage;
+                                }
+
+                                return (
+                                  senderNames.get(repliedMessage.sender_id ?? '') ||
+                                  t.chat.unknownUser
+                                );
+                              })()}
+                            </span>
+                            <span className="message-reply-snippet">
+                              {(() => {
+                                const repliedMessage = messagesById.get(
+                                  message.reply_to_message_id,
+                                );
+
+                                if (repliedMessage?.deleted_at) {
+                                  return t.chat.messageDeleted;
+                                }
+
+                                if (repliedMessage?.kind === 'voice') {
+                                  return t.chat.voiceMessage;
+                                }
+
+                                if (repliedMessage && isEncryptedDmTextMessage(repliedMessage)) {
+                                  return t.chat.replyToEncryptedMessage;
+                                }
+
+                                return getMessageSnippet(
+                                  repliedMessage?.body ?? null,
+                                  t,
+                                  72,
+                                );
+                              })()}
+                            </span>
+                          </div>
+                        ) : null}
+                        {isDeletedMessage ? (
+                          <p className="message-deleted-text">{t.chat.messageDeleted}</p>
+                        ) : isMessageInEditMode ? (
+                          <form action={editMessageAction} className="stack message-edit-form">
+                            <input
+                              name="conversationId"
+                              type="hidden"
+                              value={conversationId}
+                            />
+                            <input name="messageId" type="hidden" value={message.id} />
+                            <label className="field">
+                              <span className="sr-only">{t.chat.edit}</span>
+                              <AutoGrowTextarea
+                                className="input textarea"
+                                defaultValue={
+                                  isEncryptedDmTextMessage(message)
+                                    ? ''
+                                    : message.body?.trim() ?? ''
+                                }
+                                maxHeight={160}
+                                name="body"
+                                required
+                                rows={2}
+                              />
+                            </label>
+                            <div className="message-edit-actions">
+                              <button className="button button-compact" type="submit">
+                                {t.chat.save}
+                              </button>
+                              <Link
+                                className="pill message-edit-cancel"
+                                href={buildChatHref({
+                                  conversationId,
+                                  hash: `#message-${message.id}`,
+                                  spaceId: activeSpaceId,
+                                })}
+                              >
+                                {t.chat.cancel}
+                              </Link>
+                            </div>
+                          </form>
+                        ) : activeEditMessageId === message.id &&
+                          isOwnMessage &&
+                          isEncryptedDmTextMessage(message) ? (
+                          <div className="message-edit-unavailable">
+                            <p className="message-edit-unavailable-copy">
+                              {t.chat.encryptedEditUnavailable}
+                            </p>
+                            <div className="message-edit-actions">
+                              <Link
+                                className="pill message-edit-cancel"
+                                href={buildChatHref({
+                                  conversationId,
+                                  hash: `#message-${message.id}`,
+                                  spaceId: activeSpaceId,
+                                })}
+                              >
+                                {t.chat.cancel}
+                              </Link>
+                            </div>
+                          </div>
+                        ) : isEncryptedDmTextMessage(message) ? (
+                          <EncryptedDmMessageBody
+                            clientId={message.client_id}
+                            conversationId={conversationId}
+                            currentUserId={user.id}
+                            envelope={e2eeEnvelopesByMessage.get(message.id) ?? null}
+                            fallbackLabel={t.chat.encryptedMessage}
+                            refreshSetupLabel={t.chat.refreshEncryptedSetup}
+                            reloadConversationLabel={t.chat.reloadConversation}
+                            retryLabel={t.chat.retryEncryptedAction}
+                            setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
+                            unavailableLabel={t.chat.encryptedMessageUnavailable}
+                            messageId={message.id}
+                            messageCreatedAt={message.created_at}
+                            shouldCachePreview={
+                              conversation.kind === 'dm' && isLatestConversationMessage
+                            }
+                          />
+                        ) : message.body?.trim() ? (
+                          <p className="message-body">{message.body.trim()}</p>
+                        ) : !messageAttachments.length ? (
+                          <p className="message-body">{t.chat.emptyMessage}</p>
+                        ) : null}
+                        {messageAttachments.length && !isDeletedMessage ? (
+                          <div className="message-attachments">
+                            {messageAttachments.map((attachment) => {
+                              const attachmentContent = (
+                                <>
+                                  {attachment.isImage && attachment.signedUrl ? (
+                                    <span
+                                      aria-hidden="true"
+                                      className="message-attachment-preview"
+                                      style={{
+                                        backgroundImage: `url("${attachment.signedUrl}")`,
+                                      }}
+                                    />
+                                  ) : (
+                                    <span
+                                      aria-hidden="true"
+                                      className="message-attachment-file"
+                                    >
+                                      {attachment.isAudio ? t.chat.audio : t.chat.file}
+                                    </span>
+                                  )}
+                                  <span className="message-attachment-copy">
+                                    <span className="message-attachment-name">
+                                      {attachment.fileName}
+                                    </span>
+                                    <span className="message-attachment-meta">
+                                      {attachment.isVoiceMessage
+                                        ? t.chat.voiceMessage
+                                        : attachment.isAudio
+                                          ? t.chat.audio
+                                          : attachment.isImage
+                                            ? t.chat.image
+                                            : t.chat.attachment}
+                                      {formatAttachmentSize(attachment.sizeBytes)
+                                        ? ` · ${formatAttachmentSize(
+                                            attachment.sizeBytes,
+                                          )}`
+                                        : ''}
+                                      {!attachment.signedUrl
+                                        ? ` · ${t.chat.unavailableRightNow}`
+                                        : ''}
+                                    </span>
+                                  </span>
+                                </>
+                              );
+
+                              if (!attachment.signedUrl) {
+                                return (
+                                  <div
+                                    key={attachment.id}
+                                    className="message-attachment-card message-attachment-card-unavailable"
+                                  >
+                                    {attachmentContent}
+                                  </div>
+                                );
+                              }
+
+                              if (attachment.isAudio) {
+                                return (
+                                  <div
+                                    key={attachment.id}
+                                    className="message-attachment-card message-attachment-card-audio"
+                                  >
+                                    {attachmentContent}
+                                    <audio
+                                      className="message-attachment-audio"
+                                      controls
+                                      preload="metadata"
+                                      src={attachment.signedUrl}
+                                    />
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <a
+                                  key={attachment.id}
+                                  className="message-attachment-card"
+                                  href={attachment.signedUrl}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  {attachmentContent}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                      <span
+                        className={
+                          isOwnMessage
+                            ? 'message-meta message-meta-own'
+                            : 'message-meta'
+                        }
+                      >
+                        <span>{formatMessageTimestamp(message.created_at, language) || t.chat.justNow}</span>
+                        {isEditedMessage(message) ? (
+                          <span className="message-edited" aria-label={t.chat.edited}>
+                            {t.chat.edited}
+                          </span>
+                        ) : null}
+                        {isOwnMessage && outgoingMessageStatus ? (
+                          <LiveOutgoingMessageStatus
+                            labels={{
+                              delivered: t.chat.delivered,
+                              seen: t.chat.seen,
+                              sent: t.chat.sent,
+                            }}
+                            status={outgoingMessageStatus}
+                          />
+                        ) : null}
+                      </span>
+
+                      {reactionsByMessage.get(message.id)?.length && !isDeletedMessage ? (
+                        <div
+                          className={
+                            isOwnMessage
+                              ? 'reaction-groups reaction-groups-own'
+                              : 'reaction-groups'
+                          }
+                          aria-label={t.chat.messageReactions}
+                        >
+                          {reactionsByMessage.get(message.id)?.map((reaction) => (
+                            <form
+                              key={`${message.id}-${reaction.emoji}`}
+                              action={toggleReactionAction}
+                            >
+                              <input
+                                name="conversationId"
+                                type="hidden"
+                                value={conversationId}
+                              />
+                              <input
+                                name="messageId"
+                                type="hidden"
+                                value={message.id}
+                              />
+                              <input name="emoji" type="hidden" value={reaction.emoji} />
+                              <button
+                                className={
+                                  reaction.selectedByCurrentUser
+                                    ? 'reaction-pill reaction-pill-selected'
+                                    : 'reaction-pill'
+                                }
+                                type="submit"
+                              >
+                                <span>{reaction.emoji}</span>
+                                <span>{reaction.count}</span>
+                              </button>
+                            </form>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {isMessageInDeleteMode ? (
+                        <form action={deleteMessageAction} className="message-delete-form">
+                          <input
+                            name="conversationId"
+                            type="hidden"
+                            value={conversationId}
+                          />
+                          <input name="messageId" type="hidden" value={message.id} />
+                          <span className="message-delete-confirmation">
+                            {t.chat.deleteConfirm}
+                          </span>
+                          <div className="message-delete-actions">
+                            <button className="button button-danger button-compact" type="submit">
+                              {t.chat.delete}
+                            </button>
+                            <Link
+                              className="pill message-delete-cancel"
+                              href={buildChatHref({
+                                conversationId,
+                                hash: `#message-${message.id}`,
+                                spaceId: activeSpaceId,
+                              })}
+                            >
+                              {t.chat.cancel}
+                            </Link>
+                          </div>
+                        </form>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </ConversationPresenceProvider>
           ) : (
             timelineItems.map((item) => {
               if (item.type === 'separator') {
@@ -819,12 +1256,10 @@ export default async function ChatPage({
               const showSeenState =
                 conversation.kind === 'dm' &&
                 isOwnMessage &&
-                latestOwnVisibleMessage?.id === message.id &&
                 !isDeletedMessage &&
                 otherParticipantReadSeq !== null &&
                 Number.isFinite(messageSeq) &&
                 otherParticipantReadSeq >= messageSeq;
-              const ownMessageStatusLabel = showSeenState ? t.chat.seen : t.chat.sent;
               const outgoingMessageStatus = getOutgoingMessageStatus({
                 isOwnMessage,
                 isSeen: showSeenState,
@@ -1121,13 +1556,26 @@ export default async function ChatPage({
                             {t.chat.edited}
                           </span>
                         ) : null}
-                        {isOwnMessage ? (
-                          outgoingMessageStatus ? (
-                            <MessageStatusIndicator
-                              label={ownMessageStatusLabel}
+                        {isOwnMessage && outgoingMessageStatus ? (
+                          otherParticipantUserId ? (
+                            <LiveOutgoingMessageStatus
+                              labels={{
+                                delivered: t.chat.delivered,
+                                seen: t.chat.seen,
+                                sent: t.chat.sent,
+                              }}
                               status={outgoingMessageStatus}
                             />
-                          ) : null
+                          ) : (
+                            <MessageStatusIndicator
+                              label={
+                                outgoingMessageStatus === 'seen'
+                                  ? t.chat.seen
+                                  : t.chat.sent
+                              }
+                              status={outgoingMessageStatus}
+                            />
+                          )
                         ) : null}
                       </span>
 
