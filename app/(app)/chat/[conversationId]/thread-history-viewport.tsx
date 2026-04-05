@@ -755,9 +755,15 @@ function ThreadMessageRow({
                   envelope={encryptedEnvelope}
                   fallbackLabel={t.chat.encryptedMessage}
                   historyDiagnosticHint={encryptedHistoryHint}
+                  historyUnavailableNoteLabel={
+                    t.chat.encryptedHistoryUnavailableNote
+                  }
                   messageCreatedAt={message.created_at}
                   messageId={message.id}
                   messageSenderId={message.sender_id}
+                  policyUnavailableNoteLabel={
+                    t.chat.encryptedHistoryPolicyBlockedNote
+                  }
                   refreshSetupLabel={t.chat.refreshEncryptedSetup}
                   reloadConversationLabel={t.chat.reloadConversation}
                   retryLabel={t.chat.retryEncryptedAction}

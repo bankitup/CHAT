@@ -351,6 +351,8 @@ type LanguageDictionary = {
     encryptionSessionChanged: string;
     unableToSendEncryptedMessage: string;
     encryptedMessageSetupUnavailable: string;
+    encryptedHistoryUnavailableNote: string;
+    encryptedHistoryPolicyBlockedNote: string;
     encryptedReplyInfo: string;
     encryptedEditUnavailable: string;
     retryEncryptedAction: string;
@@ -724,6 +726,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       unableToSendEncryptedMessage: 'Unable to send encrypted message.',
       encryptedMessageSetupUnavailable:
         'This encrypted message is not available on this device right now.',
+      encryptedHistoryUnavailableNote:
+        'Older encrypted history is not available on this device. New messages in this chat still work.',
+      encryptedHistoryPolicyBlockedNote:
+        'This encrypted message was sent before your current access to this chat.',
       encryptedReplyInfo:
         'Replies keep the message reference, not the encrypted text.',
       encryptedEditUnavailable:
@@ -1103,6 +1109,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Не удалось отправить зашифрованное сообщение.',
       encryptedMessageSetupUnavailable:
         'Это зашифрованное сообщение сейчас недоступно на этом устройстве.',
+      encryptedHistoryUnavailableNote:
+        'Более ранняя зашифрованная история недоступна на этом устройстве. Новые сообщения в этом чате будут работать.',
+      encryptedHistoryPolicyBlockedNote:
+        'Это зашифрованное сообщение было отправлено до вашего текущего доступа к этому чату.',
       encryptedReplyInfo:
         'Ответ сохраняет ссылку на сообщение, но не раскрывает зашифрованный текст.',
       encryptedEditUnavailable:

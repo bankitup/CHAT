@@ -4783,6 +4783,13 @@ main {
   text-transform: uppercase;
 }
 
+.message-encryption-note {
+  margin: -2px 0 0;
+  color: rgba(58, 68, 84, 0.76);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .composer-reply-preview {
   display: flex;
   align-items: flex-start;

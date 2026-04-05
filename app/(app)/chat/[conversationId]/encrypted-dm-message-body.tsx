@@ -29,9 +29,11 @@ type EncryptedDmMessageBodyProps = {
   envelope: StoredDmE2eeEnvelope | null;
   fallbackLabel: string;
   historyDiagnosticHint: EncryptedDmServerHistoryHint;
+  historyUnavailableNoteLabel: string;
   messageSenderId: string | null;
   refreshSetupLabel: string;
   reloadConversationLabel: string;
+  policyUnavailableNoteLabel: string;
   retryLabel: string;
   setupUnavailableLabel: string;
   unavailableLabel: string;
@@ -79,9 +81,11 @@ export function EncryptedDmMessageBody({
   envelope,
   fallbackLabel,
   historyDiagnosticHint,
+  historyUnavailableNoteLabel,
   messageSenderId,
   refreshSetupLabel,
   reloadConversationLabel,
+  policyUnavailableNoteLabel,
   retryLabel,
   setupUnavailableLabel,
   unavailableLabel,
@@ -431,6 +435,13 @@ export function EncryptedDmMessageBody({
   }
 
   if (renderState.kind === 'unavailable') {
+    const unavailableNote =
+      renderState.unavailableNoteKind === 'history-unavailable'
+        ? historyUnavailableNoteLabel
+        : renderState.unavailableNoteKind === 'policy-blocked'
+          ? policyUnavailableNoteLabel
+          : null;
+
     return (
       <div
         className="message-encryption-state"
@@ -442,54 +453,59 @@ export function EncryptedDmMessageBody({
         }
       >
         <p className="message-body">{renderState.text}</p>
+        {unavailableNote ? (
+          <p className="message-encryption-note">{unavailableNote}</p>
+        ) : null}
         {diagnosticsEnabled && renderState.diagnosticCode ? (
           <p className="message-encryption-debug-label">
             {renderState.diagnosticCode}
           </p>
         ) : null}
-        <div className="message-encryption-actions">
-          <button
-            className="button button-secondary button-compact message-encryption-action"
-            onClick={() => setRetryNonce((value) => value + 1)}
-            type="button"
-          >
-            {retryLabel}
-          </button>
-          {renderState.showRefreshSetup ? (
+        {renderState.showRecoveryActions ? (
+          <div className="message-encryption-actions">
             <button
               className="button button-secondary button-compact message-encryption-action"
-              disabled={isRefreshingSetup}
-              onClick={async () => {
-                setIsRefreshingSetup(true);
-                try {
-                  const bootstrap = await reinitializeLocalDmE2eeStateForUser(
-                    currentUserId,
-                  );
+              onClick={() => setRetryNonce((value) => value + 1)}
+              type="button"
+            >
+              {retryLabel}
+            </button>
+            {renderState.showRefreshSetup ? (
+              <button
+                className="button button-secondary button-compact message-encryption-action"
+                disabled={isRefreshingSetup}
+                onClick={async () => {
+                  setIsRefreshingSetup(true);
+                  try {
+                    const bootstrap = await reinitializeLocalDmE2eeStateForUser(
+                      currentUserId,
+                    );
 
-                  if (bootstrap.status === 'registered') {
-                    setRetryNonce((value) => value + 1);
+                    if (bootstrap.status === 'registered') {
+                      setRetryNonce((value) => value + 1);
+                    }
+                  } finally {
+                    setIsRefreshingSetup(false);
                   }
-                } finally {
-                  setIsRefreshingSetup(false);
-                }
+                }}
+                type="button"
+              >
+                {refreshSetupLabel}
+              </button>
+            ) : null}
+            <button
+              className="button button-secondary button-compact message-encryption-action"
+              onClick={() => {
+                startRefreshTransition(() => {
+                  router.refresh();
+                });
               }}
               type="button"
             >
-              {refreshSetupLabel}
+              {reloadConversationLabel}
             </button>
-          ) : null}
-          <button
-            className="button button-secondary button-compact message-encryption-action"
-            onClick={() => {
-              startRefreshTransition(() => {
-                router.refresh();
-              });
-            }}
-            type="button"
-          >
-            {reloadConversationLabel}
-          </button>
-        </div>
+          </div>
+        ) : null}
       </div>
     );
   }

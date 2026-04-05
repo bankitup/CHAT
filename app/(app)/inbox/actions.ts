@@ -73,6 +73,24 @@ async function getAuthenticatedUserId() {
   return user.id;
 }
 
+async function redirectToExistingDmConversation(input: {
+  conversationId: string;
+  creatorUserId: string;
+  spaceId: string;
+}) {
+  try {
+    await restoreConversationForUser({
+      conversationId: input.conversationId,
+      userId: input.creatorUserId,
+    });
+  } catch {
+    // Opening the existing DM is still the safest fallback, even if hidden-state
+    // restoration is unavailable in the current schema/runtime.
+  }
+
+  redirect(withSpaceParam(`/chat/${input.conversationId}`, input.spaceId));
+}
+
 export async function createDmAction(formData: FormData) {
   try {
     const creatorUserId = await getAuthenticatedUserId();
@@ -96,7 +114,11 @@ export async function createDmAction(formData: FormData) {
     );
 
     if (existingConversationId) {
-      redirect(withSpaceParam(`/chat/${existingConversationId}`, spaceId));
+      await redirectToExistingDmConversation({
+        conversationId: existingConversationId,
+        creatorUserId,
+        spaceId,
+      });
     }
 
     const conversationId = await createConversationWithMembers({
@@ -131,7 +153,11 @@ export async function createDmAction(formData: FormData) {
         );
 
         if (existingConversationId) {
-          redirect(withSpaceParam(`/chat/${existingConversationId}`, spaceId));
+          await redirectToExistingDmConversation({
+            conversationId: existingConversationId,
+            creatorUserId,
+            spaceId,
+          });
         }
       } catch {
         // Fall through to the friendly generic error below.

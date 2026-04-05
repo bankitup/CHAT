@@ -1,4 +1,8 @@
 export type EncryptedDmFailureKind = 'device-setup' | 'unavailable';
+export type EncryptedDmUnavailableNoteKind =
+  | 'history-unavailable'
+  | 'policy-blocked'
+  | null;
 
 export type EncryptedDmDiagnosticCode =
   | 'temporary-loading'
@@ -24,14 +28,40 @@ export function getEncryptedDmFailureKindForDiagnostic(
   diagnosticCode: EncryptedDmDiagnosticCode,
 ): EncryptedDmFailureKind {
   switch (diagnosticCode) {
-    case 'same-user-new-device-history-gap':
-    case 'device-retired-or-mismatched':
     case 'client-session-lookup-failed':
     case 'client-key-material-missing':
     case 'local-device-record-missing':
       return 'device-setup';
     default:
       return 'unavailable';
+  }
+}
+
+export function shouldOfferEncryptedDmRecoveryActions(
+  diagnosticCode: EncryptedDmDiagnosticCode,
+) {
+  switch (diagnosticCode) {
+    case 'client-session-lookup-failed':
+    case 'client-key-material-missing':
+    case 'local-device-record-missing':
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function getEncryptedDmUnavailableNoteKind(
+  diagnosticCode: EncryptedDmDiagnosticCode,
+): EncryptedDmUnavailableNoteKind {
+  switch (diagnosticCode) {
+    case 'policy-blocked-history':
+      return 'policy-blocked';
+    case 'missing-envelope':
+    case 'same-user-new-device-history-gap':
+    case 'device-retired-or-mismatched':
+      return 'history-unavailable';
+    default:
+      return null;
   }
 }
 
@@ -126,6 +156,8 @@ export function getEncryptedDmBodyRenderState(input: {
           ? input.setupUnavailableLabel
           : input.unavailableLabel,
       showRefreshSetup: input.failureKind === 'device-setup',
+      showRecoveryActions: shouldOfferEncryptedDmRecoveryActions(diagnosticCode),
+      unavailableNoteKind: getEncryptedDmUnavailableNoteKind(diagnosticCode),
       diagnosticCode,
       debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
     };
@@ -134,10 +166,12 @@ export function getEncryptedDmBodyRenderState(input: {
   return {
     kind: 'fallback' as const,
     text: input.fallbackLabel,
-    showRefreshSetup: false,
-    diagnosticCode,
-    debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
-  };
+      showRefreshSetup: false,
+      showRecoveryActions: false,
+      unavailableNoteKind: null,
+      diagnosticCode,
+      debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
+    };
 }
 
 export function getEncryptedDmComposerErrorMessage(input: {
