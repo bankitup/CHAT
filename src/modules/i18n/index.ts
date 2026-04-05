@@ -63,6 +63,9 @@ type LanguageDictionary = {
     displayNamePlaceholder: string;
     profilePhotoNote: string;
     removePhoto: string;
+    editProfile: string;
+    cancelEdit: string;
+    tapPhotoToChange: string;
     avatarTooLarge: string;
     avatarInvalidType: string;
     avatarUploading: string;
@@ -375,7 +378,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     settings: {
       backToChats: 'Back to chats',
       heroEyebrow: 'You',
-      heroNote: 'Photo, name, alerts, and account.',
+      heroNote: 'Photo, name, language, and account.',
       profileTitle: 'Profile',
       profileSubtitle: 'Photo and name',
       profilePhoto: 'Profile photo',
@@ -385,6 +388,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       displayNamePlaceholder: 'Your name',
       profilePhotoNote: 'JPG, PNG, WEBP, or GIF, up to 5 MB.',
       removePhoto: 'Remove photo',
+      editProfile: 'Edit profile',
+      cancelEdit: 'Cancel',
+      tapPhotoToChange: 'Tap photo to change',
       avatarTooLarge: 'Avatar images can be up to 5 MB.',
       avatarInvalidType: 'Avatar must be a JPG, PNG, WEBP, or GIF image.',
       avatarUploading: 'Uploading photo...',
@@ -707,7 +713,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     settings: {
       backToChats: 'Назад к чатам',
       heroEyebrow: 'Вы',
-      heroNote: 'Фото, имя, уведомления и аккаунт.',
+      heroNote: 'Фото, имя, язык и аккаунт.',
       profileTitle: 'Профиль',
       profileSubtitle: 'Фото и имя',
       profilePhoto: 'Фото профиля',
@@ -717,6 +723,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       displayNamePlaceholder: 'Ваше имя',
       profilePhotoNote: 'JPG, PNG, WEBP или GIF, до 5 МБ.',
       removePhoto: 'Удалить фото',
+      editProfile: 'Изменить профиль',
+      cancelEdit: 'Отмена',
+      tapPhotoToChange: 'Нажмите на фото, чтобы изменить',
       avatarTooLarge: 'Изображение профиля может быть до 5 МБ.',
       avatarInvalidType: 'Аватар должен быть в формате JPG, PNG, WEBP или GIF.',
       avatarUploading: 'Загружаем фото...',

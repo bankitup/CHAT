@@ -1,9 +1,5 @@
 import { logoutAction } from '../actions';
-import {
-  removeAvatarAction,
-  updateLanguagePreferenceAction,
-} from './actions';
-import { NotificationReadinessPanel } from './notification-readiness';
+import { updateLanguagePreferenceAction } from './actions';
 import { ProfileSettingsForm } from './profile-settings-form';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
@@ -105,7 +101,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             <p className="muted">{t.settings.profileSubtitle}</p>
           </div>
 
-          <ProfileSettingsForm
+            <ProfileSettingsForm
+            avatarPath={profile.avatarPath}
             userId={profile.userId}
             defaultDisplayName={profile.displayName ?? ''}
             hasAvatar={hasAvatar}
@@ -117,6 +114,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               displayName: t.settings.displayName,
               displayNamePlaceholder: t.settings.displayNamePlaceholder,
               saveChanges: t.settings.saveChanges,
+              editProfile: t.settings.editProfile,
+              cancelEdit: t.settings.cancelEdit,
+              tapPhotoToChange: t.settings.tapPhotoToChange,
+              removePhoto: t.settings.removePhoto,
               avatarTooLarge: t.settings.avatarTooLarge,
               avatarInvalidType: t.settings.avatarInvalidType,
               avatarUploading: t.settings.avatarUploading,
@@ -125,56 +126,41 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               profileUpdateFailed: t.settings.profileUpdateFailed,
             }}
           />
-
-          {hasAvatar ? (
-            <form action={removeAvatarAction}>
-              <button
-                className="button button-secondary button-compact"
-                type="submit"
-              >
-                {t.settings.removePhoto}
-              </button>
-            </form>
-          ) : null}
         </section>
 
         <section className="card stack settings-surface settings-home-card">
-          <NotificationReadinessPanel embedded language={language} />
+          <div className="stack settings-card-copy settings-section-copy">
+            <h2 className="section-title">{t.settings.languageTitle}</h2>
+            <p className="muted">{t.settings.languageSubtitle}</p>
+          </div>
 
-          <section className="stack settings-section">
-            <div className="stack settings-card-copy settings-section-copy">
-              <h2 className="section-title">{t.settings.languageTitle}</h2>
-              <p className="muted">{t.settings.languageSubtitle}</p>
-            </div>
+          <form action={updateLanguagePreferenceAction} className="settings-language-form">
+            <input name="preferredLanguage" type="hidden" value="en" />
+            <button
+              className={
+                currentLanguage === 'en'
+                  ? 'settings-language-button settings-language-button-active'
+                  : 'settings-language-button'
+              }
+              type="submit"
+            >
+              <span className="settings-language-title">{t.settings.languageEnglish}</span>
+            </button>
+          </form>
 
-            <form action={updateLanguagePreferenceAction} className="settings-language-form">
-              <input name="preferredLanguage" type="hidden" value="en" />
-              <button
-                className={
-                  currentLanguage === 'en'
-                    ? 'settings-language-button settings-language-button-active'
-                    : 'settings-language-button'
-                }
-                type="submit"
-              >
-                <span className="settings-language-title">{t.settings.languageEnglish}</span>
-              </button>
-            </form>
-
-            <form action={updateLanguagePreferenceAction} className="settings-language-form">
-              <input name="preferredLanguage" type="hidden" value="ru" />
-              <button
-                className={
-                  currentLanguage === 'ru'
-                    ? 'settings-language-button settings-language-button-active'
-                    : 'settings-language-button'
-                }
-                type="submit"
-              >
-                <span className="settings-language-title">{t.settings.languageRussian}</span>
-              </button>
-            </form>
-          </section>
+          <form action={updateLanguagePreferenceAction} className="settings-language-form">
+            <input name="preferredLanguage" type="hidden" value="ru" />
+            <button
+              className={
+                currentLanguage === 'ru'
+                  ? 'settings-language-button settings-language-button-active'
+                  : 'settings-language-button'
+              }
+              type="submit"
+            >
+              <span className="settings-language-title">{t.settings.languageRussian}</span>
+            </button>
+          </form>
         </section>
 
         <section className="card stack settings-surface settings-home-card settings-home-card-session">
