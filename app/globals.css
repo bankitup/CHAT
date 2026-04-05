@@ -3526,6 +3526,7 @@ main {
   position: relative;
   min-width: 0;
   width: 100%;
+  min-height: 40px;
 }
 
 .composer-mention-menu {
@@ -4142,13 +4143,14 @@ main {
 }
 
 .composer-form .textarea {
-  min-height: 42px;
+  display: block;
+  min-height: 40px;
   max-height: 136px;
   border-radius: 18px;
-  padding: 10px 6px 10px 1px;
+  padding: 9px 8px 9px 4px;
   border-color: transparent;
   background: transparent;
-  line-height: 1.42;
+  line-height: 1.35;
   resize: none;
   overflow-y: auto;
   overscroll-behavior: contain;
