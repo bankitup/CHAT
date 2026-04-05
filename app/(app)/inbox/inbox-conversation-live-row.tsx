@@ -1,11 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { memo, useEffect, useSyncExternalStore } from 'react';
+import { memo, useSyncExternalStore } from 'react';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getInboxConversationSummarySnapshot,
-  hydrateInboxConversationSummaries,
   subscribeToInboxConversationSummary,
   type InboxConversationLiveSummary,
 } from '@/modules/messaging/realtime/inbox-summary-store';
@@ -29,11 +28,11 @@ type InboxConversationLiveRowProps = {
       label: string;
       tone: 'default' | 'archived';
     }>;
-    participant: {
+    participants: Array<{
       userId: string;
       displayName: string | null;
       avatarPath?: string | null;
-    } | null;
+    }>;
     title: string;
   };
   language: 'en' | 'ru';
@@ -220,7 +219,7 @@ const InboxConversationTitleVisual = memo(function InboxConversationTitleVisual(
   );
 });
 
-export function InboxConversationLiveRow({
+function InboxConversationLiveRowComponent({
   activeSpaceId,
   currentUserId,
   initialSummary,
@@ -232,10 +231,6 @@ export function InboxConversationLiveRow({
   restoreAction,
   restoreLabel,
 }: InboxConversationLiveRowProps) {
-  useEffect(() => {
-    hydrateInboxConversationSummaries([initialSummary]);
-  }, [initialSummary]);
-
   const liveSummary = useSyncExternalStore(
     (listener) =>
       subscribeToInboxConversationSummary(item.conversationId, listener),
@@ -319,7 +314,7 @@ export function InboxConversationLiveRow({
             groupAvatarPath={item.groupAvatarPath}
             isGroupConversation={item.isGroupConversation}
             isPrimaryChatsView={isPrimaryChatsView}
-            participant={item.participant}
+            participant={item.participants[0] ?? null}
             title={item.title}
           />
 
@@ -429,3 +424,18 @@ export function InboxConversationLiveRow({
     </article>
   );
 }
+
+export const InboxConversationLiveRow = memo(
+  InboxConversationLiveRowComponent,
+  (previous, next) =>
+    previous.activeSpaceId === next.activeSpaceId &&
+    previous.currentUserId === next.currentUserId &&
+    previous.initialSummary === next.initialSummary &&
+    previous.isArchivedView === next.isArchivedView &&
+    previous.isPrimaryChatsView === next.isPrimaryChatsView &&
+    previous.item === next.item &&
+    previous.language === next.language &&
+    previous.labels === next.labels &&
+    previous.restoreAction === next.restoreAction &&
+    previous.restoreLabel === next.restoreLabel,
+);

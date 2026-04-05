@@ -1,13 +1,10 @@
 import { getRequestViewer } from '@/lib/request-context/server';
 import {
-  getLocaleForLanguage,
   getTranslations,
-  type AppLanguage,
 } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   getInboxPreviewText,
-  getSearchableConversationPreview,
 } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getAvailableUsers,
@@ -34,14 +31,11 @@ import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 import { resolveV1TestSpaceFallback } from '@/modules/spaces/server';
-import { withSpaceParam } from '@/modules/spaces/url';
-import { InboxConversationLiveRow } from './inbox-conversation-live-row';
-import Link from 'next/link';
+import { InboxFilterableContent } from './inbox-filterable-content';
 import { notFound, redirect } from 'next/navigation';
 import {
   restoreConversationAction,
 } from './actions';
-import { NewChatSheet } from './new-chat-sheet';
 
 type InboxPageProps = {
   searchParams: Promise<{
@@ -70,8 +64,6 @@ type ConversationListItem = {
     label: string;
     tone: 'default' | 'archived';
   }>;
-  recencyLabel: string;
-  timestampLabel: string;
   participants: Array<{
     userId: string;
     displayName: string | null;
@@ -80,10 +72,6 @@ type ConversationListItem = {
   participantLabels: string[];
   hasUnread: boolean;
 };
-
-function normalizeSearchTerm(value: string | undefined) {
-  return value?.trim().toLowerCase() ?? '';
-}
 
 function normalizeFilter(value: string | undefined): InboxFilter {
   if (value === 'dm' || value === 'groups') {
@@ -95,131 +83,6 @@ function normalizeFilter(value: string | undefined): InboxFilter {
 
 function normalizeView(value: string | undefined): InboxView {
   return value === 'archived' ? 'archived' : 'main';
-}
-
-function formatTimestamp(value: string | null, language: AppLanguage) {
-  if (!value) {
-    return getTranslations(language).inbox.noActivityYet;
-  }
-
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
-}
-
-function formatRecency(value: string | null, language: AppLanguage) {
-  const t = getTranslations(language);
-  if (!value) {
-    return t.inbox.newRecency;
-  }
-
-  const target = new Date(value);
-  const now = new Date();
-  const diffMs = now.getTime() - target.getTime();
-  const diffMinutes = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-
-  if (diffMinutes < 60) {
-    return language === 'ru' ? `${diffMinutes} мин` : `${diffMinutes}m`;
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-
-  if (diffHours < 24) {
-    return language === 'ru' ? `${diffHours} ч` : `${diffHours}h`;
-  }
-
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const targetDay = new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    target.getDate(),
-  );
-  const dayDiff = Math.round(
-    (today.getTime() - targetDay.getTime()) / (1000 * 60 * 60 * 24),
-  );
-
-  if (dayDiff === 1) {
-    return t.inbox.yesterday;
-  }
-
-  if (dayDiff < 7) {
-    return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-      weekday: 'short',
-    }).format(target);
-  }
-
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    month: 'short',
-    day: 'numeric',
-  }).format(target);
-}
-
-function buildFilterHref(
-  filter: InboxFilter,
-  query?: string,
-  view?: InboxView,
-  spaceId?: string | null,
-) {
-  const params = new URLSearchParams();
-
-  if (filter !== 'all') {
-    params.set('filter', filter);
-  }
-
-  if (view === 'archived') {
-    params.set('view', 'archived');
-  }
-
-  if (spaceId?.trim()) {
-    params.set('space', spaceId.trim());
-  }
-
-  if (query?.trim()) {
-    params.set('q', query.trim());
-  }
-
-  const href = params.toString();
-  return href ? `/inbox?${href}` : '/inbox';
-}
-
-function buildInboxHref({
-  filter,
-  query,
-  create,
-  spaceId,
-  view,
-}: {
-  filter: InboxFilter;
-  query?: string;
-  create?: boolean;
-  spaceId?: string | null;
-  view?: InboxView;
-}) {
-  const params = new URLSearchParams();
-
-  if (filter !== 'all') {
-    params.set('filter', filter);
-  }
-
-  if (query?.trim()) {
-    params.set('q', query.trim());
-  }
-
-  if (view === 'archived') {
-    params.set('view', 'archived');
-  }
-
-  if (spaceId?.trim()) {
-    params.set('space', spaceId.trim());
-  }
-
-  if (create) {
-    params.set('create', 'open');
-  }
-
-  const href = params.toString();
-  return href ? `/inbox?${href}` : '/inbox';
 }
 
 export default async function InboxPage({ searchParams }: InboxPageProps) {
@@ -244,11 +107,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     filter: query.filter ?? 'all',
     view: query.view ?? 'main',
   });
-  const searchTerm = normalizeSearchTerm(query.q);
   const activeFilter = normalizeFilter(query.filter);
   const activeView = normalizeView(query.view);
-  const isPrimaryChatsView = activeView === 'main';
-  const isDmFilter = activeFilter === 'dm';
   const isCreateOpen = query.create === 'open';
   const [user, language] = await Promise.all([
     getRequestViewer(),
@@ -396,10 +256,9 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           }),
   ]);
   logDiagnostics('loader:all-ok');
-  const visibleConversations: InboxConversation[] =
-    activeView === 'archived' ? archivedConversations : conversations;
+  const allVisibleConversations = [...conversations, ...archivedConversations];
   const participantIdentities = await getConversationParticipantIdentities(
-    visibleConversations.map((conversation) => conversation.conversationId),
+    allVisibleConversations.map((conversation) => conversation.conversationId),
   );
   logDiagnostics('loader:participant-identities-ok', {
     count: participantIdentities.length,
@@ -417,550 +276,109 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ...availableUser,
     label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
   }));
-  const filteredAvailableUserEntries = availableUserEntries.filter(
-    (availableUser) => {
-      if (!searchTerm) {
-        return true;
-      }
+  const buildConversationItems = (input: InboxConversation[]) =>
+    input.map((conversation) => {
+      const participantOptions =
+        participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
+      const otherParticipants = participantOptions.filter(
+        (participant) => participant.userId !== user.id,
+      );
+      const otherParticipantLabels = otherParticipants.map((participant) =>
+        resolvePublicIdentityLabel(participant, t.chat.unknownUser),
+      );
+      const isGroupConversation = conversation.kind === 'group';
+      const title = isGroupConversation
+        ? getConversationDisplayName({
+            kind: conversation.kind ?? null,
+            title: conversation.title,
+            participantLabels: otherParticipantLabels,
+            fallbackTitles: {
+              dm: language === 'ru' ? 'Новый чат' : 'New chat',
+              group: language === 'ru' ? 'Новая группа' : 'New group',
+            },
+          })
+        : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
+      const preview = getInboxPreviewText(conversation, {
+        deletedMessage: t.chat.deletedMessage,
+        voiceMessage: t.chat.voiceMessage,
+        encryptedMessage: t.chat.encryptedMessage,
+        newEncryptedMessage: t.chat.newEncryptedMessage,
+        attachment: t.chat.attachment,
+      });
+      const hasUnread = conversation.unreadCount > 0;
+      const metaLabels = [
+        ...(isGroupConversation
+          ? [{ label: t.inbox.metaGroup, tone: 'default' as const }]
+          : []),
+        ...(conversation.hiddenAt
+          ? [{ label: t.inbox.metaArchived, tone: 'archived' as const }]
+          : []),
+      ];
 
-      return availableUser.label.toLowerCase().includes(searchTerm);
-    },
-  );
-  const conversationItems = visibleConversations.map((conversation) => {
-    const participantOptions =
-      participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
-    const otherParticipants = participantOptions.filter(
-      (participant) => participant.userId !== user.id,
-    );
-    const otherParticipantLabels = otherParticipants.map((participant) =>
-      resolvePublicIdentityLabel(participant, t.chat.unknownUser),
-    );
-    const isGroupConversation = conversation.kind === 'group';
-    const title = isGroupConversation
-      ? getConversationDisplayName({
-          kind: conversation.kind ?? null,
-          title: conversation.title,
-          participantLabels: otherParticipantLabels,
-          fallbackTitles: {
-            dm: language === 'ru' ? 'Новый чат' : 'New chat',
-            group: language === 'ru' ? 'Новая группа' : 'New group',
-          },
-        })
-      : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
-    const preview = getInboxPreviewText(conversation, {
-      deletedMessage: t.chat.deletedMessage,
-      voiceMessage: t.chat.voiceMessage,
-      encryptedMessage: t.chat.encryptedMessage,
-      newEncryptedMessage: t.chat.newEncryptedMessage,
-      attachment: t.chat.attachment,
-    });
-    const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
-    const hasUnread = conversation.unreadCount > 0;
-    const metaLabels = [
-      ...(isGroupConversation
-        ? [{ label: t.inbox.metaGroup, tone: 'default' as const }]
-        : []),
-      ...(activeView === 'archived'
-        ? [{ label: t.inbox.metaArchived, tone: 'archived' as const }]
-        : []),
-    ];
-
-    return {
-      conversationId: conversation.conversationId,
-      isGroupConversation,
-      title,
-      groupAvatarPath: conversation.avatarPath,
-      preview,
-      latestMessageId: conversation.latestMessageId,
-      latestMessageContentMode: conversation.latestMessageContentMode,
-      latestMessageDeletedAt: conversation.latestMessageDeletedAt,
-      metaLabels,
-      recencyLabel: formatRecency(lastActivityAt, language),
-      timestampLabel: formatTimestamp(lastActivityAt, language),
-      participants: otherParticipants,
-      participantLabels: otherParticipantLabels,
-      hasUnread,
-    } satisfies ConversationListItem;
-  });
-  const liveSummariesByConversationId = new Map(
-    visibleConversations.map((conversation) => [
-      conversation.conversationId,
-      {
+      return {
         conversationId: conversation.conversationId,
-        createdAt: conversation.createdAt,
-        hiddenAt: conversation.hiddenAt,
-        lastMessageAt: conversation.lastMessageAt,
-        lastReadAt: conversation.lastReadAt,
-        lastReadMessageSeq: conversation.lastReadMessageSeq,
-        latestMessageBody: conversation.latestMessageBody,
+        isGroupConversation,
+        title,
+        groupAvatarPath: conversation.avatarPath,
+        preview,
+        latestMessageId: conversation.latestMessageId,
         latestMessageContentMode: conversation.latestMessageContentMode,
         latestMessageDeletedAt: conversation.latestMessageDeletedAt,
-        latestMessageId: conversation.latestMessageId,
-        latestMessageKind: conversation.latestMessageKind,
-        latestMessageSenderId: conversation.latestMessageSenderId,
-        latestMessageSeq: conversation.latestMessageSeq,
-        unreadCount: conversation.unreadCount,
-      },
-    ]),
+        metaLabels,
+        participants: otherParticipants,
+        participantLabels: otherParticipantLabels,
+        hasUnread,
+      } satisfies ConversationListItem;
+    });
+  const mainConversationItems = buildConversationItems(conversations);
+  const archivedConversationItems = buildConversationItems(archivedConversations);
+  const buildLiveSummaries = (input: InboxConversation[]) =>
+    input.map((conversation) => ({
+      conversationId: conversation.conversationId,
+      createdAt: conversation.createdAt,
+      hiddenAt: conversation.hiddenAt,
+      lastMessageAt: conversation.lastMessageAt,
+      lastReadAt: conversation.lastReadAt,
+      lastReadMessageSeq: conversation.lastReadMessageSeq,
+      latestMessageBody: conversation.latestMessageBody,
+      latestMessageContentMode: conversation.latestMessageContentMode,
+      latestMessageDeletedAt: conversation.latestMessageDeletedAt,
+      latestMessageId: conversation.latestMessageId,
+      latestMessageKind: conversation.latestMessageKind,
+      latestMessageSenderId: conversation.latestMessageSenderId,
+      latestMessageSeq: conversation.latestMessageSeq,
+      unreadCount: conversation.unreadCount,
+    }));
+  const mainSummaries = buildLiveSummaries(conversations);
+  const archivedSummaries = buildLiveSummaries(archivedConversations);
+  const allConversationIds = Array.from(
+    new Set(allVisibleConversations.map((conversation) => conversation.conversationId)),
   );
 
-  const filterConversationItems = (conversation: ConversationListItem) => {
-    if (activeFilter === 'dm' && conversation.isGroupConversation) {
-      return false;
-    }
-
-    if (activeFilter === 'groups' && !conversation.isGroupConversation) {
-      return false;
-    }
-
-    return true;
-  };
-
-  const visibleConversationItems = conversationItems.filter(filterConversationItems);
-
-  const filteredConversationItems = visibleConversationItems.filter((conversation) => {
-    if (!searchTerm) {
-      return true;
-    }
-
-    const searchablePreview = getSearchableConversationPreview({
-      latestMessageContentMode: conversation.latestMessageContentMode,
-      preview: conversation.preview,
-    });
-
-    const haystack = [
-      conversation.title,
-      searchablePreview,
-      ...conversation.participantLabels,
-      conversation.isGroupConversation ? t.inbox.metaGroup : t.chat.directChat,
-    ]
-      .join(' ')
-      .toLowerCase();
-
-    return haystack.includes(searchTerm);
-  });
-
-  const unreadVisibleConversationCount = visibleConversationItems.filter(
-    (conversation) => conversation.hasUnread,
-  ).length;
-  const archivedConversationCount = archivedConversations.length;
-  const headerTitle = t.inbox.title;
-  const headerSubtitle =
-    activeView === 'archived'
-      ? archivedConversationCount > 0
-        ? t.inbox.subtitleArchivedCount(archivedConversationCount)
-        : t.inbox.subtitleArchivedEmpty
-      : isDmFilter
-        ? unreadVisibleConversationCount > 0
-          ? t.inbox.subtitleDmNew(unreadVisibleConversationCount)
-          : visibleConversationItems.length > 0
-            ? t.inbox.subtitleDmCaughtUp
-            : t.inbox.subtitleDmStart
-        : unreadVisibleConversationCount > 0
-          ? t.inbox.subtitleNew(unreadVisibleConversationCount)
-          : visibleConversationItems.length > 0
-            ? t.inbox.subtitleCaughtUp
-            : t.inbox.subtitleStart;
-  const searchAria = isDmFilter ? t.inbox.searchDmAria : t.inbox.searchAria;
-  const searchPlaceholder = isDmFilter
-    ? t.inbox.searchDmPlaceholder
-    : t.inbox.searchPlaceholder;
-  const searchScopeSummary = searchTerm
-    ? (() => {
-        const parts = [
-          filteredConversationItems.length > 0
-            ? t.inbox.searchResultChat(filteredConversationItems.length)
-            : null,
-          filteredAvailableUserEntries.length > 0
-            ? t.inbox.searchResultPerson(filteredAvailableUserEntries.length)
-            : null,
-        ].filter(Boolean);
-
-        return parts.length > 0 ? parts.join(' · ') : t.inbox.searchSummaryNone;
-      })()
-    : null;
-  const hasEncryptedDmSearchLimit =
-    searchTerm.length > 0 &&
-    visibleConversations.some(
-      (conversation) =>
-        conversation.kind === 'dm' &&
-        conversation.latestMessageContentMode === 'dm_e2ee_v1',
-    );
-
   return (
-    <section
-      className={
-        isPrimaryChatsView
-          ? 'stack inbox-screen inbox-screen-minimal inbox-screen-dm'
-          : 'stack inbox-screen inbox-screen-minimal'
-      }
-    >
+    <section className="stack inbox-screen inbox-screen-minimal">
       <InboxRealtimeSync
-        conversationIds={visibleConversations.map((conversation) => conversation.conversationId)}
-        initialSummaries={visibleConversations.map((conversation) => ({
-          conversationId: conversation.conversationId,
-          createdAt: conversation.createdAt,
-          hiddenAt: conversation.hiddenAt,
-          lastMessageAt: conversation.lastMessageAt,
-          lastReadAt: conversation.lastReadAt,
-          lastReadMessageSeq: conversation.lastReadMessageSeq,
-          latestMessageBody: conversation.latestMessageBody,
-          latestMessageContentMode: conversation.latestMessageContentMode,
-          latestMessageDeletedAt: conversation.latestMessageDeletedAt,
-          latestMessageId: conversation.latestMessageId,
-          latestMessageKind: conversation.latestMessageKind,
-          latestMessageSenderId: conversation.latestMessageSenderId,
-          latestMessageSeq: conversation.latestMessageSeq,
-          unreadCount: conversation.unreadCount,
-        }))}
+        conversationIds={allConversationIds}
+        initialSummaries={[...mainSummaries, ...archivedSummaries]}
         userId={user.id}
       />
 
-      <section
-        className={
-          isPrimaryChatsView
-            ? 'card inbox-home-shell inbox-home-shell-dm stack'
-            : 'card inbox-home-shell stack'
-        }
-      >
-        <div className="inbox-topbar">
-          <div
-            className={
-              isPrimaryChatsView
-                ? 'stack inbox-topbar-copy inbox-topbar-copy-dm'
-                : 'stack inbox-topbar-copy'
-            }
-          >
-            <h1
-              className={
-                isPrimaryChatsView
-                  ? 'inbox-home-title inbox-home-title-dm'
-                  : 'inbox-home-title'
-              }
-            >
-              {headerTitle}
-            </h1>
-            <p
-              className={
-                isPrimaryChatsView
-                  ? 'muted inbox-home-subtitle inbox-home-subtitle-dm'
-                  : 'muted inbox-home-subtitle'
-              }
-            >
-              {headerSubtitle}
-            </p>
-          </div>
-          <div className="inbox-topbar-actions">
-            <Link
-              aria-label={t.inbox.settingsAria}
-              className="inbox-settings-trigger"
-              href={withSpaceParam('/settings', activeSpaceId)}
-            >
-              <span aria-hidden="true">⚙</span>
-            </Link>
-            <Link
-              aria-label={t.inbox.createAria}
-              className="inbox-compose-trigger"
-              href={buildInboxHref({
-                filter: activeFilter,
-                query: query.q,
-                create: true,
-                spaceId: activeSpaceId,
-                view: activeView,
-              })}
-            >
-              <span aria-hidden="true">+</span>
-            </Link>
-          </div>
-        </div>
-
-        <div
-          className={
-            isPrimaryChatsView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
-          }
-        >
-          <form
-            action="/inbox"
-            className={
-              isPrimaryChatsView
-                ? 'inbox-search-form inbox-search-form-minimal inbox-search-form-dm'
-                : 'inbox-search-form inbox-search-form-minimal'
-            }
-            aria-label={searchAria}
-            role="search"
-          >
-            <label
-              className={
-                isPrimaryChatsView
-                  ? 'field inbox-search-field inbox-search-shell inbox-search-shell-dm'
-                  : 'field inbox-search-field inbox-search-shell'
-              }
-            >
-              <span className="sr-only">{searchAria}</span>
-              <span
-                aria-hidden="true"
-                className={
-                  isPrimaryChatsView
-                    ? 'inbox-search-icon inbox-search-icon-dm'
-                    : 'inbox-search-icon'
-                }
-              >
-                ⌕
-              </span>
-              <input
-                className={
-                  isPrimaryChatsView
-                    ? 'input inbox-search-input inbox-search-input-dm'
-                    : 'input inbox-search-input'
-                }
-                defaultValue={query.q ?? ''}
-                enterKeyHint="search"
-                name="q"
-                placeholder={searchPlaceholder}
-                type="search"
-              />
-            </label>
-            {activeFilter !== 'all' ? (
-              <input name="filter" type="hidden" value={activeFilter} />
-            ) : null}
-            <input name="space" type="hidden" value={activeSpaceId} />
-            {activeView === 'archived' ? (
-              <input name="view" type="hidden" value="archived" />
-            ) : null}
-          </form>
-
-          <div
-            className={
-              isPrimaryChatsView
-                ? 'inbox-filter-row inbox-filter-row-dm'
-                : 'inbox-filter-row'
-            }
-            role="tablist"
-            aria-label={t.inbox.filtersAria}
-          >
-            <Link
-              aria-selected={activeFilter === 'all'}
-              className={
-                activeFilter === 'all'
-                  ? 'inbox-filter-pill inbox-filter-pill-active'
-                  : 'inbox-filter-pill'
-              }
-              href={buildFilterHref('all', query.q, activeView, activeSpaceId)}
-            >
-              {t.inbox.filters.all}
-            </Link>
-            <Link
-              aria-selected={activeFilter === 'dm'}
-              className={
-                activeFilter === 'dm'
-                  ? 'inbox-filter-pill inbox-filter-pill-active'
-                  : 'inbox-filter-pill'
-              }
-              href={buildFilterHref('dm', query.q, activeView, activeSpaceId)}
-            >
-              {t.inbox.filters.dm}
-            </Link>
-            <Link
-              aria-selected={activeFilter === 'groups'}
-              className={
-                activeFilter === 'groups'
-                  ? 'inbox-filter-pill inbox-filter-pill-active'
-                  : 'inbox-filter-pill'
-              }
-              href={buildFilterHref('groups', query.q, activeView, activeSpaceId)}
-            >
-              {t.inbox.filters.groups}
-            </Link>
-            {(archivedConversationCount > 0 || activeView === 'archived') ? (
-              <Link
-                className={
-                  activeView === 'archived'
-                    ? 'inbox-filter-pill inbox-filter-pill-active'
-                    : 'inbox-filter-pill'
-                }
-                href={
-                  activeView === 'archived'
-                    ? buildInboxHref({
-                        filter: activeFilter,
-                        query: query.q,
-                        spaceId: activeSpaceId,
-                      })
-                    : buildInboxHref({
-                        filter: activeFilter,
-                        query: query.q,
-                        spaceId: activeSpaceId,
-                        view: 'archived',
-                      })
-                }
-              >
-                {activeView === 'archived'
-                  ? t.inbox.filters.inbox
-                  : `${t.inbox.filters.archived}${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
-              </Link>
-            ) : null}
-          </div>
-
-          {searchTerm ? (
-            <div
-              className={
-                isPrimaryChatsView
-                  ? 'inbox-search-meta inbox-search-meta-dm'
-                  : 'inbox-search-meta'
-              }
-            >
-              <div
-                className={
-                  isPrimaryChatsView
-                    ? 'stack inbox-search-copy inbox-search-copy-dm'
-                    : 'stack inbox-search-copy'
-                }
-              >
-                <p className="muted inbox-search-scope">{searchScopeSummary}</p>
-                {hasEncryptedDmSearchLimit ? (
-                  <p className="muted inbox-search-note">
-                    {t.inbox.searchEncryptedNote}
-                  </p>
-                ) : null}
-              </div>
-              <div className="inbox-search-meta-actions">
-              {searchTerm ? (
-                <Link
-                  className="inbox-search-clear"
-                  href={buildFilterHref(
-                    activeFilter,
-                    undefined,
-                    activeView,
-                    activeSpaceId,
-                  )}
-                >
-                  {t.inbox.clear}
-                </Link>
-              ) : null}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </section>
-
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
-
-      {activeView === 'archived' ? (
-        <section className="card stack inbox-archived-note">
-          <p className="muted inbox-archived-note-copy">
-            {t.inbox.archivedNote}
-          </p>
-        </section>
-      ) : null}
-
-      {conversationItems.length === 0 ? (
-          <section className="card stack empty-card inbox-empty-state">
-          <h2 className="card-title">
-            {activeView === 'archived' ? t.inbox.emptyArchivedTitle : t.inbox.emptyMainTitle}
-          </h2>
-          <p className="muted">
-            {activeView === 'archived'
-              ? t.inbox.emptyArchivedBody
-              : t.inbox.emptyMainBody}
-          </p>
-        </section>
-      ) : filteredConversationItems.length === 0 ? (
-        <section className="card stack empty-card inbox-empty-state">
-          <h2 className="card-title">
-            {activeView === 'archived'
-              ? t.inbox.emptyArchivedSearchTitle
-              : t.inbox.emptySearchTitle}
-          </h2>
-          <p className="muted">
-            {t.inbox.emptySearchBody}
-          </p>
-        </section>
-      ) : (
-        <section
-          className={
-            isPrimaryChatsView
-              ? 'stack conversation-list conversation-list-minimal conversation-list-dm'
-              : 'stack conversation-list conversation-list-minimal'
-          }
-        >
-          {filteredConversationItems.map((conversation) => (
-            <InboxConversationLiveRow
-              key={conversation.conversationId}
-              activeSpaceId={activeSpaceId}
-              currentUserId={user.id}
-              initialSummary={
-                liveSummariesByConversationId.get(conversation.conversationId) ?? {
-                  conversationId: conversation.conversationId,
-                  createdAt: null,
-                  hiddenAt: null,
-                  lastMessageAt: null,
-                  lastReadAt: null,
-                  lastReadMessageSeq: null,
-                  latestMessageBody: null,
-                  latestMessageContentMode: null,
-                  latestMessageDeletedAt: null,
-                  latestMessageId: null,
-                  latestMessageKind: null,
-                  latestMessageSenderId: null,
-                  latestMessageSeq: null,
-                  unreadCount: 0,
-                }
-              }
-              isArchivedView={activeView === 'archived'}
-              isPrimaryChatsView={isPrimaryChatsView}
-              item={{
-                conversationId: conversation.conversationId,
-                groupAvatarPath: conversation.groupAvatarPath,
-                isGroupConversation: conversation.isGroupConversation,
-                metaLabels: conversation.metaLabels,
-                participant: conversation.participants[0] ?? null,
-                title: conversation.title,
-              }}
-              language={language}
-              labels={{
-                attachment: t.chat.attachment,
-                deletedMessage: t.chat.deletedMessage,
-                encryptedMessage: t.chat.encryptedMessage,
-                group: t.inbox.metaGroup,
-                newEncryptedMessage: t.chat.newEncryptedMessage,
-                noActivityYet: t.inbox.noActivityYet,
-                unreadAria: t.inbox.unreadAria,
-                voiceMessage: t.chat.voiceMessage,
-                yesterday: t.inbox.yesterday,
-              }}
-              restoreAction={activeView === 'archived' ? restoreConversationAction : null}
-              restoreLabel={activeView === 'archived' ? t.inbox.restore : undefined}
-            />
-          ))}
-        </section>
-      )}
-
-      {isCreateOpen ? (
-        <section className="inbox-create-overlay" aria-label="Create chat">
-          <Link
-            aria-label="Close create chat"
-            className="inbox-create-backdrop"
-            href={buildInboxHref({
-              filter: activeFilter,
-              query: query.q,
-              spaceId: activeSpaceId,
-              view: activeView,
-            })}
-          />
-
-          <NewChatSheet
-            availableUsers={filteredAvailableUserEntries}
-            hasAnyUsers={availableUserEntries.length > 0}
-            closeHref={buildInboxHref({
-              filter: activeFilter,
-              query: query.q,
-              spaceId: activeSpaceId,
-              view: activeView,
-            })}
-            spaceId={activeSpaceId}
-            language={language}
-          />
-        </section>
-      ) : null}
+      <InboxFilterableContent
+        activeSpaceId={activeSpaceId}
+        archivedConversationItems={archivedConversationItems}
+        archivedSummaries={archivedSummaries}
+        availableUserEntries={availableUserEntries}
+        createOpen={isCreateOpen}
+        currentUserId={user.id}
+        initialFilter={activeFilter}
+        initialView={activeView}
+        language={language}
+        mainConversationItems={mainConversationItems}
+        mainSummaries={mainSummaries}
+        queryValue={query.q ?? ''}
+        restoreAction={restoreConversationAction}
+      />
     </section>
   );
 }
