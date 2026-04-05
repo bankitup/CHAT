@@ -512,14 +512,7 @@ export function ProfileSettingsForm({
           type="file"
         />
 
-        <div className="profile-inline-header">
-          <div className="stack settings-card-copy settings-section-copy">
-            <h2 className="section-title">{labels.profileTitle}</h2>
-            <p className="muted">
-              {isEditing ? labels.profilePhotoNote : labels.profileSubtitle}
-            </p>
-          </div>
-
+        <div className="profile-inline-header profile-inline-header-actions-only">
           <div className="profile-inline-actions">
             {isEditing ? (
               <>

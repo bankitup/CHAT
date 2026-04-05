@@ -287,10 +287,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
       <section className="card stack settings-surface activity-surface">
         <section className="stack settings-section">
-          <div className="stack activity-section-copy">
-            <h2 className="card-title">{t.activity.overviewTitle}</h2>
-            <p className="muted">{t.activity.overviewBody}</p>
-          </div>
           <div className="activity-summary-grid">
             <div className="activity-summary-card">
               <span className="activity-summary-label">{t.activity.unreadChats}</span>

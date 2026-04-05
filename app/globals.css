@@ -2262,6 +2262,10 @@ main {
   gap: 12px;
 }
 
+.profile-inline-header-actions-only {
+  justify-content: flex-end;
+}
+
 .profile-inline-actions {
   display: inline-flex;
   align-items: center;
