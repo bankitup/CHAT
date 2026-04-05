@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 export { getIdentityLabel } from './identity-label';
+
+const AVATAR_RETRY_MAX_ATTEMPTS = 2;
+const AVATAR_RETRY_DELAY_MS = 900;
 
 type IdentityRecord = {
   userId: string;
@@ -55,6 +58,21 @@ function isRenderableAvatarPath(value: string | null | undefined) {
   );
 }
 
+function withAvatarRetryParam(value: string, attempt: number) {
+  if (attempt <= 0) {
+    return value;
+  }
+
+  try {
+    const nextUrl = new URL(value);
+    nextUrl.searchParams.set('avatar_retry', String(attempt));
+    return nextUrl.toString();
+  } catch {
+    const separator = value.includes('?') ? '&' : '?';
+    return `${value}${separator}avatar_retry=${attempt}`;
+  }
+}
+
 export function getIdentityInitials(label: string) {
   const words = label
     .trim()
@@ -85,14 +103,41 @@ export function IdentityAvatar({
   const avatarPath = isRenderableAvatarPath(identity?.avatarPath)
     ? (identity?.avatarPath ?? null)
     : null;
-  const [failedAvatarPath, setFailedAvatarPath] = useState<string | null>(null);
-  const [loadedAvatarPath, setLoadedAvatarPath] = useState<string | null>(null);
-  const hasImageError = Boolean(avatarPath && failedAvatarPath === avatarPath);
-  const isImageLoaded = Boolean(avatarPath && loadedAvatarPath === avatarPath);
-  const shouldRenderImage = Boolean(avatarPath && !hasImageError);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [avatarRenderState, setAvatarRenderState] = useState(() => ({
+    hasPermanentImageError: false,
+    loadedAvatarPath: null as string | null,
+    path: avatarPath,
+    retryAttempt: 0,
+  }));
+  const retryAttempt =
+    avatarRenderState.path === avatarPath ? avatarRenderState.retryAttempt : 0;
+  const hasPermanentImageError =
+    avatarRenderState.path === avatarPath
+      ? avatarRenderState.hasPermanentImageError
+      : false;
+  const effectiveAvatarPath = useMemo(
+    () => (avatarPath ? withAvatarRetryParam(avatarPath, retryAttempt) : null),
+    [avatarPath, retryAttempt],
+  );
+  const isImageLoaded = Boolean(
+    effectiveAvatarPath &&
+      avatarRenderState.path === avatarPath &&
+      avatarRenderState.loadedAvatarPath === effectiveAvatarPath,
+  );
+  const shouldRenderImage = Boolean(avatarPath && !hasPermanentImageError);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_AVATARS === '1';
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!diagnosticsEnabled) {
@@ -105,18 +150,21 @@ export function IdentityAvatar({
       userId: identity?.userId ?? null,
       label,
       hasAvatarUrl: Boolean(avatarPath),
-      avatarUrl: avatarPath,
-      fallingBackToInitials: !avatarPath || hasImageError,
+      avatarUrl: effectiveAvatarPath,
+      retryAttempt,
+      fallingBackToInitials: !avatarPath || hasPermanentImageError,
       imageLoaded: isImageLoaded,
     });
   }, [
     avatarPath,
     diagnosticsEnabled,
     diagnosticsSurface,
-    hasImageError,
+    effectiveAvatarPath,
+    hasPermanentImageError,
     identity?.userId,
     isImageLoaded,
     label,
+    retryAttempt,
   ]);
 
   return (
@@ -155,11 +203,42 @@ export function IdentityAvatar({
                 surface: diagnosticsSurface ?? 'unknown',
                 userId: identity?.userId ?? null,
                 label,
-                avatarUrl: avatarPath,
+                avatarUrl: effectiveAvatarPath,
+                retryAttempt,
               });
             }
-            setFailedAvatarPath(avatarPath);
-            setLoadedAvatarPath(null);
+            setAvatarRenderState((currentState) => ({
+              ...currentState,
+              loadedAvatarPath: null,
+              path: avatarPath,
+            }));
+
+            if (retryAttempt < AVATAR_RETRY_MAX_ATTEMPTS) {
+              if (retryTimeoutRef.current) {
+                clearTimeout(retryTimeoutRef.current);
+              }
+
+              retryTimeoutRef.current = setTimeout(() => {
+                setAvatarRenderState((currentState) => ({
+                  hasPermanentImageError: false,
+                  loadedAvatarPath: null,
+                  path: avatarPath,
+                  retryAttempt:
+                    currentState.path === avatarPath
+                      ? currentState.retryAttempt + 1
+                      : 1,
+                }));
+                retryTimeoutRef.current = null;
+              }, AVATAR_RETRY_DELAY_MS);
+              return;
+            }
+
+            setAvatarRenderState({
+              hasPermanentImageError: true,
+              loadedAvatarPath: null,
+              path: avatarPath,
+              retryAttempt,
+            });
           }}
           onLoad={() => {
             if (diagnosticsEnabled) {
@@ -168,12 +247,22 @@ export function IdentityAvatar({
                 surface: diagnosticsSurface ?? 'unknown',
                 userId: identity?.userId ?? null,
                 label,
-                avatarUrl: avatarPath,
+                avatarUrl: effectiveAvatarPath,
+                retryAttempt,
               });
             }
-            setLoadedAvatarPath(avatarPath);
+            if (retryTimeoutRef.current) {
+              clearTimeout(retryTimeoutRef.current);
+              retryTimeoutRef.current = null;
+            }
+            setAvatarRenderState({
+              hasPermanentImageError: false,
+              loadedAvatarPath: effectiveAvatarPath,
+              path: avatarPath,
+              retryAttempt,
+            });
           }}
-          src={avatarPath ?? undefined}
+          src={effectiveAvatarPath ?? undefined}
         />
       ) : null}
     </span>
