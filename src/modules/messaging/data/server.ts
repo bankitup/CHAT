@@ -363,6 +363,9 @@ export type MessageSenderProfile = {
   email?: string | null;
   emailLocalPart?: string | null;
   avatarPath?: string | null;
+  statusEmoji?: string | null;
+  statusText?: string | null;
+  statusUpdatedAt?: string | null;
 };
 
 export type AvailableUser = {
@@ -372,6 +375,9 @@ export type AvailableUser = {
   email?: string | null;
   emailLocalPart?: string | null;
   avatarPath?: string | null;
+  statusEmoji?: string | null;
+  statusText?: string | null;
+  statusUpdatedAt?: string | null;
 };
 
 export type CurrentUserProfile = {
@@ -410,6 +416,9 @@ export type ConversationParticipantIdentity = {
   email?: string | null;
   emailLocalPart?: string | null;
   avatarPath?: string | null;
+  statusEmoji?: string | null;
+  statusText?: string | null;
+  statusUpdatedAt?: string | null;
 };
 
 export type ConversationMessageStats = {
@@ -2112,6 +2121,39 @@ export async function getProfileIdentities(userIds: string[]) {
     client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
     ids: string[],
   ) => {
+    const withStatuses = await client
+      .from('profiles')
+      .select(
+        'user_id, display_name, username, email_local_part, avatar_path, status_emoji, status_text, status_updated_at',
+      )
+      .in('user_id', ids);
+
+    if (!withStatuses.error) {
+      const profiles = ((withStatuses.data ?? []) as {
+        user_id: string;
+        display_name: string | null;
+        username?: string | null;
+        email_local_part?: string | null;
+        avatar_path?: string | null;
+        status_emoji?: string | null;
+        status_text?: string | null;
+        status_updated_at?: string | null;
+      }[]);
+
+      return Promise.all(
+        profiles.map(async (profile) => ({
+          userId: profile.user_id,
+          displayName: profile.display_name?.trim() || null,
+          username: profile.username?.trim() || null,
+          emailLocalPart: profile.email_local_part?.trim() || null,
+          avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
+          statusEmoji: profile.status_emoji?.trim() || null,
+          statusText: profile.status_text?.trim() || null,
+          statusUpdatedAt: profile.status_updated_at?.trim() || null,
+        })),
+      );
+    }
+
     const withIdentityFallbacksAndAvatars = await client
       .from('profiles')
       .select('user_id, display_name, username, email_local_part, avatar_path')
@@ -2133,6 +2175,9 @@ export async function getProfileIdentities(userIds: string[]) {
           username: profile.username?.trim() || null,
           emailLocalPart: profile.email_local_part?.trim() || null,
           avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
+          statusEmoji: null,
+          statusText: null,
+          statusUpdatedAt: null,
         })),
       );
     }
@@ -2156,6 +2201,9 @@ export async function getProfileIdentities(userIds: string[]) {
           username: null,
           emailLocalPart: null,
           avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
+          statusEmoji: null,
+          statusText: null,
+          statusUpdatedAt: null,
         })),
       );
     }
@@ -2177,6 +2225,9 @@ export async function getProfileIdentities(userIds: string[]) {
         username: profile.username?.trim() || null,
         emailLocalPart: profile.email_local_part?.trim() || null,
         avatarPath: null,
+        statusEmoji: null,
+        statusText: null,
+        statusUpdatedAt: null,
       }));
     }
 
@@ -2195,6 +2246,9 @@ export async function getProfileIdentities(userIds: string[]) {
         username: null,
         emailLocalPart: null,
         avatarPath: null,
+        statusEmoji: null,
+        statusText: null,
+        statusUpdatedAt: null,
       }));
     }
 
@@ -2210,6 +2264,9 @@ export async function getProfileIdentities(userIds: string[]) {
       username: null,
       emailLocalPart: null,
       avatarPath: null,
+      statusEmoji: null,
+      statusText: null,
+      statusUpdatedAt: null,
     }));
   };
   const mergeIdentity = (
@@ -2221,6 +2278,9 @@ export async function getProfileIdentities(userIds: string[]) {
     username: base?.username ?? fallback.username ?? null,
     emailLocalPart: base?.emailLocalPart ?? fallback.emailLocalPart ?? null,
     avatarPath: base?.avatarPath ?? fallback.avatarPath ?? null,
+    statusEmoji: base?.statusEmoji ?? fallback.statusEmoji ?? null,
+    statusText: base?.statusText ?? fallback.statusText ?? null,
+    statusUpdatedAt: base?.statusUpdatedAt ?? fallback.statusUpdatedAt ?? null,
   });
 
   const authProfiles = await loadProfiles(supabase, uniqueUserIds);
@@ -3861,6 +3921,9 @@ export async function getAvailableUsers(
       username: identity?.username ?? null,
       emailLocalPart: identity?.emailLocalPart ?? null,
       avatarPath: identity?.avatarPath ?? null,
+      statusEmoji: identity?.statusEmoji ?? null,
+      statusText: identity?.statusText ?? null,
+      statusUpdatedAt: identity?.statusUpdatedAt ?? null,
     };
   }) satisfies AvailableUser[];
 }
@@ -3894,6 +3957,9 @@ export async function getConversationParticipantIdentities(
       username: identity?.username ?? null,
       emailLocalPart: identity?.emailLocalPart ?? null,
       avatarPath: identity?.avatarPath ?? null,
+      statusEmoji: identity?.statusEmoji ?? null,
+      statusText: identity?.statusText ?? null,
+      statusUpdatedAt: identity?.statusUpdatedAt ?? null,
     };
   }) satisfies ConversationParticipantIdentity[];
 }

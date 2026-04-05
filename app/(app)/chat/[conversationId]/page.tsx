@@ -35,6 +35,10 @@ import {
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
+import {
+  IdentityStatusInline,
+  hasIdentityStatus,
+} from '@/modules/messaging/ui/identity-status';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
   getUserFacingErrorFallback,
@@ -996,15 +1000,23 @@ export default async function ChatPage({
                 </h1>
                 {conversation.kind === 'group' ? (
                   <p className="muted chat-member-summary">{groupMemberSummary}</p>
-                ) : otherParticipants[0] ? (
-                  <DmThreadClientSubtree
-                    conversationId={conversationId}
-                    {...threadClientDiagnostics}
-                    fallback={null}
-                    surface="conversation-presence-status"
-                  >
-                    <ConversationPresenceStatus language={language} />
-                  </DmThreadClientSubtree>
+                ) : hasIdentityStatus(directParticipantIdentity) || otherParticipants[0] ? (
+                  <div className="chat-header-meta">
+                    <IdentityStatusInline
+                      className="chat-header-status"
+                      identity={directParticipantIdentity}
+                    />
+                    {otherParticipants[0] ? (
+                      <DmThreadClientSubtree
+                        conversationId={conversationId}
+                        {...threadClientDiagnostics}
+                        fallback={null}
+                        surface="conversation-presence-status"
+                      >
+                        <ConversationPresenceStatus language={language} />
+                      </DmThreadClientSubtree>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -1217,11 +1229,20 @@ export default async function ChatPage({
 
                 <div className="stack conversation-info-copy">
                   <h3 className="conversation-info-title">{directConversationDisplayTitle}</h3>
-                  <p className="muted conversation-info-subtitle">
-                    {conversation.kind === 'group'
-                      ? groupMemberSummary
-                      : t.chat.directChat}
-                  </p>
+                  {conversation.kind === 'group' ? (
+                    <p className="muted conversation-info-subtitle">
+                      {groupMemberSummary}
+                    </p>
+                  ) : hasIdentityStatus(directParticipantIdentity) ? (
+                    <IdentityStatusInline
+                      className="conversation-info-status"
+                      identity={directParticipantIdentity}
+                    />
+                  ) : (
+                    <p className="muted conversation-info-subtitle">
+                      {t.chat.directChat}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1290,6 +1311,10 @@ export default async function ChatPage({
                         <span className="user-label">
                           {participant.label}
                         </span>
+                        <IdentityStatusInline
+                          className="conversation-member-status"
+                          identity={participant.identity}
+                        />
                         <div className="conversation-member-meta">
                           {conversation.kind === 'group' ? (
                             <span className="conversation-role-chip">
@@ -1433,7 +1458,13 @@ export default async function ChatPage({
                                       size="sm"
                                     />
                                   </span>
-                                  <span className="user-label">{participant.label}</span>
+                                  <span className="stack user-copy">
+                                    <span className="user-label">{participant.label}</span>
+                                    <IdentityStatusInline
+                                      className="user-status-inline"
+                                      identity={participant}
+                                    />
+                                  </span>
                                 </span>
                               </label>
                             ))}

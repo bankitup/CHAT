@@ -7,6 +7,7 @@ import {
   type AppLanguage,
 } from '@/modules/i18n';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import { IdentityStatusInline } from '@/modules/messaging/ui/identity-status';
 import { GuardedServerActionForm } from '../guarded-server-action-form';
 import { PendingSubmitButton } from '../pending-submit-button';
 import { createDmAction, createGroupAction } from './actions';
@@ -16,6 +17,8 @@ type NewChatSheetUser = {
   label: string;
   displayName: string | null;
   avatarPath?: string | null;
+  statusEmoji?: string | null;
+  statusText?: string | null;
 };
 
 type NewChatSheetProps = {
@@ -152,6 +155,10 @@ export function NewChatSheet({
                       />
                       <div className="stack user-copy">
                         <span className="user-label">{availableUser.label}</span>
+                        <IdentityStatusInline
+                          className="user-status-inline"
+                          identity={availableUser}
+                        />
                       </div>
                     </div>
                     <span className="inbox-create-option-state">
@@ -247,6 +254,10 @@ export function NewChatSheet({
                         />
                         <div className="stack user-copy">
                           <span className="user-label">{availableUser.label}</span>
+                          <IdentityStatusInline
+                            className="user-status-inline"
+                            identity={availableUser}
+                          />
                         </div>
                       </div>
                       <span className="inbox-create-option-state">
