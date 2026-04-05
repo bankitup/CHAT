@@ -79,7 +79,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       </section>
 
       {params.error ? <p className="notice notice-error">{params.error}</p> : null}
-      {params.message ? <p className="notice">{params.message}</p> : null}
+      {params.message ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{params.message}</span>
+        </div>
+      ) : null}
 
       <section className="card stack settings-surface">
         <section className="stack settings-section">

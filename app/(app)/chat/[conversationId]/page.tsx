@@ -1319,12 +1319,12 @@ export default async function ChatPage({
             {hasSettingsSavedState ? (
               <div
                 aria-live="polite"
-                className="conversation-settings-success"
+                className="notice notice-success notice-inline conversation-settings-success"
               >
-                <span aria-hidden="true" className="conversation-settings-success-check">
+                <span aria-hidden="true" className="notice-check conversation-settings-success-check">
                   ✓
                 </span>
-                <span className="conversation-settings-success-copy">
+                <span className="notice-copy conversation-settings-success-copy">
                   {t.chat.changesSaved}
                 </span>
               </div>
