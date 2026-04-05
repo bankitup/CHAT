@@ -550,17 +550,51 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     );
 
   return (
-    <section className="stack inbox-screen inbox-screen-minimal">
+    <section
+      className={
+        isDmOnlyView
+          ? 'stack inbox-screen inbox-screen-minimal inbox-screen-dm'
+          : 'stack inbox-screen inbox-screen-minimal'
+      }
+    >
       <InboxRealtimeSync
         conversationIds={visibleConversations.map((conversation) => conversation.conversationId)}
         userId={user.id}
       />
 
-      <section className="card inbox-home-shell stack">
+      <section
+        className={
+          isDmOnlyView
+            ? 'card inbox-home-shell inbox-home-shell-dm stack'
+            : 'card inbox-home-shell stack'
+        }
+      >
         <div className="inbox-topbar">
-          <div className="stack inbox-topbar-copy">
-            <h1 className="inbox-home-title">{headerTitle}</h1>
-            <p className="muted inbox-home-subtitle">{headerSubtitle}</p>
+          <div
+            className={
+              isDmOnlyView
+                ? 'stack inbox-topbar-copy inbox-topbar-copy-dm'
+                : 'stack inbox-topbar-copy'
+            }
+          >
+            <h1
+              className={
+                isDmOnlyView
+                  ? 'inbox-home-title inbox-home-title-dm'
+                  : 'inbox-home-title'
+              }
+            >
+              {headerTitle}
+            </h1>
+            <p
+              className={
+                isDmOnlyView
+                  ? 'muted inbox-home-subtitle inbox-home-subtitle-dm'
+                  : 'muted inbox-home-subtitle'
+              }
+            >
+              {headerSubtitle}
+            </p>
           </div>
           <div className="inbox-topbar-actions">
             <Link
@@ -586,20 +620,45 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           </div>
         </div>
 
-        <div className="stack inbox-toolbar">
+        <div
+          className={
+            isDmOnlyView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
+          }
+        >
           <form
             action="/inbox"
-            className="inbox-search-form inbox-search-form-minimal"
+            className={
+              isDmOnlyView
+                ? 'inbox-search-form inbox-search-form-minimal inbox-search-form-dm'
+                : 'inbox-search-form inbox-search-form-minimal'
+            }
             aria-label={searchAria}
             role="search"
           >
-            <label className="field inbox-search-field inbox-search-shell">
+            <label
+              className={
+                isDmOnlyView
+                  ? 'field inbox-search-field inbox-search-shell inbox-search-shell-dm'
+                  : 'field inbox-search-field inbox-search-shell'
+              }
+            >
               <span className="sr-only">{searchAria}</span>
-              <span aria-hidden="true" className="inbox-search-icon">
+              <span
+                aria-hidden="true"
+                className={
+                  isDmOnlyView
+                    ? 'inbox-search-icon inbox-search-icon-dm'
+                    : 'inbox-search-icon'
+                }
+              >
                 ⌕
               </span>
               <input
-                className="input inbox-search-input"
+                className={
+                  isDmOnlyView
+                    ? 'input inbox-search-input inbox-search-input-dm'
+                    : 'input inbox-search-input'
+                }
                 defaultValue={query.q ?? ''}
                 enterKeyHint="search"
                 name="q"
@@ -616,7 +675,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             ) : null}
           </form>
 
-          <div className="inbox-filter-row" role="tablist" aria-label={t.inbox.filtersAria}>
+          <div
+            className={
+              isDmOnlyView
+                ? 'inbox-filter-row inbox-filter-row-dm'
+                : 'inbox-filter-row'
+            }
+            role="tablist"
+            aria-label={t.inbox.filtersAria}
+          >
             <Link
               aria-selected={activeFilter === 'all'}
               className={
@@ -680,8 +747,20 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           </div>
 
           {searchTerm ? (
-            <div className="inbox-search-meta">
-              <div className="stack inbox-search-copy">
+            <div
+              className={
+                isDmOnlyView
+                  ? 'inbox-search-meta inbox-search-meta-dm'
+                  : 'inbox-search-meta'
+              }
+            >
+              <div
+                className={
+                  isDmOnlyView
+                    ? 'stack inbox-search-copy inbox-search-copy-dm'
+                    : 'stack inbox-search-copy'
+                }
+              >
                 <p className="muted inbox-search-scope">{searchScopeSummary}</p>
                 {hasEncryptedDmSearchLimit ? (
                   <p className="muted inbox-search-note">
@@ -742,25 +821,43 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           </p>
         </section>
       ) : (
-        <section className="stack conversation-list conversation-list-minimal">
+        <section
+          className={
+            isDmOnlyView
+              ? 'stack conversation-list conversation-list-minimal conversation-list-dm'
+              : 'stack conversation-list conversation-list-minimal'
+          }
+        >
           {filteredConversationItems.map((conversation) => (
             <article
               key={conversation.conversationId}
               className={
                 conversation.hasUnread
-                  ? 'conversation-card conversation-card-unread conversation-card-minimal'
-                  : 'conversation-card conversation-card-minimal'
+                  ? isDmOnlyView
+                    ? 'conversation-card conversation-card-unread conversation-card-minimal conversation-card-dm'
+                    : 'conversation-card conversation-card-unread conversation-card-minimal'
+                  : isDmOnlyView
+                    ? 'conversation-card conversation-card-minimal conversation-card-dm'
+                    : 'conversation-card conversation-card-minimal'
               }
             >
               <div
                 className={
                   activeView === 'archived'
-                    ? 'conversation-row conversation-row-with-action'
-                    : 'conversation-row'
+                    ? isDmOnlyView
+                      ? 'conversation-row conversation-row-with-action conversation-row-dm'
+                      : 'conversation-row conversation-row-with-action'
+                    : isDmOnlyView
+                      ? 'conversation-row conversation-row-dm'
+                      : 'conversation-row'
                 }
               >
                 <Link
-                  className="conversation-row-link"
+                  className={
+                    isDmOnlyView
+                      ? 'conversation-row-link conversation-row-link-dm'
+                      : 'conversation-row-link'
+                  }
                   href={withSpaceParam(
                     `/chat/${conversation.conversationId}`,
                     activeSpaceId,
@@ -769,25 +866,47 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar
                       label={conversation.title}
-                      size="md"
+                      size={isDmOnlyView ? 'lg' : 'md'}
                     />
                   ) : (
                     <IdentityAvatar
                       diagnosticsSurface="inbox:conversation-row"
                       identity={conversation.participants[0]}
                       label={conversation.title}
-                      size="md"
+                      size={isDmOnlyView ? 'lg' : 'md'}
                     />
                   )}
 
-                  <div className="stack conversation-card-copy">
-                    <div className="stack conversation-main-copy">
-                      <div className="conversation-title-row">
+                  <div
+                    className={
+                      isDmOnlyView
+                        ? 'stack conversation-card-copy conversation-card-copy-dm'
+                        : 'stack conversation-card-copy'
+                    }
+                  >
+                    <div
+                      className={
+                        isDmOnlyView
+                          ? 'stack conversation-main-copy conversation-main-copy-dm'
+                          : 'stack conversation-main-copy'
+                      }
+                    >
+                      <div
+                        className={
+                          isDmOnlyView
+                            ? 'conversation-title-row conversation-title-row-dm'
+                            : 'conversation-title-row'
+                        }
+                      >
                         <h3
                           className={
                             conversation.hasUnread
-                              ? 'conversation-title conversation-title-unread'
-                              : 'conversation-title'
+                              ? isDmOnlyView
+                                ? 'conversation-title conversation-title-unread conversation-title-dm'
+                                : 'conversation-title conversation-title-unread'
+                              : isDmOnlyView
+                                ? 'conversation-title conversation-title-dm'
+                                : 'conversation-title'
                           }
                         >
                           {conversation.title}
@@ -814,8 +933,12 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                         <EncryptedDmInboxPreview
                           className={
                             conversation.hasUnread
-                              ? 'muted conversation-preview conversation-preview-unread'
-                              : 'muted conversation-preview'
+                              ? isDmOnlyView
+                                ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
+                                : 'muted conversation-preview conversation-preview-unread'
+                              : isDmOnlyView
+                                ? 'muted conversation-preview conversation-preview-dm'
+                                : 'muted conversation-preview'
                           }
                           conversationId={conversation.conversationId}
                           currentUserId={user.id}
@@ -827,7 +950,13 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                       ) : null}
                     </div>
 
-                    <div className="conversation-footer">
+                    <div
+                      className={
+                        isDmOnlyView
+                          ? 'conversation-footer conversation-footer-dm'
+                          : 'conversation-footer'
+                      }
+                    >
                       <div className="conversation-footer-meta">
                         {conversation.metaLabels.map((metaLabel) => (
                           <span
