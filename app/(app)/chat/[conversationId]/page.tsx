@@ -288,6 +288,13 @@ function isEncryptedDmTextMessage(value: {
   );
 }
 
+function canRenderEncryptedDmBody(input: {
+  clientId: string | null | undefined;
+  envelopePresent: boolean;
+}) {
+  return Boolean(input.clientId?.trim() && input.envelopePresent);
+}
+
 function formatGroupMemberSummary(
   participantIds: string[],
   currentUserId: string,
@@ -601,6 +608,19 @@ export default async function ChatPage({
       messageIds: encryptedMessageIds,
     }),
   ]);
+  if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' && encryptedMessageIds.length > 0) {
+    const missingEnvelopeMessageIds = encryptedMessageIds.filter(
+      (messageId) => !e2eeEnvelopesByMessage.has(messageId),
+    );
+    console.info('[dm-e2ee-history]', 'thread:envelope-availability', {
+      conversationId,
+      currentUserId: user.id,
+      encryptedMessageCount: encryptedMessageIds.length,
+      envelopeCount: e2eeEnvelopesByMessage.size,
+      missingEnvelopeCount: missingEnvelopeMessageIds.length,
+      missingEnvelopeMessageIds,
+    });
+  }
   const senderNames = new Map<string, string>(
     senderProfiles.map((profile) => [
       profile.userId,
@@ -897,6 +917,12 @@ export default async function ChatPage({
                 const isMessageInDeleteMode =
                   activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
                 const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
+                const encryptedEnvelope =
+                  e2eeEnvelopesByMessage.get(message.id) ?? null;
+                const canAttemptEncryptedRender = canRenderEncryptedDmBody({
+                  clientId: message.client_id,
+                  envelopePresent: Boolean(encryptedEnvelope),
+                });
                 const otherParticipantReadSeq =
                   otherParticipantReadState?.lastReadMessageSeq ?? null;
                 const outgoingMessageStatus = getOutgoingMessageStatus({
@@ -1075,23 +1101,31 @@ export default async function ChatPage({
                             </div>
                           </div>
                         ) : isEncryptedDmTextMessage(message) ? (
-                          <EncryptedDmMessageBody
-                            clientId={message.client_id}
-                            conversationId={conversationId}
-                            currentUserId={user.id}
-                            envelope={e2eeEnvelopesByMessage.get(message.id) ?? null}
-                            fallbackLabel={t.chat.encryptedMessage}
-                            refreshSetupLabel={t.chat.refreshEncryptedSetup}
-                            reloadConversationLabel={t.chat.reloadConversation}
-                            retryLabel={t.chat.retryEncryptedAction}
-                            setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
-                            unavailableLabel={t.chat.encryptedMessageUnavailable}
-                            messageId={message.id}
-                            messageCreatedAt={message.created_at}
-                            shouldCachePreview={
-                              conversation.kind === 'dm' && isLatestConversationMessage
-                            }
-                          />
+                          canAttemptEncryptedRender ? (
+                            <EncryptedDmMessageBody
+                              clientId={message.client_id}
+                              conversationId={conversationId}
+                              currentUserId={user.id}
+                              envelope={encryptedEnvelope}
+                              fallbackLabel={t.chat.encryptedMessage}
+                              refreshSetupLabel={t.chat.refreshEncryptedSetup}
+                              reloadConversationLabel={t.chat.reloadConversation}
+                              retryLabel={t.chat.retryEncryptedAction}
+                              setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
+                              unavailableLabel={t.chat.encryptedMessageUnavailable}
+                              messageId={message.id}
+                              messageCreatedAt={message.created_at}
+                              shouldCachePreview={
+                                conversation.kind === 'dm' && isLatestConversationMessage
+                              }
+                            />
+                          ) : (
+                            <div className="message-encryption-state">
+                              <p className="message-body">
+                                {t.chat.encryptedMessageUnavailable}
+                              </p>
+                            </div>
+                          )
                         ) : message.body?.trim() ? (
                           <p className="message-body">{message.body.trim()}</p>
                         ) : !messageAttachments.length ? (
@@ -1327,6 +1361,12 @@ export default async function ChatPage({
               const isMessageInDeleteMode =
                 activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
               const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
+              const encryptedEnvelope =
+                e2eeEnvelopesByMessage.get(message.id) ?? null;
+              const canAttemptEncryptedRender = canRenderEncryptedDmBody({
+                clientId: message.client_id,
+                envelopePresent: Boolean(encryptedEnvelope),
+              });
               const otherParticipantReadSeq =
                 otherParticipantReadState?.lastReadMessageSeq ?? null;
               const outgoingMessageStatus = getOutgoingMessageStatus({
@@ -1505,23 +1545,31 @@ export default async function ChatPage({
                             </div>
                           </div>
                         ) : isEncryptedDmTextMessage(message) ? (
-                          <EncryptedDmMessageBody
-                            clientId={message.client_id}
-                            conversationId={conversationId}
-                            currentUserId={user.id}
-                            envelope={e2eeEnvelopesByMessage.get(message.id) ?? null}
-                            fallbackLabel={t.chat.encryptedMessage}
-                            refreshSetupLabel={t.chat.refreshEncryptedSetup}
-                            reloadConversationLabel={t.chat.reloadConversation}
-                            retryLabel={t.chat.retryEncryptedAction}
-                            setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
-                            unavailableLabel={t.chat.encryptedMessageUnavailable}
-                            messageId={message.id}
-                            messageCreatedAt={message.created_at}
-                            shouldCachePreview={
-                              conversation.kind === 'dm' && isLatestConversationMessage
-                            }
-                          />
+                          canAttemptEncryptedRender ? (
+                            <EncryptedDmMessageBody
+                              clientId={message.client_id}
+                              conversationId={conversationId}
+                              currentUserId={user.id}
+                              envelope={encryptedEnvelope}
+                              fallbackLabel={t.chat.encryptedMessage}
+                              refreshSetupLabel={t.chat.refreshEncryptedSetup}
+                              reloadConversationLabel={t.chat.reloadConversation}
+                              retryLabel={t.chat.retryEncryptedAction}
+                              setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
+                              unavailableLabel={t.chat.encryptedMessageUnavailable}
+                              messageId={message.id}
+                              messageCreatedAt={message.created_at}
+                              shouldCachePreview={
+                                conversation.kind === 'dm' && isLatestConversationMessage
+                              }
+                            />
+                          ) : (
+                            <div className="message-encryption-state">
+                              <p className="message-body">
+                                {t.chat.encryptedMessageUnavailable}
+                              </p>
+                            </div>
+                          )
                         ) : message.body?.trim() ? (
                           <p className="message-body">{message.body.trim()}</p>
                         ) : !messageAttachments.length ? (
