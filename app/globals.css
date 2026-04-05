@@ -1368,18 +1368,19 @@ main {
 }
 
 .conversation-back {
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
   padding: 0;
   border-color: rgba(214, 223, 235, 0.96);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 254, 0.92));
   color: rgba(17, 24, 39, 0.96);
-  font-size: 1.08rem;
+  font-size: 1.12rem;
   box-shadow:
     0 1px 2px rgba(17, 24, 39, 0.04),
-    0 10px 24px rgba(17, 24, 39, 0.06);
+    0 12px 28px rgba(17, 24, 39, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .chat-screen {
@@ -2102,9 +2103,17 @@ main {
 }
 
 .conversation-settings-back-link {
-  width: 36px;
-  min-height: 36px;
+  width: 38px;
+  min-height: 38px;
   padding: 0;
+  border-color: rgba(214, 223, 235, 0.92);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.9));
+  color: rgba(17, 24, 39, 0.94);
+  font-size: 1.04rem;
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.04),
+    0 8px 18px rgba(17, 24, 39, 0.05);
 }
 
 .chat-header-chevron {
