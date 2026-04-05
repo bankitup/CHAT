@@ -72,6 +72,12 @@ type LanguageDictionary = {
     avatarUploadFailed: string;
     avatarStorageUnavailable: string;
     profileUpdateFailed: string;
+    avatarEditorHint: string;
+    avatarEditorZoom: string;
+    avatarEditorApply: string;
+    avatarEditorDraftReady: string;
+    avatarEditorPreparing: string;
+    avatarEditorLoadFailed: string;
     saveChanges: string;
     profileFallback: string;
     languageTitle: string;
@@ -397,6 +403,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarUploadFailed: 'Unable to upload avatar right now.',
       avatarStorageUnavailable: 'Avatar uploads are not available right now.',
       profileUpdateFailed: 'Unable to update your profile right now.',
+      avatarEditorHint: 'Move and zoom your photo, then use it as a draft.',
+      avatarEditorZoom: 'Zoom',
+      avatarEditorApply: 'Use photo',
+      avatarEditorDraftReady: 'Photo draft ready. Save to apply it.',
+      avatarEditorPreparing: 'Preparing photo...',
+      avatarEditorLoadFailed: 'Unable to open that photo right now.',
       saveChanges: 'Save changes',
       profileFallback: 'Your profile',
       languageTitle: 'Language',
@@ -732,6 +744,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarUploadFailed: 'Сейчас не удалось загрузить аватар.',
       avatarStorageUnavailable: 'Загрузка аватаров сейчас недоступна.',
       profileUpdateFailed: 'Сейчас не удалось обновить профиль.',
+      avatarEditorHint: 'Подвиньте и приблизьте фото, затем примените черновик.',
+      avatarEditorZoom: 'Масштаб',
+      avatarEditorApply: 'Использовать фото',
+      avatarEditorDraftReady: 'Черновик фото готов. Сохраните, чтобы применить.',
+      avatarEditorPreparing: 'Подготавливаем фото...',
+      avatarEditorLoadFailed: 'Сейчас не удалось открыть это фото.',
       saveChanges: 'Сохранить',
       profileFallback: 'Ваш профиль',
       languageTitle: 'Язык',

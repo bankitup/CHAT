@@ -119,6 +119,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               avatarUploadFailed: t.settings.avatarUploadFailed,
               avatarStorageUnavailable: t.settings.avatarStorageUnavailable,
               profileUpdateFailed: t.settings.profileUpdateFailed,
+              avatarEditorHint: t.settings.avatarEditorHint,
+              avatarEditorZoom: t.settings.avatarEditorZoom,
+              avatarEditorApply: t.settings.avatarEditorApply,
+              avatarEditorDraftReady: t.settings.avatarEditorDraftReady,
+              avatarEditorPreparing: t.settings.avatarEditorPreparing,
+              avatarEditorLoadFailed: t.settings.avatarEditorLoadFailed,
             }}
           />
         </section>
