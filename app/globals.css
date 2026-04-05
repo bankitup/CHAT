@@ -3023,6 +3023,7 @@ main {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  min-height: 52px;
   padding: 6px 7px 6px 8px;
   border: 1px solid rgba(221, 228, 238, 0.82);
   border-radius: 24px;
@@ -3038,14 +3039,19 @@ main {
 }
 
 .composer-input-field {
+  display: flex;
+  align-items: center;
   min-width: 0;
   align-self: stretch;
   position: relative;
 }
 
 .composer-typing-shell {
+  display: flex;
+  align-items: center;
   position: relative;
   min-width: 0;
+  width: 100%;
 }
 
 .composer-mention-menu {
@@ -3323,6 +3329,7 @@ main {
 .composer-action-cluster {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   gap: 6px;
 }
 
