@@ -581,119 +581,121 @@ export function ProfileSettingsForm({
           type="file"
         />
 
-        <div className="profile-inline-header profile-inline-header-actions-only">
-          <div className="profile-inline-actions">
-            {isEditing ? (
-              <>
+        <div className="profile-inline-shell">
+          <div className="profile-inline-top-row">
+            <div className="profile-inline-main">
+              <button
+                aria-label={isEditing ? labels.tapPhotoToChange : labels.profilePhoto}
+                className={
+                  isEditing
+                    ? 'profile-inline-avatar profile-inline-avatar-editable'
+                    : 'profile-inline-avatar'
+                }
+                disabled={!isEditing || isBusy}
+                onClick={() => fileInputRef.current?.click()}
+                type="button"
+              >
+                <IdentityAvatar
+                  diagnosticsSurface="settings:profile-inline"
+                  identity={{
+                    userId,
+                    displayName: visibleDisplayName || null,
+                    avatarPath: visibleAvatarPath,
+                  }}
+                  label={visibleDisplayName || labels.profilePhoto}
+                  size="lg"
+                />
+                {isEditing ? (
+                  <span aria-hidden="true" className="profile-inline-avatar-badge">
+                    ✎
+                  </span>
+                ) : null}
+              </button>
+
+              <div className="stack profile-inline-copy">
+                {isEditing ? (
+                  <label className="field profile-inline-field">
+                    <span className="sr-only">{labels.displayName}</span>
+                    <input
+                      className="input profile-inline-name-input"
+                      disabled={isBusy}
+                      maxLength={40}
+                      onChange={(event) => setDraftDisplayName(event.target.value)}
+                      placeholder={labels.displayNamePlaceholder}
+                      value={draftDisplayName}
+                    />
+                  </label>
+                ) : (
+                  <div className="stack profile-inline-view">
+                    <p className="profile-inline-name">
+                      {visibleDisplayName || labels.displayNamePlaceholder}
+                    </p>
+                  </div>
+                )}
+
+                <p className="muted profile-field-note">{avatarDraftNote}</p>
+              </div>
+            </div>
+
+            <div className="profile-inline-actions profile-inline-actions-top-row">
+              {isEditing ? (
+                <>
+                  <button
+                    aria-label={labels.saveChanges}
+                    className="profile-inline-save"
+                    disabled={isBusy || Boolean(avatarEditorDraft)}
+                    onClick={() => {
+                      void handleExplicitSave();
+                    }}
+                    type="button"
+                  >
+                    <span aria-hidden="true">✓</span>
+                  </button>
+                  <button
+                    className="pill profile-inline-cancel"
+                    disabled={isBusy}
+                    onClick={resetEditingState}
+                    type="button"
+                  >
+                    {labels.cancelEdit}
+                  </button>
+                </>
+              ) : (
                 <button
-                  aria-label={labels.saveChanges}
-                  className="profile-inline-save"
-                  disabled={isBusy || Boolean(avatarEditorDraft)}
+                  aria-label={labels.editProfile}
+                  className="pill profile-inline-edit"
                   onClick={() => {
-                    void handleExplicitSave();
+                    clearStatusQueryParams();
+                    setIsEditing(true);
                   }}
                   type="button"
                 >
-                  <span aria-hidden="true">✓</span>
+                  <span aria-hidden="true">✎</span>
                 </button>
-                <button
-                  className="pill profile-inline-cancel"
-                  disabled={isBusy}
-                  onClick={resetEditingState}
-                  type="button"
-                >
-                  {labels.cancelEdit}
-                </button>
-              </>
-            ) : (
-              <button
-                aria-label={labels.editProfile}
-                className="pill profile-inline-edit"
-                onClick={() => {
-                  clearStatusQueryParams();
-                  setIsEditing(true);
-                }}
-                type="button"
-              >
-                <span aria-hidden="true">✎</span>
-              </button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="profile-inline-shell">
-          <button
-            aria-label={isEditing ? labels.tapPhotoToChange : labels.profilePhoto}
-            className={
-              isEditing
-                ? 'profile-inline-avatar profile-inline-avatar-editable'
-                : 'profile-inline-avatar'
-            }
-            disabled={!isEditing || isBusy}
-            onClick={() => fileInputRef.current?.click()}
-            type="button"
-          >
-            <IdentityAvatar
-              diagnosticsSurface="settings:profile-inline"
-              identity={{
-                userId,
-                displayName: visibleDisplayName || null,
-                avatarPath: visibleAvatarPath,
+          {isEditing && hasPersistedAvatarWithoutDraft ? (
+            <button
+              className="button button-secondary button-compact profile-inline-remove"
+              disabled={isBusy}
+              onClick={() => {
+                clearPendingAvatarState();
+                setIsAvatarRemovalDraft(true);
+                setLocalError(null);
               }}
-              label={visibleDisplayName || labels.profilePhoto}
-              size="lg"
-            />
-            {isEditing ? (
-              <span aria-hidden="true" className="profile-inline-avatar-badge">
-                ✎
-              </span>
-            ) : null}
-          </button>
+              type="button"
+            >
+              {labels.removePhoto}
+            </button>
+          ) : null}
 
-          <div className="stack profile-inline-copy">
-            {isEditing ? (
-              <label className="field profile-inline-field">
-                <span className="sr-only">{labels.displayName}</span>
-                <input
-                  className="input profile-inline-name-input"
-                  disabled={isBusy}
-                  maxLength={40}
-                  onChange={(event) => setDraftDisplayName(event.target.value)}
-                  placeholder={labels.displayNamePlaceholder}
-                  value={draftDisplayName}
-                />
-              </label>
-            ) : (
-              <div className="stack profile-inline-view">
-                <p className="profile-inline-name">
-                  {visibleDisplayName || labels.displayNamePlaceholder}
-                </p>
-              </div>
-            )}
-
-            <p className="muted profile-field-note">{avatarDraftNote}</p>
-
-            {isEditing && hasPersistedAvatarWithoutDraft ? (
-              <button
-                className="button button-secondary button-compact profile-inline-remove"
-                disabled={isBusy}
-                onClick={() => {
-                  clearPendingAvatarState();
-                  setIsAvatarRemovalDraft(true);
-                  setLocalError(null);
-                }}
-                type="button"
-              >
-                {labels.removePhoto}
-              </button>
-            ) : null}
-
-            {isUploadingAvatar || isPreparingAvatar ? (
-              <p className="muted profile-field-note">
-                {isPreparingAvatar ? labels.avatarEditorPreparing : labels.avatarUploading}
-              </p>
-            ) : null}
-          </div>
+          {isUploadingAvatar || isPreparingAvatar ? (
+            <p className="muted profile-field-note">
+              {isPreparingAvatar ? labels.avatarEditorPreparing : labels.avatarUploading}
+            </p>
+          ) : null}
         </div>
 
       </form>

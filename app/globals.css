@@ -2497,22 +2497,15 @@ main {
   gap: 12px;
 }
 
-.profile-inline-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.profile-inline-header-actions-only {
-  justify-content: flex-end;
-}
-
 .profile-inline-actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.profile-inline-actions-top-row {
+  align-self: flex-start;
 }
 
 .profile-inline-edit,
@@ -2548,10 +2541,24 @@ main {
 
 .profile-inline-shell {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
+  gap: 12px;
+  padding: 6px 0 4px;
+}
+
+.profile-inline-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 14px;
-  padding: 12px 0 4px;
+}
+
+.profile-inline-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .profile-inline-avatar {
@@ -2609,7 +2616,7 @@ main {
 .profile-inline-copy {
   gap: 6px;
   min-width: 0;
-  padding-top: 6px;
+  padding-top: 2px;
 }
 
 .profile-inline-field {
