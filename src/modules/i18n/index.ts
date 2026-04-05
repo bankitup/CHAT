@@ -116,6 +116,27 @@ type LanguageDictionary = {
     quietTitle: string;
     quietBody: string;
   };
+  inboxSettings: {
+    title: string;
+    subtitle: string;
+    backToInbox: string;
+    saved: string;
+    saveChanges: string;
+    saveFailed: string;
+    filtersTitle: string;
+    filtersNote: string;
+    visibleFiltersTitle: string;
+    defaultFilterTitle: string;
+    defaultFilterNote: string;
+    groupingTitle: string;
+    groupingNote: string;
+    showGroupsSeparately: string;
+    showPersonalChatsFirst: string;
+    viewTitle: string;
+    viewNote: string;
+    densityComfortable: string;
+    densityCompact: string;
+  };
   notifications: {
     title: string;
     subtitle: string;
@@ -480,6 +501,29 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       digestBody: 'This space is reserved for smart recaps and digests when they are ready.',
       quietTitle: 'All quiet',
       quietBody: 'Nothing unread right now.',
+    },
+    inboxSettings: {
+      title: 'Chats settings',
+      subtitle: 'Choose how your chats section opens and feels.',
+      backToInbox: 'Back to chats',
+      saved: 'Chats settings updated.',
+      saveChanges: 'Save chats settings',
+      saveFailed: 'Unable to update chats settings right now. Please try again.',
+      filtersTitle: 'Filters',
+      filtersNote:
+        'Choose which tabs stay visible in chats and which one opens by default.',
+      visibleFiltersTitle: 'Visible filters',
+      defaultFilterTitle: 'Default filter',
+      defaultFilterNote:
+        'Used when you open chats without a filter already selected.',
+      groupingTitle: 'Grouping and organization',
+      groupingNote: 'Lightweight organization for the main chats list.',
+      showGroupsSeparately: 'Show groups separately',
+      showPersonalChatsFirst: 'Show personal chats first',
+      viewTitle: 'View preferences',
+      viewNote: 'Pick the inbox density that feels best on your phone.',
+      densityComfortable: 'Comfortable list density',
+      densityCompact: 'Compact list density',
     },
     notifications: {
       title: 'Notifications',
@@ -859,6 +903,29 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       digestBody: 'Это место зарезервировано под умные сводки и дайджесты, когда они будут готовы.',
       quietTitle: 'Пока тихо',
       quietBody: 'Сейчас нет непрочитанного.',
+    },
+    inboxSettings: {
+      title: 'Настройки чатов',
+      subtitle: 'Выберите, как раздел чатов открывается и выглядит.',
+      backToInbox: 'Назад в чаты',
+      saved: 'Настройки чатов обновлены.',
+      saveChanges: 'Сохранить настройки чатов',
+      saveFailed: 'Сейчас не удалось обновить настройки чатов. Попробуйте ещё раз.',
+      filtersTitle: 'Фильтры',
+      filtersNote:
+        'Выберите, какие вкладки остаются видимыми в чатах и какая открывается по умолчанию.',
+      visibleFiltersTitle: 'Видимые фильтры',
+      defaultFilterTitle: 'Фильтр по умолчанию',
+      defaultFilterNote:
+        'Используется, когда вы открываете чаты без заранее выбранного фильтра.',
+      groupingTitle: 'Группировка и организация',
+      groupingNote: 'Лёгкая организация для основного списка чатов.',
+      showGroupsSeparately: 'Показывать группы отдельно',
+      showPersonalChatsFirst: 'Показывать личные чаты первыми',
+      viewTitle: 'Вид списка',
+      viewNote: 'Выберите плотность списка, которая удобнее на телефоне.',
+      densityComfortable: 'Комфортная плотность списка',
+      densityCompact: 'Компактная плотность списка',
     },
     notifications: {
       title: 'Уведомления',

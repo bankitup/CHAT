@@ -16,10 +16,15 @@ import {
   subscribeToInboxSummaryRevision,
   type InboxConversationLiveSummary,
 } from '@/modules/messaging/realtime/inbox-summary-store';
+import {
+  resolveInboxInitialFilter,
+  type InboxPrimaryFilter,
+  type InboxSectionPreferences,
+} from '@/modules/messaging/inbox/preferences';
 import { InboxConversationLiveRow } from './inbox-conversation-live-row';
 import { NewChatSheet } from './new-chat-sheet';
 
-type InboxFilter = 'all' | 'dm' | 'groups';
+type InboxFilter = InboxPrimaryFilter;
 type InboxView = 'main' | 'archived';
 
 type ConversationListItem = {
@@ -78,6 +83,7 @@ type InboxFilterableContentProps = {
   language: AppLanguage;
   mainConversationItems: ConversationListItem[];
   mainSummaries: InboxConversationLiveSummary[];
+  preferences: InboxSectionPreferences;
   queryValue: string;
   restoreAction: ((formData: FormData) => void | Promise<void>) | null;
   archivedConversationItems: ConversationListItem[];
@@ -270,6 +276,25 @@ function deriveConversationItemsFromLiveState(input: {
   return derivedItems;
 }
 
+function partitionConversationItemsByKind(items: ConversationListItem[]) {
+  const directMessages: ConversationListItem[] = [];
+  const groups: ConversationListItem[] = [];
+
+  for (const item of items) {
+    if (item.isGroupConversation) {
+      groups.push(item);
+      continue;
+    }
+
+    directMessages.push(item);
+  }
+
+  return {
+    directMessages,
+    groups,
+  };
+}
+
 export function InboxFilterableContent({
   activeSpaceId,
   archivedConversationItems,
@@ -282,6 +307,7 @@ export function InboxFilterableContent({
   language,
   mainConversationItems,
   mainSummaries,
+  preferences,
   queryValue,
   restoreAction,
 }: InboxFilterableContentProps) {
@@ -289,14 +315,30 @@ export function InboxFilterableContent({
   const searchTerm = normalizeSearchTerm(queryValue);
   const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
   const [activeView, setActiveView] = useState<InboxView>(initialView);
+  const visibleFilters = useMemo(
+    () => preferences.visibleFilters,
+    [preferences.visibleFilters],
+  );
+  const resolvedInitialFilter = useMemo(
+    () => resolveInboxInitialFilter(initialFilter, preferences),
+    [initialFilter, preferences],
+  );
 
   useEffect(() => {
-    setActiveFilter(initialFilter);
-  }, [initialFilter]);
+    setActiveFilter(resolvedInitialFilter);
+  }, [resolvedInitialFilter]);
 
   useEffect(() => {
     setActiveView(initialView);
   }, [initialView]);
+
+  useEffect(() => {
+    const resolvedFilter = resolveInboxInitialFilter(activeFilter, preferences);
+
+    if (resolvedFilter !== activeFilter) {
+      setActiveFilter(resolvedFilter);
+    }
+  }, [activeFilter, preferences]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -417,6 +459,48 @@ export function InboxFilterableContent({
   );
   const activeBuckets = activeView === 'archived' ? archivedBuckets : mainBuckets;
   const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
+  const organizedConversationSections = useMemo(() => {
+    const shouldGroupByKind =
+      preferences.showGroupsSeparately && activeFilter === 'all';
+
+    if (!shouldGroupByKind) {
+      const orderedItems =
+        preferences.showPersonalChatsFirst && activeFilter === 'all'
+          ? [
+              ...partitionConversationItemsByKind(filteredConversationItems).directMessages,
+              ...partitionConversationItemsByKind(filteredConversationItems).groups,
+            ]
+          : filteredConversationItems;
+
+      return [
+        {
+          items: orderedItems,
+          key: 'all',
+          label: null,
+        },
+      ];
+    }
+
+    const { directMessages, groups } =
+      partitionConversationItemsByKind(filteredConversationItems);
+    const orderedSections = preferences.showPersonalChatsFirst
+      ? [
+          { items: directMessages, key: 'dm', label: t.inbox.filters.dm },
+          { items: groups, key: 'groups', label: t.inbox.filters.groups },
+        ]
+      : [
+          { items: groups, key: 'groups', label: t.inbox.filters.groups },
+          { items: directMessages, key: 'dm', label: t.inbox.filters.dm },
+        ];
+
+    return orderedSections.filter((section) => section.items.length > 0);
+  }, [
+    activeFilter,
+    filteredConversationItems,
+    preferences.showGroupsSeparately,
+    preferences.showPersonalChatsFirst,
+    t,
+  ]);
   const activeConversationSourceCount =
     activeView === 'archived'
       ? derivedArchivedConversationItems.length
@@ -513,7 +597,7 @@ export function InboxFilterableContent({
             <Link
               aria-label={t.inbox.settingsAria}
               className="inbox-settings-trigger inbox-topbar-action-button"
-              href={`/settings?space=${encodeURIComponent(activeSpaceId)}`}
+              href={`/inbox/settings?space=${encodeURIComponent(activeSpaceId)}`}
             >
               <span aria-hidden="true" className="inbox-topbar-action-icon">
                 ⚙
@@ -551,45 +635,51 @@ export function InboxFilterableContent({
             role="tablist"
             aria-label={t.inbox.filtersAria}
           >
-            <button
-              aria-selected={activeFilter === 'all'}
-              className={
-                activeFilter === 'all'
-                  ? 'inbox-filter-pill inbox-filter-pill-active'
-                  : 'inbox-filter-pill'
-              }
-              onClick={() => setActiveFilter('all')}
-              role="tab"
-              type="button"
-            >
-              {t.inbox.filters.all}
-            </button>
-            <button
-              aria-selected={activeFilter === 'dm'}
-              className={
-                activeFilter === 'dm'
-                  ? 'inbox-filter-pill inbox-filter-pill-active'
-                  : 'inbox-filter-pill'
-              }
-              onClick={() => setActiveFilter('dm')}
-              role="tab"
-              type="button"
-            >
-              {t.inbox.filters.dm}
-            </button>
-            <button
-              aria-selected={activeFilter === 'groups'}
-              className={
-                activeFilter === 'groups'
-                  ? 'inbox-filter-pill inbox-filter-pill-active'
-                  : 'inbox-filter-pill'
-              }
-              onClick={() => setActiveFilter('groups')}
-              role="tab"
-              type="button"
-            >
-              {t.inbox.filters.groups}
-            </button>
+            {visibleFilters.includes('all') ? (
+              <button
+                aria-selected={activeFilter === 'all'}
+                className={
+                  activeFilter === 'all'
+                    ? 'inbox-filter-pill inbox-filter-pill-active'
+                    : 'inbox-filter-pill'
+                }
+                onClick={() => setActiveFilter('all')}
+                role="tab"
+                type="button"
+              >
+                {t.inbox.filters.all}
+              </button>
+            ) : null}
+            {visibleFilters.includes('dm') ? (
+              <button
+                aria-selected={activeFilter === 'dm'}
+                className={
+                  activeFilter === 'dm'
+                    ? 'inbox-filter-pill inbox-filter-pill-active'
+                    : 'inbox-filter-pill'
+                }
+                onClick={() => setActiveFilter('dm')}
+                role="tab"
+                type="button"
+              >
+                {t.inbox.filters.dm}
+              </button>
+            ) : null}
+            {visibleFilters.includes('groups') ? (
+              <button
+                aria-selected={activeFilter === 'groups'}
+                className={
+                  activeFilter === 'groups'
+                    ? 'inbox-filter-pill inbox-filter-pill-active'
+                    : 'inbox-filter-pill'
+                }
+                onClick={() => setActiveFilter('groups')}
+                role="tab"
+                type="button"
+              >
+                {t.inbox.filters.groups}
+              </button>
+            ) : null}
             {(archivedConversationCount > 0 || activeView === 'archived') ? (
               <button
                 className={
@@ -684,41 +774,72 @@ export function InboxFilterableContent({
         <section
           className={
             isPrimaryChatsView
-              ? 'stack conversation-list conversation-list-minimal conversation-list-dm'
-              : 'stack conversation-list conversation-list-minimal'
+              ? [
+                  'stack',
+                  'conversation-list',
+                  'conversation-list-minimal',
+                  'conversation-list-dm',
+                  preferences.density === 'compact'
+                    ? 'conversation-list-density-compact'
+                    : 'conversation-list-density-comfortable',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
+              : [
+                  'stack',
+                  'conversation-list',
+                  'conversation-list-minimal',
+                  preferences.density === 'compact'
+                    ? 'conversation-list-density-compact'
+                    : 'conversation-list-density-comfortable',
+                ]
+                  .filter(Boolean)
+                  .join(' ')
           }
         >
-          {filteredConversationItems.map((conversation) => (
-            <InboxConversationLiveRow
-              key={conversation.conversationId}
-              activeSpaceId={activeSpaceId}
-              currentUserId={currentUserId}
-              initialSummary={
-                summariesByConversationId.get(conversation.conversationId) ?? {
-                  conversationId: conversation.conversationId,
-                  createdAt: null,
-                  hiddenAt: null,
-                  lastMessageAt: null,
-                  lastReadAt: null,
-                  lastReadMessageSeq: null,
-                  latestMessageBody: null,
-                  latestMessageContentMode: null,
-                  latestMessageDeletedAt: null,
-                  latestMessageId: null,
-                  latestMessageKind: null,
-                  latestMessageSenderId: null,
-                  latestMessageSeq: null,
-                  unreadCount: 0,
-                }
+          {organizedConversationSections.map((section) => (
+            <div
+              key={section.key}
+              className={
+                section.label ? 'stack conversation-list-section' : 'stack'
               }
-              isArchivedView={activeView === 'archived'}
-              isPrimaryChatsView={isPrimaryChatsView}
-              item={conversation}
-              language={language}
-              labels={rowLabels}
-              restoreAction={activeView === 'archived' ? restoreAction : null}
-              restoreLabel={activeView === 'archived' ? t.inbox.restore : undefined}
-            />
+            >
+              {section.label ? (
+                <p className="conversation-list-section-label">{section.label}</p>
+              ) : null}
+              {section.items.map((conversation) => (
+                <InboxConversationLiveRow
+                  key={conversation.conversationId}
+                  activeSpaceId={activeSpaceId}
+                  currentUserId={currentUserId}
+                  initialSummary={
+                    summariesByConversationId.get(conversation.conversationId) ?? {
+                      conversationId: conversation.conversationId,
+                      createdAt: null,
+                      hiddenAt: null,
+                      lastMessageAt: null,
+                      lastReadAt: null,
+                      lastReadMessageSeq: null,
+                      latestMessageBody: null,
+                      latestMessageContentMode: null,
+                      latestMessageDeletedAt: null,
+                      latestMessageId: null,
+                      latestMessageKind: null,
+                      latestMessageSenderId: null,
+                      latestMessageSeq: null,
+                      unreadCount: 0,
+                    }
+                  }
+                  isArchivedView={activeView === 'archived'}
+                  isPrimaryChatsView={isPrimaryChatsView}
+                  item={conversation}
+                  language={language}
+                  labels={rowLabels}
+                  restoreAction={activeView === 'archived' ? restoreAction : null}
+                  restoreLabel={activeView === 'archived' ? t.inbox.restore : undefined}
+                />
+              ))}
+            </div>
           ))}
         </section>
       )}

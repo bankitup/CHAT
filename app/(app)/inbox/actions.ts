@@ -1,14 +1,22 @@
 'use server';
 
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getRequestViewer } from '@/lib/request-context/server';
+import { getTranslations } from '@/modules/i18n';
+import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   createConversationWithMembers,
   findExistingActiveDmConversation,
   restoreConversationForUser,
   isUniqueConstraintErrorMessage,
 } from '@/modules/messaging/data/server';
+import {
+  normalizeInboxListDensity,
+  normalizeInboxSectionPreferences,
+} from '@/modules/messaging/inbox/preferences';
+import { setInboxSectionPreferencesCookie } from '@/modules/messaging/inbox/preferences-server';
 import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
@@ -89,6 +97,30 @@ async function redirectToExistingDmConversation(input: {
   }
 
   redirect(withSpaceParam(`/chat/${input.conversationId}`, input.spaceId));
+}
+
+function redirectToInboxSettings(
+  spaceId?: string | null,
+  options?: {
+    error?: string | null;
+    saved?: boolean;
+  },
+): never {
+  const params = new URLSearchParams();
+
+  if (options?.error?.trim()) {
+    params.set('error', options.error.trim());
+  }
+
+  if (options?.saved) {
+    params.set('saved', '1');
+  }
+
+  const baseHref = params.toString()
+    ? `/inbox/settings?${params.toString()}`
+    : '/inbox/settings';
+
+  redirect(withSpaceParam(baseHref, spaceId));
 }
 
 export async function createDmAction(formData: FormData) {
@@ -249,4 +281,49 @@ export async function restoreConversationAction(formData: FormData) {
     });
     redirect(withSpaceParam(`/inbox?${params.toString()}`, readText(formData, 'spaceId')));
   }
+}
+
+export async function saveInboxPreferencesAction(formData: FormData) {
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
+  const spaceId = readText(formData, 'spaceId');
+
+  try {
+    await getAuthenticatedUserId();
+
+    const visibleFilters = formData
+      .getAll('visibleFilters')
+      .map((value) => String(value).trim());
+    const defaultFilter = readText(formData, 'defaultFilter');
+    const density = normalizeInboxListDensity(readText(formData, 'density'));
+
+    const preferences = normalizeInboxSectionPreferences({
+      defaultFilter,
+      density,
+      showGroupsSeparately: readText(formData, 'showGroupsSeparately') === '1',
+      showPersonalChatsFirst: readText(formData, 'showPersonalChatsFirst') === '1',
+      visibleFilters,
+    });
+
+    await setInboxSectionPreferencesCookie(preferences);
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    redirectToInboxSettings(
+      spaceId,
+      {
+        error: getFriendlyInboxActionErrorMessage(
+          error,
+          t.inboxSettings.saveFailed,
+          'inbox:save-settings',
+        ),
+      },
+    );
+  }
+
+  revalidatePath('/inbox');
+  revalidatePath('/inbox/settings');
+  redirectToInboxSettings(spaceId, { saved: true });
 }

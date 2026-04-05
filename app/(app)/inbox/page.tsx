@@ -7,6 +7,12 @@ import {
   getInboxPreviewText,
 } from '@/modules/messaging/e2ee/inbox-policy';
 import {
+  getInboxSectionPreferences,
+} from '@/modules/messaging/inbox/preferences-server';
+import {
+  resolveInboxInitialFilter,
+} from '@/modules/messaging/inbox/preferences';
+import {
   getAvailableUsers,
   getArchivedConversations,
   getConversationDisplayName,
@@ -48,7 +54,6 @@ type InboxPageProps = {
   }>;
 };
 
-type InboxFilter = 'all' | 'dm' | 'groups';
 type InboxView = 'main' | 'archived';
 
 type ConversationListItem = {
@@ -72,14 +77,6 @@ type ConversationListItem = {
   participantLabels: string[];
   hasUnread: boolean;
 };
-
-function normalizeFilter(value: string | undefined): InboxFilter {
-  if (value === 'dm' || value === 'groups') {
-    return value;
-  }
-
-  return 'all';
-}
 
 function normalizeView(value: string | undefined): InboxView {
   return value === 'archived' ? 'archived' : 'main';
@@ -107,13 +104,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     filter: query.filter ?? 'all',
     view: query.view ?? 'main',
   });
-  const activeFilter = normalizeFilter(query.filter);
   const activeView = normalizeView(query.view);
   const isCreateOpen = query.create === 'open';
-  const [user, language] = await Promise.all([
+  const [user, language, inboxPreferences] = await Promise.all([
     getRequestViewer(),
     getRequestLanguage(),
+    getInboxSectionPreferences(),
   ]);
+  const activeFilter = resolveInboxInitialFilter(query.filter, inboxPreferences);
 
   if (!user) {
     logDiagnostics('no-user');
@@ -376,6 +374,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         language={language}
         mainConversationItems={mainConversationItems}
         mainSummaries={mainSummaries}
+        preferences={inboxPreferences}
         queryValue={query.q ?? ''}
         restoreAction={restoreConversationAction}
       />
