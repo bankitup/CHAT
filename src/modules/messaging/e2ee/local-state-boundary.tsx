@@ -17,9 +17,68 @@ export function DmE2eeAuthenticatedBoundary({
   userId: string;
 }) {
   const previousUserIdRef = useRef<string | null>(null);
+  const retryTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    const clearRetryTimeout = () => {
+      if (retryTimeoutRef.current !== null && typeof window !== 'undefined') {
+        window.clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+
+    const scheduleRetry = () => {
+      if (typeof window === 'undefined' || retryTimeoutRef.current !== null) {
+        return;
+      }
+
+      retryTimeoutRef.current = window.setTimeout(() => {
+        retryTimeoutRef.current = null;
+
+        if (cancelled || !enabled) {
+          return;
+        }
+
+        void runBootstrap('delayed-retry');
+      }, 1800);
+    };
+
+    const runBootstrap = async (reason: 'initial' | 'focus' | 'visibility' | 'delayed-retry') => {
+      try {
+        await ensureDmE2eeDeviceRegistered(userId, {
+          forcePublish: reason !== 'initial',
+        });
+        clearRetryTimeout();
+      } catch (error) {
+        if (!cancelled) {
+          console.error('DM E2EE boundary step failed.', error);
+          scheduleRetry();
+        }
+      }
+    };
+
+    const handleFocus = () => {
+      if (!enabled || cancelled) {
+        return;
+      }
+
+      void runBootstrap('focus');
+    };
+
+    const handleVisibilityChange = () => {
+      if (
+        !enabled ||
+        cancelled ||
+        typeof document === 'undefined' ||
+        document.visibilityState !== 'visible'
+      ) {
+        return;
+      }
+
+      void runBootstrap('visibility');
+    };
 
     void (async () => {
       try {
@@ -37,16 +96,34 @@ export function DmE2eeAuthenticatedBoundary({
           return;
         }
 
-        await ensureDmE2eeDeviceRegistered(userId);
+        await runBootstrap('initial');
+
+        if (typeof window !== 'undefined') {
+          window.addEventListener('focus', handleFocus);
+        }
+
+        if (typeof document !== 'undefined') {
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+        }
       } catch (error) {
         if (!cancelled) {
           console.error('DM E2EE boundary step failed.', error);
+          scheduleRetry();
         }
       }
     })();
 
     return () => {
       cancelled = true;
+      clearRetryTimeout();
+
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+      }
+
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
     };
   }, [enabled, userId]);
 

@@ -356,7 +356,9 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('user_devices')
-    .select('id, device_id, retired_at')
+    .select(
+      'id, device_id, retired_at, signed_prekey_id, signed_prekey_public, signed_prekey_signature',
+    )
     .eq('user_id', user.id)
     .is('retired_at', null)
     .order('created_at', { ascending: false });
@@ -380,12 +382,64 @@ export async function GET() {
     );
   }
 
-  const activeDeviceRowIds = ((data ?? []) as Array<{ id?: string | null }>)
+  const activeRows = (data ?? []) as Array<{
+    id?: string | null;
+    signed_prekey_id?: number | null;
+    signed_prekey_public?: string | null;
+    signed_prekey_signature?: string | null;
+  }>;
+  const activeDeviceRowIds = activeRows
     .map((row) => row.id?.trim() || null)
     .filter((value): value is string => Boolean(value));
+  const selectedDevice = activeRows[0] ?? null;
+  const hasSignedPrekey = Boolean(
+    Number.isInteger(selectedDevice?.signed_prekey_id) &&
+      selectedDevice?.signed_prekey_public?.trim() &&
+      selectedDevice?.signed_prekey_signature?.trim(),
+  );
+  let availableOneTimePrekeyCount = 0;
+
+  if (selectedDevice?.id) {
+    const prekeyLookup = await supabase
+      .from('device_one_time_prekeys')
+      .select('prekey_id', { count: 'exact' })
+      .eq('device_id', selectedDevice.id)
+      .is('claimed_at', null)
+      .limit(1);
+
+    if (prekeyLookup.error) {
+      if (isMissingDmE2eeSchemaMessage(prekeyLookup.error.message)) {
+        return NextResponse.json(
+          {
+            error: 'DM E2EE bootstrap schema is missing.',
+            code: 'dm_e2ee_schema_missing',
+          },
+          { status: 409 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: 'Unable to inspect encrypted device state right now.',
+        },
+        { status: 400 },
+      );
+    }
+
+    availableOneTimePrekeyCount = Number(prekeyLookup.count ?? 0);
+  }
+
+  logDmE2eeDeviceRouteDiagnostics('inspect:ok', {
+    activeDeviceRowCount: activeDeviceRowIds.length,
+    availableOneTimePrekeyCount,
+    hasSignedPrekey,
+  });
 
   return NextResponse.json({
     activeDeviceRowIds,
+    activeDeviceRowCount: activeDeviceRowIds.length,
+    availableOneTimePrekeyCount,
     hasActiveDevice: activeDeviceRowIds.length > 0,
+    hasSignedPrekey,
   });
 }

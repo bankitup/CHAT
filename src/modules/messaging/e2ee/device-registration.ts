@@ -29,7 +29,10 @@ type EnsureDmE2eeDeviceRegisteredOptions = {
 
 type DmE2eeServerDeviceState = {
   activeDeviceRowIds: string[];
+  activeDeviceRowCount: number;
+  availableOneTimePrekeyCount: number;
   hasActiveDevice: boolean;
+  hasSignedPrekey: boolean;
 };
 
 function shouldLogDmE2eeBootstrapClientDiagnostics() {
@@ -266,9 +269,12 @@ async function fetchServerDmE2eeDeviceState() {
 
   const payload = (await response.json()) as {
     activeDeviceRowIds?: string[] | null;
+    activeDeviceRowCount?: number | null;
+    availableOneTimePrekeyCount?: number | null;
     code?: string | null;
     error?: string | null;
     hasActiveDevice?: boolean | null;
+    hasSignedPrekey?: boolean | null;
   };
 
   if (!response.ok) {
@@ -292,9 +298,27 @@ async function fetchServerDmE2eeDeviceState() {
             .map((value) => value?.trim())
             .filter((value): value is string => Boolean(value))
         : [],
+      activeDeviceRowCount: Number(payload.activeDeviceRowCount ?? 0),
+      availableOneTimePrekeyCount: Number(
+        payload.availableOneTimePrekeyCount ?? 0,
+      ),
       hasActiveDevice: Boolean(payload.hasActiveDevice),
+      hasSignedPrekey: Boolean(payload.hasSignedPrekey),
     } satisfies DmE2eeServerDeviceState,
   };
+}
+
+function isServerDmE2eeDeviceStateReady(
+  serverState: DmE2eeServerDeviceState,
+  serverDeviceRecordId: string | null | undefined,
+) {
+  return Boolean(
+    serverDeviceRecordId &&
+      serverState.hasActiveDevice &&
+      serverState.activeDeviceRowIds.includes(serverDeviceRecordId) &&
+      serverState.hasSignedPrekey &&
+      serverState.availableOneTimePrekeyCount > 0,
+  );
 }
 
 export async function ensureDmE2eeDeviceRegistered(
@@ -385,33 +409,42 @@ export async function ensureDmE2eeDeviceRegistered(
       };
     }
 
-    const serverStillMatches =
-      serverState.state.hasActiveDevice &&
-      serverState.state.activeDeviceRowIds.includes(localRecord.serverDeviceRecordId);
+    const serverStillMatches = isServerDmE2eeDeviceStateReady(
+      serverState.state,
+      localRecord.serverDeviceRecordId,
+    );
 
     if (!serverStillMatches) {
       logDmE2eeBootstrapClientDiagnostics('publish:stale-server-state', {
+        activeDeviceRowCount: serverState.state.activeDeviceRowCount,
+        availableOneTimePrekeyCount:
+          serverState.state.availableOneTimePrekeyCount,
         currentUserId: userId,
+        hasSignedPrekey: serverState.state.hasSignedPrekey,
         localServerDeviceRecordId: localRecord.serverDeviceRecordId,
         activeDeviceRowIds: serverState.state.activeDeviceRowIds,
         hasActiveDevice: serverState.state.hasActiveDevice,
       });
     } else {
-    logDmE2eeBootstrapClientDiagnostics('publish:skip-already-registered', {
-      currentUserId: userId,
-      reusedExistingServerDeviceRecordId: localRecord.serverDeviceRecordId,
-      serverDeviceRecordIdPresent: true,
-    });
-    return {
-      status: 'registered',
-      result: {
-        deviceRecordId: localRecord.serverDeviceRecordId,
-        publishedPrekeyCount: 0,
-      },
-    } satisfies {
-      status: DmE2eeBootstrapStatus;
-      result: PublishDmE2eeDeviceResult;
-    };
+      logDmE2eeBootstrapClientDiagnostics('publish:skip-already-registered', {
+        activeDeviceRowCount: serverState.state.activeDeviceRowCount,
+        availableOneTimePrekeyCount:
+          serverState.state.availableOneTimePrekeyCount,
+        currentUserId: userId,
+        hasSignedPrekey: serverState.state.hasSignedPrekey,
+        reusedExistingServerDeviceRecordId: localRecord.serverDeviceRecordId,
+        serverDeviceRecordIdPresent: true,
+      });
+      return {
+        status: 'registered',
+        result: {
+          deviceRecordId: localRecord.serverDeviceRecordId,
+          publishedPrekeyCount: 0,
+        },
+      } satisfies {
+        status: DmE2eeBootstrapStatus;
+        result: PublishDmE2eeDeviceResult;
+      };
     }
   }
 
@@ -440,6 +473,54 @@ export async function ensureDmE2eeDeviceRegistered(
       serverDeviceRecordId: result.deviceRecordId,
       lastPublishedAt: new Date().toISOString(),
     });
+
+    const verifiedServerState = await fetchServerDmE2eeDeviceState();
+
+    if (verifiedServerState.status === 'schema-missing') {
+      return {
+        status: 'schema-missing',
+        result: null,
+      } satisfies {
+        status: DmE2eeBootstrapStatus;
+        result: null;
+      };
+    }
+
+    logDmE2eeBootstrapClientDiagnostics('publish:verified', {
+      activeDeviceRowCount: verifiedServerState.state.activeDeviceRowCount,
+      availableOneTimePrekeyCount:
+        verifiedServerState.state.availableOneTimePrekeyCount,
+      currentUserId: userId,
+      hasSignedPrekey: verifiedServerState.state.hasSignedPrekey,
+      hasVerifiedDeviceRow: verifiedServerState.state.activeDeviceRowIds.includes(
+        result.deviceRecordId,
+      ),
+      serverDeviceRecordId: result.deviceRecordId,
+    });
+
+    if (
+      allowRepair &&
+      publishAttempt !== 'repair-republish' &&
+      !isServerDmE2eeDeviceStateReady(
+        verifiedServerState.state,
+        result.deviceRecordId,
+      )
+    ) {
+      logDmE2eeBootstrapClientDiagnostics('publish:verify-repair:retry', {
+        activeDeviceRowCount: verifiedServerState.state.activeDeviceRowCount,
+        availableOneTimePrekeyCount:
+          verifiedServerState.state.availableOneTimePrekeyCount,
+        currentUserId: userId,
+        hasSignedPrekey: verifiedServerState.state.hasSignedPrekey,
+        publishAttempt: 'repair-republish',
+        serverDeviceRecordId: result.deviceRecordId,
+      });
+      return ensureDmE2eeDeviceRegistered(userId, {
+        allowRepair: false,
+        forcePublish: true,
+        publishAttempt: 'repair-republish',
+      });
+    }
 
     return {
       status: 'registered',
