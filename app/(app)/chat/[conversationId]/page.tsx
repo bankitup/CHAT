@@ -92,7 +92,9 @@ type ChatPageProps = {
 };
 
 function formatMessageTimestamp(value: string | null, language: AppLanguage) {
-  if (!value) {
+  const parsedDate = parseSafeDate(value);
+
+  if (!parsedDate) {
     return '';
   }
 
@@ -101,15 +103,16 @@ function formatMessageTimestamp(value: string | null, language: AppLanguage) {
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-  }).format(new Date(value));
+  }).format(parsedDate);
 }
 
 function getCalendarDayKey(value: string | null) {
-  if (!value) {
+  const date = parseSafeDate(value);
+
+  if (!date) {
     return 'unknown';
   }
 
-  const date = new Date(value);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -122,11 +125,12 @@ function formatDaySeparatorLabel(
   language: AppLanguage,
   t: ReturnType<typeof getTranslations>,
 ) {
-  if (!value) {
+  const targetDate = parseSafeDate(value);
+
+  if (!targetDate) {
     return t.chat.earlier;
   }
 
-  const targetDate = new Date(value);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today);
@@ -154,22 +158,24 @@ function formatDaySeparatorLabel(
 }
 
 function formatLongDate(value: string | null, language: AppLanguage, t: ReturnType<typeof getTranslations>) {
-  if (!value) {
+  const parsedDate = parseSafeDate(value);
+
+  if (!parsedDate) {
     return t.chat.unknown;
   }
 
   return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(new Date(value));
+  }).format(parsedDate);
 }
 
 function getMessageSnippet(
-  value: string | null,
+  value: unknown,
   t: ReturnType<typeof getTranslations>,
   maxLength = 90,
 ) {
-  const normalized = value?.trim() ?? '';
+  const normalized = normalizeMessageBodyText(value) ?? '';
 
   if (!normalized) {
     return t.chat.emptyMessage;
@@ -200,6 +206,46 @@ function isEditedMessage(value: { edited_at: string | null; deleted_at: string |
 
 function getMessageSeq(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
+}
+
+function parseSafeDate(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsedDate = new Date(trimmed);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null;
+  }
+
+  return parsedDate;
+}
+
+function normalizeMessageBodyText(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function logThreadRenderDiagnostics(
+  stage: string,
+  details: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP !== '1') {
+    return;
+  }
+
+  console.info('[chat-thread-render]', stage, details);
 }
 
 function normalizeComparableMessageSeq(value: unknown) {
@@ -929,6 +975,7 @@ export default async function ChatPage({
                 const isOwnMessage = message.sender_id === user.id;
                 const isDeletedMessage = Boolean(message.deleted_at);
                 const messageSeq = getMessageSeq(message.seq);
+                const normalizedMessageBody = normalizeMessageBodyText(message.body);
                 const isLatestConversationMessage =
                   latestVisibleMessageSeq !== null &&
                   Number.isFinite(messageSeq) &&
@@ -967,6 +1014,22 @@ export default async function ChatPage({
                     conversation.kind === 'dm' ? otherParticipantReadSeq : null,
                 });
                 const isMessageActionActive = activeActionMessage?.id === message.id;
+
+                if (!parseSafeDate(message.created_at)) {
+                  logThreadRenderDiagnostics('fallback:invalid-message-created-at', {
+                    conversationId,
+                    createdAt: message.created_at ?? null,
+                    messageId: message.id,
+                  });
+                }
+
+                if (message.body !== null && typeof message.body !== 'string') {
+                  logThreadRenderDiagnostics('fallback:invalid-message-body-type', {
+                    bodyType: typeof message.body,
+                    conversationId,
+                    messageId: message.id,
+                  });
+                }
 
                 return (
                   <article
@@ -1088,7 +1151,7 @@ export default async function ChatPage({
                                 defaultValue={
                                   isEncryptedDmTextMessage(message)
                                     ? ''
-                                    : message.body?.trim() ?? ''
+                                    : normalizedMessageBody ?? ''
                                 }
                                 maxHeight={160}
                                 name="body"
@@ -1158,8 +1221,8 @@ export default async function ChatPage({
                               </p>
                             </div>
                           )
-                        ) : message.body?.trim() ? (
-                          <p className="message-body">{message.body.trim()}</p>
+                        ) : normalizedMessageBody ? (
+                          <p className="message-body">{normalizedMessageBody}</p>
                         ) : !messageAttachments.length ? (
                           <p className="message-body">{t.chat.emptyMessage}</p>
                         ) : null}
@@ -1381,6 +1444,7 @@ export default async function ChatPage({
               const isOwnMessage = message.sender_id === user.id;
               const isDeletedMessage = Boolean(message.deleted_at);
               const messageSeq = getMessageSeq(message.seq);
+              const normalizedMessageBody = normalizeMessageBodyText(message.body);
               const isLatestConversationMessage =
                 latestVisibleMessageSeq !== null &&
                 Number.isFinite(messageSeq) &&
@@ -1419,6 +1483,22 @@ export default async function ChatPage({
                   conversation.kind === 'dm' ? otherParticipantReadSeq : null,
               });
               const isMessageActionActive = activeActionMessage?.id === message.id;
+
+              if (!parseSafeDate(message.created_at)) {
+                logThreadRenderDiagnostics('fallback:invalid-message-created-at', {
+                  conversationId,
+                  createdAt: message.created_at ?? null,
+                  messageId: message.id,
+                });
+              }
+
+              if (message.body !== null && typeof message.body !== 'string') {
+                logThreadRenderDiagnostics('fallback:invalid-message-body-type', {
+                  bodyType: typeof message.body,
+                  conversationId,
+                  messageId: message.id,
+                });
+              }
 
               return (
                 <article
@@ -1540,7 +1620,7 @@ export default async function ChatPage({
                                 defaultValue={
                                   isEncryptedDmTextMessage(message)
                                     ? ''
-                                    : message.body?.trim() ?? ''
+                                    : normalizedMessageBody ?? ''
                                 }
                                 maxHeight={160}
                                 name="body"
@@ -1610,8 +1690,8 @@ export default async function ChatPage({
                               </p>
                             </div>
                           )
-                        ) : message.body?.trim() ? (
-                          <p className="message-body">{message.body.trim()}</p>
+                        ) : normalizedMessageBody ? (
+                          <p className="message-body">{normalizedMessageBody}</p>
                         ) : !messageAttachments.length ? (
                           <p className="message-body">{t.chat.emptyMessage}</p>
                         ) : null}
@@ -2421,7 +2501,7 @@ export default async function ChatPage({
                 <span className="message-sheet-snippet">
                   {isEncryptedDmTextMessage(activeActionMessage)
                     ? t.chat.encryptedMessage
-                    : activeActionMessage.body?.trim()
+                    : normalizeMessageBodyText(activeActionMessage.body)
                     ? getMessageSnippet(activeActionMessage.body, t, 96)
                     : activeActionMessage.kind === 'voice'
                       ? t.chat.voiceMessage
