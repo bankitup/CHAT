@@ -33,11 +33,11 @@ type LanguageDictionary = {
   };
   shell: {
     label: string;
+    home: string;
     chats: string;
-    dms: string;
     activity: string;
+    openHome: string;
     openChats: string;
-    openDms: string;
     openActivity: string;
   };
   spaces: {
@@ -86,6 +86,8 @@ type LanguageDictionary = {
   activity: {
     title: string;
     subtitle: string;
+    overviewTitle: string;
+    overviewBody: string;
     unreadChats: string;
     unreadDms: string;
     archivedChats: string;
@@ -97,6 +99,10 @@ type LanguageDictionary = {
     recentBody: string;
     recentEmptyTitle: string;
     recentEmptyBody: string;
+    alertsTitle: string;
+    alertsBody: string;
+    digestTitle: string;
+    digestBody: string;
     quietTitle: string;
     quietBody: string;
   };
@@ -349,11 +355,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Primary navigation',
-      chats: 'Home',
-      dms: 'DMs',
+      home: 'Home',
+      chats: 'Chats',
       activity: 'Activity',
-      openChats: 'Open home',
-      openDms: 'Open direct messages',
+      openHome: 'Open home',
+      openChats: 'Open chats',
       openActivity: 'Open activity',
     },
     spaces: {
@@ -401,7 +407,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     activity: {
       title: 'Activity',
-      subtitle: 'Unread chats and recent message activity.',
+      subtitle: 'Notifications, unread chats, and recent updates in one place.',
+      overviewTitle: 'Overview',
+      overviewBody: 'A quick read on what needs attention right now.',
       unreadChats: 'Unread chats',
       unreadDms: 'Unread DMs',
       archivedChats: 'Archived chats',
@@ -413,6 +421,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       recentBody: 'Latest message updates across your chats.',
       recentEmptyTitle: 'No recent messages yet',
       recentEmptyBody: 'New message activity will appear here once chats pick up.',
+      alertsTitle: 'Alerts',
+      alertsBody: 'Notification readiness and device-level messaging alerts.',
+      digestTitle: 'Summaries later',
+      digestBody: 'This space is reserved for smart recaps and digests when they are ready.',
       quietTitle: 'All quiet',
       quietBody: 'Nothing unread right now.',
     },
@@ -443,7 +455,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       availableNote: 'You can turn this on now. Message alerts are coming soon.',
     },
     inbox: {
-      title: 'Home',
+      title: 'Chats',
       dmTitle: 'DMs',
       subtitleNew: (count) => `${count} new`,
       subtitleDmNew: (count) => `${count} new direct ${count === 1 ? 'chat' : 'chats'}`,
@@ -675,11 +687,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Основная навигация',
-      chats: 'Главная',
-      dms: 'Личные',
+      home: 'Главная',
+      chats: 'Чаты',
       activity: 'Активность',
-      openChats: 'Открыть главную',
-      openDms: 'Открыть личные чаты',
+      openHome: 'Открыть главную',
+      openChats: 'Открыть чаты',
       openActivity: 'Открыть активность',
     },
     spaces: {
@@ -727,7 +739,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     activity: {
       title: 'Активность',
-      subtitle: 'Непрочитанные чаты и недавняя активность сообщений.',
+      subtitle: 'Уведомления, непрочитанные чаты и недавние обновления в одном месте.',
+      overviewTitle: 'Обзор',
+      overviewBody: 'Быстрый срез того, что сейчас требует внимания.',
       unreadChats: 'Непрочитанные чаты',
       unreadDms: 'Непрочитанные личные',
       archivedChats: 'Архивные чаты',
@@ -739,6 +753,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       recentBody: 'Последние обновления сообщений в ваших чатах.',
       recentEmptyTitle: 'Пока нет недавних сообщений',
       recentEmptyBody: 'Новая активность появится здесь, когда чаты оживут.',
+      alertsTitle: 'Оповещения',
+      alertsBody: 'Готовность уведомлений и сигналы сообщений на этом устройстве.',
+      digestTitle: 'Сводки позже',
+      digestBody: 'Это место зарезервировано под умные сводки и дайджесты, когда они будут готовы.',
       quietTitle: 'Пока тихо',
       quietBody: 'Сейчас нет непрочитанного.',
     },
@@ -769,7 +787,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       availableNote: 'Можно включить уже сейчас. Оповещения о сообщениях появятся позже.',
     },
     inbox: {
-      title: 'Главная',
+      title: 'Чаты',
       dmTitle: 'Личные',
       subtitleNew: (count) => `${count} новых`,
       subtitleDmNew: (count) => `${count} новых ${getRussianCountWord(count, ['личный чат', 'личных чата', 'личных чатов'])}`,

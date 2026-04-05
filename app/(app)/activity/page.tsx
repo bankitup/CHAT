@@ -300,6 +300,10 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
       <section className="card stack settings-surface activity-surface">
         <section className="stack settings-section">
+          <div className="stack activity-section-copy">
+            <h2 className="card-title">{t.activity.overviewTitle}</h2>
+            <p className="muted">{t.activity.overviewBody}</p>
+          </div>
           <div className="activity-summary-grid">
             <div className="activity-summary-card">
               <span className="activity-summary-label">{t.activity.unreadChats}</span>
@@ -455,7 +459,29 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           )}
         </section>
 
-        <NotificationReadinessPanel embedded language={language} />
+        <section className="stack settings-section activity-section">
+          <div className="activity-section-header">
+            <div className="stack activity-section-copy">
+              <h2 className="card-title">{t.activity.alertsTitle}</h2>
+              <p className="muted">{t.activity.alertsBody}</p>
+            </div>
+          </div>
+
+          <NotificationReadinessPanel embedded language={language} />
+        </section>
+
+        <section className="stack settings-section activity-section">
+          <div className="activity-section-header">
+            <div className="stack activity-section-copy">
+              <h2 className="card-title">{t.activity.digestTitle}</h2>
+              <p className="muted">{t.activity.digestBody}</p>
+            </div>
+          </div>
+
+          <section className="empty-card activity-future-card">
+            <p className="muted activity-future-copy">{t.activity.digestBody}</p>
+          </section>
+        </section>
       </section>
     </section>
   );

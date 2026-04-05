@@ -50,6 +50,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   const t = getTranslations(language);
   const profileLabel = getProfileLabel(profile.email, profile.displayName, t.settings.heroEyebrow);
   const currentLanguage = (profile.preferredLanguage ?? language) as AppLanguage;
+  const currentLanguageLabel =
+    currentLanguage === 'ru' ? t.settings.languageRussian : t.settings.languageEnglish;
   const hasAvatar = Boolean(profile.avatarPath);
 
   return (
@@ -68,12 +70,20 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           />
 
           <div className="stack profile-settings-copy settings-hero-copy">
-            <p className="eyebrow">{t.settings.heroEyebrow}</p>
+            <p className="eyebrow">{t.shell.home}</p>
             <h1 className="settings-hero-title">{profileLabel}</h1>
             <p className="muted profile-settings-email">
               {profile.email ?? t.settings.profileFallback}
             </p>
           </div>
+        </div>
+        <div className="cluster settings-hero-pills">
+          <span className="summary-pill settings-hero-pill">{currentLanguageLabel}</span>
+          {profile.email ? (
+            <span className="summary-pill settings-hero-pill settings-hero-pill-subtle">
+              {profile.email}
+            </span>
+          ) : null}
         </div>
         <p className="muted settings-hero-note">{t.settings.heroNote}</p>
       </section>
@@ -88,8 +98,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </div>
       ) : null}
 
-      <section className="card stack settings-surface">
-        <section className="stack settings-section">
+      <section className="stack settings-hub">
+        <section className="card stack settings-surface settings-home-card">
           <div className="stack settings-card-copy settings-section-copy">
             <h2 className="section-title">{t.settings.profileTitle}</h2>
             <p className="muted">{t.settings.profileSubtitle}</p>
@@ -128,44 +138,46 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           ) : null}
         </section>
 
-        <section className="stack settings-section">
-          <div className="stack settings-card-copy settings-section-copy">
-            <h2 className="section-title">{t.settings.languageTitle}</h2>
-            <p className="muted">{t.settings.languageSubtitle}</p>
-          </div>
+        <section className="card stack settings-surface settings-home-card">
+          <NotificationReadinessPanel embedded language={language} />
 
-          <form action={updateLanguagePreferenceAction} className="settings-language-form">
-            <input name="preferredLanguage" type="hidden" value="en" />
-            <button
-              className={
-                currentLanguage === 'en'
-                  ? 'settings-language-button settings-language-button-active'
-                  : 'settings-language-button'
-              }
-              type="submit"
-            >
-              <span className="settings-language-title">{t.settings.languageEnglish}</span>
-            </button>
-          </form>
+          <section className="stack settings-section">
+            <div className="stack settings-card-copy settings-section-copy">
+              <h2 className="section-title">{t.settings.languageTitle}</h2>
+              <p className="muted">{t.settings.languageSubtitle}</p>
+            </div>
 
-          <form action={updateLanguagePreferenceAction} className="settings-language-form">
-            <input name="preferredLanguage" type="hidden" value="ru" />
-            <button
-              className={
-                currentLanguage === 'ru'
-                  ? 'settings-language-button settings-language-button-active'
-                  : 'settings-language-button'
-              }
-              type="submit"
-            >
-              <span className="settings-language-title">{t.settings.languageRussian}</span>
-            </button>
-          </form>
+            <form action={updateLanguagePreferenceAction} className="settings-language-form">
+              <input name="preferredLanguage" type="hidden" value="en" />
+              <button
+                className={
+                  currentLanguage === 'en'
+                    ? 'settings-language-button settings-language-button-active'
+                    : 'settings-language-button'
+                }
+                type="submit"
+              >
+                <span className="settings-language-title">{t.settings.languageEnglish}</span>
+              </button>
+            </form>
+
+            <form action={updateLanguagePreferenceAction} className="settings-language-form">
+              <input name="preferredLanguage" type="hidden" value="ru" />
+              <button
+                className={
+                  currentLanguage === 'ru'
+                    ? 'settings-language-button settings-language-button-active'
+                    : 'settings-language-button'
+                }
+                type="submit"
+              >
+                <span className="settings-language-title">{t.settings.languageRussian}</span>
+              </button>
+            </form>
+          </section>
         </section>
 
-        <NotificationReadinessPanel embedded language={language} />
-
-        <section className="stack settings-section settings-section-session">
+        <section className="card stack settings-surface settings-home-card settings-home-card-session">
           <div className="stack settings-card-copy settings-section-copy">
             <h2 className="section-title">{t.settings.logoutTitle}</h2>
             <p className="muted">{t.settings.logoutSubtitle}</p>

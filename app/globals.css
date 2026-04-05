@@ -1829,9 +1829,27 @@ main {
   padding: 14px;
 }
 
+.activity-future-card {
+  gap: 4px;
+  padding: 14px;
+  border-style: dashed;
+  background:
+    linear-gradient(180deg, rgba(250, 252, 255, 0.88), rgba(246, 249, 253, 0.82));
+}
+
+.activity-future-copy {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
 .settings-shell {
   width: min(100%, 420px);
   margin: 0 auto;
+}
+
+.settings-hub {
+  gap: 12px;
 }
 
 .settings-topbar {
@@ -1852,7 +1870,7 @@ main {
 }
 
 .settings-hero {
-  gap: 7px;
+  gap: 9px;
   padding: 4px 2px 2px;
 }
 
@@ -1879,6 +1897,25 @@ main {
   color: rgba(91, 100, 112, 0.88);
 }
 
+.settings-hero-pills {
+  gap: 6px;
+}
+
+.settings-hero-pill {
+  min-height: 24px;
+  padding-inline: 9px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.settings-hero-pill-subtle {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-surface {
   gap: 0;
   padding: 16px;
@@ -1887,6 +1924,21 @@ main {
     linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(250, 252, 255, 0.92));
   box-shadow: var(--shadow-float);
   backdrop-filter: blur(16px);
+}
+
+.settings-home-card {
+  gap: 0;
+}
+
+.settings-home-card .settings-section + .settings-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(221, 226, 232, 0.72);
+}
+
+.settings-home-card-session {
+  padding-top: 14px;
+  padding-bottom: 14px;
 }
 
 .settings-card {

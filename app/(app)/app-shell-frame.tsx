@@ -26,16 +26,15 @@ export function AppShellFrame({
   const isChatRoute = pathname.startsWith('/chat/');
   const isSpacesRoute = pathname.startsWith('/spaces');
   const isActivityRoute = pathname.startsWith('/activity');
-  const isDmInboxRoute =
-    pathname.startsWith('/inbox') && searchParams.get('filter') === 'dm';
+  const isSettingsRoute = pathname.startsWith('/settings');
   const activeSpaceId = searchParams.get('space');
   const navSpaceHref = (pathname: string) =>
     activeSpaceId ? withSpaceParam(pathname, activeSpaceId) : '/spaces';
   const showBottomNav = !isChatRoute && !isSpacesRoute;
   const activeTab = isActivityRoute
     ? 'activity'
-    : isDmInboxRoute
-      ? 'dms'
+    : isSettingsRoute
+      ? 'home'
       : pathname.startsWith('/inbox')
         ? 'chats'
         : null;
@@ -59,6 +58,18 @@ export function AppShellFrame({
         <nav className="app-bottom-nav" aria-label={t.shell.label}>
           <div className="app-bottom-nav-shell">
             <Link
+              aria-label={t.shell.openHome}
+              className={
+                activeTab === 'home'
+                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                  : 'app-bottom-nav-link'
+              }
+              href="/settings"
+            >
+              <span className="app-bottom-nav-label">{t.shell.home}</span>
+            </Link>
+
+            <Link
               aria-label={t.shell.openChats}
               className={
                 activeTab === 'chats'
@@ -68,18 +79,6 @@ export function AppShellFrame({
               href={navSpaceHref('/inbox')}
             >
               <span className="app-bottom-nav-label">{t.shell.chats}</span>
-            </Link>
-
-            <Link
-              aria-label={t.shell.openDms}
-              className={
-                activeTab === 'dms'
-                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                  : 'app-bottom-nav-link'
-              }
-              href={navSpaceHref('/inbox?filter=dm')}
-            >
-              <span className="app-bottom-nav-label">{t.shell.dms}</span>
             </Link>
 
             <Link

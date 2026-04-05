@@ -243,7 +243,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const searchTerm = normalizeSearchTerm(query.q);
   const activeFilter = normalizeFilter(query.filter);
   const activeView = normalizeView(query.view);
-  const isDmOnlyView = activeFilter === 'dm' && activeView === 'main';
+  const isPrimaryChatsView = activeView === 'main';
+  const isDmFilter = activeFilter === 'dm';
   const isCreateOpen = query.create === 'open';
   const supabase = await createSupabaseServerClient();
   const {
@@ -472,7 +473,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     } satisfies ConversationListItem;
   });
 
-  const filteredConversationItems = conversationItems.filter((conversation) => {
+  const filterConversationItems = (conversation: ConversationListItem) => {
     if (activeFilter === 'dm' && conversation.isGroupConversation) {
       return false;
     }
@@ -481,6 +482,12 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       return false;
     }
 
+    return true;
+  };
+
+  const visibleConversationItems = conversationItems.filter(filterConversationItems);
+
+  const filteredConversationItems = visibleConversationItems.filter((conversation) => {
     if (!searchTerm) {
       return true;
     }
@@ -502,29 +509,29 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     return haystack.includes(searchTerm);
   });
 
-  const unreadConversationCount = conversationItems.filter(
+  const unreadVisibleConversationCount = visibleConversationItems.filter(
     (conversation) => conversation.hasUnread,
   ).length;
   const archivedConversationCount = archivedConversations.length;
-  const headerTitle = isDmOnlyView ? t.inbox.dmTitle : t.inbox.title;
+  const headerTitle = t.inbox.title;
   const headerSubtitle =
     activeView === 'archived'
       ? archivedConversationCount > 0
         ? t.inbox.subtitleArchivedCount(archivedConversationCount)
         : t.inbox.subtitleArchivedEmpty
-      : isDmOnlyView
-        ? unreadConversationCount > 0
-          ? t.inbox.subtitleDmNew(unreadConversationCount)
-          : conversationItems.length > 0
+      : isDmFilter
+        ? unreadVisibleConversationCount > 0
+          ? t.inbox.subtitleDmNew(unreadVisibleConversationCount)
+          : visibleConversationItems.length > 0
             ? t.inbox.subtitleDmCaughtUp
             : t.inbox.subtitleDmStart
-        : unreadConversationCount > 0
-          ? t.inbox.subtitleNew(unreadConversationCount)
-          : conversationItems.length > 0
+        : unreadVisibleConversationCount > 0
+          ? t.inbox.subtitleNew(unreadVisibleConversationCount)
+          : visibleConversationItems.length > 0
             ? t.inbox.subtitleCaughtUp
             : t.inbox.subtitleStart;
-  const searchAria = isDmOnlyView ? t.inbox.searchDmAria : t.inbox.searchAria;
-  const searchPlaceholder = isDmOnlyView
+  const searchAria = isDmFilter ? t.inbox.searchDmAria : t.inbox.searchAria;
+  const searchPlaceholder = isDmFilter
     ? t.inbox.searchDmPlaceholder
     : t.inbox.searchPlaceholder;
   const searchScopeSummary = searchTerm
@@ -552,7 +559,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   return (
     <section
       className={
-        isDmOnlyView
+        isPrimaryChatsView
           ? 'stack inbox-screen inbox-screen-minimal inbox-screen-dm'
           : 'stack inbox-screen inbox-screen-minimal'
       }
@@ -564,7 +571,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
       <section
         className={
-          isDmOnlyView
+          isPrimaryChatsView
             ? 'card inbox-home-shell inbox-home-shell-dm stack'
             : 'card inbox-home-shell stack'
         }
@@ -572,14 +579,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         <div className="inbox-topbar">
           <div
             className={
-              isDmOnlyView
+              isPrimaryChatsView
                 ? 'stack inbox-topbar-copy inbox-topbar-copy-dm'
                 : 'stack inbox-topbar-copy'
             }
           >
             <h1
               className={
-                isDmOnlyView
+                isPrimaryChatsView
                   ? 'inbox-home-title inbox-home-title-dm'
                   : 'inbox-home-title'
               }
@@ -588,7 +595,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             </h1>
             <p
               className={
-                isDmOnlyView
+                isPrimaryChatsView
                   ? 'muted inbox-home-subtitle inbox-home-subtitle-dm'
                   : 'muted inbox-home-subtitle'
               }
@@ -622,13 +629,13 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
         <div
           className={
-            isDmOnlyView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
+            isPrimaryChatsView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
           }
         >
           <form
             action="/inbox"
             className={
-              isDmOnlyView
+              isPrimaryChatsView
                 ? 'inbox-search-form inbox-search-form-minimal inbox-search-form-dm'
                 : 'inbox-search-form inbox-search-form-minimal'
             }
@@ -637,7 +644,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           >
             <label
               className={
-                isDmOnlyView
+                isPrimaryChatsView
                   ? 'field inbox-search-field inbox-search-shell inbox-search-shell-dm'
                   : 'field inbox-search-field inbox-search-shell'
               }
@@ -646,7 +653,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               <span
                 aria-hidden="true"
                 className={
-                  isDmOnlyView
+                  isPrimaryChatsView
                     ? 'inbox-search-icon inbox-search-icon-dm'
                     : 'inbox-search-icon'
                 }
@@ -655,7 +662,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               </span>
               <input
                 className={
-                  isDmOnlyView
+                  isPrimaryChatsView
                     ? 'input inbox-search-input inbox-search-input-dm'
                     : 'input inbox-search-input'
                 }
@@ -677,7 +684,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
           <div
             className={
-              isDmOnlyView
+              isPrimaryChatsView
                 ? 'inbox-filter-row inbox-filter-row-dm'
                 : 'inbox-filter-row'
             }
@@ -749,14 +756,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           {searchTerm ? (
             <div
               className={
-                isDmOnlyView
+                isPrimaryChatsView
                   ? 'inbox-search-meta inbox-search-meta-dm'
                   : 'inbox-search-meta'
               }
             >
               <div
                 className={
-                  isDmOnlyView
+                  isPrimaryChatsView
                     ? 'stack inbox-search-copy inbox-search-copy-dm'
                     : 'stack inbox-search-copy'
                 }
@@ -823,7 +830,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       ) : (
         <section
           className={
-            isDmOnlyView
+            isPrimaryChatsView
               ? 'stack conversation-list conversation-list-minimal conversation-list-dm'
               : 'stack conversation-list conversation-list-minimal'
           }
@@ -833,10 +840,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               key={conversation.conversationId}
               className={
                 conversation.hasUnread
-                  ? isDmOnlyView
+                  ? isPrimaryChatsView
                     ? 'conversation-card conversation-card-unread conversation-card-minimal conversation-card-dm'
                     : 'conversation-card conversation-card-unread conversation-card-minimal'
-                  : isDmOnlyView
+                  : isPrimaryChatsView
                     ? 'conversation-card conversation-card-minimal conversation-card-dm'
                     : 'conversation-card conversation-card-minimal'
               }
@@ -844,17 +851,17 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
               <div
                 className={
                   activeView === 'archived'
-                    ? isDmOnlyView
+                    ? isPrimaryChatsView
                       ? 'conversation-row conversation-row-with-action conversation-row-dm'
                       : 'conversation-row conversation-row-with-action'
-                    : isDmOnlyView
+                    : isPrimaryChatsView
                       ? 'conversation-row conversation-row-dm'
                       : 'conversation-row'
                 }
               >
                 <Link
                   className={
-                    isDmOnlyView
+                    isPrimaryChatsView
                       ? 'conversation-row-link conversation-row-link-dm'
                       : 'conversation-row-link'
                   }
@@ -866,34 +873,34 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar
                       label={conversation.title}
-                      size={isDmOnlyView ? 'lg' : 'md'}
+                      size={isPrimaryChatsView ? 'lg' : 'md'}
                     />
                   ) : (
                     <IdentityAvatar
                       diagnosticsSurface="inbox:conversation-row"
                       identity={conversation.participants[0]}
                       label={conversation.title}
-                      size={isDmOnlyView ? 'lg' : 'md'}
+                      size={isPrimaryChatsView ? 'lg' : 'md'}
                     />
                   )}
 
                   <div
                     className={
-                      isDmOnlyView
+                      isPrimaryChatsView
                         ? 'stack conversation-card-copy conversation-card-copy-dm'
                         : 'stack conversation-card-copy'
                     }
                   >
                     <div
                       className={
-                        isDmOnlyView
+                        isPrimaryChatsView
                           ? 'stack conversation-main-copy conversation-main-copy-dm'
                           : 'stack conversation-main-copy'
                       }
                     >
                       <div
                         className={
-                          isDmOnlyView
+                          isPrimaryChatsView
                             ? 'conversation-title-row conversation-title-row-dm'
                             : 'conversation-title-row'
                         }
@@ -901,10 +908,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                         <h3
                           className={
                             conversation.hasUnread
-                              ? isDmOnlyView
+                              ? isPrimaryChatsView
                                 ? 'conversation-title conversation-title-unread conversation-title-dm'
                                 : 'conversation-title conversation-title-unread'
-                              : isDmOnlyView
+                              : isPrimaryChatsView
                                 ? 'conversation-title conversation-title-dm'
                                 : 'conversation-title'
                           }
@@ -933,10 +940,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                         <EncryptedDmInboxPreview
                           className={
                             conversation.hasUnread
-                              ? isDmOnlyView
+                              ? isPrimaryChatsView
                                 ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
                                 : 'muted conversation-preview conversation-preview-unread'
-                              : isDmOnlyView
+                              : isPrimaryChatsView
                                 ? 'muted conversation-preview conversation-preview-dm'
                                 : 'muted conversation-preview'
                           }
@@ -952,7 +959,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
                     <div
                       className={
-                        isDmOnlyView
+                        isPrimaryChatsView
                           ? 'conversation-footer conversation-footer-dm'
                           : 'conversation-footer'
                       }
