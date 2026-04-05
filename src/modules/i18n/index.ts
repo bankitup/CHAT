@@ -78,6 +78,7 @@ type LanguageDictionary = {
     avatarEditorDraftReady: string;
     avatarEditorPreparing: string;
     avatarEditorLoadFailed: string;
+    avatarEditorApplyBeforeSave: string;
     saveChanges: string;
     profileFallback: string;
     languageTitle: string;
@@ -409,6 +410,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarEditorDraftReady: 'Photo draft ready. Save to apply it.',
       avatarEditorPreparing: 'Preparing photo...',
       avatarEditorLoadFailed: 'Unable to open that photo right now.',
+      avatarEditorApplyBeforeSave: 'Use photo first to confirm the crop.',
       saveChanges: 'Save changes',
       profileFallback: 'Your profile',
       languageTitle: 'Language',
@@ -750,6 +752,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarEditorDraftReady: 'Черновик фото готов. Сохраните, чтобы применить.',
       avatarEditorPreparing: 'Подготавливаем фото...',
       avatarEditorLoadFailed: 'Сейчас не удалось открыть это фото.',
+      avatarEditorApplyBeforeSave: 'Сначала подтвердите кадрирование кнопкой фото.',
       saveChanges: 'Сохранить',
       profileFallback: 'Ваш профиль',
       languageTitle: 'Язык',

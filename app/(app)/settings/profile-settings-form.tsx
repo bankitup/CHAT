@@ -50,6 +50,7 @@ type ProfileSettingsFormProps = {
     avatarEditorDraftReady: string;
     avatarEditorPreparing: string;
     avatarEditorLoadFailed: string;
+    avatarEditorApplyBeforeSave: string;
   };
 };
 
@@ -233,6 +234,8 @@ export function ProfileSettingsForm({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const avatarObjectPathRef = useRef<HTMLInputElement | null>(null);
   const bypassNextSubmitRef = useRef(false);
+  const latestEditorSourceUrlRef = useRef<string | null>(null);
+  const latestPendingPreviewUrlRef = useRef<string | null>(null);
   const dragStateRef = useRef<{
     originX: number;
     originY: number;
@@ -242,11 +245,19 @@ export function ProfileSettingsForm({
   } | null>(null);
 
   useEffect(() => {
+    latestEditorSourceUrlRef.current = avatarEditorDraft?.sourceUrl ?? null;
+  }, [avatarEditorDraft?.sourceUrl]);
+
+  useEffect(() => {
+    latestPendingPreviewUrlRef.current = pendingAvatarDraft?.previewUrl ?? null;
+  }, [pendingAvatarDraft?.previewUrl]);
+
+  useEffect(() => {
     return () => {
-      revokeObjectUrl(avatarEditorDraft?.sourceUrl ?? null);
-      revokeObjectUrl(pendingAvatarDraft?.previewUrl ?? null);
+      revokeObjectUrl(latestEditorSourceUrlRef.current);
+      revokeObjectUrl(latestPendingPreviewUrlRef.current);
     };
-  }, [avatarEditorDraft, pendingAvatarDraft]);
+  }, []);
 
   function clearAvatarObjectPath() {
     if (avatarObjectPathRef.current) {
@@ -331,16 +342,13 @@ export function ProfileSettingsForm({
       return;
     }
 
-    let avatarDraftToUpload = pendingAvatarDraft;
-
-    if (!avatarDraftToUpload && avatarEditorDraft) {
+    if (avatarEditorDraft) {
       event.preventDefault();
-      avatarDraftToUpload = await applyCurrentAvatarDraft();
-
-      if (!avatarDraftToUpload) {
-        return;
-      }
+      setLocalError(labels.avatarEditorApplyBeforeSave);
+      return;
     }
+
+    const avatarDraftToUpload = pendingAvatarDraft;
 
     if (!avatarDraftToUpload) {
       setLocalError(null);
@@ -519,7 +527,11 @@ export function ProfileSettingsForm({
                 <button
                   aria-label={labels.saveChanges}
                   className="profile-inline-save"
-                  disabled={isUploadingAvatar || isPreparingAvatar}
+                  disabled={
+                    isUploadingAvatar ||
+                    isPreparingAvatar ||
+                    Boolean(avatarEditorDraft)
+                  }
                   type="submit"
                 >
                   <span aria-hidden="true">✓</span>

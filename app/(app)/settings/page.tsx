@@ -125,6 +125,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               avatarEditorDraftReady: t.settings.avatarEditorDraftReady,
               avatarEditorPreparing: t.settings.avatarEditorPreparing,
               avatarEditorLoadFailed: t.settings.avatarEditorLoadFailed,
+              avatarEditorApplyBeforeSave: t.settings.avatarEditorApplyBeforeSave,
             }}
           />
         </section>
