@@ -134,6 +134,29 @@ type InboxConversationAvatarVisualProps = {
   title: string;
 };
 
+function areInboxParticipantsEqual(
+  previous:
+    | {
+        userId: string;
+        displayName: string | null;
+        avatarPath?: string | null;
+      }
+    | null,
+  next:
+    | {
+        userId: string;
+        displayName: string | null;
+        avatarPath?: string | null;
+      }
+    | null,
+) {
+  return (
+    previous?.userId === next?.userId &&
+    previous?.displayName === next?.displayName &&
+    previous?.avatarPath === next?.avatarPath
+  );
+}
+
 const InboxConversationAvatarVisual = memo(function InboxConversationAvatarVisual({
   groupAvatarPath,
   isGroupConversation,
@@ -158,6 +181,42 @@ const InboxConversationAvatarVisual = memo(function InboxConversationAvatarVisua
       label={title}
       size={isPrimaryChatsView ? 'lg' : 'md'}
     />
+  );
+}, (previous, next) => {
+  return (
+    previous.groupAvatarPath === next.groupAvatarPath &&
+    previous.isGroupConversation === next.isGroupConversation &&
+    previous.isPrimaryChatsView === next.isPrimaryChatsView &&
+    previous.title === next.title &&
+    areInboxParticipantsEqual(previous.participant, next.participant)
+  );
+});
+
+type InboxConversationTitleVisualProps = {
+  hasUnread: boolean;
+  isPrimaryChatsView: boolean;
+  title: string;
+};
+
+const InboxConversationTitleVisual = memo(function InboxConversationTitleVisual({
+  hasUnread,
+  isPrimaryChatsView,
+  title,
+}: InboxConversationTitleVisualProps) {
+  return (
+    <h3
+      className={
+        hasUnread
+          ? isPrimaryChatsView
+            ? 'conversation-title conversation-title-unread conversation-title-dm'
+            : 'conversation-title conversation-title-unread'
+          : isPrimaryChatsView
+            ? 'conversation-title conversation-title-dm'
+            : 'conversation-title'
+      }
+    >
+      {title}
+    </h3>
   );
 });
 
@@ -285,19 +344,11 @@ export function InboxConversationLiveRow({
                     : 'conversation-title-row'
                 }
               >
-                <h3
-                  className={
-                    hasUnread
-                      ? isPrimaryChatsView
-                        ? 'conversation-title conversation-title-unread conversation-title-dm'
-                        : 'conversation-title conversation-title-unread'
-                      : isPrimaryChatsView
-                        ? 'conversation-title conversation-title-dm'
-                        : 'conversation-title'
-                  }
-                >
-                  {item.title}
-                </h3>
+                <InboxConversationTitleVisual
+                  hasUnread={hasUnread}
+                  isPrimaryChatsView={isPrimaryChatsView}
+                  title={item.title}
+                />
                 <div className="conversation-title-meta">
                   <span
                     className={

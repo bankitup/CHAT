@@ -21,6 +21,37 @@ export type InboxConversationLiveSummary = {
 const inboxSummaryStore = new Map<string, InboxConversationLiveSummary>();
 const inboxSummaryListeners = new Map<string, Set<() => void>>();
 
+function areInboxConversationSummariesEqual(
+  left: InboxConversationLiveSummary | null,
+  right: InboxConversationLiveSummary | null,
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.conversationId === right.conversationId &&
+    left.createdAt === right.createdAt &&
+    left.hiddenAt === right.hiddenAt &&
+    left.lastMessageAt === right.lastMessageAt &&
+    left.lastReadAt === right.lastReadAt &&
+    left.lastReadMessageSeq === right.lastReadMessageSeq &&
+    left.latestMessageBody === right.latestMessageBody &&
+    left.latestMessageContentMode === right.latestMessageContentMode &&
+    left.latestMessageDeletedAt === right.latestMessageDeletedAt &&
+    left.latestMessageId === right.latestMessageId &&
+    left.latestMessageKind === right.latestMessageKind &&
+    left.latestMessageSenderId === right.latestMessageSenderId &&
+    left.latestMessageSeq === right.latestMessageSeq &&
+    left.removed === right.removed &&
+    left.unreadCount === right.unreadCount
+  );
+}
+
 function emitInboxConversationSummaryChange(conversationId: string) {
   const listeners = inboxSummaryListeners.get(conversationId);
 
@@ -80,22 +111,23 @@ export function hydrateInboxConversationSummaries(
       continue;
     }
 
-    const existing = inboxSummaryStore.get(normalizedConversationId);
-    const nextValue =
-      existing &&
-      existing.lastMessageAt === summary.lastMessageAt &&
-      existing.lastReadMessageSeq === summary.lastReadMessageSeq &&
-      existing.latestMessageId === summary.latestMessageId &&
-      existing.hiddenAt === summary.hiddenAt &&
-      existing.unreadCount === summary.unreadCount &&
-      existing.removed === summary.removed
-        ? existing
-        : {
-            ...summary,
-            conversationId: normalizedConversationId,
-          };
+    const existing = inboxSummaryStore.get(normalizedConversationId) ?? null;
+    const normalizedSummary = {
+      ...summary,
+      conversationId: normalizedConversationId,
+    };
+    const nextValue = areInboxConversationSummariesEqual(
+      existing,
+      normalizedSummary,
+    )
+      ? existing
+      : normalizedSummary;
 
-    inboxSummaryStore.set(normalizedConversationId, nextValue);
+    if (existing === nextValue) {
+      continue;
+    }
+
+    inboxSummaryStore.set(normalizedConversationId, nextValue ?? normalizedSummary);
     emitInboxConversationSummaryChange(normalizedConversationId);
   }
 }
@@ -109,10 +141,17 @@ export function patchInboxConversationSummary(
     return;
   }
 
-  inboxSummaryStore.set(normalizedConversationId, {
+  const nextValue = {
     ...summary,
     conversationId: normalizedConversationId,
-  });
+  };
+  const existing = inboxSummaryStore.get(normalizedConversationId) ?? null;
+
+  if (areInboxConversationSummariesEqual(existing, nextValue)) {
+    return;
+  }
+
+  inboxSummaryStore.set(normalizedConversationId, nextValue);
   emitInboxConversationSummaryChange(normalizedConversationId);
 }
 
@@ -129,12 +168,16 @@ export function updateInboxConversationSummary(
   }
 
   const current = inboxSummaryStore.get(normalizedConversationId) ?? null;
-  const nextValue = updater(current);
-
-  inboxSummaryStore.set(normalizedConversationId, {
-    ...nextValue,
+  const nextValue = {
+    ...updater(current),
     conversationId: normalizedConversationId,
-  });
+  };
+
+  if (areInboxConversationSummariesEqual(current, nextValue)) {
+    return;
+  }
+
+  inboxSummaryStore.set(normalizedConversationId, nextValue);
   emitInboxConversationSummaryChange(normalizedConversationId);
 }
 

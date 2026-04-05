@@ -136,6 +136,29 @@ type ActivityConversationAvatarVisualProps = {
   title: string;
 };
 
+function areActivityParticipantsEqual(
+  previous:
+    | {
+        userId: string;
+        displayName: string | null;
+        avatarPath?: string | null;
+      }
+    | null,
+  next:
+    | {
+        userId: string;
+        displayName: string | null;
+        avatarPath?: string | null;
+      }
+    | null,
+) {
+  return (
+    previous?.userId === next?.userId &&
+    previous?.displayName === next?.displayName &&
+    previous?.avatarPath === next?.avatarPath
+  );
+}
+
 const ActivityConversationAvatarVisual = memo(function ActivityConversationAvatarVisual({
   groupAvatarPath,
   isGroupConversation,
@@ -154,6 +177,23 @@ const ActivityConversationAvatarVisual = memo(function ActivityConversationAvata
       size="sm"
     />
   );
+}, (previous, next) => {
+  return (
+    previous.groupAvatarPath === next.groupAvatarPath &&
+    previous.isGroupConversation === next.isGroupConversation &&
+    previous.title === next.title &&
+    areActivityParticipantsEqual(previous.primaryParticipant, next.primaryParticipant)
+  );
+});
+
+type ActivityConversationTitleVisualProps = {
+  title: string;
+};
+
+const ActivityConversationTitleVisual = memo(function ActivityConversationTitleVisual({
+  title,
+}: ActivityConversationTitleVisualProps) {
+  return <h3 className="activity-item-title">{title}</h3>;
 });
 
 export function ActivityConversationLiveItem({
@@ -220,7 +260,7 @@ export function ActivityConversationLiveItem({
 
       <div className="stack activity-item-copy">
         <div className="activity-item-title-row">
-          <h3 className="activity-item-title">{item.title}</h3>
+          <ActivityConversationTitleVisual title={item.title} />
           <span className="activity-item-recency">
             {formatActivityRecency(lastActivityAt, language, labels.yesterday)}
           </span>

@@ -51,6 +51,7 @@ import {
   updateConversationNotificationLevelAction,
 } from './actions';
 import { ConversationPresenceStatus } from './conversation-presence-status';
+import { ChatHeaderAvatarVisual } from './chat-header-avatar-visual';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import {
   DmThreadClientSubtree,
@@ -971,20 +972,20 @@ export default async function ChatPage({
           href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
         >
           <div className="chat-header-identity">
-            {conversation.kind === 'group' ? (
-              <GroupIdentityAvatar
-                avatarPath={conversation.avatarPath}
-                label={directConversationDisplayTitle}
-                size="lg"
-              />
-            ) : (
-              <IdentityAvatar
-                diagnosticsSurface="chat:header"
-                identity={directParticipantIdentity}
-                label={directConversationDisplayTitle}
-                size="lg"
-              />
-            )}
+            <ChatHeaderAvatarVisual
+              conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
+              groupAvatarPath={conversation.avatarPath}
+              participant={
+                directParticipantIdentity
+                  ? {
+                      avatarPath: directParticipantIdentity.avatarPath ?? null,
+                      displayName: directParticipantIdentity.displayName ?? null,
+                      userId: directParticipantIdentity.userId,
+                    }
+                  : null
+              }
+              title={directConversationDisplayTitle}
+            />
 
             <div className="stack chat-header-copy">
               <h1 className="conversation-screen-title">
