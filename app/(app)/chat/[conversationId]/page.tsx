@@ -44,7 +44,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
   addGroupParticipantsAction,
-  deleteDirectConversationAction,
   hideConversationAction,
   leaveGroupAction,
   removeGroupParticipantAction,
@@ -58,6 +57,7 @@ import {
   DmThreadComposerFallback,
   DmThreadPresenceScope,
 } from './dm-thread-client-diagnostics';
+import { DmChatDeleteConfirmForm } from './dm-chat-delete-confirm-form';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
 import { DmReplyTargetSnippet } from './dm-reply-target-snippet';
 import { ThreadHistoryViewport } from './thread-history-viewport';
@@ -728,6 +728,9 @@ export default async function ChatPage({
     participants.some(
       (participant) => participant.userId === user.id && participant.role === 'owner',
     );
+  const canDeleteDirectConversation =
+    conversation.kind === 'dm' &&
+    participants.some((participant) => participant.userId === user.id);
   const participantItems = participants.map((participant) => {
     const identity = senderIdentities.get(participant.userId);
     const label = resolvePublicIdentityLabel(identity, t.chat.unknownUser);
@@ -1522,7 +1525,7 @@ export default async function ChatPage({
               </GuardedServerActionForm>
             </section>
 
-            {conversation.kind === 'dm' ? (
+            {canDeleteDirectConversation ? (
               <section className="conversation-settings-panel stack">
                 <div className="stack conversation-settings-panel-copy">
                   <h3 className="card-title">{t.chat.deleteChat}</h3>
@@ -1532,27 +1535,21 @@ export default async function ChatPage({
                 </div>
 
                 <div className="conversation-manage-actions">
-                  <GuardedServerActionForm action={deleteDirectConversationAction}>
-                    <input
-                      name="conversationId"
-                      type="hidden"
-                      value={conversationId}
-                    />
-                    <input
-                      name="spaceId"
-                      type="hidden"
-                      value={activeSpaceId ?? ''}
-                    />
-                    <PendingSubmitButton
-                      className="button button-compact button-danger-subtle"
-                      type="submit"
-                    >
-                      {t.chat.deleteChatButton}
-                    </PendingSubmitButton>
-                  </GuardedServerActionForm>
+                  <DmChatDeleteConfirmForm
+                    cancelLabel={t.chat.cancel}
+                    confirmBody={t.chat.deleteChatConfirmBody}
+                    confirmButtonLabel={t.chat.deleteChatConfirmButton}
+                    confirmHint={t.chat.deleteChatConfirmHint}
+                    confirmPlaceholder={t.chat.deleteChatConfirmPlaceholder}
+                    confirmTitle={t.chat.deleteChatConfirmTitle}
+                    conversationId={conversationId}
+                    deleteButtonLabel={t.chat.deleteChatButton}
+                    returnTo="settings-overlay"
+                    spaceId={activeSpaceId}
+                  />
                 </div>
               </section>
-            ) : (
+            ) : conversation.kind === 'group' ? (
               <section className="conversation-settings-panel stack">
                 <div className="stack conversation-settings-panel-copy">
                   <h3 className="card-title">{t.chat.inbox}</h3>
@@ -1582,7 +1579,7 @@ export default async function ChatPage({
                   </GuardedServerActionForm>
                 </div>
               </section>
-            )}
+            ) : null}
           </section>
         </section>
       ) : null}

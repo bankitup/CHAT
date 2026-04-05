@@ -14,6 +14,7 @@ type DmChatDeleteConfirmFormProps = {
   confirmTitle: string;
   conversationId: string;
   deleteButtonLabel: string;
+  returnTo?: 'settings-overlay' | 'settings-screen';
   spaceId?: string | null;
 };
 
@@ -26,6 +27,7 @@ export function DmChatDeleteConfirmForm({
   confirmTitle,
   conversationId,
   deleteButtonLabel,
+  returnTo = 'settings-screen',
   spaceId,
 }: DmChatDeleteConfirmFormProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -82,7 +84,7 @@ export function DmChatDeleteConfirmForm({
             >
               <input name="confirmationMode" type="hidden" value="typed-delete-ru" />
               <input name="conversationId" type="hidden" value={conversationId} />
-              <input name="returnTo" type="hidden" value="settings-screen" />
+              <input name="returnTo" type="hidden" value={returnTo} />
               <input name="spaceId" type="hidden" value={spaceId ?? ''} />
 
               <label className="field">

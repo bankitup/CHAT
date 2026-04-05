@@ -335,6 +335,9 @@ export default async function ChatSettingsPage({
     participants.some(
       (participant) => participant.userId === user.id && participant.role === 'owner',
     );
+  const canDeleteDirectConversation =
+    conversation.kind === 'dm' &&
+    participants.some((participant) => participant.userId === user.id);
   const participantItems = participants.map((participant) => {
     const identity = identitiesByUserId.get(participant.userId);
     const label = resolvePublicIdentityLabel(identity, t.chat.unknownUser);
@@ -782,7 +785,7 @@ export default async function ChatSettingsPage({
           </GuardedServerActionForm>
         </section>
 
-        {conversation.kind === 'dm' ? (
+        {canDeleteDirectConversation ? (
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
               <h3 className="card-title">{t.chat.deleteChat}</h3>
@@ -801,11 +804,12 @@ export default async function ChatSettingsPage({
                 confirmTitle={t.chat.deleteChatConfirmTitle}
                 conversationId={conversationId}
                 deleteButtonLabel={t.chat.deleteChatButton}
+                returnTo="settings-screen"
                 spaceId={activeSpaceId}
               />
             </div>
           </section>
-        ) : (
+        ) : conversation.kind === 'group' ? (
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
               <h3 className="card-title">{t.chat.inbox}</h3>
@@ -825,9 +829,9 @@ export default async function ChatSettingsPage({
                   {t.chat.hideFromInbox}
                 </PendingSubmitButton>
               </GuardedServerActionForm>
-            </div>
-          </section>
-        )}
+                </div>
+              </section>
+        ) : null}
       </section>
     </section>
   );

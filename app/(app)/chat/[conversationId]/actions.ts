@@ -1133,6 +1133,19 @@ export async function hideConversationAction(formData: FormData) {
     redirectToInbox(spaceId);
   }
 
+  const conversation = await getConversationForUser(conversationId, user.id, {
+    spaceId,
+  });
+
+  if (!conversation || conversation.kind !== 'dm') {
+    redirectWithSettingsError(
+      conversationId,
+      'Delete chat from your side is available for direct chats only.',
+      spaceId,
+      settingsReturnTarget,
+    );
+  }
+
   try {
     await hideConversationForUser({
       conversationId,
