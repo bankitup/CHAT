@@ -287,6 +287,8 @@ main {
 }
 
 .page.app-shell-chat-route {
+  height: 100dvh;
+  min-height: 100dvh;
   padding:
     calc(14px + env(safe-area-inset-top))
     16px
@@ -311,9 +313,12 @@ main {
 }
 
 .app-shell-chat-route .app-shell-content {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   gap: 0;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
   padding-bottom: 0;
 }
@@ -1383,12 +1388,10 @@ main {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  height: calc(100dvh - 202px);
   overflow: hidden;
 }
 
 .app-shell-chat-route .chat-screen {
-  height: 100%;
   min-height: 0;
 }
 
@@ -2036,9 +2039,6 @@ main {
 }
 
 .chat-header-stack {
-  position: sticky;
-  top: 0;
-  z-index: 6;
   flex: 0 0 auto;
   gap: 6px;
   padding-top: 2px;
@@ -2500,6 +2500,7 @@ main {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  gap: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -2972,7 +2973,7 @@ main {
 .composer-input-shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: end;
+  align-items: center;
   gap: 8px;
   min-width: 0;
   padding: 6px 7px 6px 8px;
@@ -3056,7 +3057,7 @@ main {
 
 .attachment-entry-details {
   position: relative;
-  align-self: end;
+  align-self: center;
 }
 
 .attachment-trigger {
@@ -3274,7 +3275,7 @@ main {
 
 .composer-action-cluster {
   display: inline-flex;
-  align-items: end;
+  align-items: center;
   gap: 6px;
 }
 
