@@ -13,7 +13,7 @@ import {
 } from '@/modules/messaging/profile-avatar';
 import { removeAvatarAction, updateProfileAction } from './actions';
 
-const AVATAR_EDITOR_PREVIEW_SIZE = 220;
+const AVATAR_EDITOR_PREVIEW_SIZE = 260;
 const AVATAR_EDITOR_OUTPUT_SIZE = 512;
 const AVATAR_EDITOR_MIN_ZOOM = 1;
 const AVATAR_EDITOR_MAX_ZOOM = 3;
@@ -259,9 +259,33 @@ export function ProfileSettingsForm({
     };
   }, []);
 
+  useEffect(() => {
+    if (!avatarEditorDraft || typeof document === 'undefined') {
+      return;
+    }
+
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousDocumentOverflow = documentElement.style.overflow;
+
+    body.style.overflow = 'hidden';
+    documentElement.style.overflow = 'hidden';
+
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [avatarEditorDraft]);
+
   function clearAvatarObjectPath() {
     if (avatarObjectPathRef.current) {
       avatarObjectPathRef.current.value = '';
+    }
+  }
+
+  function resetAvatarPickerInput() {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   }
 
@@ -272,10 +296,7 @@ export function ProfileSettingsForm({
     setPendingAvatarDraft(null);
     setSelectedFileName(null);
     clearAvatarObjectPath();
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    resetAvatarPickerInput();
   }
 
   function resetEditingState() {
@@ -309,6 +330,7 @@ export function ProfileSettingsForm({
       revokeObjectUrl(avatarEditorDraft.sourceUrl);
       setAvatarEditorDraft(null);
       setLocalError(null);
+      resetAvatarPickerInput();
 
       return nextPendingDraft;
     } catch (error) {
@@ -321,6 +343,14 @@ export function ProfileSettingsForm({
     } finally {
       setIsPreparingAvatar(false);
     }
+  }
+
+  function cancelAvatarEditor() {
+    revokeObjectUrl(avatarEditorDraft?.sourceUrl ?? null);
+    setAvatarEditorDraft(null);
+    setSelectedFileName(pendingAvatarDraft?.fileName ?? null);
+    setLocalError(null);
+    resetAvatarPickerInput();
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -408,9 +438,7 @@ export function ProfileSettingsForm({
     try {
       const nextDraft = await loadAvatarEditorDraft(file);
       revokeObjectUrl(avatarEditorDraft?.sourceUrl ?? null);
-      revokeObjectUrl(pendingAvatarDraft?.previewUrl ?? null);
       setAvatarEditorDraft(nextDraft);
-      setPendingAvatarDraft(null);
       setSelectedFileName(file.name);
       clearAvatarObjectPath();
       setLocalError(null);
@@ -631,92 +659,126 @@ export function ProfileSettingsForm({
           </div>
         </div>
 
-        {isEditing && avatarEditorDraft && editorMetrics ? (
-          <div className="stack profile-avatar-editor">
-            <div
-              className="profile-avatar-editor-stage"
-              onPointerCancel={handleAvatarEditorPointerEnd}
-              onPointerDown={handleAvatarEditorPointerDown}
-              onPointerMove={handleAvatarEditorPointerMove}
-              onPointerUp={handleAvatarEditorPointerEnd}
-            >
-              <div className="profile-avatar-editor-crop">
-                <NextImage
-                  alt=""
-                  className="profile-avatar-editor-image"
-                  draggable={false}
-                  src={avatarEditorDraft.sourceUrl}
-                  unoptimized
-                  height={Math.round(editorMetrics.height)}
-                  style={{
-                    height: `${editorMetrics.height}px`,
-                    transform: `translate(calc(-50% + ${avatarEditorDraft.offsetX}px), calc(-50% + ${avatarEditorDraft.offsetY}px))`,
-                    width: `${editorMetrics.width}px`,
+      </form>
+
+      {isEditing && avatarEditorDraft && editorMetrics ? (
+        <section
+          aria-label={labels.profilePhoto}
+          aria-modal="true"
+          className="profile-avatar-editor-modal"
+          role="dialog"
+        >
+          <button
+            aria-hidden="true"
+            className="profile-avatar-editor-backdrop"
+            onClick={cancelAvatarEditor}
+            tabIndex={-1}
+            type="button"
+          />
+
+          <div className="profile-avatar-editor-panel">
+            <div className="profile-avatar-editor-toolbar">
+              <button
+                aria-label={labels.cancelEdit}
+                className="button button-secondary conversation-settings-back-link profile-avatar-editor-back"
+                disabled={isPreparingAvatar || isUploadingAvatar}
+                onClick={cancelAvatarEditor}
+                type="button"
+              >
+                <span aria-hidden="true">←</span>
+              </button>
+
+              <div className="profile-avatar-editor-toolbar-spacer" />
+
+              {avatarEditorDraft ? (
+                <button
+                  aria-label={labels.avatarEditorApply}
+                  className="profile-inline-save profile-avatar-editor-confirm"
+                  disabled={isPreparingAvatar || isUploadingAvatar}
+                  onClick={async () => {
+                    await applyCurrentAvatarDraft();
                   }}
-                  width={Math.round(editorMetrics.width)}
-                />
-                <div className="profile-avatar-editor-overlay" />
-              </div>
+                  type="button"
+                >
+                  <span aria-hidden="true">✓</span>
+                </button>
+              ) : null}
             </div>
 
-            <label className="stack profile-avatar-editor-control">
-              <span className="profile-avatar-editor-control-label">
-                {labels.avatarEditorZoom}
-              </span>
-              <input
-                className="profile-avatar-editor-slider"
-                disabled={isPreparingAvatar || isUploadingAvatar}
-                max={AVATAR_EDITOR_MAX_ZOOM}
-                min={AVATAR_EDITOR_MIN_ZOOM}
-                onChange={(event) => {
-                  const nextZoom = Number(event.target.value);
+            <div className="stack profile-avatar-editor">
+              <div
+                className="profile-avatar-editor-stage"
+                onPointerCancel={handleAvatarEditorPointerEnd}
+                onPointerDown={handleAvatarEditorPointerDown}
+                onPointerMove={handleAvatarEditorPointerMove}
+                onPointerUp={handleAvatarEditorPointerEnd}
+              >
+                <div className="profile-avatar-editor-crop">
+                  <NextImage
+                    alt=""
+                    className="profile-avatar-editor-image"
+                    draggable={false}
+                    src={avatarEditorDraft.sourceUrl}
+                    unoptimized
+                    height={Math.round(editorMetrics.height)}
+                    style={{
+                      height: `${editorMetrics.height}px`,
+                      transform: `translate(calc(-50% + ${avatarEditorDraft.offsetX}px), calc(-50% + ${avatarEditorDraft.offsetY}px))`,
+                      width: `${editorMetrics.width}px`,
+                    }}
+                    width={Math.round(editorMetrics.width)}
+                  />
+                  <div className="profile-avatar-editor-crop-overlay" />
+                </div>
+              </div>
 
-                  setAvatarEditorDraft((currentDraft) => {
-                    if (!currentDraft) {
-                      return currentDraft;
-                    }
+              <label className="stack profile-avatar-editor-control">
+                <span className="profile-avatar-editor-control-label">
+                  {labels.avatarEditorZoom}
+                </span>
+                <input
+                  className="profile-avatar-editor-slider"
+                  disabled={isPreparingAvatar || isUploadingAvatar}
+                  max={AVATAR_EDITOR_MAX_ZOOM}
+                  min={AVATAR_EDITOR_MIN_ZOOM}
+                  onChange={(event) => {
+                    const nextZoom = Number(event.target.value);
 
-                    const nextDraft = {
-                      ...currentDraft,
-                      zoom: nextZoom,
-                    };
-                    const clampedOffsets = clampAvatarOffsets(nextDraft, nextZoom);
+                    setAvatarEditorDraft((currentDraft) => {
+                      if (!currentDraft) {
+                        return currentDraft;
+                      }
 
-                    return {
-                      ...nextDraft,
-                      ...clampedOffsets,
-                    };
-                  });
-                }}
-                step={AVATAR_EDITOR_ZOOM_STEP}
-                type="range"
-                value={avatarEditorDraft.zoom}
-              />
-            </label>
+                      const nextDraft = {
+                        ...currentDraft,
+                        zoom: nextZoom,
+                      };
+                      const clampedOffsets = clampAvatarOffsets(nextDraft, nextZoom);
 
-            <div className="profile-avatar-editor-actions">
+                      return {
+                        ...nextDraft,
+                        ...clampedOffsets,
+                      };
+                    });
+                  }}
+                  step={AVATAR_EDITOR_ZOOM_STEP}
+                  type="range"
+                  value={avatarEditorDraft.zoom}
+                />
+              </label>
+
               <button
-                className="button button-secondary button-compact"
+                className="button button-secondary button-compact profile-avatar-editor-replace"
                 disabled={isPreparingAvatar || isUploadingAvatar}
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
               >
                 {labels.tapPhotoToChange}
               </button>
-              <button
-                className="button button-compact profile-avatar-editor-apply"
-                disabled={isPreparingAvatar || isUploadingAvatar}
-                onClick={async () => {
-                  await applyCurrentAvatarDraft();
-                }}
-                type="button"
-              >
-                {labels.avatarEditorApply}
-              </button>
             </div>
           </div>
-        ) : null}
-      </form>
+        </section>
+      ) : null}
     </>
   );
 }
