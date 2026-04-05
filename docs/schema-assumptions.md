@@ -62,6 +62,13 @@ Required columns used by current code:
 - `space_id`
 - `created_by`
 - `last_message_at`
+- `last_message_id`
+- `last_message_seq`
+- `last_message_sender_id`
+- `last_message_kind`
+- `last_message_content_mode`
+- `last_message_deleted_at`
+- `last_message_body`
 - `created_at`
 
 Optional / hardening support:
@@ -76,6 +83,7 @@ Assumptions:
   entry, and conversation creation are all active-space-scoped.
 - `created_by` is used for group ownership-sensitive UI like title editing.
 - `last_message_at` drives inbox ordering and recency labels.
+- the `last_message_*` projection columns are now the canonical list-surface summary for inbox and activity; list rendering no longer depends on scanning `public.messages` across visible conversations to discover the latest message.
 - `dm_key`, when present, is the canonical unordered DM pair key (`sorted(user_a,user_b).join(':')`) used to make direct-message creation race-safe and reuse exactly one DM for the same pair.
 - `avatar_path`, when present, stores group chat avatar identity in the private avatars bucket; inbox/chat loading tolerates it being absent, but editable group avatars require it.
 - `space_id` makes each conversation belong to exactly one space.

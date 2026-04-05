@@ -216,6 +216,13 @@ type ConversationRecord = {
   created_by?: string | null;
   last_message_at?: string | null;
   created_at?: string | null;
+  last_message_id?: string | null;
+  last_message_seq?: number | string | null;
+  last_message_sender_id?: string | null;
+  last_message_kind?: string | null;
+  last_message_content_mode?: string | null;
+  last_message_deleted_at?: string | null;
+  last_message_body?: string | null;
 };
 
 type ConversationMemberRow = {
@@ -242,6 +249,7 @@ export type InboxConversation = {
   lastReadAt: string | null;
   latestMessageId: string | null;
   latestMessageSeq: number | null;
+  latestMessageSenderId: string | null;
   latestMessageBody: string | null;
   latestMessageKind: string | null;
   latestMessageContentMode: string | null;
@@ -463,6 +471,75 @@ function isMissingColumnErrorMessage(message: string, columnName: string) {
     normalizedMessage.includes('column') &&
     normalizedMessage.includes(columnName.toLowerCase())
   );
+}
+
+const CONVERSATION_SUMMARY_PROJECTION_COLUMNS = [
+  'last_message_id',
+  'last_message_seq',
+  'last_message_sender_id',
+  'last_message_kind',
+  'last_message_content_mode',
+  'last_message_deleted_at',
+  'last_message_body',
+] as const;
+
+function isMissingConversationSummaryProjectionErrorMessage(message: string) {
+  return CONVERSATION_SUMMARY_PROJECTION_COLUMNS.some((columnName) =>
+    isMissingColumnErrorMessage(message, columnName),
+  );
+}
+
+function hasConversationSummaryProjectionFields(record: ConversationRecord | null) {
+  if (!record) {
+    return false;
+  }
+
+  return CONVERSATION_SUMMARY_PROJECTION_COLUMNS.some((columnName) =>
+    Object.prototype.hasOwnProperty.call(record, columnName),
+  );
+}
+
+function normalizeConversationLatestMessageSeq(value: number | string | null | undefined) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function getConversationSummarySelect(input?: {
+  includeAvatarPath?: boolean;
+  includeSpaceId?: boolean;
+  includeSummaryProjection?: boolean;
+}) {
+  const columns = [
+    'id',
+    'kind',
+    'title',
+    ...(input?.includeAvatarPath === false ? [] : ['avatar_path']),
+    ...(input?.includeSpaceId === false ? [] : ['space_id']),
+    'created_by',
+    'last_message_at',
+    'created_at',
+    ...(input?.includeSummaryProjection === false
+      ? []
+      : [
+          'last_message_id',
+          'last_message_seq',
+          'last_message_sender_id',
+          'last_message_kind',
+          'last_message_content_mode',
+          'last_message_deleted_at',
+          'last_message_body',
+        ]),
+  ];
+
+  return columns.join(', ');
 }
 
 function createSchemaRequirementError(details: string) {
@@ -935,7 +1012,13 @@ async function attachConversationsToMembershipRows(
 
   const { data, error } = await supabase
     .from('conversations')
-    .select('id, kind, title, avatar_path, space_id, created_by, last_message_at, created_at')
+    .select(
+      getConversationSummarySelect({
+        includeAvatarPath: true,
+        includeSpaceId: true,
+        includeSummaryProjection: true,
+      }),
+    )
     .in('id', conversationIds);
 
   let conversations = (data ?? null) as ConversationRecord[] | null;
@@ -943,11 +1026,15 @@ async function attachConversationsToMembershipRows(
   if (error) {
     const missingSpaceId = isMissingColumnErrorMessage(error.message, 'space_id');
     const missingAvatarPath = isMissingColumnErrorMessage(error.message, 'avatar_path');
+    const missingSummaryProjection =
+      isMissingConversationSummaryProjectionErrorMessage(error.message);
 
-    if (missingSpaceId || missingAvatarPath) {
+    if (missingSpaceId || missingAvatarPath || missingSummaryProjection) {
       logConversationSchemaDiagnostics('attachConversationsToMembershipRows:select-error', {
         actualFailingColumn: missingAvatarPath
           ? 'avatar_path'
+          : missingSummaryProjection
+            ? 'conversation-summary-projection'
           : missingSpaceId
             ? 'space_id'
             : 'unknown',
@@ -956,12 +1043,15 @@ async function attachConversationsToMembershipRows(
         requestedSpaceId: options?.spaceId ?? null,
         schemaCheckAvatarPathMissing: missingAvatarPath,
         schemaCheckSpaceIdMissing: missingSpaceId,
+        schemaCheckSummaryProjectionMissing: missingSummaryProjection,
       });
 
       if (options?.spaceId && missingSpaceId) {
         logConversationSchemaDiagnostics('attachConversationsToMembershipRows:throw-space-id-required', {
           actualFailingColumn: missingAvatarPath
             ? 'avatar_path'
+            : missingSummaryProjection
+              ? 'conversation-summary-projection'
             : missingSpaceId
               ? 'space_id'
               : 'unknown',
@@ -970,28 +1060,33 @@ async function attachConversationsToMembershipRows(
           requestedSpaceId: options.spaceId,
           schemaCheckAvatarPathMissing: missingAvatarPath,
           schemaCheckSpaceIdMissing: missingSpaceId,
+          schemaCheckSummaryProjectionMissing: missingSummaryProjection,
         });
         throw createSchemaRequirementError(
           'Active space scoping requires public.conversations.space_id.',
         );
       }
 
-      const fallback =
-        missingAvatarPath && !missingSpaceId
-          ? await supabase
-              .from('conversations')
-              .select('id, kind, title, space_id, created_by, last_message_at, created_at')
-              .in('id', conversationIds)
-          : await supabase
-              .from('conversations')
-              .select('id, kind, title, created_by, last_message_at, created_at')
-              .in('id', conversationIds);
+      const fallback = await supabase
+        .from('conversations')
+        .select(
+          getConversationSummarySelect({
+            includeAvatarPath: !missingAvatarPath,
+            includeSpaceId: !missingSpaceId,
+            includeSummaryProjection: !missingSummaryProjection,
+          }),
+        )
+        .in('id', conversationIds);
 
       if (fallback.error) {
         logConversationSchemaDiagnostics('attachConversationsToMembershipRows:fallback-error', {
           actualFailingColumn:
             isMissingColumnErrorMessage(fallback.error.message, 'avatar_path')
               ? 'avatar_path'
+              : isMissingConversationSummaryProjectionErrorMessage(
+                    fallback.error.message,
+                  )
+                ? 'conversation-summary-projection'
               : isMissingColumnErrorMessage(fallback.error.message, 'space_id')
                 ? 'space_id'
                 : 'unknown',
@@ -1006,11 +1101,15 @@ async function attachConversationsToMembershipRows(
             fallback.error.message,
             'space_id',
           ),
+          schemaCheckSummaryProjectionMissing:
+            isMissingConversationSummaryProjectionErrorMessage(
+              fallback.error.message,
+            ),
         });
         throw new Error(fallback.error.message);
       }
 
-      conversations = (fallback.data ?? null) as ConversationRecord[] | null;
+      conversations = (fallback.data ?? null) as unknown as ConversationRecord[] | null;
     } else {
       throw new Error(error.message);
     }
@@ -1057,6 +1156,7 @@ async function mapInboxConversations(
     string,
     {
       id: string | null;
+      senderId: string | null;
       body: string | null;
       kind: string | null;
       contentMode: string | null;
@@ -1064,8 +1164,57 @@ async function mapInboxConversations(
     }
   >();
   const unreadCountByConversation = new Map<string, number>();
+  const summaryProjectionAvailable =
+    rows.length > 0 &&
+    rows.every((row) =>
+      hasConversationSummaryProjectionFields(
+        normalizeConversation(row.conversations),
+      ),
+    );
 
-  if (conversationIds.length > 0) {
+  if (summaryProjectionAvailable) {
+    for (const membershipRow of rows) {
+      const conversation = normalizeConversation(membershipRow.conversations);
+      const latestSeq = normalizeConversationLatestMessageSeq(
+        conversation?.last_message_seq ?? null,
+      );
+
+      if (conversation && conversation.last_message_id !== undefined) {
+        latestMessageByConversation.set(membershipRow.conversation_id, {
+          id: conversation.last_message_id ?? null,
+          senderId: conversation.last_message_sender_id ?? null,
+          body: conversation.last_message_body ?? null,
+          kind: conversation.last_message_kind ?? null,
+          contentMode: conversation.last_message_content_mode ?? null,
+          deletedAt: conversation.last_message_deleted_at ?? null,
+        });
+      }
+
+      if (latestSeq !== null) {
+        latestMessageSeqByConversation.set(membershipRow.conversation_id, latestSeq);
+      }
+
+      const lastReadSeq =
+        typeof membershipRow.last_read_message_seq === 'number'
+          ? membershipRow.last_read_message_seq
+          : null;
+
+      if (latestSeq === null) {
+        unreadCountByConversation.set(membershipRow.conversation_id, 0);
+        continue;
+      }
+
+      if (lastReadSeq === null) {
+        unreadCountByConversation.set(membershipRow.conversation_id, latestSeq);
+        continue;
+      }
+
+      unreadCountByConversation.set(
+        membershipRow.conversation_id,
+        Math.max(0, latestSeq - lastReadSeq),
+      );
+    }
+  } else if (conversationIds.length > 0) {
     const latestMessagesWithContentMode = await supabase
       .from('messages')
       .select('id, conversation_id, seq, body, kind, content_mode, deleted_at')
@@ -1113,6 +1262,7 @@ async function mapInboxConversations(
         latestMessageSeqByConversation.set(row.conversation_id, messageSeq);
         latestMessageByConversation.set(row.conversation_id, {
           id: row.id ?? null,
+          senderId: null,
           body: row.body ?? null,
           kind: row.kind ?? null,
           contentMode: row.content_mode ?? null,
@@ -1176,6 +1326,7 @@ async function mapInboxConversations(
         lastReadAt: row.last_read_at ?? null,
         latestMessageId: latestMessage?.id ?? null,
         latestMessageSeq,
+        latestMessageSenderId: latestMessage?.senderId ?? null,
         latestMessageBody: latestMessage?.body ?? null,
         latestMessageKind: latestMessage?.kind ?? null,
         latestMessageContentMode: latestMessage?.contentMode ?? null,
@@ -5111,6 +5262,166 @@ export async function toggleMessageReaction(input: {
   }
 }
 
+type ConversationSummaryMessageRow = {
+  id: string;
+  seq: number | string;
+  sender_id: string | null;
+  body: string | null;
+  kind: string | null;
+  content_mode?: string | null;
+  deleted_at: string | null;
+  created_at: string | null;
+};
+
+async function loadConversationSummaryMessageRowById(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  messageId: string,
+) {
+  const response = await supabase
+    .from('messages')
+    .select('id, seq, sender_id, body, kind, content_mode, deleted_at, created_at')
+    .eq('id', messageId)
+    .maybeSingle();
+
+  if (response.error) {
+    if (isMissingColumnErrorMessage(response.error.message, 'content_mode')) {
+      const fallback = await supabase
+        .from('messages')
+        .select('id, seq, sender_id, body, kind, deleted_at, created_at')
+        .eq('id', messageId)
+        .maybeSingle();
+
+      if (fallback.error) {
+        throw new Error(fallback.error.message);
+      }
+
+      return (fallback.data ?? null) as ConversationSummaryMessageRow | null;
+    }
+
+    throw new Error(response.error.message);
+  }
+
+  return (response.data ?? null) as ConversationSummaryMessageRow | null;
+}
+
+async function loadLatestConversationSummaryMessageRow(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  conversationId: string,
+) {
+  const response = await supabase
+    .from('messages')
+    .select('id, seq, sender_id, body, kind, content_mode, deleted_at, created_at')
+    .eq('conversation_id', conversationId)
+    .order('seq', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (response.error) {
+    if (isMissingColumnErrorMessage(response.error.message, 'content_mode')) {
+      const fallback = await supabase
+        .from('messages')
+        .select('id, seq, sender_id, body, kind, deleted_at, created_at')
+        .eq('conversation_id', conversationId)
+        .order('seq', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (fallback.error) {
+        throw new Error(fallback.error.message);
+      }
+
+      return (fallback.data ?? null) as ConversationSummaryMessageRow | null;
+    }
+
+    throw new Error(response.error.message);
+  }
+
+  return (response.data ?? null) as ConversationSummaryMessageRow | null;
+}
+
+async function updateConversationSummaryProjectionFromRow(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  conversationId: string,
+  row: ConversationSummaryMessageRow | null,
+) {
+  const latestMessageSeq = normalizeConversationLatestMessageSeq(row?.seq ?? null);
+  const updatePayload = row
+    ? {
+        last_message_at: row.created_at ?? null,
+        last_message_id: row.id,
+        last_message_seq: latestMessageSeq,
+        last_message_sender_id: row.sender_id ?? null,
+        last_message_kind: row.kind ?? null,
+        last_message_content_mode: row.content_mode ?? null,
+        last_message_deleted_at: row.deleted_at ?? null,
+        last_message_body: row.body ?? null,
+      }
+    : {
+        last_message_at: null,
+        last_message_id: null,
+        last_message_seq: null,
+        last_message_sender_id: null,
+        last_message_kind: null,
+        last_message_content_mode: null,
+        last_message_deleted_at: null,
+        last_message_body: null,
+      };
+
+  const { error } = await supabase
+    .from('conversations')
+    .update(updatePayload)
+    .eq('id', conversationId);
+
+  if (error) {
+    if (
+      isMissingConversationSummaryProjectionErrorMessage(error.message)
+    ) {
+      const fallbackUpdate = await supabase
+        .from('conversations')
+        .update({
+          last_message_at: row?.created_at ?? null,
+        })
+        .eq('id', conversationId);
+
+      if (fallbackUpdate.error) {
+        throw new Error(fallbackUpdate.error.message);
+      }
+
+      return;
+    }
+
+    throw new Error(error.message);
+  }
+}
+
+async function syncConversationSummaryProjectionByMessageId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  conversationId: string,
+  messageId: string,
+) {
+  const messageRow = await loadConversationSummaryMessageRowById(supabase, messageId);
+  await updateConversationSummaryProjectionFromRow(
+    supabase,
+    conversationId,
+    messageRow,
+  );
+}
+
+async function syncConversationSummaryProjectionFromLatestMessage(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  conversationId: string,
+) {
+  const latestMessageRow = await loadLatestConversationSummaryMessageRow(
+    supabase,
+    conversationId,
+  );
+  await updateConversationSummaryProjectionFromRow(
+    supabase,
+    conversationId,
+    latestMessageRow,
+  );
+}
+
 export async function sendTextMessage(input: {
   conversationId: string;
   body: string;
@@ -5407,6 +5718,12 @@ export async function sendEncryptedDmTextMessage(
     hasMessageId: true,
   });
 
+  await syncConversationSummaryProjectionByMessageId(
+    supabase,
+    input.conversationId,
+    messageId,
+  );
+
   return {
     messageId,
     timestamp: row?.created_at ?? new Date().toISOString(),
@@ -5493,14 +5810,11 @@ async function createMessageRecord(input: {
   }
 
   if (input.touchConversation ?? true) {
-    const { error: updateError } = await supabase
-      .from('conversations')
-      .update({ last_message_at: timestamp })
-      .eq('id', input.conversationId);
-
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
+    await syncConversationSummaryProjectionByMessageId(
+      supabase,
+      input.conversationId,
+      messageId,
+    );
   }
 
   return {
@@ -5557,6 +5871,11 @@ export async function editMessage(input: {
 
     throw new Error(error.message);
   }
+
+  await syncConversationSummaryProjectionFromLatestMessage(
+    supabase,
+    input.conversationId,
+  );
 }
 
 export async function softDeleteMessage(input: {
@@ -5605,6 +5924,11 @@ export async function softDeleteMessage(input: {
 
     throw new Error(error.message);
   }
+
+  await syncConversationSummaryProjectionFromLatestMessage(
+    supabase,
+    input.conversationId,
+  );
 }
 
 export async function updateConversationTitle(input: {
@@ -6134,14 +6458,11 @@ export async function sendMessageWithAttachment(input: {
     throw new Error(attachmentError.message);
   }
 
-  const { error: updateError } = await supabase
-    .from('conversations')
-    .update({ last_message_at: messageResult.timestamp })
-    .eq('id', input.conversationId);
-
-  if (updateError) {
-    throw new Error(updateError.message);
-  }
+  await syncConversationSummaryProjectionByMessageId(
+    supabase,
+    input.conversationId,
+    messageResult.messageId,
+  );
 
   return messageResult;
 }
