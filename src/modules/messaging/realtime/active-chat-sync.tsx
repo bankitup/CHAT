@@ -1,6 +1,10 @@
 'use client';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import {
+  applyThreadReactionRealtimeEvent,
+  patchThreadConversationReadState,
+} from '@/modules/messaging/realtime/thread-live-state-store';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useTransition } from 'react';
 import {
@@ -11,6 +15,7 @@ import {
 
 type ActiveChatRealtimeSyncProps = {
   conversationId: string;
+  currentUserId: string;
   messageIds: string[];
 };
 
@@ -20,6 +25,7 @@ const THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
 
 export function ActiveChatRealtimeSync({
   conversationId,
+  currentUserId,
   messageIds,
 }: ActiveChatRealtimeSyncProps) {
   const router = useRouter();
@@ -105,6 +111,7 @@ export function ActiveChatRealtimeSync({
     };
 
     const scheduleReactionRefresh = (payload: {
+      eventType: 'INSERT' | 'UPDATE' | 'DELETE';
       new?: { message_id?: string | null } | null;
       old?: { message_id?: string | null } | null;
     }) => {
@@ -114,7 +121,13 @@ export function ActiveChatRealtimeSync({
         return;
       }
 
-      scheduleRefresh('reaction-postgres');
+      applyThreadReactionRealtimeEvent({
+        conversationId,
+        currentUserId,
+        eventType: payload.eventType,
+        newRow: payload.new,
+        oldRow: payload.old,
+      });
     };
 
     const scheduleMessageBroadcastRefresh = ({
@@ -126,7 +139,10 @@ export function ActiveChatRealtimeSync({
         return;
       }
 
-      scheduleRefresh('message-broadcast');
+      logDiagnostics('message-broadcast:ignored-route-refresh', {
+        conversationId,
+        messageId: payload.messageId ?? null,
+      });
     };
 
     const handleLocalMessageCommitted = (event: Event) => {
@@ -136,7 +152,11 @@ export function ActiveChatRealtimeSync({
         return;
       }
 
-      scheduleRefresh('message-local');
+      logDiagnostics('message-local:ignored-route-refresh', {
+        clientId: detail.clientId ?? null,
+        conversationId,
+        messageId: detail.messageId ?? null,
+      });
     };
 
     const channel = supabase
@@ -158,7 +178,31 @@ export function ActiveChatRealtimeSync({
         schema: 'public',
         table: 'conversation_members',
         filter: `conversation_id=eq.${conversationId}`,
-      }, () => scheduleRefresh('membership-postgres'))
+      }, (payload) => {
+        const userId =
+          typeof payload.new?.user_id === 'string'
+            ? payload.new.user_id
+            : typeof payload.old?.user_id === 'string'
+              ? payload.old.user_id
+              : null;
+        const lastReadMessageSeq =
+          typeof payload.new?.last_read_message_seq === 'number'
+            ? payload.new.last_read_message_seq
+            : typeof payload.old?.last_read_message_seq === 'number'
+              ? payload.old.last_read_message_seq
+              : null;
+
+        if (!userId) {
+          scheduleRefresh('membership-postgres:fallback');
+          return;
+        }
+
+        patchThreadConversationReadState({
+          conversationId,
+          isCurrentUser: userId === currentUserId,
+          lastReadMessageSeq,
+        });
+      })
       .on('broadcast', {
         event: MESSAGE_COMMITTED_BROADCAST_EVENT,
       }, scheduleMessageBroadcastRefresh)
@@ -169,7 +213,12 @@ export function ActiveChatRealtimeSync({
           schema: 'public',
           table: 'message_reactions',
         },
-        scheduleReactionRefresh,
+        (payload) =>
+          scheduleReactionRefresh({
+            eventType: payload.eventType,
+            new: payload.new,
+            old: payload.old,
+          }),
       )
       .subscribe();
 
@@ -193,6 +242,7 @@ export function ActiveChatRealtimeSync({
     };
   }, [
     conversationId,
+    currentUserId,
     diagnosticsEnabled,
     messageIdsKey,
     normalizedMessageIds,

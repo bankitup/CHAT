@@ -24,10 +24,8 @@ import {
   loadInboxConversationsForSsr,
 } from '@/modules/messaging/data/inbox-ssr-stability';
 import {
-  GroupIdentityAvatar,
-  IdentityAvatar,
-} from '@/modules/messaging/ui/identity';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+  resolvePublicIdentityLabel,
+} from '@/modules/messaging/ui/identity-label';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
@@ -37,14 +35,12 @@ import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 import { resolveV1TestSpaceFallback } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
-import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
+import { InboxConversationLiveRow } from './inbox-conversation-live-row';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
   restoreConversationAction,
 } from './actions';
-import { GuardedServerActionForm } from '../guarded-server-action-form';
-import { PendingSubmitButton } from '../pending-submit-button';
 import { NewChatSheet } from './new-chat-sheet';
 
 type InboxPageProps = {
@@ -487,6 +483,27 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       hasUnread,
     } satisfies ConversationListItem;
   });
+  const liveSummariesByConversationId = new Map(
+    visibleConversations.map((conversation) => [
+      conversation.conversationId,
+      {
+        conversationId: conversation.conversationId,
+        createdAt: conversation.createdAt,
+        hiddenAt: conversation.hiddenAt,
+        lastMessageAt: conversation.lastMessageAt,
+        lastReadAt: conversation.lastReadAt,
+        lastReadMessageSeq: conversation.lastReadMessageSeq,
+        latestMessageBody: conversation.latestMessageBody,
+        latestMessageContentMode: conversation.latestMessageContentMode,
+        latestMessageDeletedAt: conversation.latestMessageDeletedAt,
+        latestMessageId: conversation.latestMessageId,
+        latestMessageKind: conversation.latestMessageKind,
+        latestMessageSenderId: conversation.latestMessageSenderId,
+        latestMessageSeq: conversation.latestMessageSeq,
+        unreadCount: conversation.unreadCount,
+      },
+    ]),
+  );
 
   const filterConversationItems = (conversation: ConversationListItem) => {
     if (activeFilter === 'dm' && conversation.isGroupConversation) {
@@ -581,6 +598,22 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     >
       <InboxRealtimeSync
         conversationIds={visibleConversations.map((conversation) => conversation.conversationId)}
+        initialSummaries={visibleConversations.map((conversation) => ({
+          conversationId: conversation.conversationId,
+          createdAt: conversation.createdAt,
+          hiddenAt: conversation.hiddenAt,
+          lastMessageAt: conversation.lastMessageAt,
+          lastReadAt: conversation.lastReadAt,
+          lastReadMessageSeq: conversation.lastReadMessageSeq,
+          latestMessageBody: conversation.latestMessageBody,
+          latestMessageContentMode: conversation.latestMessageContentMode,
+          latestMessageDeletedAt: conversation.latestMessageDeletedAt,
+          latestMessageId: conversation.latestMessageId,
+          latestMessageKind: conversation.latestMessageKind,
+          latestMessageSenderId: conversation.latestMessageSenderId,
+          latestMessageSeq: conversation.latestMessageSeq,
+          unreadCount: conversation.unreadCount,
+        }))}
         userId={user.id}
       />
 
@@ -851,176 +884,53 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           }
         >
           {filteredConversationItems.map((conversation) => (
-            <article
+            <InboxConversationLiveRow
               key={conversation.conversationId}
-              className={
-                conversation.hasUnread
-                  ? isPrimaryChatsView
-                    ? 'conversation-card conversation-card-unread conversation-card-minimal conversation-card-dm'
-                    : 'conversation-card conversation-card-unread conversation-card-minimal'
-                  : isPrimaryChatsView
-                    ? 'conversation-card conversation-card-minimal conversation-card-dm'
-                    : 'conversation-card conversation-card-minimal'
-              }
-            >
-              <div
-                className={
-                  activeView === 'archived'
-                    ? isPrimaryChatsView
-                      ? 'conversation-row conversation-row-with-action conversation-row-dm'
-                      : 'conversation-row conversation-row-with-action'
-                    : isPrimaryChatsView
-                      ? 'conversation-row conversation-row-dm'
-                      : 'conversation-row'
+              activeSpaceId={activeSpaceId}
+              currentUserId={user.id}
+              initialSummary={
+                liveSummariesByConversationId.get(conversation.conversationId) ?? {
+                  conversationId: conversation.conversationId,
+                  createdAt: null,
+                  hiddenAt: null,
+                  lastMessageAt: null,
+                  lastReadAt: null,
+                  lastReadMessageSeq: null,
+                  latestMessageBody: null,
+                  latestMessageContentMode: null,
+                  latestMessageDeletedAt: null,
+                  latestMessageId: null,
+                  latestMessageKind: null,
+                  latestMessageSenderId: null,
+                  latestMessageSeq: null,
+                  unreadCount: 0,
                 }
-              >
-                <Link
-                  className={
-                    isPrimaryChatsView
-                      ? 'conversation-row-link conversation-row-link-dm'
-                      : 'conversation-row-link'
-                  }
-                  href={withSpaceParam(
-                    `/chat/${conversation.conversationId}`,
-                    activeSpaceId,
-                  )}
-                  prefetch={false}
-                >
-                  {conversation.isGroupConversation ? (
-                    <GroupIdentityAvatar
-                      avatarPath={conversation.groupAvatarPath}
-                      label={conversation.title}
-                      size={isPrimaryChatsView ? 'lg' : 'md'}
-                    />
-                  ) : (
-                    <IdentityAvatar
-                      diagnosticsSurface="inbox:conversation-row"
-                      identity={conversation.participants[0]}
-                      label={conversation.title}
-                      size={isPrimaryChatsView ? 'lg' : 'md'}
-                    />
-                  )}
-
-                  <div
-                    className={
-                      isPrimaryChatsView
-                        ? 'stack conversation-card-copy conversation-card-copy-dm'
-                        : 'stack conversation-card-copy'
-                    }
-                  >
-                    <div
-                      className={
-                        isPrimaryChatsView
-                          ? 'stack conversation-main-copy conversation-main-copy-dm'
-                          : 'stack conversation-main-copy'
-                      }
-                    >
-                      <div
-                        className={
-                          isPrimaryChatsView
-                            ? 'conversation-title-row conversation-title-row-dm'
-                            : 'conversation-title-row'
-                        }
-                      >
-                        <h3
-                          className={
-                            conversation.hasUnread
-                              ? isPrimaryChatsView
-                                ? 'conversation-title conversation-title-unread conversation-title-dm'
-                                : 'conversation-title conversation-title-unread'
-                              : isPrimaryChatsView
-                                ? 'conversation-title conversation-title-dm'
-                                : 'conversation-title'
-                          }
-                        >
-                          {conversation.title}
-                        </h3>
-                        <div className="conversation-title-meta">
-                          <span
-                            className={
-                              conversation.hasUnread
-                                ? 'conversation-recency conversation-recency-unread'
-                                : 'conversation-recency'
-                            }
-                          >
-                            {conversation.recencyLabel}
-                          </span>
-                          {conversation.hasUnread ? (
-                            <span
-                              className="conversation-unread-dot"
-                              aria-label={t.inbox.unreadAria}
-                            />
-                          ) : null}
-                        </div>
-                      </div>
-                      {conversation.preview ? (
-                        <EncryptedDmInboxPreview
-                          className={
-                            conversation.hasUnread
-                              ? isPrimaryChatsView
-                                ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
-                                : 'muted conversation-preview conversation-preview-unread'
-                              : isPrimaryChatsView
-                                ? 'muted conversation-preview conversation-preview-dm'
-                                : 'muted conversation-preview'
-                          }
-                          conversationId={conversation.conversationId}
-                          currentUserId={user.id}
-                          fallbackPreview={conversation.preview}
-                          latestMessageContentMode={conversation.latestMessageContentMode}
-                          latestMessageDeletedAt={conversation.latestMessageDeletedAt ?? null}
-                          latestMessageId={conversation.latestMessageId}
-                        />
-                      ) : null}
-                    </div>
-
-                    <div
-                      className={
-                        isPrimaryChatsView
-                          ? 'conversation-footer conversation-footer-dm'
-                          : 'conversation-footer'
-                      }
-                    >
-                      <div className="conversation-footer-meta">
-                        {conversation.metaLabels.map((metaLabel) => (
-                          <span
-                            key={metaLabel.label}
-                            className={
-                              metaLabel.tone === 'archived'
-                                ? 'conversation-kind-label conversation-kind-label-archived'
-                                : 'conversation-kind-label'
-                            }
-                          >
-                            {metaLabel.tone === 'archived'
-                              ? t.inbox.metaArchived
-                              : t.inbox.metaGroup}
-                          </span>
-                        ))}
-                      </div>
-                      <p className="muted conversation-timestamp">
-                        {conversation.timestampLabel}
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-                {activeView === 'archived' ? (
-                  <GuardedServerActionForm action={restoreConversationAction}>
-                    <input
-                      name="conversationId"
-                      type="hidden"
-                      value={conversation.conversationId}
-                    />
-                    <input name="spaceId" type="hidden" value={activeSpaceId} />
-                    <PendingSubmitButton
-                      className="button button-compact button-secondary conversation-restore-button"
-                      type="submit"
-                    >
-                      {t.inbox.restore}
-                    </PendingSubmitButton>
-                  </GuardedServerActionForm>
-                ) : null}
-              </div>
-            </article>
+              }
+              isArchivedView={activeView === 'archived'}
+              isPrimaryChatsView={isPrimaryChatsView}
+              item={{
+                conversationId: conversation.conversationId,
+                groupAvatarPath: conversation.groupAvatarPath,
+                isGroupConversation: conversation.isGroupConversation,
+                metaLabels: conversation.metaLabels,
+                participant: conversation.participants[0] ?? null,
+                title: conversation.title,
+              }}
+              language={language}
+              labels={{
+                attachment: t.chat.attachment,
+                deletedMessage: t.chat.deletedMessage,
+                encryptedMessage: t.chat.encryptedMessage,
+                group: t.inbox.metaGroup,
+                newEncryptedMessage: t.chat.newEncryptedMessage,
+                noActivityYet: t.inbox.noActivityYet,
+                unreadAria: t.inbox.unreadAria,
+                voiceMessage: t.chat.voiceMessage,
+                yesterday: t.inbox.yesterday,
+              }}
+              restoreAction={activeView === 'archived' ? restoreConversationAction : null}
+              restoreLabel={activeView === 'archived' ? t.inbox.restore : undefined}
+            />
           ))}
         </section>
       )}

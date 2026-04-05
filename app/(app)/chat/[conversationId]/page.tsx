@@ -80,6 +80,8 @@ import { GroupChatSettingsForm } from './group-chat-settings-form';
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
+import { ThreadReactionGroups } from './thread-reaction-groups';
+import { ThreadLiveStateHydrator } from '@/modules/messaging/realtime/thread-live-state-store';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
 
@@ -1127,15 +1129,26 @@ export default async function ChatPage({
         >
           <ActiveChatRealtimeSync
             conversationId={conversationId}
+            currentUserId={user.id}
             messageIds={messages.map((message) => message.id)}
           />
         </DmThreadClientSubtree>
       ) : (
         <ActiveChatRealtimeSync
           conversationId={conversationId}
+          currentUserId={user.id}
           messageIds={messages.map((message) => message.id)}
         />
       )}
+      <ThreadLiveStateHydrator
+        conversationId={conversationId}
+        currentUserReadSeq={readState.lastReadMessageSeq}
+        otherParticipantReadSeq={otherParticipantReadState?.lastReadMessageSeq ?? null}
+        reactionsByMessage={messageIds.map((messageId) => ({
+          messageId,
+          reactions: reactionsByMessage.get(messageId) ?? [],
+        }))}
+      />
       {conversation.kind === 'dm' ? (
         <DmThreadClientSubtree
           conversationId={conversationId}
@@ -1710,11 +1723,14 @@ export default async function ChatPage({
                               surface="live-outgoing-message-status"
                             >
                               <LiveOutgoingMessageStatus
+                                conversationId={conversationId}
                                 labels={{
                                   delivered: t.chat.delivered,
                                   seen: t.chat.seen,
                                   sent: t.chat.sent,
                                 }}
+                                messageSeq={message.seq}
+                                otherParticipantReadSeq={otherParticipantReadSeq}
                                 status={outgoingMessageStatus}
                               />
                             </DmThreadClientSubtree>
@@ -1731,45 +1747,15 @@ export default async function ChatPage({
                         ) : null}
                       </span>
 
-                      {reactionsByMessage.get(message.id)?.length && !isDeletedMessage ? (
-                        <div
-                          className={
-                            isOwnMessage
-                              ? 'reaction-groups reaction-groups-own'
-                              : 'reaction-groups'
-                          }
-                          aria-label={t.chat.messageReactions}
-                        >
-                          {reactionsByMessage.get(message.id)?.map((reaction) => (
-                            <form
-                              key={`${message.id}-${reaction.emoji}`}
-                              action={toggleReactionAction}
-                            >
-                              <input
-                                name="conversationId"
-                                type="hidden"
-                                value={conversationId}
-                              />
-                              <input
-                                name="messageId"
-                                type="hidden"
-                                value={message.id}
-                              />
-                              <input name="emoji" type="hidden" value={reaction.emoji} />
-                              <button
-                                className={
-                                  reaction.selectedByCurrentUser
-                                    ? 'reaction-pill reaction-pill-selected'
-                                    : 'reaction-pill'
-                                }
-                                type="submit"
-                              >
-                                <span>{reaction.emoji}</span>
-                                <span className="reaction-count">{reaction.count}</span>
-                              </button>
-                            </form>
-                          ))}
-                        </div>
+                      {!isDeletedMessage ? (
+                        <ThreadReactionGroups
+                          action={toggleReactionAction}
+                          ariaLabel={t.chat.messageReactions}
+                          conversationId={conversationId}
+                          initialReactions={reactionsByMessage.get(message.id) ?? []}
+                          isOwnMessage={isOwnMessage}
+                          messageId={message.id}
+                        />
                       ) : null}
                       {isMessageInDeleteMode ? (
                         <form action={deleteMessageAction} className="message-delete-confirm">

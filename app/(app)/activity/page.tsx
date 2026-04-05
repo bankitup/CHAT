@@ -16,19 +16,15 @@ import {
   type InboxConversation,
 } from '@/modules/messaging/data/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
-import {
-  GroupIdentityAvatar,
-  IdentityAvatar,
-} from '@/modules/messaging/ui/identity';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
   resolveV1TestSpaceFallback,
   resolveActiveSpaceForUser,
   isSpaceMembersSchemaCacheErrorMessage,
 } from '@/modules/spaces/server';
-import { withSpaceParam } from '@/modules/spaces/url';
 import { notFound, redirect } from 'next/navigation';
 import { NotificationReadinessPanel } from '../settings/notification-readiness';
+import { ActivityConversationLiveItem } from './activity-conversation-live-item';
 
 type ActivityPageProps = {
   searchParams: Promise<{
@@ -265,6 +261,27 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       primaryParticipant: otherParticipants[0] ?? null,
     } satisfies ActivityItem;
   });
+  const liveSummariesByConversationId = new Map(
+    conversations.map((conversation) => [
+      conversation.conversationId,
+      {
+        conversationId: conversation.conversationId,
+        createdAt: conversation.createdAt,
+        hiddenAt: conversation.hiddenAt,
+        lastMessageAt: conversation.lastMessageAt,
+        lastReadAt: conversation.lastReadAt,
+        lastReadMessageSeq: conversation.lastReadMessageSeq,
+        latestMessageBody: conversation.latestMessageBody,
+        latestMessageContentMode: conversation.latestMessageContentMode,
+        latestMessageDeletedAt: conversation.latestMessageDeletedAt,
+        latestMessageId: conversation.latestMessageId,
+        latestMessageKind: conversation.latestMessageKind,
+        latestMessageSenderId: conversation.latestMessageSenderId,
+        latestMessageSeq: conversation.latestMessageSeq,
+        unreadCount: conversation.unreadCount,
+      },
+    ]),
+  );
 
   const unreadItems = activityItems.filter((conversation) => conversation.unreadCount > 0);
   const recentItems = activityItems
@@ -279,6 +296,22 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     <section className="stack settings-screen settings-shell activity-screen">
       <InboxRealtimeSync
         conversationIds={conversations.map((conversation) => conversation.conversationId)}
+        initialSummaries={conversations.map((conversation) => ({
+          conversationId: conversation.conversationId,
+          createdAt: conversation.createdAt,
+          hiddenAt: conversation.hiddenAt,
+          lastMessageAt: conversation.lastMessageAt,
+          lastReadAt: conversation.lastReadAt,
+          lastReadMessageSeq: conversation.lastReadMessageSeq,
+          latestMessageBody: conversation.latestMessageBody,
+          latestMessageContentMode: conversation.latestMessageContentMode,
+          latestMessageDeletedAt: conversation.latestMessageDeletedAt,
+          latestMessageId: conversation.latestMessageId,
+          latestMessageKind: conversation.latestMessageKind,
+          latestMessageSenderId: conversation.latestMessageSenderId,
+          latestMessageSeq: conversation.latestMessageSeq,
+          unreadCount: conversation.unreadCount,
+        }))}
         userId={user.id}
       />
 
@@ -329,50 +362,48 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           {unreadItems.length > 0 ? (
             <div className="activity-list">
               {unreadItems.map((conversation) => (
-                <Link
+                <ActivityConversationLiveItem
                   key={`unread-${conversation.conversationId}`}
-                  className="activity-item"
-                  href={withSpaceParam(
-                    `/chat/${conversation.conversationId}`,
-                    activeSpaceId,
-                  )}
-                  prefetch={false}
-                >
-                  {conversation.isGroupConversation ? (
-                    <GroupIdentityAvatar
-                      avatarPath={conversation.groupAvatarPath}
-                      label={conversation.title}
-                      size="sm"
-                    />
-                  ) : (
-                    <IdentityAvatar
-                      diagnosticsSurface="activity:unread-item"
-                      identity={conversation.primaryParticipant}
-                      label={conversation.title}
-                      size="sm"
-                    />
-                  )}
-
-                  <div className="stack activity-item-copy">
-                    <div className="activity-item-title-row">
-                      <h3 className="activity-item-title">{conversation.title}</h3>
-                      <span className="activity-item-recency">{conversation.recencyLabel}</span>
-                    </div>
-
-                    {conversation.preview ? (
-                      <p className="muted activity-item-preview">{conversation.preview}</p>
-                    ) : null}
-
-                    <div className="activity-item-meta">
-                      <span className="activity-unread-pill">
-                        {t.chat.unreadMessages}: {conversation.unreadCount}
-                      </span>
-                      <span className="muted activity-item-timestamp">
-                        {conversation.timestampLabel}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
+                  activeSpaceId={activeSpaceId}
+                  initialSummary={
+                    liveSummariesByConversationId.get(conversation.conversationId) ?? {
+                      conversationId: conversation.conversationId,
+                      createdAt: null,
+                      hiddenAt: null,
+                      lastMessageAt: null,
+                      lastReadAt: null,
+                      lastReadMessageSeq: null,
+                      latestMessageBody: null,
+                      latestMessageContentMode: null,
+                      latestMessageDeletedAt: null,
+                      latestMessageId: null,
+                      latestMessageKind: null,
+                      latestMessageSenderId: null,
+                      latestMessageSeq: null,
+                      unreadCount: 0,
+                    }
+                  }
+                  item={{
+                    conversationId: conversation.conversationId,
+                    groupAvatarPath: conversation.groupAvatarPath,
+                    isGroupConversation: conversation.isGroupConversation,
+                    primaryParticipant: conversation.primaryParticipant,
+                    title: conversation.title,
+                    variant: 'unread',
+                  }}
+                  language={language}
+                  labels={{
+                    attachment: t.chat.attachment,
+                    deletedMessage: t.chat.deletedMessage,
+                    encryptedMessage: t.chat.encryptedMessage,
+                    group: t.inbox.metaGroup,
+                    newEncryptedMessage: t.chat.newEncryptedMessage,
+                    noActivityYet: '',
+                    unreadMessages: t.chat.unreadMessages,
+                    voiceMessage: t.chat.voiceMessage,
+                    yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
+                  }}
+                />
               ))}
             </div>
           ) : (
@@ -406,50 +437,48 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           {recentItems.length > 0 ? (
             <div className="activity-list">
               {recentItems.map((conversation) => (
-                <Link
+                <ActivityConversationLiveItem
                   key={`recent-${conversation.conversationId}`}
-                  className="activity-item activity-item-recent"
-                  href={withSpaceParam(
-                    `/chat/${conversation.conversationId}`,
-                    activeSpaceId,
-                  )}
-                  prefetch={false}
-                >
-                  {conversation.isGroupConversation ? (
-                    <GroupIdentityAvatar
-                      avatarPath={conversation.groupAvatarPath}
-                      label={conversation.title}
-                      size="sm"
-                    />
-                  ) : (
-                    <IdentityAvatar
-                      diagnosticsSurface="activity:recent-item"
-                      identity={conversation.primaryParticipant}
-                      label={conversation.title}
-                      size="sm"
-                    />
-                  )}
-
-                  <div className="stack activity-item-copy">
-                    <div className="activity-item-title-row">
-                      <h3 className="activity-item-title">{conversation.title}</h3>
-                      <span className="activity-item-recency">{conversation.recencyLabel}</span>
-                    </div>
-
-                    {conversation.preview ? (
-                      <p className="muted activity-item-preview">{conversation.preview}</p>
-                    ) : null}
-
-                    <div className="activity-item-meta">
-                      {conversation.isGroupConversation ? (
-                        <span className="conversation-kind-label">{t.inbox.metaGroup}</span>
-                      ) : null}
-                      <span className="muted activity-item-timestamp">
-                        {conversation.timestampLabel}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
+                  activeSpaceId={activeSpaceId}
+                  initialSummary={
+                    liveSummariesByConversationId.get(conversation.conversationId) ?? {
+                      conversationId: conversation.conversationId,
+                      createdAt: null,
+                      hiddenAt: null,
+                      lastMessageAt: null,
+                      lastReadAt: null,
+                      lastReadMessageSeq: null,
+                      latestMessageBody: null,
+                      latestMessageContentMode: null,
+                      latestMessageDeletedAt: null,
+                      latestMessageId: null,
+                      latestMessageKind: null,
+                      latestMessageSenderId: null,
+                      latestMessageSeq: null,
+                      unreadCount: 0,
+                    }
+                  }
+                  item={{
+                    conversationId: conversation.conversationId,
+                    groupAvatarPath: conversation.groupAvatarPath,
+                    isGroupConversation: conversation.isGroupConversation,
+                    primaryParticipant: conversation.primaryParticipant,
+                    title: conversation.title,
+                    variant: 'recent',
+                  }}
+                  language={language}
+                  labels={{
+                    attachment: t.chat.attachment,
+                    deletedMessage: t.chat.deletedMessage,
+                    encryptedMessage: t.chat.encryptedMessage,
+                    group: t.inbox.metaGroup,
+                    newEncryptedMessage: t.chat.newEncryptedMessage,
+                    noActivityYet: '',
+                    unreadMessages: t.chat.unreadMessages,
+                    voiceMessage: t.chat.voiceMessage,
+                    yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
+                  }}
+                />
               ))}
             </div>
           ) : (
