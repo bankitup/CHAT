@@ -38,12 +38,13 @@ export function OptimisticThreadMessages({
     () => new Set(confirmedClientIds.filter(Boolean)),
     [confirmedClientIds],
   );
-
-  useEffect(() => {
-    setItems((currentItems) =>
-      currentItems.filter((item) => item.status === 'failed' || !confirmedIds.has(item.clientId)),
-    );
-  }, [confirmedIds]);
+  const visibleItems = useMemo(
+    () =>
+      items.filter(
+        (item) => item.status === 'failed' || !confirmedIds.has(item.clientId),
+      ),
+    [confirmedIds, items],
+  );
 
   useEffect(() => {
     const handleOptimisticMessage = (event: Event) => {
@@ -55,10 +56,7 @@ export function OptimisticThreadMessages({
 
       setItems((currentItems) => {
         const nextItems = currentItems.filter(
-          (item) => item.status === 'failed' || item.clientId !== detail.clientId,
-        );
-        const existingFailedItem = currentItems.find(
-          (item) => item.clientId === detail.clientId && item.status === 'failed',
+          (item) => item.clientId !== detail.clientId,
         );
 
         if (detail.status === 'failed') {
@@ -73,10 +71,7 @@ export function OptimisticThreadMessages({
           ...nextItems,
           {
             ...detail,
-            errorMessage:
-              detail.status === 'failed'
-                ? detail.errorMessage ?? labels.failed
-                : existingFailedItem?.errorMessage ?? null,
+            errorMessage: null,
           },
         ];
       });
@@ -107,13 +102,13 @@ export function OptimisticThreadMessages({
     };
   }, [confirmedIds, conversationId, labels.failed]);
 
-  if (items.length === 0) {
+  if (visibleItems.length === 0) {
     return null;
   }
 
   return (
     <>
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const isPending = item.status === 'pending';
         const isFailed = item.status === 'failed';
 

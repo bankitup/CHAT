@@ -278,6 +278,8 @@ type LanguageDictionary = {
     file: string;
     unavailableRightNow: string;
     justNow: string;
+    sending: string;
+    sendFailed: string;
     edited: string;
     sent: string;
     seen: string;
@@ -326,6 +328,7 @@ type LanguageDictionary = {
     encryptedReplyInfo: string;
     encryptedEditUnavailable: string;
     retryEncryptedAction: string;
+    retrySend: string;
     refreshEncryptedSetup: string;
     resetEncryptedSetupDev: string;
     reloadConversation: string;
@@ -612,6 +615,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       file: 'File',
       unavailableRightNow: 'Unavailable right now',
       justNow: 'Just now',
+      sending: 'Sending…',
+      sendFailed: 'Failed to send',
       edited: 'Edited',
       sent: 'Sent',
       seen: 'Seen',
@@ -668,6 +673,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       encryptedEditUnavailable:
         'Editing encrypted direct messages is not available yet.',
       retryEncryptedAction: 'Retry',
+      retrySend: 'Retry',
       refreshEncryptedSetup: 'Refresh encrypted setup',
       resetEncryptedSetupDev: 'Reset encrypted setup (dev)',
       reloadConversation: 'Reload chat',
@@ -955,6 +961,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       file: 'Файл',
       unavailableRightNow: 'Сейчас недоступно',
       justNow: 'Только что',
+      sending: 'Отправляется…',
+      sendFailed: 'Не отправилось',
       edited: 'Изменено',
       sent: 'Отправлено',
       seen: 'Просмотрено',
@@ -1014,6 +1022,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       encryptedEditUnavailable:
         'Редактирование зашифрованных личных сообщений пока недоступно.',
       retryEncryptedAction: 'Повторить',
+      retrySend: 'Повторить',
       refreshEncryptedSetup: 'Обновить настройку шифрования',
       resetEncryptedSetupDev: 'Сбросить шифрование (dev)',
       reloadConversation: 'Обновить чат',

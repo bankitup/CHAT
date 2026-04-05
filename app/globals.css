@@ -293,6 +293,143 @@ main {
   line-height: 1.25;
 }
 
+.route-loading-screen {
+  gap: 14px;
+}
+
+.route-loading-hero,
+.route-loading-row,
+.route-loading-chat-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.route-loading-list {
+  gap: 10px;
+}
+
+.route-loading-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+
+.route-loading-copy,
+.route-loading-chat-copy {
+  gap: 8px;
+  min-width: 0;
+}
+
+.route-loading-avatar {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(233, 239, 247, 0.96), rgba(223, 231, 241, 0.92));
+}
+
+.route-loading-avatar-lg {
+  width: 42px;
+  height: 42px;
+}
+
+.route-loading-line,
+.route-loading-pill,
+.route-loading-bubble,
+.route-loading-button,
+.route-loading-button-sm {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(233, 239, 247, 0.96), rgba(223, 231, 241, 0.92));
+}
+
+.route-loading-line::after,
+.route-loading-pill::after,
+.route-loading-bubble::after,
+.route-loading-button::after,
+.route-loading-button-sm::after,
+.route-loading-avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.62), transparent);
+  animation: route-loading-shimmer 1.15s ease-in-out infinite;
+}
+
+.route-loading-line {
+  height: 12px;
+  border-radius: 999px;
+}
+
+.route-loading-line-title {
+  width: min(180px, 52%);
+  height: 18px;
+}
+
+.route-loading-line-subtitle {
+  width: min(240px, 72%);
+}
+
+.route-loading-line-row-title {
+  width: min(148px, 62%);
+}
+
+.route-loading-line-row-body {
+  width: min(210px, 84%);
+}
+
+.route-loading-line-input {
+  width: 100%;
+  height: 16px;
+}
+
+.route-loading-pill {
+  width: 62px;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 0;
+}
+
+.route-loading-bubble {
+  min-height: 48px;
+  border: 0;
+}
+
+.route-loading-bubble-wide {
+  width: min(248px, 82vw);
+}
+
+.route-loading-bubble-mid {
+  width: min(186px, 66vw);
+}
+
+.route-loading-bubble-own {
+  width: min(168px, 58vw);
+}
+
+.route-loading-button {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 0;
+}
+
+.route-loading-button-sm {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 0;
+}
+
+@keyframes route-loading-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .list {
   margin: 0;
   padding-left: 20px;
@@ -1608,6 +1745,26 @@ main {
 
 .app-shell-chat-route .chat-screen {
   min-height: 0;
+}
+
+.route-loading-chat {
+  height: 100%;
+}
+
+.route-loading-chat-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 68px;
+}
+
+.route-loading-chat-thread {
+  gap: 14px;
+}
+
+.route-loading-composer {
+  min-height: 54px;
 }
 
 .settings-screen {
@@ -3155,6 +3312,10 @@ main {
   justify-content: flex-end;
 }
 
+.message-row-optimistic {
+  animation: optimistic-message-enter 180ms ease-out;
+}
+
 .message-card {
   display: grid;
   gap: 6px;
@@ -3165,6 +3326,10 @@ main {
 
 .message-card-own {
   align-items: end;
+}
+
+.message-card-optimistic {
+  opacity: 0.98;
 }
 
 .message-card-deleted {
@@ -3202,6 +3367,11 @@ main {
   background: rgba(230, 240, 255, 0.98);
   border-color: rgba(31, 111, 235, 0.18);
   box-shadow: 0 10px 22px rgba(31, 111, 235, 0.055);
+}
+
+.message-bubble-optimistic {
+  border-style: dashed;
+  border-color: rgba(31, 111, 235, 0.22);
 }
 
 .message-deleted-text {
@@ -3255,6 +3425,10 @@ main {
   text-align: right;
 }
 
+.message-meta-optimistic {
+  gap: 6px;
+}
+
 .message-status {
   display: inline-flex;
   align-items: center;
@@ -3263,6 +3437,61 @@ main {
   font-size: 0.54rem;
   font-weight: 560;
   letter-spacing: 0.01em;
+}
+
+.message-status-pending {
+  color: rgba(31, 111, 235, 0.72);
+}
+
+.message-status-failed {
+  gap: 6px;
+  color: rgba(180, 35, 24, 0.84);
+}
+
+.message-status-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(31, 111, 235, 0.18);
+  border-top-color: rgba(31, 111, 235, 0.88);
+  border-radius: 999px;
+  animation: optimistic-message-spin 0.9s linear infinite;
+}
+
+.message-status-retry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+@keyframes optimistic-message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes optimistic-message-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .message-status-seen {

@@ -313,6 +313,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               <Link
                 className="pill activity-section-link"
                 href={buildInboxHref({ spaceId: activeSpaceId })}
+                prefetch
               >
                 {t.activity.openChats}
               </Link>
@@ -329,6 +330,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     `/chat/${conversation.conversationId}`,
                     activeSpaceId,
                   )}
+                  prefetch
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar label={conversation.title} size="sm" />
@@ -384,6 +386,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   spaceId: activeSpaceId,
                   view: 'archived',
                 })}
+                prefetch
               >
                 {t.activity.openArchived}
               </Link>
@@ -400,6 +403,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     `/chat/${conversation.conversationId}`,
                     activeSpaceId,
                   )}
+                  prefetch
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar label={conversation.title} size="sm" />

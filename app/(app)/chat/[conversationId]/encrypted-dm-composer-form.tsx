@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import type {
   DmE2eeApiErrorCode,
@@ -26,6 +26,11 @@ import {
 import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encrypt';
 import { getEncryptedDmComposerErrorMessage } from '@/modules/messaging/e2ee/ui-policy';
 import { broadcastMessageCommitted } from '@/modules/messaging/realtime/live-refresh';
+import {
+  emitOptimisticThreadMessage,
+  LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
+  type OptimisticThreadRetryPayload,
+} from '@/modules/messaging/realtime/optimistic-thread';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
@@ -459,6 +464,8 @@ export function EncryptedDmComposerForm({
   const [, startNavigationTransition] = useTransition();
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const isSubmittingRef = useRef(false);
+  const sendSignatureRef = useRef<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
   const [errorDebugDetails, setErrorDebugDetails] =
@@ -510,6 +517,61 @@ export function EncryptedDmComposerForm({
         errorDebugDetails?.recipientMismatchRight,
     );
 
+  useEffect(() => {
+    const handleRetryRequest = (event: Event) => {
+      const detail = (event as CustomEvent<OptimisticThreadRetryPayload>).detail;
+
+      if (!detail || detail.conversationId !== conversationId) {
+        return;
+      }
+
+      const form = formRef.current;
+      const textarea = form?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+
+      if (!form || !textarea) {
+        return;
+      }
+
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value',
+      )?.set;
+
+      if (valueSetter) {
+        valueSetter.call(textarea, detail.body);
+      } else {
+        textarea.value = detail.body;
+      }
+
+      textarea.focus();
+      textarea.setSelectionRange(detail.body.length, detail.body.length);
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      setErrorMessage(null);
+      setErrorCode(null);
+      setErrorDebugDetails(null);
+
+      if ((detail.replyToMessageId ?? null) === (replyToMessageId ?? null)) {
+        const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+        window.requestAnimationFrame(() => {
+          form.requestSubmit(submitButton ?? undefined);
+        });
+      }
+    };
+
+    window.addEventListener(
+      LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
+      handleRetryRequest as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
+        handleRetryRequest as EventListener,
+      );
+    };
+  }, [conversationId, replyToMessageId]);
+
   return (
     <form
       ref={formRef}
@@ -549,10 +611,41 @@ export function EncryptedDmComposerForm({
         }
 
         event.preventDefault();
+        const sendSignature = `${conversationId}:${replyToMessageId ?? ''}:${body}`;
+
+        if (isSubmittingRef.current || sendSignatureRef.current === sendSignature) {
+          return;
+        }
+
+        isSubmittingRef.current = true;
+        sendSignatureRef.current = sendSignature;
         setIsSendingEncrypted(true);
         setErrorMessage(null);
         setErrorCode(null);
         setErrorDebugDetails(null);
+
+        const clientId = crypto.randomUUID();
+        const optimisticCreatedAt = new Date().toISOString();
+
+        emitOptimisticThreadMessage({
+          body,
+          clientId,
+          conversationId,
+          createdAt: optimisticCreatedAt,
+          replyToMessageId: replyToMessageId ?? null,
+          status: 'pending',
+        });
+
+        form.reset();
+        window.requestAnimationFrame(() => {
+          const textarea = form.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+
+          if (!textarea) {
+            return;
+          }
+
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        });
 
         try {
           let retriedAfterRepublish = false;
@@ -565,7 +658,6 @@ export function EncryptedDmComposerForm({
                 retriedAfterRepublish,
               );
               const recipientBundle = await fetchRecipientBundle(conversationId);
-              const clientId = crypto.randomUUID();
               const encryptedPayload = await encryptDmTextForRecipient({
                 conversationId,
                 clientId,
@@ -584,9 +676,18 @@ export function EncryptedDmComposerForm({
                 envelopes: encryptedPayload.envelopes,
               });
               await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+                clientId,
                 conversationId,
                 messageId: sendResult.messageId ?? null,
                 source: 'encrypted-dm-send',
+              });
+              emitOptimisticThreadMessage({
+                body,
+                clientId,
+                conversationId,
+                createdAt: sendResult.timestamp ?? optimisticCreatedAt,
+                replyToMessageId: replyToMessageId ?? null,
+                status: 'sent',
               });
               break;
             } catch (error) {
@@ -610,7 +711,6 @@ export function EncryptedDmComposerForm({
             }
           }
 
-          form.reset();
           startNavigationTransition(() => {
             router.replace(withSpaceParam(`/chat/${conversationId}`, spaceId));
             router.refresh();
@@ -623,9 +723,21 @@ export function EncryptedDmComposerForm({
                 ? 'dm_e2ee_unsupported_browser'
                 : null;
           setErrorCode(nextCode);
-          setErrorMessage(getEncryptedDmErrorMessage(error, t));
+          const nextErrorMessage = getEncryptedDmErrorMessage(error, t);
+          setErrorMessage(nextErrorMessage);
           setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
+          emitOptimisticThreadMessage({
+            body,
+            clientId,
+            conversationId,
+            createdAt: optimisticCreatedAt,
+            errorMessage: nextErrorMessage,
+            replyToMessageId: replyToMessageId ?? null,
+            status: 'failed',
+          });
         } finally {
+          isSubmittingRef.current = false;
+          sendSignatureRef.current = null;
           setIsSendingEncrypted(false);
         }
       }}
@@ -674,6 +786,7 @@ export function EncryptedDmComposerForm({
             aria-label={t.chat.sendMessage}
             className="button composer-button composer-button-icon"
             disabled={isSendingEncrypted}
+            aria-busy={isSendingEncrypted}
             type="submit"
           >
             <span aria-hidden="true">➤</span>

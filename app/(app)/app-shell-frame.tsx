@@ -65,6 +65,7 @@ export function AppShellFrame({
                   : 'app-bottom-nav-link'
               }
               href="/settings"
+              prefetch
             >
               <span className="app-bottom-nav-label">{t.shell.home}</span>
             </Link>
@@ -77,6 +78,7 @@ export function AppShellFrame({
                   : 'app-bottom-nav-link'
               }
               href={navSpaceHref('/inbox')}
+              prefetch
             >
               <span className="app-bottom-nav-label">{t.shell.chats}</span>
             </Link>
@@ -89,6 +91,7 @@ export function AppShellFrame({
                   : 'app-bottom-nav-link'
               }
               href={navSpaceHref('/activity')}
+              prefetch
             >
               <span className="app-bottom-nav-label">{t.shell.activity}</span>
             </Link>
