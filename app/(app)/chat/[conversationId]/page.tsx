@@ -70,6 +70,7 @@ type ChatPageProps = {
   }>;
   searchParams: Promise<{
     error?: string;
+    saved?: string;
     replyToMessageId?: string;
     editMessageId?: string;
     deleteMessageId?: string;
@@ -270,6 +271,7 @@ function buildChatHref(input: {
   deleteMessageId?: string | null;
   editMessageId?: string | null;
   error?: string | null;
+  saved?: string | null;
   replyToMessageId?: string | null;
   settings?: string | null;
   hash?: string | null;
@@ -290,6 +292,10 @@ function buildChatHref(input: {
 
   if (input.error?.trim()) {
     params.set('error', input.error.trim());
+  }
+
+  if (input.saved?.trim()) {
+    params.set('saved', input.saved.trim());
   }
 
   if (input.replyToMessageId?.trim()) {
@@ -426,6 +432,7 @@ export default async function ChatPage({
   );
 
   const isSettingsOpen = query.settings === 'open';
+  const hasSettingsSavedState = query.saved === '1';
   const messages = await getConversationMessages(conversationId);
   const readState = await getConversationReadState(conversationId, user.id);
   const memberReadStates = await getConversationMemberReadStates(conversationId);
@@ -1307,6 +1314,20 @@ export default async function ChatPage({
 
             {query.error ? (
               <p className="notice notice-error">{query.error}</p>
+            ) : null}
+
+            {hasSettingsSavedState ? (
+              <div
+                aria-live="polite"
+                className="conversation-settings-success"
+              >
+                <span aria-hidden="true" className="conversation-settings-success-check">
+                  ✓
+                </span>
+                <span className="conversation-settings-success-copy">
+                  {t.chat.changesSaved}
+                </span>
+              </div>
             ) : null}
 
             <section className="conversation-info-summary">

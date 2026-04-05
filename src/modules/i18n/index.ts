@@ -233,6 +233,7 @@ type LanguageDictionary = {
     notificationsDefaultNote: string;
     notificationsMuted: string;
     notificationsMutedNote: string;
+    changesSaved: string;
     inbox: string;
     inboxNote: string;
     hideFromInbox: string;
@@ -550,6 +551,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       notificationsDefaultNote: 'Use your usual setting.',
       notificationsMuted: 'Muted',
       notificationsMutedNote: 'Keep this chat quieter.',
+      changesSaved: 'Saved',
       inbox: 'Inbox',
       inboxNote: 'Hide this chat from your inbox only.',
       hideFromInbox: 'Hide from inbox',
@@ -875,6 +877,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       notificationsDefaultNote: 'Использовать обычную настройку.',
       notificationsMuted: 'Без звука',
       notificationsMutedNote: 'Сделать этот чат тише.',
+      changesSaved: 'Сохранено',
       inbox: 'Входящие',
       inboxNote: 'Скрыть этот чат только из списка.',
       hideFromInbox: 'Скрыть из чатов',

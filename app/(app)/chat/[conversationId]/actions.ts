@@ -87,6 +87,18 @@ function redirectWithSettingsError(
   redirect(`${href}#conversation-settings`);
 }
 
+function redirectWithSettingsSaved(
+  conversationId: string,
+  spaceId?: string | null,
+): never {
+  const params = new URLSearchParams({
+    saved: '1',
+    settings: 'open',
+  });
+  const href = withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId);
+  redirect(`${href}#conversation-settings`);
+}
+
 export async function sendMessageAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
@@ -221,7 +233,7 @@ export async function sendMessageAction(formData: FormData) {
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectToChat(conversationId, spaceId);
+  redirectWithSettingsSaved(conversationId, spaceId);
 }
 
 export async function toggleReactionAction(formData: FormData) {
@@ -273,7 +285,7 @@ export async function toggleReactionAction(formData: FormData) {
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirectToChat(conversationId, spaceId);
+  redirectWithSettingsSaved(conversationId, spaceId);
 }
 
 export async function editMessageAction(formData: FormData) {
@@ -686,10 +698,7 @@ export async function addGroupParticipantsAction(formData: FormData) {
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectToChat(conversationId, spaceId, {
-    settings: 'open',
-    hash: '#conversation-settings',
-  });
+  redirectWithSettingsSaved(conversationId, spaceId);
 }
 
 export async function removeGroupParticipantAction(formData: FormData) {
@@ -731,7 +740,7 @@ export async function removeGroupParticipantAction(formData: FormData) {
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectToChat(conversationId, spaceId);
+  redirectWithSettingsSaved(conversationId, spaceId);
 }
 
 export async function leaveGroupAction(formData: FormData) {
