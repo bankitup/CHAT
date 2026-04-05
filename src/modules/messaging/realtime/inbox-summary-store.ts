@@ -20,6 +20,16 @@ export type InboxConversationLiveSummary = {
 
 const inboxSummaryStore = new Map<string, InboxConversationLiveSummary>();
 const inboxSummaryListeners = new Map<string, Set<() => void>>();
+const inboxSummaryRevisionListeners = new Set<() => void>();
+let inboxSummaryRevision = 0;
+
+function emitInboxSummaryRevisionChange() {
+  inboxSummaryRevision += 1;
+
+  for (const listener of inboxSummaryRevisionListeners) {
+    listener();
+  }
+}
 
 function areInboxConversationSummariesEqual(
   left: InboxConversationLiveSummary | null,
@@ -56,12 +66,26 @@ function emitInboxConversationSummaryChange(conversationId: string) {
   const listeners = inboxSummaryListeners.get(conversationId);
 
   if (!listeners) {
-    return;
-  }
+    emitInboxSummaryRevisionChange();
+  } else {
+    for (const listener of listeners) {
+      listener();
+    }
 
-  for (const listener of listeners) {
-    listener();
+    emitInboxSummaryRevisionChange();
   }
+}
+
+export function subscribeToInboxSummaryRevision(listener: () => void) {
+  inboxSummaryRevisionListeners.add(listener);
+
+  return () => {
+    inboxSummaryRevisionListeners.delete(listener);
+  };
+}
+
+export function getInboxSummaryRevisionSnapshot() {
+  return inboxSummaryRevision;
 }
 
 export function subscribeToInboxConversationSummary(

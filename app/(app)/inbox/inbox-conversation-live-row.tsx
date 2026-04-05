@@ -156,6 +156,47 @@ function areInboxParticipantsEqual(
   );
 }
 
+function areInboxParticipantListsEqual(
+  previous: Array<{
+    userId: string;
+    displayName: string | null;
+    avatarPath?: string | null;
+  }>,
+  next: Array<{
+    userId: string;
+    displayName: string | null;
+    avatarPath?: string | null;
+  }>,
+) {
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  return previous.every((participant, index) =>
+    areInboxParticipantsEqual(participant, next[index] ?? null),
+  );
+}
+
+function areInboxMetaLabelsEqual(
+  previous: Array<{
+    label: string;
+    tone: 'default' | 'archived';
+  }>,
+  next: Array<{
+    label: string;
+    tone: 'default' | 'archived';
+  }>,
+) {
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  return previous.every(
+    (label, index) =>
+      label.label === next[index]?.label && label.tone === next[index]?.tone,
+  );
+}
+
 const InboxConversationAvatarVisual = memo(function InboxConversationAvatarVisual({
   groupAvatarPath,
   isGroupConversation,
@@ -433,7 +474,12 @@ export const InboxConversationLiveRow = memo(
     previous.initialSummary === next.initialSummary &&
     previous.isArchivedView === next.isArchivedView &&
     previous.isPrimaryChatsView === next.isPrimaryChatsView &&
-    previous.item === next.item &&
+    previous.item.conversationId === next.item.conversationId &&
+    previous.item.groupAvatarPath === next.item.groupAvatarPath &&
+    previous.item.isGroupConversation === next.item.isGroupConversation &&
+    previous.item.title === next.item.title &&
+    areInboxMetaLabelsEqual(previous.item.metaLabels, next.item.metaLabels) &&
+    areInboxParticipantListsEqual(previous.item.participants, next.item.participants) &&
     previous.language === next.language &&
     previous.labels === next.labels &&
     previous.restoreAction === next.restoreAction &&

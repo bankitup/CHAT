@@ -1,13 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   getTranslations,
   type AppLanguage,
 } from '@/modules/i18n';
-import { getSearchableConversationPreview } from '@/modules/messaging/e2ee/inbox-policy';
-import type { InboxConversationLiveSummary } from '@/modules/messaging/realtime/inbox-summary-store';
+import {
+  getInboxPreviewText,
+  getSearchableConversationPreview,
+} from '@/modules/messaging/e2ee/inbox-policy';
+import {
+  getInboxConversationSummarySnapshot,
+  getInboxSummaryRevisionSnapshot,
+  subscribeToInboxSummaryRevision,
+  type InboxConversationLiveSummary,
+} from '@/modules/messaging/realtime/inbox-summary-store';
 import { InboxConversationLiveRow } from './inbox-conversation-live-row';
 import { NewChatSheet } from './new-chat-sheet';
 
@@ -46,6 +54,18 @@ type FilterBucket = {
   itemsByFilter: Record<InboxFilter, ConversationListItem[]>;
   totalByFilter: Record<InboxFilter, number>;
   unreadByFilter: Record<InboxFilter, number>;
+};
+
+type InboxPresentationLabels = {
+  attachment: string;
+  deletedMessage: string;
+  encryptedMessage: string;
+  group: string;
+  newEncryptedMessage: string;
+  noActivityYet: string;
+  unreadAria: string;
+  voiceMessage: string;
+  yesterday: string;
 };
 
 type InboxFilterableContentProps = {
@@ -185,6 +205,71 @@ function buildFilterBucket(input: {
   } satisfies FilterBucket;
 }
 
+function deriveConversationItemsFromLiveState(input: {
+  items: ConversationListItem[];
+  labels: InboxPresentationLabels;
+  liveSummariesByConversationId: Map<string, InboxConversationLiveSummary>;
+  visibility: InboxView;
+}) {
+  const derivedItems: ConversationListItem[] = [];
+
+  for (const item of input.items) {
+    const fallbackSummary =
+      input.liveSummariesByConversationId.get(item.conversationId) ?? {
+        conversationId: item.conversationId,
+        createdAt: null,
+        hiddenAt: null,
+        lastMessageAt: null,
+        lastReadAt: null,
+        lastReadMessageSeq: null,
+        latestMessageBody: null,
+        latestMessageContentMode: null,
+        latestMessageDeletedAt: null,
+        latestMessageId: null,
+        latestMessageKind: null,
+        latestMessageSenderId: null,
+        latestMessageSeq: null,
+        unreadCount: 0,
+      };
+    const liveSummary = fallbackSummary;
+
+    if (liveSummary.removed) {
+      continue;
+    }
+
+    const isHidden = Boolean(liveSummary.hiddenAt);
+
+    if (input.visibility === 'main' ? isHidden : !isHidden) {
+      continue;
+    }
+
+    derivedItems.push({
+      ...item,
+      hasUnread: liveSummary.unreadCount > 0,
+      latestMessageContentMode: liveSummary.latestMessageContentMode,
+      preview: getInboxPreviewText(
+        {
+          lastMessageAt: liveSummary.lastMessageAt,
+          latestMessageBody: liveSummary.latestMessageBody,
+          latestMessageContentMode: liveSummary.latestMessageContentMode,
+          latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
+          latestMessageKind: liveSummary.latestMessageKind,
+          unreadCount: liveSummary.unreadCount,
+        },
+        {
+          attachment: input.labels.attachment,
+          deletedMessage: input.labels.deletedMessage,
+          encryptedMessage: input.labels.encryptedMessage,
+          newEncryptedMessage: input.labels.newEncryptedMessage,
+          voiceMessage: input.labels.voiceMessage,
+        },
+      ),
+    });
+  }
+
+  return derivedItems;
+}
+
 export function InboxFilterableContent({
   activeSpaceId,
   archivedConversationItems,
@@ -232,25 +317,6 @@ export function InboxFilterableContent({
 
     window.history.replaceState(window.history.state, '', nextHref);
   }, [activeFilter, activeSpaceId, activeView, createOpen, queryValue]);
-
-  const mainBuckets = useMemo(
-    () =>
-      buildFilterBucket({
-        items: mainConversationItems,
-        searchTerm,
-        t,
-      }),
-    [mainConversationItems, searchTerm, t],
-  );
-  const archivedBuckets = useMemo(
-    () =>
-      buildFilterBucket({
-        items: archivedConversationItems,
-        searchTerm,
-        t,
-      }),
-    [archivedConversationItems, searchTerm, t],
-  );
   const availableUserEntriesFiltered = useMemo(
     () =>
       availableUserEntries.filter((availableUser) => {
@@ -273,13 +339,89 @@ export function InboxFilterableContent({
       ),
     [allSummaries],
   );
+  const inboxSummaryRevision = useSyncExternalStore(
+    subscribeToInboxSummaryRevision,
+    getInboxSummaryRevisionSnapshot,
+    getInboxSummaryRevisionSnapshot,
+  );
+  const rowLabels = useMemo(
+    () => ({
+      attachment: t.chat.attachment,
+      deletedMessage: t.chat.deletedMessage,
+      encryptedMessage: t.chat.encryptedMessage,
+      group: t.inbox.metaGroup,
+      newEncryptedMessage: t.chat.newEncryptedMessage,
+      noActivityYet: t.inbox.noActivityYet,
+      unreadAria: t.inbox.unreadAria,
+      voiceMessage: t.chat.voiceMessage,
+      yesterday: t.inbox.yesterday,
+    }),
+    [t],
+  );
+  const liveSummariesByConversationId = useMemo(() => {
+    // Tie this snapshot map to store revision changes without forcing unrelated
+    // filter-state switches to rebuild it.
+    void inboxSummaryRevision;
+    const nextMap = new Map<string, InboxConversationLiveSummary>();
+
+    for (const [conversationId, fallbackSummary] of summariesByConversationId) {
+      nextMap.set(
+        conversationId,
+        getInboxConversationSummarySnapshot(conversationId, fallbackSummary),
+      );
+    }
+
+    return nextMap;
+  }, [inboxSummaryRevision, summariesByConversationId]);
+  const derivedMainConversationItems = useMemo(
+    () =>
+      deriveConversationItemsFromLiveState({
+        items: mainConversationItems,
+        labels: rowLabels,
+        liveSummariesByConversationId,
+        visibility: 'main',
+      }),
+    [liveSummariesByConversationId, mainConversationItems, rowLabels],
+  );
+  const derivedArchivedConversationItems = useMemo(
+    () =>
+      deriveConversationItemsFromLiveState({
+        items: archivedConversationItems,
+        labels: rowLabels,
+        liveSummariesByConversationId,
+        visibility: 'archived',
+      }),
+    [
+      archivedConversationItems,
+      liveSummariesByConversationId,
+      rowLabels,
+    ],
+  );
+  const mainBuckets = useMemo(
+    () =>
+      buildFilterBucket({
+        items: derivedMainConversationItems,
+        searchTerm,
+        t,
+      }),
+    [derivedMainConversationItems, searchTerm, t],
+  );
+  const archivedBuckets = useMemo(
+    () =>
+      buildFilterBucket({
+        items: derivedArchivedConversationItems,
+        searchTerm,
+        t,
+      }),
+    [derivedArchivedConversationItems, searchTerm, t],
+  );
   const activeBuckets = activeView === 'archived' ? archivedBuckets : mainBuckets;
   const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
   const activeConversationSourceCount =
     activeView === 'archived'
-      ? archivedConversationItems.length
-      : mainConversationItems.length;
-  const archivedConversationCount = archivedConversationItems.length;
+      ? derivedArchivedConversationItems.length
+      : derivedMainConversationItems.length;
+  const archivedConversationCount = derivedArchivedConversationItems.length;
   const isPrimaryChatsView = activeView === 'main';
   const isDmFilter = activeFilter === 'dm';
   const searchAria = isDmFilter ? t.inbox.searchDmAria : t.inbox.searchAria;
@@ -300,21 +442,6 @@ export function InboxFilterableContent({
         return parts.length > 0 ? parts.join(' · ') : t.inbox.searchSummaryNone;
       })()
     : null;
-
-  const rowLabels = useMemo(
-    () => ({
-      attachment: t.chat.attachment,
-      deletedMessage: t.chat.deletedMessage,
-      encryptedMessage: t.chat.encryptedMessage,
-      group: t.inbox.metaGroup,
-      newEncryptedMessage: t.chat.newEncryptedMessage,
-      noActivityYet: t.inbox.noActivityYet,
-      unreadAria: t.inbox.unreadAria,
-      voiceMessage: t.chat.voiceMessage,
-      yesterday: t.inbox.yesterday,
-    }),
-    [t],
-  );
 
   return (
     <div className={isPrimaryChatsView ? 'stack inbox-screen-dm' : 'stack'}>
