@@ -96,17 +96,14 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
       <section className="stack settings-hub">
         <section className="card stack settings-surface settings-home-card">
-          <div className="stack settings-card-copy settings-section-copy">
-            <h2 className="section-title">{t.settings.profileTitle}</h2>
-            <p className="muted">{t.settings.profileSubtitle}</p>
-          </div>
-
-            <ProfileSettingsForm
+          <ProfileSettingsForm
             avatarPath={profile.avatarPath}
             userId={profile.userId}
             defaultDisplayName={profile.displayName ?? ''}
             hasAvatar={hasAvatar}
             labels={{
+              profileTitle: t.settings.profileTitle,
+              profileSubtitle: t.settings.profileSubtitle,
               profilePhoto: t.settings.profilePhoto,
               profilePhotoNote: t.settings.profilePhotoNote,
               profilePhotoCurrent: t.settings.profilePhotoCurrent,

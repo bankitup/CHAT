@@ -286,15 +286,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <h1 className="inbox-home-title">{t.activity.title}</h1>
             <p className="muted inbox-home-subtitle">{t.activity.subtitle}</p>
           </div>
-          <div className="inbox-topbar-actions">
-            <Link
-              aria-label={t.inbox.settingsAria}
-              className="inbox-settings-trigger"
-              href={withSpaceParam('/settings', activeSpaceId)}
-            >
-              <span aria-hidden="true">⚙</span>
-            </Link>
-          </div>
         </div>
       </section>
 
