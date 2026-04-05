@@ -28,11 +28,14 @@ type DmE2eeRolloutDiagnosticsInput = {
 };
 
 function normalizeRolloutMode(value: string | undefined): DmE2eeRolloutMode {
-  if (value === 'all' || value === 'selected') {
-    return value;
+  if (value === 'disabled') {
+    return 'disabled';
   }
 
-  return 'disabled';
+  // DM E2EE is now the default product path for authenticated users.
+  // Keep an explicit kill switch, but do not require per-user tester allowlists
+  // for normal account bootstrap anymore.
+  return 'all';
 }
 
 function parseTesterUserIds(value: string | undefined) {
@@ -90,7 +93,8 @@ export function getDmE2eeRolloutStatusForUser(
 ): DmE2eeRolloutStatus {
   const rawMode = process.env.CHAT_DM_E2EE_ROLLOUT?.trim() ?? null;
   const mode = normalizeRolloutMode(rawMode ?? undefined);
-  const recognizedMode = rawMode === 'all' || rawMode === 'selected';
+  const recognizedMode =
+    rawMode === 'all' || rawMode === 'selected' || rawMode === 'disabled';
   const testerUserIds = parseTesterUserIds(
     process.env.CHAT_DM_E2EE_TESTER_USER_IDS,
   );
@@ -126,17 +130,9 @@ export function getDmE2eeRolloutStatusForUser(
   const matchedTesterUserId = testerUserIds.includes(userId);
   const matchedTesterEmail =
     normalizedEmail.length > 0 && testerEmails.includes(normalizedEmail);
-  const enabled =
-    mode === 'all' ||
-    (mode === 'selected' && (matchedTesterUserId || matchedTesterEmail));
+  const enabled = mode === 'all';
   const enabledReason: DmE2eeRolloutDiagnosticsInput['enabledReason'] =
-    mode === 'all'
-      ? 'mode_all'
-      : mode === 'selected'
-        ? matchedTesterUserId || matchedTesterEmail
-          ? 'selected_match'
-          : 'selected_no_match'
-        : 'mode_disabled';
+    mode === 'all' ? 'mode_all' : 'mode_disabled';
 
   logDmE2eeRolloutDiagnostics({
     source,
