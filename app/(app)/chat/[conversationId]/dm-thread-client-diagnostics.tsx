@@ -16,6 +16,11 @@ type DmThreadClientSubtreeProps = {
   vercelUrl?: string | null;
 };
 
+export type DmThreadClientDiagnostics = Omit<
+  DmThreadClientSubtreeProps,
+  'children' | 'conversationId' | 'fallback' | 'messageId' | 'surface'
+>;
+
 type DmThreadClientBoundaryState = {
   error: Error | null;
 };

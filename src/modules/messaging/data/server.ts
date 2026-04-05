@@ -10,6 +10,7 @@ import {
 } from '@/modules/messaging/avatar-delivery';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import { DM_E2EE_CURRENT_DEVICE_COOKIE } from '@/modules/messaging/e2ee/current-device-cookie';
+import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import {
   applyConversationVisibility,
   isHiddenAtVisibilityRuntimeError,
@@ -294,6 +295,36 @@ export type ConversationMessage = {
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string | null;
+};
+
+export type ConversationHistoryPageSnapshot = {
+  attachmentsByMessage: Array<{
+    attachments: MessageAttachment[];
+    messageId: string;
+  }>;
+  dmE2ee:
+    | {
+        activeDeviceCreatedAt: string | null;
+        activeDeviceRecordId: string | null;
+        envelopesByMessage: Array<{
+          envelope: StoredDmE2eeEnvelope;
+          messageId: string;
+        }>;
+        historyHintsByMessage: Array<{
+          hint: EncryptedDmServerHistoryHint;
+          messageId: string;
+        }>;
+        selectionSource: string | null;
+      }
+    | null;
+  hasMoreOlder: boolean;
+  messages: ConversationMessage[];
+  oldestMessageSeq: number | null;
+  reactionsByMessage: Array<{
+    messageId: string;
+    reactions: MessageReactionGroup[];
+  }>;
+  senderProfiles: MessageSenderProfile[];
 };
 
 type MessageAttachmentRow = {
@@ -4453,6 +4484,7 @@ export async function updateCurrentUserLanguagePreference(input: {
 export async function getConversationMessages(
   conversationId: string,
   options?: {
+    beforeSeqExclusive?: number | null;
     debugRequestId?: string | null;
     limitLatest?: number | null;
   },
@@ -4464,24 +4496,28 @@ export async function getConversationMessages(
     options.limitLatest > 0
       ? Math.floor(options.limitLatest)
       : null;
+  const beforeSeqExclusive =
+    typeof options?.beforeSeqExclusive === 'number' &&
+    Number.isFinite(options.beforeSeqExclusive)
+      ? Math.floor(options.beforeSeqExclusive)
+      : null;
   const queryLimit = normalizedLimit !== null ? normalizedLimit + 1 : null;
-  const response =
-    queryLimit !== null
-      ? await supabase
-          .from('messages')
-          .select(
-            'id, conversation_id, sender_id, sender_device_id, reply_to_message_id, seq, kind, client_id, body, content_mode, edited_at, deleted_at, created_at',
-          )
-          .eq('conversation_id', conversationId)
-          .order('seq', { ascending: false })
-          .limit(queryLimit)
-      : await supabase
-          .from('messages')
-          .select(
-            'id, conversation_id, sender_id, sender_device_id, reply_to_message_id, seq, kind, client_id, body, content_mode, edited_at, deleted_at, created_at',
-          )
-          .eq('conversation_id', conversationId)
-          .order('seq', { ascending: false });
+  const buildMessagesQuery = (selectClause: string) => {
+    let query = supabase
+      .from('messages')
+      .select(selectClause)
+      .eq('conversation_id', conversationId)
+      .order('seq', { ascending: false });
+
+    if (beforeSeqExclusive !== null) {
+      query = query.lt('seq', beforeSeqExclusive);
+    }
+
+    return queryLimit !== null ? query.limit(queryLimit) : query;
+  };
+  const response = await buildMessagesQuery(
+    'id, conversation_id, sender_id, sender_device_id, reply_to_message_id, seq, kind, client_id, body, content_mode, edited_at, deleted_at, created_at',
+  );
 
   const normalizeMessages = (data: ConversationMessage[]) => {
     const hasMoreOlder =
@@ -4502,6 +4538,7 @@ export async function getConversationMessages(
         firstMessageId: normalizedMessages[0]?.id ?? null,
         gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
         hasMoreOlder,
+        beforeSeqExclusive,
         lastMessageId:
           normalizedMessages[normalizedMessages.length - 1]?.id ?? null,
         limitLatest: normalizedLimit,
@@ -4519,34 +4556,203 @@ export async function getConversationMessages(
   if (response.error) {
     if (isMissingColumnErrorMessage(response.error.message, 'content_mode')) {
       const fallback =
-        queryLimit !== null
-          ? await supabase
-              .from('messages')
-              .select(
-                'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
-              )
-              .eq('conversation_id', conversationId)
-              .order('seq', { ascending: false })
-              .limit(queryLimit)
-          : await supabase
-              .from('messages')
-              .select(
-                'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
-              )
-              .eq('conversation_id', conversationId)
-              .order('seq', { ascending: false });
+        await buildMessagesQuery(
+          'id, conversation_id, sender_id, reply_to_message_id, seq, kind, client_id, body, edited_at, deleted_at, created_at',
+        );
 
       if (fallback.error) {
         throw new Error(fallback.error.message);
       }
 
-      return normalizeMessages((fallback.data ?? []) as ConversationMessage[]);
+      return normalizeMessages(
+        ((fallback.data ?? []) as unknown) as ConversationMessage[],
+      );
     }
 
     throw new Error(response.error.message);
   }
 
-  return normalizeMessages((response.data ?? []) as ConversationMessage[]);
+  return normalizeMessages(
+    ((response.data ?? []) as unknown) as ConversationMessage[],
+  );
+}
+
+function parseConversationHistoryDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export async function getConversationHistoryWindowSizeForMessageTargets(input: {
+  conversationId: string;
+  messageIds: string[];
+}) {
+  const normalizedMessageIds = Array.from(
+    new Set(input.messageIds.map((value) => value.trim()).filter(Boolean)),
+  );
+
+  if (normalizedMessageIds.length === 0) {
+    return null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const targetMessages = await supabase
+    .from('messages')
+    .select('id, seq')
+    .eq('conversation_id', input.conversationId)
+    .in('id', normalizedMessageIds);
+
+  if (targetMessages.error) {
+    throw new Error(targetMessages.error.message);
+  }
+
+  const minimumTargetSeq = (targetMessages.data ?? []).reduce<number | null>(
+    (currentMinimum, row) => {
+      const normalizedSeq =
+        typeof row.seq === 'number'
+          ? row.seq
+          : typeof row.seq === 'string'
+            ? Number(row.seq)
+            : null;
+
+      if (normalizedSeq === null || !Number.isFinite(normalizedSeq)) {
+        return currentMinimum;
+      }
+
+      if (currentMinimum === null) {
+        return normalizedSeq;
+      }
+
+      return Math.min(currentMinimum, normalizedSeq);
+    },
+    null,
+  );
+
+  if (minimumTargetSeq === null) {
+    return null;
+  }
+
+  const countLookup = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', input.conversationId)
+    .gte('seq', minimumTargetSeq);
+
+  if (countLookup.error) {
+    throw new Error(countLookup.error.message);
+  }
+
+  return countLookup.count ?? null;
+}
+
+export async function getConversationHistorySnapshot(input: {
+  beforeSeqExclusive?: number | null;
+  conversationId: string;
+  debugRequestId?: string | null;
+  limit: number;
+  userId: string;
+}): Promise<ConversationHistoryPageSnapshot> {
+  const normalizedLimit =
+    Number.isFinite(input.limit) && input.limit > 0
+      ? Math.floor(input.limit)
+      : 26;
+  const [{ messages, hasMoreOlder }, currentUserConversationJoinedAt] =
+    await Promise.all([
+      getConversationMessages(input.conversationId, {
+        beforeSeqExclusive: input.beforeSeqExclusive ?? null,
+        debugRequestId: input.debugRequestId ?? null,
+        limitLatest: normalizedLimit,
+      }),
+      getConversationMemberJoinedAt(input.conversationId, input.userId),
+    ]);
+  const messageIds = messages.map((message) => message.id);
+  const encryptedMessageIds = messages
+    .filter((message) => message.kind === 'dm_e2ee_v1')
+    .map((message) => message.id);
+  const senderProfileIds = Array.from(
+    new Set(messages.map((message) => message.sender_id ?? '').filter(Boolean)),
+  );
+  const [
+    senderProfiles,
+    reactionsByMessage,
+    attachmentsByMessage,
+    e2eeEnvelopeHistory,
+  ] = await Promise.all([
+    getMessageSenderProfiles(senderProfileIds),
+    getGroupedReactionsForMessages(messageIds, input.userId),
+    getMessageAttachments(messageIds),
+    getCurrentUserDmE2eeEnvelopesForMessages({
+      debugRequestId: input.debugRequestId ?? null,
+      messageIds: encryptedMessageIds,
+      userId: input.userId,
+    }),
+  ]);
+  const messagesById = new Map(messages.map((message) => [message.id, message]));
+  const currentUserJoinedAtDate = parseConversationHistoryDate(
+    currentUserConversationJoinedAt,
+  );
+  const encryptedHistoryHints = encryptedMessageIds.map((messageId) => {
+    const message = messagesById.get(messageId) ?? null;
+    const messageCreatedAtDate = parseConversationHistoryDate(
+      message?.created_at ?? null,
+    );
+    const wasSentBeforeViewerJoined =
+      Boolean(message) &&
+      message?.sender_id !== input.userId &&
+      messageCreatedAtDate !== null &&
+      currentUserJoinedAtDate !== null &&
+      messageCreatedAtDate.getTime() < currentUserJoinedAtDate.getTime();
+
+    return {
+      hint: {
+        code: e2eeEnvelopeHistory.envelopesByMessage.has(messageId)
+          ? 'envelope-present'
+          : wasSentBeforeViewerJoined
+            ? 'policy-blocked-history'
+            : 'missing-envelope',
+        activeDeviceRecordId: e2eeEnvelopeHistory.activeDeviceRecordId,
+        messageCreatedAt: message?.created_at ?? null,
+        viewerJoinedAt: currentUserConversationJoinedAt,
+      } satisfies EncryptedDmServerHistoryHint,
+      messageId,
+    };
+  });
+
+  return {
+    attachmentsByMessage: messageIds.map((messageId) => ({
+      attachments: attachmentsByMessage.get(messageId) ?? [],
+      messageId,
+    })),
+    dmE2ee: {
+      activeDeviceCreatedAt: e2eeEnvelopeHistory.activeDeviceCreatedAt,
+      activeDeviceRecordId: e2eeEnvelopeHistory.activeDeviceRecordId,
+      envelopesByMessage: encryptedMessageIds.flatMap((messageId) => {
+        const envelope = e2eeEnvelopeHistory.envelopesByMessage.get(messageId);
+
+        return envelope ? [{ envelope, messageId }] : [];
+      }),
+      historyHintsByMessage: encryptedHistoryHints,
+      selectionSource: e2eeEnvelopeHistory.selectionSource,
+    },
+    hasMoreOlder,
+    messages,
+    oldestMessageSeq:
+      messages.length > 0
+        ? Number(
+            typeof messages[0]?.seq === 'number'
+              ? messages[0]?.seq
+              : Number(messages[0]?.seq ?? 0),
+          )
+        : null,
+    reactionsByMessage: messageIds.map((messageId) => ({
+      messageId,
+      reactions: reactionsByMessage.get(messageId) ?? [],
+    })),
+    senderProfiles,
+  };
 }
 
 export async function getMessageSenderProfiles(userIds: string[]) {

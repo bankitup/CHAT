@@ -2,6 +2,10 @@
 
 This note describes the current foundation for voice messages in CHAT. It is intentionally scoped to message architecture and honest UI support, not a finished recording feature.
 
+Long-term boundary document:
+
+- [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
+
 ## Implemented now
 
 - Audio files can fit into the existing message attachment path.
@@ -12,6 +16,17 @@ This note describes the current foundation for voice messages in CHAT. It is int
 - Voice messages still use the existing `public.message_attachments` table and Supabase Storage bucket.
 - Audio attachments stored under a `/voice/` object-path segment are treated as voice messages in the UI.
 - The chat thread can render supported audio attachments with native audio playback controls.
+
+## Boundary note
+
+The current implementation still couples message creation and storage upload in the generic attachment send path.
+
+That is acceptable for now, but future work should move into the dedicated module boundaries introduced here:
+
+- [src/modules/messaging/media/README.md](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/README.md)
+- [src/modules/messaging/rtc/README.md](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/rtc/README.md)
+
+Voice messages should evolve as a media runtime concern, not as extra branching inside the thread route.
 
 ## Storage and model assumptions
 

@@ -14,20 +14,16 @@ import {
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   getConversationDisplayName,
   getDirectMessageDisplayName,
-  getConversationMemberJoinedAt,
-  getCurrentUserDmE2eeEnvelopesForMessages,
   getConversationForUser,
-  getConversationMessages,
+  getConversationHistorySnapshot,
+  getConversationHistoryWindowSizeForMessageTargets,
   getConversationMemberReadStates,
   getConversationParticipants,
   getConversationReadState,
-  getMessageAttachments,
   getMessageSenderProfiles,
-  getGroupedReactionsForMessages,
   STARTER_REACTIONS,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
-import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
 import {
   resolveV1TestSpaceFallback,
@@ -48,7 +44,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
   addGroupParticipantsAction,
-  deleteMessageAction,
   deleteDirectConversationAction,
   hideConversationAction,
   leaveGroupAction,
@@ -56,10 +51,8 @@ import {
   sendMessageAction,
   updateConversationNotificationLevelAction,
 } from './actions';
-import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import { ConversationPresenceStatus } from './conversation-presence-status';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
-import { MarkConversationRead } from './mark-conversation-read';
 import {
   DmThreadClientSubtree,
   DmThreadComposerFallback,
@@ -67,19 +60,12 @@ import {
 } from './dm-thread-client-diagnostics';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
 import { DmReplyTargetSnippet } from './dm-reply-target-snippet';
-import { ProgressiveHistoryLoader } from './progressive-history-loader';
+import { ThreadHistoryViewport } from './thread-history-viewport';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
-import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
 import { GroupChatSettingsForm } from './group-chat-settings-form';
-import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
-import { MessageStatusIndicator } from './message-status-indicator';
-import { OptimisticThreadMessages } from './optimistic-thread-messages';
 import { PlaintextChatComposerForm } from './plaintext-chat-composer-form';
-import { ThreadEditedIndicator } from './thread-edited-indicator';
-import { ThreadInlineEditForm } from './thread-inline-edit-form';
 import { ThreadReactionPicker } from './thread-reaction-picker';
-import { ThreadReactionGroups } from './thread-reaction-groups';
 import { ThreadLiveStateHydrator } from '@/modules/messaging/realtime/thread-live-state-store';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
@@ -98,90 +84,10 @@ type ChatPageProps = {
     actionMessageId?: string;
     settings?: string;
     space?: string;
-    history?: string;
   }>;
 };
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
-
-function getNormalizedThreadHistoryLimit(value: string | undefined) {
-  const parsed = Number(value?.trim() ?? '');
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return THREAD_HISTORY_PAGE_SIZE;
-  }
-
-  return Math.max(
-    THREAD_HISTORY_PAGE_SIZE,
-    Math.ceil(parsed / THREAD_HISTORY_PAGE_SIZE) * THREAD_HISTORY_PAGE_SIZE,
-  );
-}
-
-function formatMessageTimestamp(value: string | null, language: AppLanguage) {
-  const parsedDate = parseSafeDate(value);
-
-  if (!parsedDate) {
-    return '';
-  }
-
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(parsedDate);
-}
-
-function getCalendarDayKey(value: string | null) {
-  const date = parseSafeDate(value);
-
-  if (!date) {
-    return 'unknown';
-  }
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-}
-
-function formatDaySeparatorLabel(
-  value: string | null,
-  language: AppLanguage,
-  t: ReturnType<typeof getTranslations>,
-) {
-  const targetDate = parseSafeDate(value);
-
-  if (!targetDate) {
-    return t.chat.earlier;
-  }
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const compareDate = new Date(
-    targetDate.getFullYear(),
-    targetDate.getMonth(),
-    targetDate.getDate(),
-  );
-
-  if (compareDate.getTime() === today.getTime()) {
-    return t.chat.today;
-  }
-
-  if (compareDate.getTime() === yesterday.getTime()) {
-    return t.chat.yesterday;
-  }
-
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    month: 'short',
-    day: 'numeric',
-    year:
-      targetDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  }).format(targetDate);
-}
 
 function formatLongDate(value: string | null, language: AppLanguage, t: ReturnType<typeof getTranslations>) {
   const parsedDate = parseSafeDate(value);
@@ -212,18 +118,6 @@ function getMessageSnippet(
   }
 
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
-}
-
-function formatAttachmentSize(value: number | null) {
-  if (!value || Number.isNaN(value)) {
-    return null;
-  }
-
-  if (value < 1024 * 1024) {
-    return `${Math.max(1, Math.round(value / 1024))} KB`;
-  }
-
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function getMessageSeq(value: number | string) {
@@ -296,62 +190,6 @@ function normalizeComparableMessageSeq(value: unknown) {
   return null;
 }
 
-function logMessageStatusDiagnostics(
-  stage: string,
-  details: Record<string, unknown>,
-) {
-  if (process.env.CHAT_DEBUG_MESSAGE_STATUS !== '1') {
-    return;
-  }
-
-  console.info('[message-status]', stage, details);
-}
-
-function getOutgoingMessageStatus(input: {
-  conversationId: string;
-  isOwnMessage: boolean;
-  isDeletedMessage: boolean;
-  messageId: string;
-  messageSeq: unknown;
-  otherParticipantReadSeq: unknown;
-}) {
-  if (!input.isOwnMessage || input.isDeletedMessage) {
-    return null;
-  }
-
-  const normalizedMessageSeq = normalizeComparableMessageSeq(input.messageSeq);
-  const normalizedReadSeq = normalizeComparableMessageSeq(
-    input.otherParticipantReadSeq,
-  );
-
-  if (normalizedMessageSeq === null) {
-    logMessageStatusDiagnostics('fallback:invalid-message-seq', {
-      conversationId: input.conversationId,
-      messageId: input.messageId,
-      rawMessageSeq: input.messageSeq ?? null,
-      rawReadSeq: input.otherParticipantReadSeq ?? null,
-      resolvedStatus: 'sent',
-    });
-    return 'sent' as const;
-  }
-
-  if (normalizedReadSeq !== null && normalizedReadSeq >= normalizedMessageSeq) {
-    return 'seen' as const;
-  }
-
-  if (normalizedReadSeq === null && input.otherParticipantReadSeq !== null) {
-    logMessageStatusDiagnostics('fallback:invalid-read-seq', {
-      conversationId: input.conversationId,
-      messageId: input.messageId,
-      rawMessageSeq: input.messageSeq ?? null,
-      rawReadSeq: input.otherParticipantReadSeq ?? null,
-      resolvedStatus: 'sent',
-    });
-  }
-
-  return 'sent' as const;
-}
-
 function isEncryptedDmTextMessage(value: {
   kind: string | null;
   content_mode?: string | null;
@@ -368,28 +206,6 @@ function canRenderEncryptedDmBody(input: {
   clientId: unknown;
 }) {
   return typeof input.clientId === 'string' && input.clientId.trim().length > 0;
-}
-
-function logEncryptedDmRenderFallback(input: {
-  clientId: unknown;
-  conversationId: string;
-  diagnosticHintCode?: string | null;
-  envelopePresent: boolean;
-  messageId: string;
-}) {
-  if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP !== '1') {
-    return;
-  }
-
-  console.info('[dm-e2ee-history]', 'thread:render-fallback', {
-    clientIdType: typeof input.clientId,
-    conversationId: input.conversationId,
-    envelopePresent: input.envelopePresent,
-    hasUsableClientId:
-      typeof input.clientId === 'string' && input.clientId.trim().length > 0,
-    diagnosticHintCode: input.diagnosticHintCode ?? null,
-    messageId: input.messageId,
-  });
 }
 
 function formatGroupMemberSummary(
@@ -668,29 +484,56 @@ export default async function ChatPage({
   const isSettingsOpen =
     query.details === 'open' || query.settings === 'open';
   const hasSettingsSavedState = query.saved === '1';
-  const threadHistoryLimit = getNormalizedThreadHistoryLimit(query.history);
+  const requestedHistoryTargetMessageIds = Array.from(
+    new Set(
+      [
+        query.actionMessageId?.trim() ?? '',
+        query.deleteMessageId?.trim() ?? '',
+        query.editMessageId?.trim() ?? '',
+        query.replyToMessageId?.trim() ?? '',
+      ].filter(Boolean),
+    ),
+  );
+  const requestedHistoryTargetWindowSize =
+    requestedHistoryTargetMessageIds.length > 0
+      ? await getConversationHistoryWindowSizeForMessageTargets({
+          conversationId,
+          messageIds: requestedHistoryTargetMessageIds,
+        })
+      : null;
+  const threadHistoryLimit =
+    requestedHistoryTargetWindowSize &&
+    Number.isFinite(requestedHistoryTargetWindowSize) &&
+    requestedHistoryTargetWindowSize > 0
+      ? Math.max(
+          THREAD_HISTORY_PAGE_SIZE,
+          Math.ceil(requestedHistoryTargetWindowSize / THREAD_HISTORY_PAGE_SIZE) *
+            THREAD_HISTORY_PAGE_SIZE,
+        )
+      : THREAD_HISTORY_PAGE_SIZE;
   const threadRenderRequestId =
     process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
       ? crypto.randomUUID()
       : null;
   const threadDeploymentMarker = getThreadDeploymentMarker();
   const [
-    { messages, hasMoreOlder },
+    threadHistorySnapshot,
     readState,
     memberReadStates,
     participants,
-    currentUserConversationJoinedAt,
   ] =
     await Promise.all([
-      getConversationMessages(conversationId, {
+      getConversationHistorySnapshot({
+        conversationId,
         debugRequestId: threadRenderRequestId,
-        limitLatest: threadHistoryLimit,
+        limit: threadHistoryLimit,
+        userId: user.id,
       }),
       getConversationReadState(conversationId, user.id),
       getConversationMemberReadStates(conversationId),
       getConversationParticipants(conversationId),
-      getConversationMemberJoinedAt(conversationId, user.id),
     ]);
+  const { hasMoreOlder, messages } = threadHistorySnapshot;
   // Temporary v1 unblocker: do not trigger space_members-backed available user lookup in TEST bypass flow.
   const availableUsers =
     conversation.kind === 'group' && isSettingsOpen && !isV1TestBypass
@@ -702,59 +545,54 @@ export default async function ChatPage({
   const encryptedMessageIds = messages
     .filter((message) => isEncryptedDmTextMessage(message))
     .map((message) => message.id);
-  const senderProfileIds = Array.from(
-    new Set([
-      ...messages.map((message) => message.sender_id ?? ''),
-      ...participants.map((participant) => participant.userId),
-      ...availableUsers.map((availableUser) => availableUser.userId),
-    ]),
+  const snapshotSenderProfiles = threadHistorySnapshot.senderProfiles;
+  const snapshotSenderProfileIds = new Set(
+    snapshotSenderProfiles.map((profile) => profile.userId),
   );
-  const [
-    senderProfiles,
-    reactionsByMessage,
-    attachmentsByMessage,
-    e2eeEnvelopeHistory,
-  ] = await Promise.all([
-    getMessageSenderProfiles(senderProfileIds),
-    getGroupedReactionsForMessages(messageIds, user.id),
-    getMessageAttachments(messageIds),
-    getCurrentUserDmE2eeEnvelopesForMessages({
-      debugRequestId: threadRenderRequestId,
-      userId: user.id,
-      messageIds: encryptedMessageIds,
-    }),
-  ]);
-  const e2eeEnvelopesByMessage = e2eeEnvelopeHistory.envelopesByMessage;
+  const supplementalSenderProfileIds = Array.from(
+    [
+      ...new Set([
+        ...participants.map((participant) => participant.userId),
+        ...availableUsers.map((availableUser) => availableUser.userId),
+      ]),
+    ].filter((userId) => !snapshotSenderProfileIds.has(userId)),
+  );
+  const supplementalSenderProfiles = supplementalSenderProfileIds.length
+    ? await getMessageSenderProfiles(supplementalSenderProfileIds)
+    : [];
+  const senderProfiles = [
+    ...snapshotSenderProfiles,
+    ...supplementalSenderProfiles,
+  ];
+  const reactionsByMessage = new Map(
+    threadHistorySnapshot.reactionsByMessage.map((entry) => [
+      entry.messageId,
+      entry.reactions,
+    ] as const),
+  );
+  const e2eeEnvelopeHistory = {
+    activeDeviceCreatedAt:
+      threadHistorySnapshot.dmE2ee?.activeDeviceCreatedAt ?? null,
+    activeDeviceRecordId:
+      threadHistorySnapshot.dmE2ee?.activeDeviceRecordId ?? null,
+    selectionSource: threadHistorySnapshot.dmE2ee?.selectionSource ?? null,
+  };
+  const e2eeEnvelopesByMessage = new Map(
+    (threadHistorySnapshot.dmE2ee?.envelopesByMessage ?? []).map((entry) => [
+      entry.messageId,
+      entry.envelope,
+    ] as const),
+  );
   const messagesById = new Map(messages.map((message) => [message.id, message]));
+  const currentUserConversationJoinedAt =
+    threadHistorySnapshot.dmE2ee?.historyHintsByMessage[0]?.hint.viewerJoinedAt ??
+    null;
   const currentUserJoinedAtDate = parseSafeDate(currentUserConversationJoinedAt);
-  const encryptedHistoryHintsByMessage = new Map<
-    string,
-    EncryptedDmServerHistoryHint
-  >(
-    encryptedMessageIds.map((messageId) => {
-      const message = messagesById.get(messageId) ?? null;
-      const messageCreatedAtDate = parseSafeDate(message?.created_at ?? null);
-      const wasSentBeforeViewerJoined =
-        Boolean(message) &&
-        message?.sender_id !== user.id &&
-        messageCreatedAtDate !== null &&
-        currentUserJoinedAtDate !== null &&
-        messageCreatedAtDate.getTime() < currentUserJoinedAtDate.getTime();
-
-      return [
-        messageId,
-        {
-          code: e2eeEnvelopesByMessage.has(messageId)
-            ? 'envelope-present'
-            : wasSentBeforeViewerJoined
-              ? 'policy-blocked-history'
-              : 'missing-envelope',
-          activeDeviceRecordId: e2eeEnvelopeHistory.activeDeviceRecordId,
-          messageCreatedAt: message?.created_at ?? null,
-          viewerJoinedAt: currentUserConversationJoinedAt,
-        } satisfies EncryptedDmServerHistoryHint,
-      ] as const;
-    }),
+  const encryptedHistoryHintsByMessage = new Map(
+    (threadHistorySnapshot.dmE2ee?.historyHintsByMessage ?? []).map((entry) => [
+      entry.messageId,
+      entry.hint,
+    ] as const),
   );
   if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' && encryptedMessageIds.length > 0) {
     const missingEnvelopeMessageIds = encryptedMessageIds.filter(
@@ -1055,52 +893,6 @@ export default async function ChatPage({
       unreadSeparatorFallbackUsed,
     });
   }
-  const timelineItems = messages.flatMap((message, index) => {
-    const previousMessage = messages[index - 1];
-    const currentDayKey = getCalendarDayKey(message.created_at);
-    const previousDayKey = previousMessage
-      ? getCalendarDayKey(previousMessage.created_at)
-      : null;
-    const items: Array<
-      | { type: 'separator'; key: string; label: string }
-      | { type: 'unread'; key: string; label: string }
-      | { type: 'message'; key: string; message: (typeof messages)[number] }
-    > = [];
-
-    if (currentDayKey !== previousDayKey) {
-      items.push({
-        type: 'separator',
-        key: `day-${currentDayKey}-${message.id}`,
-        label: formatDaySeparatorLabel(message.created_at, language, t),
-      });
-    }
-
-    const messageSeq = getMessageSeq(message.seq);
-    const previousSeq = previousMessage
-      ? getMessageSeq(previousMessage.seq)
-      : null;
-    const hasUnreadBoundary =
-      readState.lastReadMessageSeq !== null &&
-      Number.isFinite(messageSeq) &&
-      messageSeq > readState.lastReadMessageSeq &&
-      (previousSeq === null || previousSeq <= readState.lastReadMessageSeq);
-
-    if (hasUnreadBoundary) {
-      items.push({
-        type: 'unread',
-        key: `unread-${message.id}`,
-        label: t.chat.unreadMessages,
-      });
-    }
-
-    items.push({
-      type: 'message',
-      key: message.id,
-      message,
-    });
-
-    return items;
-  });
 
   return (
     <section className="stack chat-screen">
@@ -1226,615 +1018,25 @@ export default async function ChatPage({
 
       <section className="chat-main">
         <section className="message-thread" id="message-thread-scroll">
-          {conversation.kind === 'dm' ? (
-            <DmThreadClientSubtree
-              conversationId={conversationId}
-              {...threadClientDiagnostics}
-              surface="progressive-history-loader"
-            >
-              <ProgressiveHistoryLoader
-                conversationId={conversationId}
-                currentLimit={threadHistoryLimit}
-                hasMoreOlder={hasMoreOlder}
-                idleLabel={t.chat.olderMessagesAutoLoad}
-                loadingLabel={t.chat.loadingOlderMessages}
-                pageSize={THREAD_HISTORY_PAGE_SIZE}
-                targetId="message-thread-scroll"
-              />
-            </DmThreadClientSubtree>
-          ) : (
-            <ProgressiveHistoryLoader
-              conversationId={conversationId}
-              currentLimit={threadHistoryLimit}
-              hasMoreOlder={hasMoreOlder}
-              idleLabel={t.chat.olderMessagesAutoLoad}
-              loadingLabel={t.chat.loadingOlderMessages}
-              pageSize={THREAD_HISTORY_PAGE_SIZE}
-              targetId="message-thread-scroll"
-            />
-          )}
-          {conversation.kind === 'dm' ? (
-            <DmThreadClientSubtree
-              conversationId={conversationId}
-              {...threadClientDiagnostics}
-              surface="auto-scroll-to-latest"
-            >
-              <AutoScrollToLatest
-                bottomSentinelId="message-thread-bottom-sentinel"
-                conversationId={conversationId}
-                latestVisibleMessageSeq={latestVisibleMessageSeq}
-                targetId="message-thread-scroll"
-              />
-            </DmThreadClientSubtree>
-          ) : (
-            <AutoScrollToLatest
-              bottomSentinelId="message-thread-bottom-sentinel"
-              conversationId={conversationId}
-              latestVisibleMessageSeq={latestVisibleMessageSeq}
-              targetId="message-thread-scroll"
-            />
-          )}
-          {messages.length === 0 ? (
-            <div className="chat-empty-state" aria-label={t.chat.noMessagesYet}>
-              <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
-            </div>
-          ) : (
-            timelineItems.map((item) => {
-              if (item.type === 'separator') {
-                return (
-                  <div
-                    key={item.key}
-                    className="message-day-separator"
-                    aria-label={item.label}
-                  >
-                    <span className="message-day-label">{item.label}</span>
-                  </div>
-                );
-              }
-
-              if (item.type === 'unread') {
-                return (
-                  <div
-                    key={item.key}
-                    className="message-unread-separator"
-                    aria-label={item.label}
-                  >
-                    <span className="message-unread-label">{item.label}</span>
-                  </div>
-                );
-              }
-
-              const { message } = item;
-              const isOwnMessage = message.sender_id === user.id;
-              const isDeletedMessage = Boolean(message.deleted_at);
-              const messageSeq = getMessageSeq(message.seq);
-              const normalizedMessageBody = normalizeMessageBodyText(message.body);
-              const isLatestConversationMessage =
-                latestVisibleMessageSeq !== null &&
-                Number.isFinite(messageSeq) &&
-                messageSeq === latestVisibleMessageSeq;
-              const isMessageInEditMode =
-                activeEditMessageId === message.id &&
-                isOwnMessage &&
-                !isDeletedMessage &&
-                !isEncryptedDmTextMessage(message);
-              const isMessageInDeleteMode =
-                activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
-              const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
-              const encryptedEnvelope =
-                e2eeEnvelopesByMessage.get(message.id) ?? null;
-              const encryptedHistoryHint =
-                encryptedHistoryHintsByMessage.get(message.id) ?? {
-                  code: encryptedEnvelope ? 'envelope-present' : 'missing-envelope',
-                  activeDeviceRecordId: e2eeEnvelopeHistory.activeDeviceRecordId,
-                  messageCreatedAt: message.created_at ?? null,
-                  viewerJoinedAt: currentUserConversationJoinedAt,
-                };
-              const canAttemptEncryptedRender = canRenderEncryptedDmBody({
-                clientId: message.client_id,
-              });
-              if (isEncryptedDmTextMessage(message) && !canAttemptEncryptedRender) {
-                logEncryptedDmRenderFallback({
-                  clientId: message.client_id,
-                  conversationId,
-                  diagnosticHintCode: encryptedHistoryHint.code,
-                  envelopePresent: Boolean(encryptedEnvelope),
-                  messageId: message.id,
-                });
-              }
-              const otherParticipantReadSeq =
-                otherParticipantReadState?.lastReadMessageSeq ?? null;
-              const outgoingMessageStatus = getOutgoingMessageStatus({
-                conversationId,
-                isOwnMessage,
-                isDeletedMessage,
-                messageId: message.id,
-                messageSeq: message.seq,
-                otherParticipantReadSeq:
-                  conversation.kind === 'dm' ? otherParticipantReadSeq : null,
-              });
-              const isMessageActionActive = activeActionMessage?.id === message.id;
-
-              if (!parseSafeDate(message.created_at)) {
-                logThreadRenderDiagnostics('fallback:invalid-message-created-at', {
-                  conversationId,
-                  createdAt: message.created_at ?? null,
-                  messageId: message.id,
-                });
-              }
-
-              if (message.body !== null && typeof message.body !== 'string') {
-                logThreadRenderDiagnostics('fallback:invalid-message-body-type', {
-                  bodyType: typeof message.body,
-                  conversationId,
-                  messageId: message.id,
-                });
-              }
-
-              return (
-                <article
-                  key={item.key}
-                  className={isOwnMessage ? 'message-row message-row-own' : 'message-row'}
-                >
-                  <div
-                    className={
-                      isDeletedMessage
-                        ? isOwnMessage
-                          ? 'message-card message-card-own message-card-deleted'
-                          : 'message-card message-card-deleted'
-                        : isOwnMessage
-                          ? 'message-card message-card-own'
-                          : 'message-card'
-                    }
-                    id={`message-${message.id}`}
-                  >
-                      {!isDeletedMessage ? (
-                        <div
-                          className={
-                            isOwnMessage
-                              ? 'message-header message-header-own'
-                              : 'message-header'
-                          }
-                        >
-                          <div className="message-header-side">
-                          {!isDeletedMessage ? (
-                            <Link
-                              aria-label={t.chat.openMessageActions}
-                              className={
-                                isMessageActionActive
-                                  ? 'message-actions-trigger message-actions-trigger-active'
-                                  : 'message-actions-trigger'
-                              }
-                              href={buildChatHref({
-                                actionMessageId: message.id,
-                                conversationId,
-                                hash: `#message-${message.id}`,
-                                spaceId: activeSpaceId,
-                              })}
-                            >
-                              <span aria-hidden="true">⋯</span>
-                            </Link>
-                          ) : null}
-                          </div>
-                        </div>
-                      ) : null}
-                      <div
-                        className={
-                          isOwnMessage
-                            ? 'message-bubble message-bubble-own'
-                            : 'message-bubble'
-                        }
-                      >
-                        {message.reply_to_message_id && !isDeletedMessage ? (
-                          <div className="message-reply-reference">
-                            <span className="message-reply-sender">
-                              {(() => {
-                                const repliedMessage = messagesById.get(
-                                  message.reply_to_message_id,
-                                );
-
-                                if (!repliedMessage) {
-                                  return t.chat.earlierMessage;
-                                }
-
-                                if (repliedMessage.deleted_at) {
-                                  return t.chat.deletedMessage;
-                                }
-
-                                return (
-                                  senderNames.get(repliedMessage.sender_id ?? '') ||
-                                  t.chat.unknownUser
-                                );
-                              })()}
-                            </span>
-                            <DmReplyTargetSnippet
-                              body={
-                                messagesById.get(message.reply_to_message_id)?.body ?? null
-                              }
-                              conversationId={conversationId}
-                              currentUserId={user.id}
-                              debugRequestId={threadRenderRequestId}
-                              deletedFallbackLabel={t.chat.messageDeleted}
-                              emptyFallbackLabel={t.chat.emptyMessage}
-                              encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
-                              encryptedReferenceNote={null}
-                              loadedFallbackLabel={t.chat.earlierMessage}
-                              messageId={message.id}
-                              surface="message-reply-reference"
-                              targetDeleted={Boolean(
-                                messagesById.get(message.reply_to_message_id)?.deleted_at,
-                              )}
-                              targetIsEncrypted={Boolean(
-                                messagesById.get(message.reply_to_message_id) &&
-                                  isEncryptedDmTextMessage(
-                                    messagesById.get(message.reply_to_message_id)!,
-                                  ),
-                              )}
-                              targetIsLoaded={Boolean(
-                                messagesById.get(message.reply_to_message_id),
-                              )}
-                              targetKind={
-                                messagesById.get(message.reply_to_message_id)?.kind ?? null
-                              }
-                              targetMessageId={message.reply_to_message_id}
-                              voiceFallbackLabel={t.chat.voiceMessage}
-                            />
-                          </div>
-                        ) : null}
-                        {isDeletedMessage ? (
-                          <p className="message-deleted-text">{t.chat.messageDeleted}</p>
-                        ) : isMessageInEditMode ? (
-                          <ThreadInlineEditForm
-                            cancelHref={buildChatHref({
-                              conversationId,
-                              hash: `#message-${message.id}`,
-                              spaceId: activeSpaceId,
-                            })}
-                            conversationId={conversationId}
-                            emptyMessageLabel={t.chat.emptyMessage}
-                            hasAttachments={messageAttachments.length > 0}
-                            initialBody={
-                              isEncryptedDmTextMessage(message)
-                                ? ''
-                                : normalizedMessageBody ?? ''
-                            }
-                            labels={{
-                              cancel: t.chat.cancel,
-                              save: t.chat.save,
-                            }}
-                            messageId={message.id}
-                          />
-                        ) : activeEditMessageId === message.id &&
-                          isOwnMessage &&
-                          isEncryptedDmTextMessage(message) ? (
-                          <div className="message-edit-unavailable">
-                            <p className="message-edit-unavailable-copy">
-                              {t.chat.encryptedEditUnavailable}
-                            </p>
-                            <div className="message-edit-actions">
-                              <Link
-                                className="pill message-edit-cancel"
-                                href={buildChatHref({
-                                  conversationId,
-                                  hash: `#message-${message.id}`,
-                                  spaceId: activeSpaceId,
-                                })}
-                              >
-                                {t.chat.cancel}
-                              </Link>
-                            </div>
-                          </div>
-                        ) : isEncryptedDmTextMessage(message) ? (
-                          canAttemptEncryptedRender ? (
-                            <DmThreadClientSubtree
-                              conversationId={conversationId}
-                              {...threadClientDiagnostics}
-                              fallback={
-                                <div className="message-encryption-state">
-                                  <p className="message-body">
-                                    {t.chat.encryptedMessageUnavailable}
-                                  </p>
-                                </div>
-                              }
-                              messageId={message.id}
-                              surface="encrypted-dm-message-body"
-                            >
-                              <EncryptedDmMessageBody
-                                clientId={message.client_id}
-                                conversationId={conversationId}
-                                currentUserId={user.id}
-                                envelope={encryptedEnvelope}
-                                fallbackLabel={t.chat.encryptedMessage}
-                                historyDiagnosticHint={encryptedHistoryHint}
-                                messageSenderId={message.sender_id}
-                                refreshSetupLabel={t.chat.refreshEncryptedSetup}
-                                reloadConversationLabel={t.chat.reloadConversation}
-                                retryLabel={t.chat.retryEncryptedAction}
-                                setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
-                                unavailableLabel={t.chat.encryptedMessageUnavailable}
-                                messageId={message.id}
-                                messageCreatedAt={message.created_at}
-                                shouldCachePreview={
-                                  conversation.kind === 'dm' && isLatestConversationMessage
-                                }
-                              />
-                            </DmThreadClientSubtree>
-                          ) : (
-                            <div
-                              className="message-encryption-state"
-                              data-dm-e2ee-debug-bucket={
-                                process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-                                  ? encryptedHistoryHint.code
-                                  : undefined
-                              }
-                            >
-                              <p className="message-body">
-                                {t.chat.encryptedMessageUnavailable}
-                              </p>
-                              {process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ? (
-                                <p className="message-encryption-debug-label">
-                                  {encryptedHistoryHint.code}
-                                </p>
-                              ) : null}
-                            </div>
-                          )
-                        ) : normalizedMessageBody ? (
-                          <p className="message-body">{normalizedMessageBody}</p>
-                        ) : !messageAttachments.length ? (
-                          <p className="message-body">{t.chat.emptyMessage}</p>
-                        ) : null}
-                        {messageAttachments.length && !isDeletedMessage ? (
-                          <div className="message-attachments">
-                            {messageAttachments.map((attachment) => {
-                              const attachmentContent = (
-                                <>
-                                  {attachment.isImage && attachment.signedUrl ? (
-                                    <span
-                                      aria-hidden="true"
-                                      className="message-attachment-preview"
-                                      style={{
-                                        backgroundImage: `url("${attachment.signedUrl}")`,
-                                      }}
-                                    />
-                                  ) : (
-                                    <span
-                                      aria-hidden="true"
-                                      className="message-attachment-file"
-                                    >
-                                      {attachment.isAudio ? t.chat.audio : t.chat.file}
-                                    </span>
-                                  )}
-                                  <span className="message-attachment-copy">
-                                    <span className="message-attachment-name">
-                                      {attachment.fileName}
-                                    </span>
-                                    <span className="message-attachment-meta">
-                                      {attachment.isVoiceMessage
-                                        ? t.chat.voiceMessage
-                                        : attachment.isAudio
-                                          ? t.chat.audio
-                                          : attachment.isImage
-                                            ? t.chat.image
-                                            : t.chat.attachment}
-                                      {formatAttachmentSize(attachment.sizeBytes)
-                                        ? ` · ${formatAttachmentSize(
-                                            attachment.sizeBytes,
-                                          )}`
-                                        : ''}
-                                      {!attachment.signedUrl
-                                        ? ` · ${t.chat.unavailableRightNow}`
-                                        : ''}
-                                    </span>
-                                  </span>
-                                </>
-                              );
-
-                              if (!attachment.signedUrl) {
-                                return (
-                                  <div
-                                    key={attachment.id}
-                                    className="message-attachment-card message-attachment-card-unavailable"
-                                  >
-                                    {attachmentContent}
-                                  </div>
-                                );
-                              }
-
-                              if (attachment.isAudio) {
-                                return (
-                                  <div
-                                    key={attachment.id}
-                                    className="message-attachment-card message-attachment-card-audio"
-                                  >
-                                    {attachmentContent}
-                                    <audio
-                                      className="message-attachment-audio"
-                                      controls
-                                      preload="metadata"
-                                      src={attachment.signedUrl}
-                                    />
-                                  </div>
-                                );
-                              }
-
-                              return (
-                                <a
-                                  key={attachment.id}
-                                  className="message-attachment-card"
-                                  href={attachment.signedUrl}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                >
-                                  {attachmentContent}
-                                </a>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                      <span
-                        className={
-                          isOwnMessage
-                            ? 'message-meta message-meta-own'
-                            : 'message-meta'
-                        }
-                      >
-                        <span>{formatMessageTimestamp(message.created_at, language) || t.chat.justNow}</span>
-                        <ThreadEditedIndicator
-                          conversationId={conversationId}
-                          editedAt={message.edited_at}
-                          label={t.chat.edited}
-                          messageId={message.id}
-                        />
-                        {isOwnMessage && outgoingMessageStatus ? (
-                          otherParticipantUserId ? (
-                            <DmThreadClientSubtree
-                              conversationId={conversationId}
-                              {...threadClientDiagnostics}
-                              fallback={
-                                <MessageStatusIndicator
-                                  label={t.chat.sent}
-                                  status="sent"
-                                />
-                              }
-                              messageId={message.id}
-                              surface="live-outgoing-message-status"
-                            >
-                              <LiveOutgoingMessageStatus
-                                conversationId={conversationId}
-                                labels={{
-                                  delivered: t.chat.delivered,
-                                  seen: t.chat.seen,
-                                  sent: t.chat.sent,
-                                }}
-                                messageSeq={message.seq}
-                                otherParticipantReadSeq={otherParticipantReadSeq}
-                                status={outgoingMessageStatus}
-                              />
-                            </DmThreadClientSubtree>
-                          ) : (
-                            <MessageStatusIndicator
-                              label={
-                                outgoingMessageStatus === 'seen'
-                                  ? t.chat.seen
-                                  : t.chat.sent
-                              }
-                              status={outgoingMessageStatus}
-                            />
-                          )
-                        ) : null}
-                      </span>
-
-                      {!isDeletedMessage ? (
-                        <ThreadReactionGroups
-                          ariaLabel={t.chat.messageReactions}
-                          conversationId={conversationId}
-                          currentUserId={user.id}
-                          initialReactions={reactionsByMessage.get(message.id) ?? []}
-                          isOwnMessage={isOwnMessage}
-                          messageId={message.id}
-                        />
-                      ) : null}
-                      {isMessageInDeleteMode ? (
-                        <form action={deleteMessageAction} className="message-delete-confirm">
-                          <input
-                            name="conversationId"
-                            type="hidden"
-                            value={conversationId}
-                          />
-                          <input name="messageId" type="hidden" value={message.id} />
-                          <input name="confirmDelete" type="hidden" value="true" />
-                          <span className="message-delete-copy">
-                            {t.chat.deleteConfirm}
-                          </span>
-                          <div className="message-delete-actions">
-                            <button className="button button-compact" type="submit">
-                              {t.chat.delete}
-                            </button>
-                            <Link
-                              className="pill message-edit-cancel"
-                              href={buildChatHref({
-                                conversationId,
-                                hash: `#message-${message.id}`,
-                                spaceId: activeSpaceId,
-                              })}
-                            >
-                              {t.chat.cancel}
-                            </Link>
-                          </div>
-                        </form>
-                      ) : null}
-                  </div>
-                </article>
-              );
-            })
-          )}
-          {conversation.kind === 'dm' ? (
-            <DmThreadClientSubtree
-              conversationId={conversationId}
-              {...threadClientDiagnostics}
-              surface="optimistic-thread-messages"
-            >
-              <OptimisticThreadMessages
-                confirmedClientIds={messages
-                  .map((message) => message.client_id ?? null)
-                  .filter((clientId): clientId is string => Boolean(clientId))}
-                conversationId={conversationId}
-                labels={{
-                  failed: t.chat.sendFailed,
-                  justNow: t.chat.justNow,
-                  retry: t.chat.retrySend,
-                  sending: t.chat.sending,
-                  sent: t.chat.sent,
-                }}
-              />
-            </DmThreadClientSubtree>
-          ) : (
-            <OptimisticThreadMessages
-              confirmedClientIds={messages
-                .map((message) => message.client_id ?? null)
-                .filter((clientId): clientId is string => Boolean(clientId))}
-              conversationId={conversationId}
-              labels={{
-                failed: t.chat.sendFailed,
-                justNow: t.chat.justNow,
-                retry: t.chat.retrySend,
-                sending: t.chat.sending,
-                sent: t.chat.sent,
-              }}
-            />
-          )}
-          {conversation.kind === 'dm' ? (
-            <DmThreadClientSubtree
-              conversationId={conversationId}
-              {...threadClientDiagnostics}
-              surface="mark-conversation-read"
-            >
-              <MarkConversationRead
-                bottomSentinelId="message-thread-bottom-sentinel"
-                conversationId={conversationId}
-                currentReadMessageSeq={readState.lastReadMessageSeq}
-                key={`mark-read-${conversationId}-${readState.lastReadMessageSeq ?? 'none'}-${latestVisibleMessageSeq ?? 'none'}`}
-                latestVisibleMessageSeq={
-                  latestVisibleMessageSeq !== null && Number.isFinite(latestVisibleMessageSeq)
-                    ? latestVisibleMessageSeq
-                    : null
-                }
-              />
-            </DmThreadClientSubtree>
-          ) : (
-            <MarkConversationRead
-              bottomSentinelId="message-thread-bottom-sentinel"
-              conversationId={conversationId}
-              currentReadMessageSeq={readState.lastReadMessageSeq}
-              key={`mark-read-${conversationId}-${readState.lastReadMessageSeq ?? 'none'}-${latestVisibleMessageSeq ?? 'none'}`}
-              latestVisibleMessageSeq={
-                latestVisibleMessageSeq !== null && Number.isFinite(latestVisibleMessageSeq)
-                  ? latestVisibleMessageSeq
-                  : null
-              }
-            />
-          )}
+          <ThreadHistoryViewport
+            activeActionMessageId={activeActionMessageId}
+            activeDeleteMessageId={activeDeleteMessageId}
+            activeEditMessageId={activeEditMessageId}
+            activeSpaceId={activeSpaceId}
+            confirmedClientIds={messages
+              .map((message) => message.client_id ?? null)
+              .filter((clientId): clientId is string => Boolean(clientId))}
+            conversationId={conversationId}
+            conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
+            currentReadMessageSeq={readState.lastReadMessageSeq}
+            currentUserId={user.id}
+            initialSnapshot={threadHistorySnapshot}
+            language={language}
+            latestVisibleMessageSeq={latestVisibleMessageSeq}
+            otherParticipantReadSeq={otherParticipantReadState?.lastReadMessageSeq ?? null}
+            otherParticipantUserId={otherParticipantUserId}
+            threadClientDiagnostics={threadClientDiagnostics}
+          />
         </section>
 
         <section className="stack composer-card" id="message-composer">
