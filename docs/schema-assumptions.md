@@ -59,6 +59,7 @@ Required columns used by current code:
 - `id`
 - `kind`
 - `title`
+- `space_id`
 - `created_by`
 - `last_message_at`
 - `created_at`
@@ -66,16 +67,17 @@ Required columns used by current code:
 Optional / hardening support:
 
 - `dm_key`
-- `space_id`
 
 Assumptions:
 
 - `kind` is used as a conversation-type discriminator (`dm` or `group`).
+- `space_id` is now required by the running app because inbox, activity, chat
+  entry, and conversation creation are all active-space-scoped.
 - `created_by` is used for group ownership-sensitive UI like title editing.
 - `last_message_at` drives inbox ordering and recency labels.
 - `dm_key`, when present, is the canonical unordered DM pair key (`sorted(user_a,user_b).join(':')`) used to make direct-message creation race-safe and reuse exactly one DM for the same pair.
-- `space_id`, once the space model is enabled, makes each conversation belong to exactly one space.
-- direct-message uniqueness is global only in the current implicit-space runtime; once spaces are enabled, DM uniqueness must become space-scoped via `space_id` plus `dm_key`.
+- `space_id` makes each conversation belong to exactly one space.
+- direct-message uniqueness must now be enforced per space via `space_id` plus `dm_key`; the runtime no longer treats DMs as global.
 
 ## `public.conversation_members`
 
@@ -308,11 +310,11 @@ Prepared role for space scoping:
 - no cross-space conversations
 - no global DMs outside spaces
 
-Current migration shape:
+Current required migration shape:
 
-- add `space_id` nullable first for safe backfill
+- add `space_id` first for safe rollout on drifted databases
 - backfill legacy conversations into the default `TEST` space first
-- tighten to `not null` as the space-scoped runtime becomes universal
+- tighten to `not null` before treating the production runtime as healthy
 - conversation membership should only be considered valid when it remains inside the parent space boundary
 - inbox and activity filters already scope by selected `space_id`
 - chat entry already validates that the conversation belongs to the current parent `space_id`
@@ -350,15 +352,19 @@ These schema changes must exist in Supabase for the current app to run safely:
 4. `public.messages.kind` must allow `voice`
    Source file: [2026-04-03-messages-kind-voice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-kind-voice.sql)
 
+5. `public.conversations.space_id` final active-space alignment
+   Source file: [2026-04-05-conversations-space-id-required.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-05-conversations-space-id-required.sql)
+
 ## Recommended hardening before broader testing
 
 1. `public.conversations.dm_key`
    Source file: [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
 
-## Required migrations before enabling space-scoped conversations
+## Historical space-scoping migrations
 
-Do not treat the current app as space-aware until these migrations are applied
-and the runtime query/routing layer is actively scoped to a selected space.
+These earlier files are still useful for understanding rollout history, but the
+current production target should apply the final required alignment file above
+when `public.conversations.space_id` is missing, nullable, or not backfilled.
 
 1. `public.spaces`, `public.space_members`, and `public.conversations.space_id`
    Source file: [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql)
