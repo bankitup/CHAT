@@ -233,7 +233,7 @@ export async function sendMessageAction(formData: FormData) {
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectWithSettingsSaved(conversationId, spaceId);
+  redirectToChat(conversationId, spaceId);
 }
 
 export async function toggleReactionAction(formData: FormData) {

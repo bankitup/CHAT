@@ -25,6 +25,7 @@ import {
 } from '@/modules/messaging/e2ee/lifecycle';
 import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encrypt';
 import { getEncryptedDmComposerErrorMessage } from '@/modules/messaging/e2ee/ui-policy';
+import { broadcastMessageCommitted } from '@/modules/messaging/realtime/live-refresh';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
@@ -185,6 +186,12 @@ async function postEncryptedDmMessage(input: DmE2eeSendRequest) {
       payload.sendSelectedRecipientDeviceRowId ?? null;
     throw error;
   }
+
+  return payload as {
+    clientId?: string | null;
+    messageId?: string | null;
+    timestamp?: string | null;
+  };
 }
 
 async function resolveLocalRecordForEncryptedDm(
@@ -567,7 +574,7 @@ export function EncryptedDmComposerForm({
                 recipientBundle,
               });
 
-              await postEncryptedDmMessage({
+              const sendResult = await postEncryptedDmMessage({
                 conversationId,
                 clientId,
                 replyToMessageId: replyToMessageId ?? null,
@@ -575,6 +582,11 @@ export function EncryptedDmComposerForm({
                 kind: 'text',
                 contentMode: 'dm_e2ee_v1',
                 envelopes: encryptedPayload.envelopes,
+              });
+              await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+                conversationId,
+                messageId: sendResult.messageId ?? null,
+                source: 'encrypted-dm-send',
               });
               break;
             } catch (error) {
@@ -601,6 +613,7 @@ export function EncryptedDmComposerForm({
           form.reset();
           startNavigationTransition(() => {
             router.replace(withSpaceParam(`/chat/${conversationId}`, spaceId));
+            router.refresh();
           });
         } catch (error) {
           const nextCode =
