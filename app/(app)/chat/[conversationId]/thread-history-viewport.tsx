@@ -124,6 +124,19 @@ type PendingScrollRestore = {
   previousScrollTop: number;
 };
 
+type ThreadHistoryState = {
+  attachmentsByMessage: Map<string, MessageAttachment[]>;
+  encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
+  encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
+  hasMoreOlder: boolean;
+  loadedOlderPageCount: number;
+  messages: ConversationMessageRow[];
+  messagesById: Map<string, ConversationMessageRow>;
+  oldestLoadedSeq: number | null;
+  reactionsByMessage: Map<string, MessageReactionGroup[]>;
+  senderProfilesById: Map<string, MessageSenderProfile>;
+};
+
 type TimelineItem =
   | { key: string; label: string; type: 'separator' | 'unread' }
   | { key: string; message: ConversationMessageRow; type: 'message' };
@@ -443,63 +456,159 @@ function buildTimelineItems(input: {
   });
 }
 
-function mergeHistorySnapshots(
-  olderSnapshots: ThreadHistoryPageSnapshot[],
-  baseSnapshot: ThreadHistoryPageSnapshot,
+function getSnapshotRevisionKey(snapshot: ThreadHistoryPageSnapshot) {
+  return JSON.stringify({
+    hasMoreOlder: snapshot.hasMoreOlder,
+    messageIds: snapshot.messages.map((message) => message.id),
+    oldestMessageSeq: snapshot.oldestMessageSeq,
+  });
+}
+
+function resolveOldestLoadedSeq(
+  messages: ConversationMessageRow[],
+  fallback: number | null,
 ) {
-  const snapshots = [...olderSnapshots, baseSnapshot];
-  const orderedMessageIds: string[] = [];
-  const seenMessageIds = new Set<string>();
-  const messagesById = new Map<string, ConversationMessageRow>();
-  const senderProfilesById = new Map<string, MessageSenderProfile>();
-  const reactionsByMessage = new Map<string, MessageReactionGroup[]>();
-  const attachmentsByMessage = new Map<string, MessageAttachment[]>();
-  const encryptedEnvelopesByMessage = new Map<string, StoredDmE2eeEnvelope>();
-  const encryptedHistoryHintsByMessage = new Map<
-    string,
-    EncryptedDmServerHistoryHint
-  >();
+  return normalizeComparableMessageSeq(messages[0]?.seq ?? fallback);
+}
 
-  for (const snapshot of snapshots) {
-    for (const message of snapshot.messages) {
-      messagesById.set(message.id, message);
+function createThreadHistoryState(
+  snapshot: ThreadHistoryPageSnapshot,
+): ThreadHistoryState {
+  return {
+    attachmentsByMessage: new Map(
+      snapshot.attachmentsByMessage.map((entry) => [
+        entry.messageId,
+        entry.attachments,
+      ] as const),
+    ),
+    encryptedEnvelopesByMessage: new Map(
+      (snapshot.dmE2ee?.envelopesByMessage ?? []).map((entry) => [
+        entry.messageId,
+        entry.envelope,
+      ] as const),
+    ),
+    encryptedHistoryHintsByMessage: new Map(
+      (snapshot.dmE2ee?.historyHintsByMessage ?? []).map((entry) => [
+        entry.messageId,
+        entry.hint,
+      ] as const),
+    ),
+    hasMoreOlder: snapshot.hasMoreOlder,
+    loadedOlderPageCount: 0,
+    messages: [...snapshot.messages],
+    messagesById: new Map(
+      snapshot.messages.map((message) => [message.id, message] as const),
+    ),
+    oldestLoadedSeq: resolveOldestLoadedSeq(
+      snapshot.messages,
+      snapshot.oldestMessageSeq,
+    ),
+    reactionsByMessage: new Map(
+      snapshot.reactionsByMessage.map((entry) => [
+        entry.messageId,
+        entry.reactions,
+      ] as const),
+    ),
+    senderProfilesById: new Map(
+      snapshot.senderProfiles.map((profile) => [profile.userId, profile] as const),
+    ),
+  };
+}
 
-      if (!seenMessageIds.has(message.id)) {
-        seenMessageIds.add(message.id);
-        orderedMessageIds.push(message.id);
+function mergeThreadHistoryState(input: {
+  mode: 'prepend-older' | 'refresh-base';
+  snapshot: ThreadHistoryPageSnapshot;
+  state: ThreadHistoryState;
+}) {
+  const nextMessagesById = new Map(input.state.messagesById);
+  const nextMessages = [...input.state.messages];
+  const nextMessageIndexes = new Map(
+    nextMessages.map((message, index) => [message.id, index] as const),
+  );
+  const nextSenderProfilesById = new Map(input.state.senderProfilesById);
+  const nextReactionsByMessage = new Map(input.state.reactionsByMessage);
+  const nextAttachmentsByMessage = new Map(input.state.attachmentsByMessage);
+  const nextEncryptedEnvelopesByMessage = new Map(
+    input.state.encryptedEnvelopesByMessage,
+  );
+  const nextEncryptedHistoryHintsByMessage = new Map(
+    input.state.encryptedHistoryHintsByMessage,
+  );
+  const prependedMessages: ConversationMessageRow[] = [];
+  const appendedMessages: ConversationMessageRow[] = [];
+  let insertedMessageCount = 0;
+
+  for (const message of input.snapshot.messages) {
+    const existingIndex = nextMessageIndexes.get(message.id);
+    nextMessagesById.set(message.id, message);
+
+    if (existingIndex === undefined) {
+      insertedMessageCount += 1;
+
+      if (input.mode === 'prepend-older') {
+        prependedMessages.push(message);
+      } else {
+        appendedMessages.push(message);
       }
+
+      continue;
     }
 
-    for (const senderProfile of snapshot.senderProfiles) {
-      senderProfilesById.set(senderProfile.userId, senderProfile);
-    }
+    nextMessages[existingIndex] = message;
+  }
 
-    for (const entry of snapshot.reactionsByMessage) {
-      reactionsByMessage.set(entry.messageId, entry.reactions);
-    }
+  const mergedMessages =
+    input.mode === 'prepend-older'
+      ? [...prependedMessages, ...nextMessages]
+      : appendedMessages.length > 0
+        ? [...nextMessages, ...appendedMessages]
+        : nextMessages;
 
-    for (const entry of snapshot.attachmentsByMessage) {
-      attachmentsByMessage.set(entry.messageId, entry.attachments);
-    }
+  for (const profile of input.snapshot.senderProfiles) {
+    nextSenderProfilesById.set(profile.userId, profile);
+  }
 
-    for (const entry of snapshot.dmE2ee?.envelopesByMessage ?? []) {
-      encryptedEnvelopesByMessage.set(entry.messageId, entry.envelope);
-    }
+  for (const entry of input.snapshot.reactionsByMessage) {
+    nextReactionsByMessage.set(entry.messageId, entry.reactions);
+  }
 
-    for (const entry of snapshot.dmE2ee?.historyHintsByMessage ?? []) {
-      encryptedHistoryHintsByMessage.set(entry.messageId, entry.hint);
-    }
+  for (const entry of input.snapshot.attachmentsByMessage) {
+    nextAttachmentsByMessage.set(entry.messageId, entry.attachments);
+  }
+
+  for (const entry of input.snapshot.dmE2ee?.envelopesByMessage ?? []) {
+    nextEncryptedEnvelopesByMessage.set(entry.messageId, entry.envelope);
+  }
+
+  for (const entry of input.snapshot.dmE2ee?.historyHintsByMessage ?? []) {
+    nextEncryptedHistoryHintsByMessage.set(entry.messageId, entry.hint);
   }
 
   return {
-    attachmentsByMessage,
-    encryptedEnvelopesByMessage,
-    encryptedHistoryHintsByMessage,
-    messages: orderedMessageIds
-      .map((messageId) => messagesById.get(messageId) ?? null)
-      .filter((message): message is ConversationMessageRow => Boolean(message)),
-    reactionsByMessage,
-    senderProfiles: Array.from(senderProfilesById.values()),
+    insertedMessageCount,
+    nextState: {
+      attachmentsByMessage: nextAttachmentsByMessage,
+      encryptedEnvelopesByMessage: nextEncryptedEnvelopesByMessage,
+      encryptedHistoryHintsByMessage: nextEncryptedHistoryHintsByMessage,
+      hasMoreOlder:
+        input.mode === 'prepend-older'
+          ? input.snapshot.hasMoreOlder
+          : input.state.loadedOlderPageCount > 0
+            ? input.state.hasMoreOlder
+            : input.snapshot.hasMoreOlder,
+      loadedOlderPageCount:
+        input.mode === 'prepend-older'
+          ? input.state.loadedOlderPageCount + 1
+          : input.state.loadedOlderPageCount,
+      messages: mergedMessages,
+      messagesById: nextMessagesById,
+      oldestLoadedSeq: resolveOldestLoadedSeq(
+        mergedMessages,
+        input.snapshot.oldestMessageSeq ?? input.state.oldestLoadedSeq,
+      ),
+      reactionsByMessage: nextReactionsByMessage,
+      senderProfilesById: nextSenderProfilesById,
+    } satisfies ThreadHistoryState,
   };
 }
 
@@ -994,36 +1103,44 @@ export function ThreadHistoryViewport({
   threadClientDiagnostics,
 }: ThreadHistoryViewportProps) {
   const t = getTranslations(language);
-  const [baseSnapshot, setBaseSnapshot] =
-    useState<ThreadHistoryPageSnapshot>(initialSnapshot);
-  const [olderSnapshots, setOlderSnapshots] = useState<ThreadHistoryPageSnapshot[]>(
-    [],
+  const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
+    createThreadHistoryState(initialSnapshot),
   );
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const lastConversationIdRef = useRef(conversationId);
+  const lastInitialSnapshotKeyRef = useRef(getSnapshotRevisionKey(initialSnapshot));
   const pendingRestoreRef = useRef<PendingScrollRestore | null>(null);
 
   useEffect(() => {
+    const nextSnapshotKey = getSnapshotRevisionKey(initialSnapshot);
+
     if (lastConversationIdRef.current !== conversationId) {
       lastConversationIdRef.current = conversationId;
-      setOlderSnapshots([]);
-      setBaseSnapshot(initialSnapshot);
+      lastInitialSnapshotKeyRef.current = nextSnapshotKey;
+      setHistoryState(createThreadHistoryState(initialSnapshot));
       setIsLoadingOlder(false);
       pendingRestoreRef.current = null;
       return;
     }
 
-    setBaseSnapshot(initialSnapshot);
+    if (lastInitialSnapshotKeyRef.current === nextSnapshotKey) {
+      return;
+    }
+
+    lastInitialSnapshotKeyRef.current = nextSnapshotKey;
+    setHistoryState((currentState) =>
+      mergeThreadHistoryState({
+        mode: 'refresh-base',
+        snapshot: initialSnapshot,
+        state: currentState,
+      }).nextState,
+    );
   }, [conversationId, initialSnapshot]);
 
-  const mergedHistory = useMemo(
-    () => mergeHistorySnapshots(olderSnapshots, baseSnapshot),
-    [baseSnapshot, olderSnapshots],
-  );
   const senderNames = useMemo(
     () =>
       new Map(
-        mergedHistory.senderProfiles.map((profile, index) => [
+        Array.from(historyState.senderProfilesById.values()).map((profile, index) => [
           profile.userId,
           resolvePublicIdentityLabel(
             profile,
@@ -1031,30 +1148,20 @@ export function ThreadHistoryViewport({
           ),
         ] as const),
       ),
-    [language, mergedHistory.senderProfiles],
-  );
-  const messagesById = useMemo(
-    () =>
-      new Map(
-        mergedHistory.messages.map((message) => [message.id, message] as const),
-      ),
-    [mergedHistory.messages],
+    [historyState.senderProfilesById, language],
   );
   const timelineItems = useMemo(
     () =>
       buildTimelineItems({
         language,
         lastReadMessageSeq: currentReadMessageSeq,
-        messages: mergedHistory.messages,
+        messages: historyState.messages,
         t,
       }),
-    [currentReadMessageSeq, language, mergedHistory.messages, t],
+    [currentReadMessageSeq, historyState.messages, language, t],
   );
-  const oldestLoadedSeq = normalizeComparableMessageSeq(
-    mergedHistory.messages[0]?.seq ?? baseSnapshot.oldestMessageSeq,
-  );
-  const hasMoreOlder =
-    olderSnapshots[0]?.hasMoreOlder ?? baseSnapshot.hasMoreOlder;
+  const oldestLoadedSeq = historyState.oldestLoadedSeq;
+  const hasMoreOlder = historyState.hasMoreOlder;
 
   const loadOlderMessages = useCallback(async () => {
     if (isLoadingOlder || !hasMoreOlder || oldestLoadedSeq === null) {
@@ -1099,10 +1206,33 @@ export function ThreadHistoryViewport({
       const nextSnapshot =
         (await response.json()) as ThreadHistoryPageSnapshot;
 
-      setOlderSnapshots((currentSnapshots) => [
-        nextSnapshot,
-        ...currentSnapshots,
-      ]);
+      setHistoryState((currentState) => {
+        const { insertedMessageCount, nextState } = mergeThreadHistoryState({
+          mode: 'prepend-older',
+          snapshot: nextSnapshot,
+          state: currentState,
+        });
+
+        if (
+          insertedMessageCount > 0 ||
+          nextSnapshot.hasMoreOlder === false ||
+          !currentState.hasMoreOlder
+        ) {
+          return nextState;
+        }
+
+        console.warn('[chat-history]', 'older-page-cursor-stalled', {
+          beforeSeq: oldestLoadedSeq,
+          conversationId,
+          fetchedMessageCount: nextSnapshot.messages.length,
+          oldestMessageSeq: nextSnapshot.oldestMessageSeq,
+        });
+
+        return {
+          ...currentState,
+          hasMoreOlder: false,
+        };
+      });
     } catch (error) {
       console.error('[chat-history]', 'older-page-fetch-failed', {
         conversationId,
@@ -1141,7 +1271,7 @@ export function ThreadHistoryViewport({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [olderSnapshots]);
+  }, [historyState.messages]);
 
   return (
     <>
@@ -1197,7 +1327,7 @@ export function ThreadHistoryViewport({
           targetId="message-thread-scroll"
         />
       )}
-      {mergedHistory.messages.length === 0 ? (
+      {historyState.messages.length === 0 ? (
         <div className="chat-empty-state" aria-label={t.chat.noMessagesYet}>
           <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
         </div>
@@ -1235,19 +1365,19 @@ export function ThreadHistoryViewport({
                 activeDeleteMessageId={activeDeleteMessageId}
                 activeEditMessageId={activeEditMessageId}
                 activeSpaceId={activeSpaceId}
-                attachmentsByMessage={mergedHistory.attachmentsByMessage}
+                attachmentsByMessage={historyState.attachmentsByMessage}
                 conversationId={conversationId}
                 conversationKind={conversationKind}
                 currentUserId={currentUserId}
-                encryptedEnvelopesByMessage={mergedHistory.encryptedEnvelopesByMessage}
-                encryptedHistoryHintsByMessage={mergedHistory.encryptedHistoryHintsByMessage}
+                encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
+                encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
                 language={language}
                 latestVisibleMessageSeq={latestVisibleMessageSeq}
                 message={item.message}
-                messagesById={messagesById}
+                messagesById={historyState.messagesById}
                 otherParticipantReadSeq={otherParticipantReadSeq}
                 otherParticipantUserId={otherParticipantUserId}
-                reactionsByMessage={mergedHistory.reactionsByMessage}
+                reactionsByMessage={historyState.reactionsByMessage}
                 senderNames={senderNames}
                 threadClientDiagnostics={threadClientDiagnostics}
               />
