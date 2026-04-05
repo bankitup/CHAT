@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
+import {
+  getRequestSupabaseServerClient,
+  requireRequestViewer,
+} from '@/lib/request-context/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
@@ -4004,7 +4008,7 @@ export async function createConversationWithMembers(input: {
   title?: string | null;
   spaceId?: string | null;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
   const conversationId = crypto.randomUUID();
   const normalizedSpaceId = input.spaceId?.trim() || null;
 
@@ -4016,9 +4020,7 @@ export async function createConversationWithMembers(input: {
     throw new Error('Active space is required to create a conversation.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Conversation creation debug');
 
   if (!user) {
     throw new Error(
@@ -4185,15 +4187,13 @@ export async function updateCurrentUserProfile(input: {
   avatarFile?: File | null;
   removeAvatar?: boolean;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Authenticated user is required to update a profile.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Profile settings debug');
 
   if (!user?.id) {
     throw new Error('Profile settings debug: no authenticated user found.');
@@ -4330,15 +4330,13 @@ export async function updateCurrentUserProfile(input: {
 }
 
 export async function removeCurrentUserAvatar(userId: string) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!userId) {
     throw new Error('Authenticated user is required to update a profile.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Profile settings debug');
 
   if (!user?.id) {
     throw new Error('Profile settings debug: no authenticated user found.');
@@ -4411,15 +4409,13 @@ export async function updateCurrentUserLanguagePreference(input: {
   userId: string;
   preferredLanguage: AppLanguage;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Authenticated user is required to update language.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Language update debug');
 
   if (!user?.id) {
     throw new Error('Language update debug: no authenticated user found.');
@@ -4911,7 +4907,7 @@ export async function markConversationRead(input: {
   userId: string;
   lastReadMessageSeq: number;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Read state debug: authenticated user is required.');
@@ -4921,9 +4917,7 @@ export async function markConversationRead(input: {
     throw new Error('Read state debug: invalid last read message sequence.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Read state debug');
 
   if (!user?.id) {
     throw new Error('Read state debug: no authenticated user found.');
@@ -5029,15 +5023,13 @@ export async function hideConversationForUser(input: {
   conversationId: string;
   userId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Conversation archive debug: authenticated user is required.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Conversation archive debug');
 
   if (!user?.id) {
     throw new Error('Conversation archive debug: no authenticated user found.');
@@ -5105,15 +5097,11 @@ export async function deleteDirectConversationForUser(input: {
   conversationId: string;
   userId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
-
   if (!input.userId) {
     throw new Error('Direct chat delete requires an authenticated user.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Direct chat delete debug');
 
   if (!user?.id) {
     throw new Error('Direct chat delete debug: no authenticated user found.');
@@ -5256,15 +5244,13 @@ export async function restoreConversationForUser(input: {
   conversationId: string;
   userId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Conversation archive debug: authenticated user is required.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Conversation archive debug');
 
   if (!user?.id) {
     throw new Error('Conversation archive debug: no authenticated user found.');
@@ -5333,15 +5319,13 @@ export async function updateConversationNotificationLevel(input: {
   userId: string;
   notificationLevel: ConversationNotificationLevel;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Conversation notifications debug: authenticated user is required.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Conversation notifications debug');
 
   if (!user?.id) {
     throw new Error('Conversation notifications debug: no authenticated user found.');
@@ -5990,7 +5974,7 @@ async function createMessageRecord(input: {
   contentMode?: 'plaintext' | 'dm_e2ee_v1';
   senderDeviceId?: string | null;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
   const timestamp = new Date().toISOString();
   const clientId = input.clientId?.trim() || crypto.randomUUID();
   const messageId = crypto.randomUUID();
@@ -6001,9 +5985,7 @@ async function createMessageRecord(input: {
     );
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Message sending debug');
 
   if (!user) {
     throw new Error(
@@ -6078,16 +6060,14 @@ export async function editMessage(input: {
   senderId: string;
   body: string;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
   const timestamp = new Date().toISOString();
 
   if (!input.senderId) {
     throw new Error('Authenticated sender is required to edit a message.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Message edit debug');
 
   if (!user?.id) {
     throw new Error('Message edit debug: no authenticated user found.');
@@ -6136,16 +6116,14 @@ export async function softDeleteMessage(input: {
   conversationId: string;
   senderId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
   const timestamp = new Date().toISOString();
 
   if (!input.senderId) {
     throw new Error('Authenticated sender is required to delete a message.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Message delete debug');
 
   if (!user?.id) {
     throw new Error('Message delete debug: no authenticated user found.');
@@ -6189,15 +6167,13 @@ export async function updateConversationTitle(input: {
   userId: string;
   title: string;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Authenticated user is required to edit a group title.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Conversation settings debug');
 
   if (!user?.id) {
     throw new Error('Conversation settings debug: no authenticated user found.');
@@ -6234,15 +6210,13 @@ export async function updateConversationIdentity(input: {
   avatarFile?: File | null;
   removeAvatar?: boolean;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Authenticated user is required to edit group settings.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Conversation settings debug');
 
   if (!user?.id) {
     throw new Error('Conversation settings debug: no authenticated user found.');
@@ -6404,15 +6378,13 @@ export async function addParticipantsToGroupConversation(input: {
   ownerUserId: string;
   participantUserIds: string[];
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.ownerUserId) {
     throw new Error('Group management debug: authenticated owner is required.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Group management debug');
 
   if (!user?.id) {
     throw new Error('Group management debug: no authenticated user found.');
@@ -6511,15 +6483,13 @@ export async function removeParticipantFromGroupConversation(input: {
   ownerUserId: string;
   targetUserId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.ownerUserId) {
     throw new Error('Group management debug: authenticated owner is required.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Group management debug');
 
   if (!user?.id) {
     throw new Error('Group management debug: no authenticated user found.');
@@ -6577,15 +6547,13 @@ export async function leaveGroupConversation(input: {
   conversationId: string;
   userId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
 
   if (!input.userId) {
     throw new Error('Group leave debug: authenticated user is required.');
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireRequestViewer('Group leave debug');
 
   if (!user?.id) {
     throw new Error('Group leave debug: no authenticated user found.');

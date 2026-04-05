@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestViewer } from '@/lib/request-context/server';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { AppShellFrame } from './app-shell-frame';
@@ -9,16 +9,15 @@ export default async function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [user, language] = await Promise.all([
+    getRequestViewer(),
+    getRequestLanguage(),
+  ]);
 
   if (!user) {
     redirect('/login');
   }
 
-  const language = await getRequestLanguage();
   const dmE2eeEnabled = isDmE2eeEnabledForUser(user.id, user.email ?? null, {
     source: 'app-layout',
   });

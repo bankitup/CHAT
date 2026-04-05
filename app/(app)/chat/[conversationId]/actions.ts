@@ -2,7 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import {
+  getRequestSupabaseServerClient,
+  getRequestViewer,
+} from '@/lib/request-context/server';
 import {
   addParticipantsToGroupConversation,
   assertConversationExists,
@@ -300,10 +303,7 @@ export async function sendMessageMutationAction(
     };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     return {
@@ -434,10 +434,7 @@ export async function toggleReactionMutationAction(
     };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     return {
@@ -507,10 +504,10 @@ export async function editMessageMutationAction(
     };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [supabase, user] = await Promise.all([
+    getRequestSupabaseServerClient(),
+    getRequestViewer(),
+  ]);
 
   if (!user?.id) {
     return {
@@ -602,10 +599,7 @@ export async function markConversationReadMutationAction(input: {
     };
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     return {
@@ -679,10 +673,7 @@ export async function sendMessageAction(formData: FormData) {
     redirectWithError(conversationId, CHAT_ATTACHMENT_HELP_TEXT, spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user) {
     redirectWithError(conversationId, 'Please log in and try again.', spaceId);
@@ -802,10 +793,7 @@ export async function toggleReactionAction(formData: FormData) {
     redirectWithError(conversationId, 'Invalid reaction.', spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user) {
     redirect('/login');
@@ -863,10 +851,10 @@ export async function editMessageAction(formData: FormData) {
     redirectWithError(conversationId, 'Edited message cannot be empty.', spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [supabase, user] = await Promise.all([
+    getRequestSupabaseServerClient(),
+    getRequestViewer(),
+  ]);
 
   if (!user?.id) {
     redirectWithError(conversationId, 'Please log in and try again.', spaceId);
@@ -950,10 +938,7 @@ export async function deleteMessageAction(formData: FormData) {
     redirectWithError(conversationId, 'Confirm deletion before removing a message.', spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithError(conversationId, 'Please log in and try again.', spaceId);
@@ -1013,10 +998,7 @@ export async function updateConversationTitleAction(formData: FormData) {
     );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithSettingsError(
@@ -1083,10 +1065,7 @@ export async function updateConversationIdentityAction(formData: FormData) {
     );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithSettingsError(
@@ -1142,10 +1121,7 @@ export async function hideConversationAction(formData: FormData) {
     redirectToInbox(spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirect('/login');
@@ -1203,10 +1179,7 @@ export async function deleteDirectConversationAction(formData: FormData) {
     );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirect('/login');
@@ -1267,10 +1240,7 @@ export async function updateConversationNotificationLevelAction(
     );
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirect('/login');
@@ -1318,10 +1288,7 @@ export async function markConversationReadAction(formData: FormData) {
     return;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     return;
@@ -1364,10 +1331,7 @@ export async function addGroupParticipantsAction(formData: FormData) {
     redirectToInbox(spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
@@ -1416,10 +1380,7 @@ export async function removeGroupParticipantAction(formData: FormData) {
     redirectToInbox(spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
@@ -1467,10 +1428,7 @@ export async function leaveGroupAction(formData: FormData) {
     redirectToInbox(spaceId);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);

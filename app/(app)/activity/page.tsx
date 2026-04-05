@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestViewer } from '@/lib/request-context/server';
 import {
   getLocaleForLanguage,
   getTranslations,
@@ -134,10 +134,10 @@ function buildInboxHref(input: {
 
 export default async function ActivityPage({ searchParams }: ActivityPageProps) {
   const query = await searchParams;
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [user, language] = await Promise.all([
+    getRequestViewer(),
+    getRequestLanguage(),
+  ]);
 
   if (!user?.id) {
     return null;
@@ -199,7 +199,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     redirect('/spaces');
   }
 
-  const language = await getRequestLanguage();
   const t = getTranslations(language);
   const [conversations, archivedConversations]: [
     InboxConversation[],

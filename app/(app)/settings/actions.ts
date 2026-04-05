@@ -4,7 +4,7 @@ import { getTranslations, normalizeLanguage } from '@/modules/i18n';
 import { getRequestLanguage, setLanguageCookie } from '@/modules/i18n/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestViewer } from '@/lib/request-context/server';
 import {
   removeCurrentUserAvatar,
   updateCurrentUserLanguagePreference,
@@ -59,10 +59,7 @@ export async function updateProfileAction(formData: FormData) {
   const avatarFile =
     avatarEntry instanceof File && avatarEntry.size > 0 ? avatarEntry : null;
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithMessage('error', t.login.managedAccess);
@@ -97,10 +94,7 @@ export async function updateProfileAction(formData: FormData) {
 export async function removeAvatarAction() {
   const language = await getRequestLanguage();
   const t = getTranslations(language);
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithMessage('error', t.login.managedAccess);
@@ -131,10 +125,7 @@ export async function updateLanguagePreferenceAction(formData: FormData) {
     String(formData.get('preferredLanguage') ?? '').trim(),
   );
   const t = getTranslations(preferredLanguage);
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user?.id) {
     redirectWithMessage('error', t.login.managedAccess);

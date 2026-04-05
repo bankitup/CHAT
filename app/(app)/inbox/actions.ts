@@ -2,7 +2,7 @@
 
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestViewer } from '@/lib/request-context/server';
 import {
   createConversationWithMembers,
   findExistingActiveDmConversation,
@@ -60,10 +60,7 @@ function readSelectedIds(formData: FormData, key: string) {
 }
 
 async function getAuthenticatedUserId() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user) {
     throw new Error('You must be logged in to create a conversation.');

@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestViewer } from '@/lib/request-context/server';
 import {
   formatMemberCount,
   formatPersonFallbackLabel,
@@ -326,11 +326,8 @@ export default async function ChatPage({
 }: ChatPageProps) {
   const { conversationId } = await params;
   const query = await searchParams;
-  const supabase = await createSupabaseServerClient();
   const languagePromise = getRequestLanguage();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestViewer();
 
   if (!user) {
     notFound();

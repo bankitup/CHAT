@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import type { SpaceRecord, SpaceRole } from './model';
 
 export type UserSpaceRecord = SpaceRecord & {
@@ -89,7 +89,7 @@ export async function resolveV1TestSpaceFallback(input: {
     return null;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
   logSpacesDiagnostics('v1-test-fallback:lookup-start', {
     source: input.source ?? 'unknown',
     hasRequestedSpaceId: true,
@@ -135,7 +135,7 @@ export async function getUserSpaces(
     source?: string;
   },
 ) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getRequestSupabaseServerClient();
   const source = options?.source ?? 'unknown';
   logSpacesDiagnostics('getUserSpaces:start', { source });
   logSpacesDiagnostics('space_members:query-start', {

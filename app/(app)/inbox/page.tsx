@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getRequestViewer } from '@/lib/request-context/server';
 import {
   getLocaleForLanguage,
   getTranslations,
@@ -250,10 +250,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const isPrimaryChatsView = activeView === 'main';
   const isDmFilter = activeFilter === 'dm';
   const isCreateOpen = query.create === 'open';
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [user, language] = await Promise.all([
+    getRequestViewer(),
+    getRequestLanguage(),
+  ]);
 
   if (!user) {
     logDiagnostics('no-user');
@@ -318,7 +318,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   }
   logDiagnostics('active-space-ok', { hasActiveSpace: true });
 
-  const language = await getRequestLanguage();
   const t = getTranslations(language);
   const visibleError = query.error
     ? sanitizeUserFacingErrorMessage({

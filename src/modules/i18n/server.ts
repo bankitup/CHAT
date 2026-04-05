@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import {
   DEFAULT_LANGUAGE,
@@ -8,9 +9,13 @@ import {
   normalizeLanguage,
 } from './index';
 
-export async function getCookieLanguage() {
+const getCookieLanguageCached = cache(async () => {
   const cookieStore = await cookies();
   return normalizeLanguage(cookieStore.get(LANGUAGE_COOKIE_NAME)?.value);
+});
+
+export async function getCookieLanguage() {
+  return getCookieLanguageCached();
 }
 
 export async function setLanguageCookie(language: AppLanguage) {
@@ -27,6 +32,6 @@ export async function getRequestLanguage(fallback?: string | null) {
     return normalizeLanguage(fallback);
   }
 
-  const cookieLanguage = await getCookieLanguage();
+  const cookieLanguage = await getCookieLanguageCached();
   return cookieLanguage ?? DEFAULT_LANGUAGE;
 }
