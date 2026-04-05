@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useSyncExternalStore } from 'react';
+import { memo, useEffect, useSyncExternalStore } from 'react';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getInboxConversationSummarySnapshot,
@@ -120,6 +120,47 @@ function formatRecency(value: string | null, language: 'en' | 'ru', yesterdayLab
   }).format(target);
 }
 
+type InboxConversationAvatarVisualProps = {
+  groupAvatarPath: string | null;
+  isGroupConversation: boolean;
+  isPrimaryChatsView: boolean;
+  participant:
+    | {
+        userId: string;
+        displayName: string | null;
+        avatarPath?: string | null;
+      }
+    | null;
+  title: string;
+};
+
+const InboxConversationAvatarVisual = memo(function InboxConversationAvatarVisual({
+  groupAvatarPath,
+  isGroupConversation,
+  isPrimaryChatsView,
+  participant,
+  title,
+}: InboxConversationAvatarVisualProps) {
+  if (isGroupConversation) {
+    return (
+      <GroupIdentityAvatar
+        avatarPath={groupAvatarPath}
+        label={title}
+        size={isPrimaryChatsView ? 'lg' : 'md'}
+      />
+    );
+  }
+
+  return (
+    <IdentityAvatar
+      diagnosticsSurface="inbox:conversation-row-live"
+      identity={participant}
+      label={title}
+      size={isPrimaryChatsView ? 'lg' : 'md'}
+    />
+  );
+});
+
 export function InboxConversationLiveRow({
   activeSpaceId,
   currentUserId,
@@ -215,20 +256,13 @@ export function InboxConversationLiveRow({
           }
           prefetch={false}
         >
-          {item.isGroupConversation ? (
-            <GroupIdentityAvatar
-              avatarPath={item.groupAvatarPath}
-              label={item.title}
-              size={isPrimaryChatsView ? 'lg' : 'md'}
-            />
-          ) : (
-            <IdentityAvatar
-              diagnosticsSurface="inbox:conversation-row-live"
-              identity={item.participant}
-              label={item.title}
-              size={isPrimaryChatsView ? 'lg' : 'md'}
-            />
-          )}
+          <InboxConversationAvatarVisual
+            groupAvatarPath={item.groupAvatarPath}
+            isGroupConversation={item.isGroupConversation}
+            isPrimaryChatsView={isPrimaryChatsView}
+            participant={item.participant}
+            title={item.title}
+          />
 
           <div
             className={

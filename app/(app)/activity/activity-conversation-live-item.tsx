@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useSyncExternalStore } from 'react';
+import { memo, useEffect, useSyncExternalStore } from 'react';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getInboxConversationSummarySnapshot,
@@ -123,6 +123,39 @@ function formatActivityTimestamp(value: string | null, language: 'en' | 'ru', no
   }).format(target);
 }
 
+type ActivityConversationAvatarVisualProps = {
+  groupAvatarPath: string | null;
+  isGroupConversation: boolean;
+  primaryParticipant:
+    | {
+        userId: string;
+        displayName: string | null;
+        avatarPath?: string | null;
+      }
+    | null;
+  title: string;
+};
+
+const ActivityConversationAvatarVisual = memo(function ActivityConversationAvatarVisual({
+  groupAvatarPath,
+  isGroupConversation,
+  primaryParticipant,
+  title,
+}: ActivityConversationAvatarVisualProps) {
+  if (isGroupConversation) {
+    return <GroupIdentityAvatar avatarPath={groupAvatarPath} label={title} size="sm" />;
+  }
+
+  return (
+    <IdentityAvatar
+      diagnosticsSurface="activity:conversation-live-avatar"
+      identity={primaryParticipant}
+      label={title}
+      size="sm"
+    />
+  );
+});
+
 export function ActivityConversationLiveItem({
   activeSpaceId,
   initialSummary,
@@ -178,20 +211,12 @@ export function ActivityConversationLiveItem({
       }
       prefetch={false}
     >
-      {item.isGroupConversation ? (
-        <GroupIdentityAvatar
-          avatarPath={item.groupAvatarPath}
-          label={item.title}
-          size="sm"
-        />
-      ) : (
-        <IdentityAvatar
-          diagnosticsSurface={`activity:${item.variant}-item-live`}
-          identity={item.primaryParticipant}
-          label={item.title}
-          size="sm"
-        />
-      )}
+      <ActivityConversationAvatarVisual
+        groupAvatarPath={item.groupAvatarPath}
+        isGroupConversation={item.isGroupConversation}
+        primaryParticipant={item.primaryParticipant}
+        title={item.title}
+      />
 
       <div className="stack activity-item-copy">
         <div className="activity-item-title-row">

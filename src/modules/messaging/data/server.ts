@@ -4,6 +4,10 @@ import { cookies } from 'next/headers';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
+import {
+  buildAvatarDeliveryPath,
+  isAbsoluteAvatarUrl,
+} from '@/modules/messaging/avatar-delivery';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import { DM_E2EE_CURRENT_DEVICE_COOKIE } from '@/modules/messaging/e2ee/current-device-cookie';
 import {
@@ -1912,14 +1916,6 @@ function sanitizeProfileFileName(value: string) {
     .toLowerCase();
 }
 
-function isAbsoluteAvatarUrl(value: string | null | undefined) {
-  if (!value) {
-    return false;
-  }
-
-  return value.startsWith('https://') || value.startsWith('http://');
-}
-
 function isManagedAvatarObjectPath(
   userId: string,
   value: string | null | undefined,
@@ -1960,22 +1956,10 @@ function getAvatarBucketRequirementErrorMessage() {
   return 'Avatar uploads are not available right now.';
 }
 
-const PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
 const avatarDiagnosticsEnabled = process.env.CHAT_DEBUG_AVATARS === '1';
-const AVATAR_SIGNED_URL_CACHE_TTL_MS =
-  (PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS - 60) * 1000;
-const avatarSignedUrlCache = new Map<
-  string,
-  {
-    source: 'auth' | 'service';
-    url: string;
-    expiresAt: number;
-  }
->();
-const avatarSignedUrlInflight = new Map<string, Promise<string | null>>();
 
 async function resolveStoredAvatarPath(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  _supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   value: string | null | undefined,
 ) {
   const normalizedValue = value?.trim() || null;
@@ -1988,95 +1972,22 @@ async function resolveStoredAvatarPath(
     return normalizedValue;
   }
 
-  const cached = avatarSignedUrlCache.get(normalizedValue);
+  const deliveryPath = buildAvatarDeliveryPath(normalizedValue);
 
-  if (cached && cached.expiresAt > Date.now()) {
-    if (avatarDiagnosticsEnabled) {
-      console.info('[avatar-storage]', {
-        issue: 'signed-url-cache-hit',
-        bucket: PROFILE_AVATAR_BUCKET,
-        objectPath: normalizedValue,
-        source: cached.source,
-      });
-    }
-    return cached.url;
+  if (!deliveryPath) {
+    return null;
   }
 
-  const inflight = avatarSignedUrlInflight.get(normalizedValue);
-
-  if (inflight) {
-    return inflight;
-  }
-
-  const nextLookup = (async () => {
-    const signed = await supabase.storage
-      .from(PROFILE_AVATAR_BUCKET)
-      .createSignedUrl(normalizedValue, PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS);
-
-    if (!signed.error) {
-      if (avatarDiagnosticsEnabled) {
-        console.info('[avatar-storage]', {
-          issue: 'signed-url-auth-ok',
-          bucket: PROFILE_AVATAR_BUCKET,
-          objectPath: normalizedValue,
-        });
-      }
-      avatarSignedUrlCache.set(normalizedValue, {
-        source: 'auth',
-        url: signed.data.signedUrl,
-        expiresAt: Date.now() + AVATAR_SIGNED_URL_CACHE_TTL_MS,
-      });
-      return signed.data.signedUrl;
-    }
-
-    const serviceSupabase = createSupabaseServiceRoleClient();
-
-    if (serviceSupabase) {
-      const serviceSigned = await serviceSupabase.storage
-        .from(PROFILE_AVATAR_BUCKET)
-        .createSignedUrl(normalizedValue, PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS);
-
-      if (!serviceSigned.error) {
-        if (avatarDiagnosticsEnabled) {
-          console.info('[avatar-storage]', {
-            issue: 'signed-url-service-fallback',
-            bucket: PROFILE_AVATAR_BUCKET,
-            objectPath: normalizedValue,
-          });
-        }
-        avatarSignedUrlCache.set(normalizedValue, {
-          source: 'service',
-          url: serviceSigned.data.signedUrl,
-          expiresAt: Date.now() + AVATAR_SIGNED_URL_CACHE_TTL_MS,
-        });
-        return serviceSigned.data.signedUrl;
-      }
-
-      console.error('[avatar-storage]', {
-        issue: 'signed-url-service-failed',
-        bucket: PROFILE_AVATAR_BUCKET,
-        objectPath: normalizedValue,
-        message: serviceSigned.error.message,
-      });
-    }
-
-    console.error('[avatar-storage]', {
-      issue: 'signed-url-failed',
+  if (avatarDiagnosticsEnabled) {
+    console.info('[avatar-storage]', {
+      issue: 'stable-delivery-path',
       bucket: PROFILE_AVATAR_BUCKET,
       objectPath: normalizedValue,
-      message: signed.error.message,
+      url: deliveryPath,
     });
-
-    return null;
-  })();
-
-  avatarSignedUrlInflight.set(normalizedValue, nextLookup);
-
-  try {
-    return await nextLookup;
-  } finally {
-    avatarSignedUrlInflight.delete(normalizedValue);
   }
+
+  return deliveryPath;
 }
 
 function getAttachmentFileName(objectPath: string) {

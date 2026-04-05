@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 export { getIdentityLabel } from './identity-label';
 
 const AVATAR_RETRY_MAX_ATTEMPTS = 2;
@@ -106,7 +106,22 @@ export function getIdentityInitials(label: string) {
   return words.map((word) => word[0]?.toUpperCase() ?? '').join('');
 }
 
-export function IdentityAvatar({
+function areIdentityAvatarPropsEqual(
+  previous: IdentityAvatarProps,
+  next: IdentityAvatarProps,
+) {
+  return (
+    previous.label === next.label &&
+    previous.size === next.size &&
+    previous.className === next.className &&
+    previous.diagnosticsSurface === next.diagnosticsSurface &&
+    previous.identity?.userId === next.identity?.userId &&
+    previous.identity?.displayName === next.identity?.displayName &&
+    previous.identity?.avatarPath === next.identity?.avatarPath
+  );
+}
+
+function IdentityAvatarBase({
   identity,
   label,
   size = 'md',
@@ -302,6 +317,11 @@ export function IdentityAvatar({
   );
 }
 
+export const IdentityAvatar = memo(
+  IdentityAvatarBase,
+  areIdentityAvatarPropsEqual,
+);
+
 export function IdentityAvatarStack({
   identities,
   labels,
@@ -325,7 +345,7 @@ export function IdentityAvatarStack({
   );
 }
 
-export function GroupIdentityAvatar({
+function GroupIdentityAvatarBase({
   label,
   avatarPath,
   size = 'md',
@@ -365,3 +385,12 @@ export function GroupIdentityAvatar({
     </span>
   );
 }
+
+export const GroupIdentityAvatar = memo(
+  GroupIdentityAvatarBase,
+  (previous, next) =>
+    previous.label === next.label &&
+    previous.avatarPath === next.avatarPath &&
+    previous.size === next.size &&
+    previous.className === next.className,
+);
