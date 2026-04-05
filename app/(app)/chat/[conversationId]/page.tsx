@@ -64,6 +64,8 @@ import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
+import { DmThreadClientSubtree } from './dm-thread-client-diagnostics';
+import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
 import { ProgressiveHistoryLoader } from './progressive-history-loader';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
@@ -998,11 +1000,43 @@ export default async function ChatPage({
 
   return (
     <section className="stack chat-screen">
-      <ActiveChatRealtimeSync
-        conversationId={conversationId}
-        messageIds={messages.map((message) => message.id)}
-      />
-      <ComposerKeyboardOffset />
+      {conversation.kind === 'dm' ? (
+        <DmThreadHydrationProbe
+          conversationId={conversationId}
+          debugRequestId={threadRenderRequestId}
+          firstMessageId={firstMessage?.id ?? null}
+          historyWindowLimit={threadHistoryLimit}
+          initialServerMessageCount={messages.length}
+          kind="dm"
+          renderedEmptyState={messages.length === 0}
+        />
+      ) : null}
+      {conversation.kind === 'dm' ? (
+        <DmThreadClientSubtree
+          conversationId={conversationId}
+          surface="active-chat-realtime-sync"
+        >
+          <ActiveChatRealtimeSync
+            conversationId={conversationId}
+            messageIds={messages.map((message) => message.id)}
+          />
+        </DmThreadClientSubtree>
+      ) : (
+        <ActiveChatRealtimeSync
+          conversationId={conversationId}
+          messageIds={messages.map((message) => message.id)}
+        />
+      )}
+      {conversation.kind === 'dm' ? (
+        <DmThreadClientSubtree
+          conversationId={conversationId}
+          surface="composer-keyboard-offset"
+        >
+          <ComposerKeyboardOffset />
+        </DmThreadClientSubtree>
+      ) : (
+        <ComposerKeyboardOffset />
+      )}
 
       <section className="stack chat-header-stack" id="chat-header-shell">
         <Link
@@ -1046,12 +1080,17 @@ export default async function ChatPage({
               {conversation.kind === 'group' ? (
                 <p className="muted chat-member-summary">{groupMemberSummary}</p>
               ) : otherParticipants[0] ? (
-                <ConversationPresenceStatus
+                <DmThreadClientSubtree
                   conversationId={conversationId}
-                  currentUserId={user.id}
-                  language={language}
-                  otherUserId={otherParticipants[0].userId}
-                />
+                  surface="conversation-presence-status"
+                >
+                  <ConversationPresenceStatus
+                    conversationId={conversationId}
+                    currentUserId={user.id}
+                    language={language}
+                    otherUserId={otherParticipants[0].userId}
+                  />
+                </DmThreadClientSubtree>
               ) : null}
             </div>
           </div>
@@ -1067,32 +1106,67 @@ export default async function ChatPage({
 
       <section className="chat-main">
         <section className="message-thread" id="message-thread-scroll">
-          <ProgressiveHistoryLoader
-            conversationId={conversationId}
-            currentLimit={threadHistoryLimit}
-            hasMoreOlder={hasMoreOlder}
-            idleLabel={t.chat.olderMessagesAutoLoad}
-            loadingLabel={t.chat.loadingOlderMessages}
-            pageSize={THREAD_HISTORY_PAGE_SIZE}
-            targetId="message-thread-scroll"
-          />
-          <AutoScrollToLatest
-            bottomSentinelId="message-thread-bottom-sentinel"
-            conversationId={conversationId}
-            latestVisibleMessageSeq={latestVisibleMessageSeq}
-            targetId="message-thread-scroll"
-          />
+          {conversation.kind === 'dm' ? (
+            <DmThreadClientSubtree
+              conversationId={conversationId}
+              surface="progressive-history-loader"
+            >
+              <ProgressiveHistoryLoader
+                conversationId={conversationId}
+                currentLimit={threadHistoryLimit}
+                hasMoreOlder={hasMoreOlder}
+                idleLabel={t.chat.olderMessagesAutoLoad}
+                loadingLabel={t.chat.loadingOlderMessages}
+                pageSize={THREAD_HISTORY_PAGE_SIZE}
+                targetId="message-thread-scroll"
+              />
+            </DmThreadClientSubtree>
+          ) : (
+            <ProgressiveHistoryLoader
+              conversationId={conversationId}
+              currentLimit={threadHistoryLimit}
+              hasMoreOlder={hasMoreOlder}
+              idleLabel={t.chat.olderMessagesAutoLoad}
+              loadingLabel={t.chat.loadingOlderMessages}
+              pageSize={THREAD_HISTORY_PAGE_SIZE}
+              targetId="message-thread-scroll"
+            />
+          )}
+          {conversation.kind === 'dm' ? (
+            <DmThreadClientSubtree
+              conversationId={conversationId}
+              surface="auto-scroll-to-latest"
+            >
+              <AutoScrollToLatest
+                bottomSentinelId="message-thread-bottom-sentinel"
+                conversationId={conversationId}
+                latestVisibleMessageSeq={latestVisibleMessageSeq}
+                targetId="message-thread-scroll"
+              />
+            </DmThreadClientSubtree>
+          ) : (
+            <AutoScrollToLatest
+              bottomSentinelId="message-thread-bottom-sentinel"
+              conversationId={conversationId}
+              latestVisibleMessageSeq={latestVisibleMessageSeq}
+              targetId="message-thread-scroll"
+            />
+          )}
           {messages.length === 0 ? (
             <div className="chat-empty-state" aria-label={t.chat.noMessagesYet}>
               <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
             </div>
           ) : otherParticipantUserId ? (
-            <ConversationPresenceProvider
+            <DmThreadClientSubtree
               conversationId={conversationId}
-              currentUserId={user.id}
-              otherUserId={otherParticipantUserId}
+              surface="conversation-presence-provider"
             >
-              {timelineItems.map((item) => {
+              <ConversationPresenceProvider
+                conversationId={conversationId}
+                currentUserId={user.id}
+                otherUserId={otherParticipantUserId}
+              >
+                {timelineItems.map((item) => {
                 if (item.type === 'separator') {
                   return (
                     <div
@@ -1343,23 +1417,29 @@ export default async function ChatPage({
                           </div>
                         ) : isEncryptedDmTextMessage(message) ? (
                           canAttemptEncryptedRender ? (
-                            <EncryptedDmMessageBody
-                              clientId={message.client_id}
+                            <DmThreadClientSubtree
                               conversationId={conversationId}
-                              currentUserId={user.id}
-                              envelope={encryptedEnvelope}
-                              fallbackLabel={t.chat.encryptedMessage}
-                              refreshSetupLabel={t.chat.refreshEncryptedSetup}
-                              reloadConversationLabel={t.chat.reloadConversation}
-                              retryLabel={t.chat.retryEncryptedAction}
-                              setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
-                              unavailableLabel={t.chat.encryptedMessageUnavailable}
                               messageId={message.id}
-                              messageCreatedAt={message.created_at}
-                              shouldCachePreview={
-                                conversation.kind === 'dm' && isLatestConversationMessage
-                              }
-                            />
+                              surface="encrypted-dm-message-body"
+                            >
+                              <EncryptedDmMessageBody
+                                clientId={message.client_id}
+                                conversationId={conversationId}
+                                currentUserId={user.id}
+                                envelope={encryptedEnvelope}
+                                fallbackLabel={t.chat.encryptedMessage}
+                                refreshSetupLabel={t.chat.refreshEncryptedSetup}
+                                reloadConversationLabel={t.chat.reloadConversation}
+                                retryLabel={t.chat.retryEncryptedAction}
+                                setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
+                                unavailableLabel={t.chat.encryptedMessageUnavailable}
+                                messageId={message.id}
+                                messageCreatedAt={message.created_at}
+                                shouldCachePreview={
+                                  conversation.kind === 'dm' && isLatestConversationMessage
+                                }
+                              />
+                            </DmThreadClientSubtree>
                           ) : (
                             <div className="message-encryption-state">
                               <p className="message-body">
@@ -1475,14 +1555,20 @@ export default async function ChatPage({
                           </span>
                         ) : null}
                         {isOwnMessage && outgoingMessageStatus ? (
-                          <LiveOutgoingMessageStatus
-                            labels={{
-                              delivered: t.chat.delivered,
-                              seen: t.chat.seen,
-                              sent: t.chat.sent,
-                            }}
-                            status={outgoingMessageStatus}
-                          />
+                          <DmThreadClientSubtree
+                            conversationId={conversationId}
+                            messageId={message.id}
+                            surface="live-outgoing-message-status"
+                          >
+                            <LiveOutgoingMessageStatus
+                              labels={{
+                                delivered: t.chat.delivered,
+                                seen: t.chat.seen,
+                                sent: t.chat.sent,
+                              }}
+                              status={outgoingMessageStatus}
+                            />
+                          </DmThreadClientSubtree>
                         ) : null}
                       </span>
 
@@ -1558,8 +1644,9 @@ export default async function ChatPage({
                     </div>
                   </article>
                 );
-              })}
-            </ConversationPresenceProvider>
+                })}
+              </ConversationPresenceProvider>
+            </DmThreadClientSubtree>
           ) : (
             timelineItems.map((item) => {
               if (item.type === 'separator') {
@@ -1812,23 +1899,29 @@ export default async function ChatPage({
                           </div>
                         ) : isEncryptedDmTextMessage(message) ? (
                           canAttemptEncryptedRender ? (
-                            <EncryptedDmMessageBody
-                              clientId={message.client_id}
+                            <DmThreadClientSubtree
                               conversationId={conversationId}
-                              currentUserId={user.id}
-                              envelope={encryptedEnvelope}
-                              fallbackLabel={t.chat.encryptedMessage}
-                              refreshSetupLabel={t.chat.refreshEncryptedSetup}
-                              reloadConversationLabel={t.chat.reloadConversation}
-                              retryLabel={t.chat.retryEncryptedAction}
-                              setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
-                              unavailableLabel={t.chat.encryptedMessageUnavailable}
                               messageId={message.id}
-                              messageCreatedAt={message.created_at}
-                              shouldCachePreview={
-                                conversation.kind === 'dm' && isLatestConversationMessage
-                              }
-                            />
+                              surface="encrypted-dm-message-body"
+                            >
+                              <EncryptedDmMessageBody
+                                clientId={message.client_id}
+                                conversationId={conversationId}
+                                currentUserId={user.id}
+                                envelope={encryptedEnvelope}
+                                fallbackLabel={t.chat.encryptedMessage}
+                                refreshSetupLabel={t.chat.refreshEncryptedSetup}
+                                reloadConversationLabel={t.chat.reloadConversation}
+                                retryLabel={t.chat.retryEncryptedAction}
+                                setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
+                                unavailableLabel={t.chat.encryptedMessageUnavailable}
+                                messageId={message.id}
+                                messageCreatedAt={message.created_at}
+                                shouldCachePreview={
+                                  conversation.kind === 'dm' && isLatestConversationMessage
+                                }
+                              />
+                            </DmThreadClientSubtree>
                           ) : (
                             <div className="message-encryption-state">
                               <p className="message-body">
@@ -1945,14 +2038,20 @@ export default async function ChatPage({
                         ) : null}
                         {isOwnMessage && outgoingMessageStatus ? (
                           otherParticipantUserId ? (
-                            <LiveOutgoingMessageStatus
-                              labels={{
-                                delivered: t.chat.delivered,
-                                seen: t.chat.seen,
-                                sent: t.chat.sent,
-                              }}
-                              status={outgoingMessageStatus}
-                            />
+                            <DmThreadClientSubtree
+                              conversationId={conversationId}
+                              messageId={message.id}
+                              surface="live-outgoing-message-status"
+                            >
+                              <LiveOutgoingMessageStatus
+                                labels={{
+                                  delivered: t.chat.delivered,
+                                  seen: t.chat.seen,
+                                  sent: t.chat.sent,
+                                }}
+                                status={outgoingMessageStatus}
+                              />
+                            </DmThreadClientSubtree>
                           ) : (
                             <MessageStatusIndicator
                               label={
@@ -2040,37 +2139,89 @@ export default async function ChatPage({
               );
             })
           )}
-          <OptimisticThreadMessages
-            confirmedClientIds={messages
-              .map((message) => message.client_id ?? null)
-              .filter((clientId): clientId is string => Boolean(clientId))}
-            conversationId={conversationId}
-            labels={{
-              failed: t.chat.sendFailed,
-              justNow: t.chat.justNow,
-              retry: t.chat.retrySend,
-              sending: t.chat.sending,
-              sent: t.chat.sent,
-            }}
-          />
-          <MarkConversationRead
-            bottomSentinelId="message-thread-bottom-sentinel"
-            conversationId={conversationId}
-            currentReadMessageSeq={readState.lastReadMessageSeq}
-            latestVisibleMessageSeq={
-              latestVisibleMessageSeq !== null && Number.isFinite(latestVisibleMessageSeq)
-                ? latestVisibleMessageSeq
-                : null
-            }
-          />
+          {conversation.kind === 'dm' ? (
+            <DmThreadClientSubtree
+              conversationId={conversationId}
+              surface="optimistic-thread-messages"
+            >
+              <OptimisticThreadMessages
+                confirmedClientIds={messages
+                  .map((message) => message.client_id ?? null)
+                  .filter((clientId): clientId is string => Boolean(clientId))}
+                conversationId={conversationId}
+                labels={{
+                  failed: t.chat.sendFailed,
+                  justNow: t.chat.justNow,
+                  retry: t.chat.retrySend,
+                  sending: t.chat.sending,
+                  sent: t.chat.sent,
+                }}
+              />
+            </DmThreadClientSubtree>
+          ) : (
+            <OptimisticThreadMessages
+              confirmedClientIds={messages
+                .map((message) => message.client_id ?? null)
+                .filter((clientId): clientId is string => Boolean(clientId))}
+              conversationId={conversationId}
+              labels={{
+                failed: t.chat.sendFailed,
+                justNow: t.chat.justNow,
+                retry: t.chat.retrySend,
+                sending: t.chat.sending,
+                sent: t.chat.sent,
+              }}
+            />
+          )}
+          {conversation.kind === 'dm' ? (
+            <DmThreadClientSubtree
+              conversationId={conversationId}
+              surface="mark-conversation-read"
+            >
+              <MarkConversationRead
+                bottomSentinelId="message-thread-bottom-sentinel"
+                conversationId={conversationId}
+                currentReadMessageSeq={readState.lastReadMessageSeq}
+                latestVisibleMessageSeq={
+                  latestVisibleMessageSeq !== null && Number.isFinite(latestVisibleMessageSeq)
+                    ? latestVisibleMessageSeq
+                    : null
+                }
+              />
+            </DmThreadClientSubtree>
+          ) : (
+            <MarkConversationRead
+              bottomSentinelId="message-thread-bottom-sentinel"
+              conversationId={conversationId}
+              currentReadMessageSeq={readState.lastReadMessageSeq}
+              latestVisibleMessageSeq={
+                latestVisibleMessageSeq !== null && Number.isFinite(latestVisibleMessageSeq)
+                  ? latestVisibleMessageSeq
+                  : null
+              }
+            />
+          )}
         </section>
 
         <section className="stack composer-card" id="message-composer">
-          <TypingIndicator
-            conversationId={conversationId}
-            currentUserId={user.id}
-            language={language}
-          />
+          {conversation.kind === 'dm' ? (
+            <DmThreadClientSubtree
+              conversationId={conversationId}
+              surface="typing-indicator"
+            >
+              <TypingIndicator
+                conversationId={conversationId}
+                currentUserId={user.id}
+                language={language}
+              />
+            </DmThreadClientSubtree>
+          ) : (
+            <TypingIndicator
+              conversationId={conversationId}
+              currentUserId={user.id}
+              language={language}
+            />
+          )}
           {activeReplyTarget ? (
             <div className="composer-reply-preview">
               <div className="stack composer-reply-copy">
@@ -2107,23 +2258,28 @@ export default async function ChatPage({
             </div>
           ) : null}
           {conversation.kind === 'dm' ? (
-            <EncryptedDmComposerForm
-              action={sendMessageAction}
-              accept={CHAT_ATTACHMENT_ACCEPT}
-              attachmentHelpText={attachmentHelpText}
-              attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
-              attachmentMaxSizeLabel={attachmentMaxSizeLabel}
+            <DmThreadClientSubtree
               conversationId={conversationId}
-              currentUserId={user.id}
-              currentUserLabel={currentUserDisplayLabel}
-              encryptedDmEnabled={encryptedDmEnabled}
-              language={language}
-              mentionParticipants={mentionParticipants}
-              mentionSuggestionsLabel={t.chat.mentionSuggestions}
-              messagePlaceholder={t.chat.messagePlaceholder}
-              replyToMessageId={activeReplyTarget?.id ?? null}
-              spaceId={activeSpaceId}
-            />
+              surface="encrypted-dm-composer-form"
+            >
+              <EncryptedDmComposerForm
+                action={sendMessageAction}
+                accept={CHAT_ATTACHMENT_ACCEPT}
+                attachmentHelpText={attachmentHelpText}
+                attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
+                attachmentMaxSizeLabel={attachmentMaxSizeLabel}
+                conversationId={conversationId}
+                currentUserId={user.id}
+                currentUserLabel={currentUserDisplayLabel}
+                encryptedDmEnabled={encryptedDmEnabled}
+                language={language}
+                mentionParticipants={mentionParticipants}
+                mentionSuggestionsLabel={t.chat.mentionSuggestions}
+                messagePlaceholder={t.chat.messagePlaceholder}
+                replyToMessageId={activeReplyTarget?.id ?? null}
+                spaceId={activeSpaceId}
+              />
+            </DmThreadClientSubtree>
           ) : (
             <GuardedServerActionForm
               action={sendMessageAction}

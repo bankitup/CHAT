@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { withSpaceParam } from '@/modules/spaces/url';
+import { readLastDmThreadHydrationSnapshot } from './dm-thread-hydration-probe';
+import { readLastDmThreadClientSubtree } from './dm-thread-client-diagnostics';
 
 type ChatRouteErrorBoundaryProps = {
   error: Error & { digest?: string };
@@ -18,8 +20,12 @@ export default function ChatRouteErrorBoundary({
   const spaceId = searchParams.get('space');
 
   useEffect(() => {
+    const lastClientSubtree = readLastDmThreadClientSubtree();
+    const lastHydrationSnapshot = readLastDmThreadHydrationSnapshot();
     console.error('[route-error-boundary]', 'chat-thread', {
       digest: error.digest ?? null,
+      lastClientSubtree,
+      lastHydrationSnapshot,
       message: error.message,
     });
   }, [error]);
