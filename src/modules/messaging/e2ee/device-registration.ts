@@ -35,6 +35,16 @@ type DmE2eeServerDeviceState = {
   hasSignedPrekey: boolean;
 };
 
+export type CurrentDmE2eeDeviceInspection =
+  | {
+      status: 'schema-missing';
+      state: null;
+    }
+  | {
+      status: 'ok';
+      state: DmE2eeServerDeviceState;
+    };
+
 function shouldLogDmE2eeBootstrapClientDiagnostics() {
   return (
     typeof window !== 'undefined' &&
@@ -259,7 +269,33 @@ function buildPublishRequest(
   };
 }
 
-async function fetchServerDmE2eeDeviceState() {
+function isServerDmE2eeDeviceStateReady(
+  serverState: DmE2eeServerDeviceState,
+  serverDeviceRecordId: string | null | undefined,
+) {
+  return Boolean(
+    serverDeviceRecordId &&
+      serverState.hasActiveDevice &&
+      serverState.activeDeviceRowIds.includes(serverDeviceRecordId) &&
+      serverState.hasSignedPrekey &&
+      serverState.availableOneTimePrekeyCount > 0,
+  );
+}
+
+export function isCurrentDmE2eeDeviceInspectionReady(input: {
+  inspection: CurrentDmE2eeDeviceInspection;
+  serverDeviceRecordId: string | null | undefined;
+}) {
+  return (
+    input.inspection.status === 'ok' &&
+    isServerDmE2eeDeviceStateReady(
+      input.inspection.state,
+      input.serverDeviceRecordId,
+    )
+  );
+}
+
+export async function inspectCurrentUserDmE2eeDeviceState(): Promise<CurrentDmE2eeDeviceInspection> {
   const response = await fetch('/api/messaging/dm-e2ee/device', {
     method: 'GET',
     headers: {
@@ -306,19 +342,6 @@ async function fetchServerDmE2eeDeviceState() {
       hasSignedPrekey: Boolean(payload.hasSignedPrekey),
     } satisfies DmE2eeServerDeviceState,
   };
-}
-
-function isServerDmE2eeDeviceStateReady(
-  serverState: DmE2eeServerDeviceState,
-  serverDeviceRecordId: string | null | undefined,
-) {
-  return Boolean(
-    serverDeviceRecordId &&
-      serverState.hasActiveDevice &&
-      serverState.activeDeviceRowIds.includes(serverDeviceRecordId) &&
-      serverState.hasSignedPrekey &&
-      serverState.availableOneTimePrekeyCount > 0,
-  );
 }
 
 export async function ensureDmE2eeDeviceRegistered(
@@ -397,7 +420,7 @@ export async function ensureDmE2eeDeviceRegistered(
   }
 
   if (localRecord.serverDeviceRecordId && !options.forcePublish) {
-    const serverState = await fetchServerDmE2eeDeviceState();
+    const serverState = await inspectCurrentUserDmE2eeDeviceState();
 
     if (serverState.status === 'schema-missing') {
       return {
@@ -474,7 +497,7 @@ export async function ensureDmE2eeDeviceRegistered(
       lastPublishedAt: new Date().toISOString(),
     });
 
-    const verifiedServerState = await fetchServerDmE2eeDeviceState();
+    const verifiedServerState = await inspectCurrentUserDmE2eeDeviceState();
 
     if (verifiedServerState.status === 'schema-missing') {
       return {
