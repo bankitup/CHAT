@@ -2031,6 +2031,12 @@ main {
   padding: 4px 2px 2px;
 }
 
+.settings-hero-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .settings-hero-summary {
   gap: 11px;
   align-items: center;
@@ -2065,6 +2071,45 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-language-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(221, 228, 238, 0.84);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow:
+    0 10px 24px rgba(17, 24, 39, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px);
+}
+
+.settings-language-compact-form {
+  margin: 0;
+}
+
+.settings-language-compact-button {
+  min-width: 40px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(91, 100, 112, 0.88);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.settings-language-compact-button-active {
+  background: rgba(31, 111, 235, 0.1);
+  color: rgba(17, 24, 39, 0.94);
+  box-shadow: inset 0 0 0 1px rgba(31, 111, 235, 0.12);
 }
 
 .settings-surface {
@@ -2557,27 +2602,34 @@ main {
 .profile-avatar-editor {
   gap: 18px;
   width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: 8px 0 2px;
 }
 
 .profile-avatar-editor-modal {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: 140;
   display: flex;
   align-items: stretch;
   justify-content: center;
+  overflow: hidden;
   padding:
-    calc(env(safe-area-inset-top, 0px) + 14px)
-    14px
-    calc(env(safe-area-inset-bottom, 0px) + 14px);
+    calc(env(safe-area-inset-top, 0px) + 10px)
+    10px
+    calc(env(safe-area-inset-bottom, 0px) + 10px);
 }
 
 .profile-avatar-editor-backdrop {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(11, 18, 32, 0.42);
-  backdrop-filter: blur(14px);
+  background:
+    linear-gradient(180deg, rgba(7, 12, 21, 0.78), rgba(9, 15, 26, 0.72)),
+    radial-gradient(circle at top, rgba(48, 126, 245, 0.18), rgba(7, 12, 21, 0) 44%);
+  backdrop-filter: blur(24px) saturate(1.05);
 }
 
 .profile-avatar-editor-panel {
@@ -2587,10 +2639,19 @@ main {
   flex: 1 1 auto;
   flex-direction: column;
   align-items: stretch;
-  justify-content: space-between;
-  width: min(100%, 520px);
+  justify-content: flex-start;
+  width: min(100%, 560px);
   min-height: 100%;
-  padding: 12px 0 4px;
+  padding: 12px 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(13, 19, 31, 0.92), rgba(11, 17, 29, 0.9));
+  box-shadow:
+    0 32px 80px rgba(2, 6, 16, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .profile-avatar-editor-toolbar {
@@ -2599,6 +2660,7 @@ main {
   align-items: center;
   gap: 12px;
   min-height: 42px;
+  padding: 2px 0 6px;
 }
 
 .profile-avatar-editor-toolbar-spacer {
@@ -2626,15 +2688,15 @@ main {
   position: relative;
   display: grid;
   place-items: center;
-  width: 260px;
-  height: 260px;
+  width: min(78vw, 320px);
+  height: min(78vw, 320px);
   overflow: hidden;
   border-radius: 999px;
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.95), rgba(229, 236, 244, 0.9));
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.98), rgba(229, 236, 244, 0.92));
   box-shadow:
-    0 0 0 1px rgba(232, 238, 246, 0.76),
-    0 28px 56px rgba(17, 24, 39, 0.18);
+    0 0 0 1px rgba(232, 238, 246, 0.72),
+    0 32px 72px rgba(0, 0, 0, 0.34);
 }
 
 .profile-avatar-editor-image {
@@ -2660,6 +2722,7 @@ main {
 
 .profile-avatar-editor-control {
   gap: 8px;
+  padding: 0 4px;
 }
 
 .profile-avatar-editor-control-label {
@@ -2676,13 +2739,13 @@ main {
 
 .profile-avatar-editor-replace {
   align-self: center;
-  min-height: 38px;
-  padding-inline: 14px;
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.14);
+  min-height: 40px;
+  padding-inline: 16px;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   color: rgba(248, 250, 252, 0.96);
   box-shadow:
-    0 10px 24px rgba(17, 24, 39, 0.14),
+    0 12px 28px rgba(17, 24, 39, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
