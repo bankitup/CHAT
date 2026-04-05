@@ -55,6 +55,9 @@ export function EncryptedDmMessageBody({
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
 
+  const normalizeString = (value: unknown) =>
+    typeof value === 'string' ? value.trim() : '';
+
   useEffect(() => {
     let cancelled = false;
 
@@ -73,11 +76,14 @@ export function EncryptedDmMessageBody({
       return;
     }
 
-    if (!clientId?.trim()) {
+    const normalizedClientId = normalizeString(clientId);
+
+    if (!normalizedClientId) {
       if (diagnosticsEnabled) {
         console.info('[dm-e2ee-history-client]', 'decrypt:missing-client-id', {
           currentUserId,
           conversationId,
+          clientIdType: typeof clientId,
           messageId,
         });
       }
@@ -87,20 +93,29 @@ export function EncryptedDmMessageBody({
       return;
     }
 
+    const senderDeviceRecordId = normalizeString(envelope.senderDeviceRecordId);
+    const recipientDeviceRecordId = normalizeString(
+      envelope.recipientDeviceRecordId,
+    );
+    const ciphertext = normalizeString(envelope.ciphertext);
+
     if (
-      !envelope.senderDeviceRecordId?.trim() ||
-      !envelope.recipientDeviceRecordId?.trim() ||
-      !envelope.ciphertext?.trim()
+      !senderDeviceRecordId ||
+      !recipientDeviceRecordId ||
+      !ciphertext
     ) {
       if (diagnosticsEnabled) {
         console.info('[dm-e2ee-history-client]', 'decrypt:malformed-envelope', {
           currentUserId,
           conversationId,
-          clientId,
-          hasCiphertext: Boolean(envelope.ciphertext?.trim()),
+          clientId: normalizedClientId,
+          ciphertextType: typeof envelope.ciphertext,
+          hasCiphertext: Boolean(ciphertext),
           messageId,
-          recipientDeviceRecordId: envelope.recipientDeviceRecordId ?? null,
-          senderDeviceRecordId: envelope.senderDeviceRecordId ?? null,
+          recipientDeviceRecordId: recipientDeviceRecordId || null,
+          recipientDeviceRecordIdType: typeof envelope.recipientDeviceRecordId,
+          senderDeviceRecordId: senderDeviceRecordId || null,
+          senderDeviceRecordIdType: typeof envelope.senderDeviceRecordId,
         });
       }
       setPlaintext(null);
@@ -112,17 +127,17 @@ export function EncryptedDmMessageBody({
     void (async () => {
       try {
         const localRecord = await getLocalDmE2eeDeviceRecordByServerDeviceId(
-          envelope.recipientDeviceRecordId,
+          recipientDeviceRecordId,
         );
 
         if (diagnosticsEnabled) {
           console.info('[dm-e2ee-history-client]', 'decrypt:local-record-lookup', {
             currentUserId,
             conversationId,
-            clientId,
+            clientId: normalizedClientId,
             messageId,
-            envelopeRecipientDeviceRecordId: envelope.recipientDeviceRecordId,
-            envelopeSenderDeviceRecordId: envelope.senderDeviceRecordId,
+            envelopeRecipientDeviceRecordId: recipientDeviceRecordId,
+            envelopeSenderDeviceRecordId: senderDeviceRecordId,
             localRecordFound: Boolean(localRecord),
             localRecordUserId: localRecord?.userId ?? null,
             localRecordServerDeviceRecordId:
@@ -136,9 +151,14 @@ export function EncryptedDmMessageBody({
 
         const nextPlaintext = await decryptStoredDmEnvelope({
           conversationId,
-          clientId,
+          clientId: normalizedClientId,
           localRecord,
-          envelope,
+          envelope: {
+            ...envelope,
+            ciphertext,
+            recipientDeviceRecordId,
+            senderDeviceRecordId,
+          },
         });
 
         if (!cancelled) {
@@ -161,10 +181,10 @@ export function EncryptedDmMessageBody({
           console.info('[dm-e2ee-history-client]', 'decrypt:error', {
             currentUserId,
             conversationId,
-            clientId,
+            clientId: normalizedClientId,
             messageId,
             envelopeRecipientDeviceRecordId:
-              envelope?.recipientDeviceRecordId ?? null,
+              recipientDeviceRecordId || null,
             failureKind: classifyEncryptedDmFailure(error),
             errorMessage: error instanceof Error ? error.message : 'Unknown error',
           });

@@ -289,10 +289,34 @@ function isEncryptedDmTextMessage(value: {
 }
 
 function canRenderEncryptedDmBody(input: {
-  clientId: string | null | undefined;
+  clientId: unknown;
   envelopePresent: boolean;
 }) {
-  return Boolean(input.clientId?.trim() && input.envelopePresent);
+  return (
+    typeof input.clientId === 'string' &&
+    input.clientId.trim().length > 0 &&
+    input.envelopePresent
+  );
+}
+
+function logEncryptedDmRenderFallback(input: {
+  clientId: unknown;
+  conversationId: string;
+  envelopePresent: boolean;
+  messageId: string;
+}) {
+  if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP !== '1') {
+    return;
+  }
+
+  console.info('[dm-e2ee-history]', 'thread:render-fallback', {
+    clientIdType: typeof input.clientId,
+    conversationId: input.conversationId,
+    envelopePresent: input.envelopePresent,
+    hasUsableClientId:
+      typeof input.clientId === 'string' && input.clientId.trim().length > 0,
+    messageId: input.messageId,
+  });
 }
 
 function formatGroupMemberSummary(
@@ -923,6 +947,14 @@ export default async function ChatPage({
                   clientId: message.client_id,
                   envelopePresent: Boolean(encryptedEnvelope),
                 });
+                if (isEncryptedDmTextMessage(message) && !canAttemptEncryptedRender) {
+                  logEncryptedDmRenderFallback({
+                    clientId: message.client_id,
+                    conversationId,
+                    envelopePresent: Boolean(encryptedEnvelope),
+                    messageId: message.id,
+                  });
+                }
                 const otherParticipantReadSeq =
                   otherParticipantReadState?.lastReadMessageSeq ?? null;
                 const outgoingMessageStatus = getOutgoingMessageStatus({
@@ -1367,6 +1399,14 @@ export default async function ChatPage({
                 clientId: message.client_id,
                 envelopePresent: Boolean(encryptedEnvelope),
               });
+              if (isEncryptedDmTextMessage(message) && !canAttemptEncryptedRender) {
+                logEncryptedDmRenderFallback({
+                  clientId: message.client_id,
+                  conversationId,
+                  envelopePresent: Boolean(encryptedEnvelope),
+                  messageId: message.id,
+                });
+              }
               const otherParticipantReadSeq =
                 otherParticipantReadState?.lastReadMessageSeq ?? null;
               const outgoingMessageStatus = getOutgoingMessageStatus({
