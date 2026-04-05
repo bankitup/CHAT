@@ -13,6 +13,7 @@ export type DmE2eeBootstrap400ReasonCode =
   | 'bad payload'
   | 'missing profile row'
   | 'profile seed failed'
+  | 'conflicting device publish'
   | 'publish failed';
 
 export type DmE2eeBootstrapFailedValidationBranch =
@@ -22,7 +23,13 @@ export type DmE2eeBootstrapFailedValidationBranch =
   | 'bad payload'
   | 'missing profile row'
   | 'profile seed failed'
+  | 'conflicting device publish'
   | 'publish failed';
+
+export type DmE2eeDevicePublishResultKind =
+  | 'first_publish'
+  | 'already_initialized_same_device'
+  | 'refresh_existing_device';
 
 export type DmE2eeBootstrapDebugState = {
   authRetireAttempted?: boolean | null;
@@ -127,6 +134,7 @@ export type PublishDmE2eeDeviceRequest = {
 export type PublishDmE2eeDeviceResult = {
   deviceRecordId: string;
   publishedPrekeyCount: number;
+  resultKind?: DmE2eeDevicePublishResultKind;
 };
 
 export type DmE2eeSendRequest = {

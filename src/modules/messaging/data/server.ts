@@ -11,6 +11,7 @@ import {
 import type {
   DmE2eeApiErrorCode,
   DmE2eeBootstrapDebugState,
+  DmE2eeDevicePublishResultKind,
   DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendDebugState,
@@ -1648,6 +1649,17 @@ function getAvatarBucketRequirementErrorMessage() {
 
 const PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
 const avatarDiagnosticsEnabled = process.env.CHAT_DEBUG_AVATARS === '1';
+const AVATAR_SIGNED_URL_CACHE_TTL_MS =
+  (PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS - 60) * 1000;
+const avatarSignedUrlCache = new Map<
+  string,
+  {
+    source: 'auth' | 'service';
+    url: string;
+    expiresAt: number;
+  }
+>();
+const avatarSignedUrlInflight = new Map<string, Promise<string | null>>();
 
 async function resolveStoredAvatarPath(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -1663,54 +1675,95 @@ async function resolveStoredAvatarPath(
     return normalizedValue;
   }
 
-  const signed = await supabase.storage
-    .from(PROFILE_AVATAR_BUCKET)
-    .createSignedUrl(normalizedValue, PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS);
+  const cached = avatarSignedUrlCache.get(normalizedValue);
 
-  if (!signed.error) {
+  if (cached && cached.expiresAt > Date.now()) {
     if (avatarDiagnosticsEnabled) {
       console.info('[avatar-storage]', {
-        issue: 'signed-url-auth-ok',
+        issue: 'signed-url-cache-hit',
         bucket: PROFILE_AVATAR_BUCKET,
         objectPath: normalizedValue,
+        source: cached.source,
       });
     }
-    return signed.data.signedUrl;
+    return cached.url;
   }
 
-  const serviceSupabase = createSupabaseServiceRoleClient();
+  const inflight = avatarSignedUrlInflight.get(normalizedValue);
 
-  if (serviceSupabase) {
-    const serviceSigned = await serviceSupabase.storage
+  if (inflight) {
+    return inflight;
+  }
+
+  const nextLookup = (async () => {
+    const signed = await supabase.storage
       .from(PROFILE_AVATAR_BUCKET)
       .createSignedUrl(normalizedValue, PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS);
 
-    if (!serviceSigned.error) {
-      console.info('[avatar-storage]', {
-        issue: 'signed-url-service-fallback',
+    if (!signed.error) {
+      if (avatarDiagnosticsEnabled) {
+        console.info('[avatar-storage]', {
+          issue: 'signed-url-auth-ok',
+          bucket: PROFILE_AVATAR_BUCKET,
+          objectPath: normalizedValue,
+        });
+      }
+      avatarSignedUrlCache.set(normalizedValue, {
+        source: 'auth',
+        url: signed.data.signedUrl,
+        expiresAt: Date.now() + AVATAR_SIGNED_URL_CACHE_TTL_MS,
+      });
+      return signed.data.signedUrl;
+    }
+
+    const serviceSupabase = createSupabaseServiceRoleClient();
+
+    if (serviceSupabase) {
+      const serviceSigned = await serviceSupabase.storage
+        .from(PROFILE_AVATAR_BUCKET)
+        .createSignedUrl(normalizedValue, PROFILE_AVATAR_SIGNED_URL_TTL_SECONDS);
+
+      if (!serviceSigned.error) {
+        if (avatarDiagnosticsEnabled) {
+          console.info('[avatar-storage]', {
+            issue: 'signed-url-service-fallback',
+            bucket: PROFILE_AVATAR_BUCKET,
+            objectPath: normalizedValue,
+          });
+        }
+        avatarSignedUrlCache.set(normalizedValue, {
+          source: 'service',
+          url: serviceSigned.data.signedUrl,
+          expiresAt: Date.now() + AVATAR_SIGNED_URL_CACHE_TTL_MS,
+        });
+        return serviceSigned.data.signedUrl;
+      }
+
+      console.error('[avatar-storage]', {
+        issue: 'signed-url-service-failed',
         bucket: PROFILE_AVATAR_BUCKET,
         objectPath: normalizedValue,
+        message: serviceSigned.error.message,
       });
-
-      return serviceSigned.data.signedUrl;
     }
 
     console.error('[avatar-storage]', {
-      issue: 'signed-url-service-failed',
+      issue: 'signed-url-failed',
       bucket: PROFILE_AVATAR_BUCKET,
       objectPath: normalizedValue,
-      message: serviceSigned.error.message,
+      message: signed.error.message,
     });
+
+    return null;
+  })();
+
+  avatarSignedUrlInflight.set(normalizedValue, nextLookup);
+
+  try {
+    return await nextLookup;
+  } finally {
+    avatarSignedUrlInflight.delete(normalizedValue);
   }
-
-  console.error('[avatar-storage]', {
-    issue: 'signed-url-failed',
-    bucket: PROFILE_AVATAR_BUCKET,
-    objectPath: normalizedValue,
-    message: signed.error.message,
-  });
-
-  return null;
 }
 
 function getAttachmentFileName(objectPath: string) {
@@ -1958,6 +2011,7 @@ export async function publishCurrentUserDmE2eeDevice(
 ) {
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
+  let resultKind: DmE2eeDevicePublishResultKind = 'first_publish';
   logDmE2eeBootstrapDiagnostics('publish:start', {
     hasUserId: Boolean(input.userId),
     oneTimePrekeyCount: input.oneTimePrekeys.length,
@@ -2018,6 +2072,149 @@ export async function publishCurrentUserDmE2eeDevice(
     logDmE2eeBootstrapDiagnostics('publish:profile-missing-insert:ok');
   } else {
     logDmE2eeBootstrapDiagnostics('publish:profile-existing');
+  }
+
+  const existingDeviceLookup = await supabase
+    .from('user_devices')
+    .select(
+      'id, device_id, registration_id, identity_key_public, signed_prekey_id, signed_prekey_public, signed_prekey_signature, retired_at',
+    )
+    .eq('user_id', input.userId)
+    .eq('device_id', input.deviceId)
+    .maybeSingle();
+
+  if (existingDeviceLookup.error) {
+    if (
+      isMissingRelationErrorMessage(existingDeviceLookup.error.message, 'user_devices') ||
+      isMissingColumnErrorMessage(existingDeviceLookup.error.message, 'identity_key_public') ||
+      isMissingColumnErrorMessage(existingDeviceLookup.error.message, 'signed_prekey_public')
+    ) {
+      throw createSchemaRequirementError(
+        'DM E2EE bootstrap schema is missing.',
+      );
+    }
+
+    throw createDmE2eeBootstrapPublishError(
+      'existing device lookup',
+      existingDeviceLookup.error.message,
+    );
+  }
+
+  const existingDevice = existingDeviceLookup.data as
+    | {
+        id?: string | null;
+        registration_id?: number | null;
+        identity_key_public?: string | null;
+        signed_prekey_id?: number | null;
+        signed_prekey_public?: string | null;
+        signed_prekey_signature?: string | null;
+        retired_at?: string | null;
+      }
+    | null;
+  const existingDeviceRecordId = String(existingDevice?.id ?? '').trim() || null;
+  const hasExistingActiveSameDevice =
+    Boolean(existingDeviceRecordId) && !existingDevice?.retired_at;
+  const sameDevicePayloadMatches =
+    hasExistingActiveSameDevice &&
+    existingDevice?.registration_id === input.registrationId &&
+    (existingDevice?.identity_key_public?.trim() ?? '') ===
+      input.identityKeyPublic.trim() &&
+    existingDevice?.signed_prekey_id === input.signedPrekeyId &&
+    (existingDevice?.signed_prekey_public?.trim() ?? '') ===
+      input.signedPrekeyPublic.trim() &&
+    (existingDevice?.signed_prekey_signature?.trim() ?? '') ===
+      input.signedPrekeySignature.trim();
+
+  if (hasExistingActiveSameDevice && !sameDevicePayloadMatches) {
+    logDmE2eeBootstrapDiagnostics('publish:conflicting-device-publish', {
+      current_device_row_id: existingDeviceRecordId,
+      device_id: input.deviceId,
+      user_id_present: Boolean(input.userId),
+    });
+    throw createDmE2eeBootstrapPublishError(
+      'conflicting device publish',
+      'Conflicting DM E2EE publish detected for an existing device id.',
+    );
+  }
+
+  if (hasExistingActiveSameDevice) {
+    const activePrekeyLookup = await supabase
+      .from('device_one_time_prekeys')
+      .select('prekey_id', { count: 'exact' })
+      .eq('device_id', existingDeviceRecordId)
+      .is('claimed_at', null)
+      .limit(1);
+
+    if (activePrekeyLookup.error) {
+      if (
+        isMissingRelationErrorMessage(
+          activePrekeyLookup.error.message,
+          'device_one_time_prekeys',
+        ) ||
+        isMissingColumnErrorMessage(activePrekeyLookup.error.message, 'claimed_at')
+      ) {
+        throw createSchemaRequirementError(
+          'DM E2EE bootstrap schema is missing.',
+        );
+      }
+
+      throw createDmE2eeBootstrapPublishError(
+        'existing device prekey lookup',
+        activePrekeyLookup.error.message,
+      );
+    }
+
+    const sameDeviceAvailablePrekeyCount = Number(activePrekeyLookup.count ?? 0);
+    const otherActiveDevicesLookup = await supabase
+      .from('user_devices')
+      .select('id', { count: 'exact' })
+      .eq('user_id', input.userId)
+      .neq('id', existingDeviceRecordId)
+      .is('retired_at', null)
+      .limit(1);
+
+    if (otherActiveDevicesLookup.error) {
+      throw createDmE2eeBootstrapPublishError(
+        'existing device sibling lookup',
+        otherActiveDevicesLookup.error.message,
+      );
+    }
+
+    const otherActiveDeviceCount = Number(otherActiveDevicesLookup.count ?? 0);
+    const sameDeviceReady =
+      sameDeviceAvailablePrekeyCount > 0 && otherActiveDeviceCount === 0;
+
+    if (sameDeviceReady) {
+      const touchExistingDevice = await supabase
+        .from('user_devices')
+        .update({
+          last_seen_at: now,
+          retired_at: null,
+        })
+        .eq('id', existingDeviceRecordId)
+        .select('id')
+        .single();
+
+      if (touchExistingDevice.error) {
+        throw createDmE2eeBootstrapPublishError(
+          'existing device touch',
+          touchExistingDevice.error.message,
+        );
+      }
+
+      logDmE2eeBootstrapDiagnostics('publish:already-initialized-same-device', {
+        current_device_row_id: existingDeviceRecordId,
+        available_prekey_count: sameDeviceAvailablePrekeyCount,
+      });
+
+      return {
+        deviceRecordId: existingDeviceRecordId as string,
+        publishedPrekeyCount: 0,
+        resultKind: 'already_initialized_same_device',
+      } satisfies PublishDmE2eeDeviceResult;
+    }
+
+    resultKind = 'refresh_existing_device';
   }
 
   const userDevices = await supabase
@@ -2487,12 +2684,15 @@ export async function publishCurrentUserDmE2eeDevice(
   if (input.oneTimePrekeys.length > 0) {
     const insertedPrekeys = await supabase
       .from('device_one_time_prekeys')
-      .insert(
+      .upsert(
         input.oneTimePrekeys.map((prekey) => ({
           device_id: deviceRecordId,
           prekey_id: prekey.prekeyId,
           public_key: prekey.publicKey,
         })),
+        {
+          onConflict: 'device_id,prekey_id',
+        },
       );
 
     if (insertedPrekeys.error) {
@@ -2507,12 +2707,14 @@ export async function publishCurrentUserDmE2eeDevice(
   }
 
   logDmE2eeBootstrapDiagnostics('publish:done', {
+    resultKind,
     publishedPrekeyCount: input.oneTimePrekeys.length,
   });
 
   return {
     deviceRecordId,
     publishedPrekeyCount: input.oneTimePrekeys.length,
+    resultKind,
   } satisfies PublishDmE2eeDeviceResult;
 }
 

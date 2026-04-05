@@ -287,6 +287,20 @@ export function EncryptedDmMessageBody({
           return;
         }
 
+        if (diagnosticsEnabled) {
+          console.info('[dm-e2ee-history-client]', 'decrypt:attempt', {
+            conversationId,
+            currentUserId,
+            diagnosticHistoryHintCode: historyDiagnosticHint.code,
+            messageId,
+            messageSenderId,
+            localRecordServerDeviceRecordId:
+              localRecord.serverDeviceRecordId ?? null,
+            recipientDeviceRecordId,
+            senderDeviceRecordId,
+          });
+        }
+
         const nextPlaintext = await decryptStoredDmEnvelope({
           conversationId,
           clientId: normalizedClientId,

@@ -93,6 +93,10 @@ function getMissingBootstrapFields(input: PublishDmE2eeDeviceRequest) {
 function classifyDmE2eeDevice400Reason(
   message: string,
 ): DmE2eeBootstrap400ReasonCode {
+  if (message.includes('Conflicting DM E2EE publish detected')) {
+    return 'conflicting device publish';
+  }
+
   if (
     message.includes('foreign key constraint') &&
     message.includes('user_devices_user_id_fkey')
@@ -221,7 +225,11 @@ export async function POST(request: Request) {
       ...input,
     });
 
-    logDmE2eeDeviceRouteDiagnostics('publish:ok');
+    logDmE2eeDeviceRouteDiagnostics('publish:ok', {
+      deviceRecordId: result.deviceRecordId,
+      publishedPrekeyCount: result.publishedPrekeyCount,
+      resultKind: result.resultKind ?? 'refresh_existing_device',
+    });
     return NextResponse.json(result);
   } catch (error) {
     const rawMessage =
@@ -304,6 +312,30 @@ export async function POST(request: Request) {
           ...diagnostics,
         },
         { status: 400 },
+      );
+    }
+
+    if (reason === 'conflicting device publish') {
+      const diagnostics = create400Diagnostics({
+        exact400ReasonCode: 'conflicting device publish',
+        failedValidationBranch: 'conflicting device publish',
+      });
+      logDmE2eeDeviceRouteDiagnostics('response:409:conflicting-device-publish', {
+        code: 'dm_e2ee_local_state_incomplete',
+        exactFailurePoint,
+        ...debugState,
+        ...diagnostics,
+      });
+      return NextResponse.json(
+        {
+          error:
+            'Encrypted setup for this installation conflicts with an existing device identity.',
+          code: 'dm_e2ee_local_state_incomplete',
+          exactFailurePoint,
+          ...debugState,
+          ...diagnostics,
+        },
+        { status: 409 },
       );
     }
 
