@@ -11,6 +11,7 @@ type ThreadConversationLiveState = {
 
 const threadLiveStateStore = new Map<string, ThreadConversationLiveState>();
 const threadLiveStateListeners = new Map<string, Set<() => void>>();
+const threadReactionRealtimeSuppressions = new Map<string, number>();
 
 function emitThreadLiveStateChange(conversationId: string) {
   const listeners = threadLiveStateListeners.get(conversationId);
@@ -54,6 +55,22 @@ function normalizeReactionGroups(reactions: MessageReactionGroup[]) {
       return left.emoji.localeCompare(right.emoji);
     })
     .slice(0, 5);
+}
+
+function buildThreadReactionSuppressionKey(input: {
+  conversationId: string;
+  direction: 'increment' | 'decrement';
+  emoji: string;
+  messageId: string;
+  userId: string;
+}) {
+  return [
+    input.conversationId,
+    input.messageId,
+    input.emoji,
+    input.userId,
+    input.direction,
+  ].join(':');
 }
 
 export function subscribeToThreadLiveState(
@@ -186,6 +203,28 @@ export function applyThreadReactionRealtimeEvent(input: {
       return;
     }
 
+    const suppressionKey = buildThreadReactionSuppressionKey({
+      conversationId: normalizedConversationId,
+      direction,
+      emoji,
+      messageId,
+      userId,
+    });
+    const suppressionCount =
+      threadReactionRealtimeSuppressions.get(suppressionKey) ?? 0;
+
+    if (suppressionCount > 0) {
+      if (suppressionCount === 1) {
+        threadReactionRealtimeSuppressions.delete(suppressionKey);
+      } else {
+        threadReactionRealtimeSuppressions.set(
+          suppressionKey,
+          suppressionCount - 1,
+        );
+      }
+      return;
+    }
+
     const currentGroups = reactionsByMessage[messageId] ?? [];
     const existingGroup = currentGroups.find((group) => group.emoji === emoji);
     const nextCount =
@@ -227,6 +266,79 @@ export function applyThreadReactionRealtimeEvent(input: {
     ...currentState,
     reactionsByMessage,
   });
+  emitThreadLiveStateChange(normalizedConversationId);
+}
+
+export function applyThreadReactionMutationResult(input: {
+  conversationId: string;
+  currentUserId: string;
+  emoji: string;
+  messageId: string;
+  selected: boolean;
+}) {
+  const normalizedConversationId = input.conversationId.trim();
+  const normalizedMessageId = input.messageId.trim();
+  const normalizedEmoji = input.emoji.trim();
+  const normalizedUserId = input.currentUserId.trim();
+
+  if (
+    !normalizedConversationId ||
+    !normalizedMessageId ||
+    !normalizedEmoji ||
+    !normalizedUserId
+  ) {
+    return;
+  }
+
+  const currentState = getThreadConversationLiveState(normalizedConversationId);
+  const currentGroups = currentState.reactionsByMessage[normalizedMessageId] ?? [];
+  const existingGroup = currentGroups.find(
+    (group) => group.emoji === normalizedEmoji,
+  );
+
+  if (
+    (input.selected && existingGroup?.selectedByCurrentUser) ||
+    (!input.selected && !existingGroup?.selectedByCurrentUser)
+  ) {
+    return;
+  }
+
+  const nextCount =
+    (existingGroup?.count ?? 0) + (input.selected ? 1 : -1);
+  const nextGroups = currentGroups
+    .filter((group) => group.emoji !== normalizedEmoji)
+    .concat(
+      nextCount > 0
+        ? [
+            {
+              emoji: normalizedEmoji,
+              count: nextCount,
+              selectedByCurrentUser: input.selected,
+            } satisfies MessageReactionGroup,
+          ]
+        : [],
+    );
+
+  threadLiveStateStore.set(normalizedConversationId, {
+    ...currentState,
+    reactionsByMessage: {
+      ...currentState.reactionsByMessage,
+      [normalizedMessageId]: normalizeReactionGroups(nextGroups),
+    },
+  });
+
+  const suppressionKey = buildThreadReactionSuppressionKey({
+    conversationId: normalizedConversationId,
+    direction: input.selected ? 'increment' : 'decrement',
+    emoji: normalizedEmoji,
+    messageId: normalizedMessageId,
+    userId: normalizedUserId,
+  });
+
+  threadReactionRealtimeSuppressions.set(
+    suppressionKey,
+    (threadReactionRealtimeSuppressions.get(suppressionKey) ?? 0) + 1,
+  );
   emitThreadLiveStateChange(normalizedConversationId);
 }
 

@@ -116,6 +116,28 @@ export function patchInboxConversationSummary(
   emitInboxConversationSummaryChange(normalizedConversationId);
 }
 
+export function updateInboxConversationSummary(
+  conversationId: string,
+  updater: (
+    current: InboxConversationLiveSummary | null,
+  ) => InboxConversationLiveSummary,
+) {
+  const normalizedConversationId = conversationId.trim();
+
+  if (!normalizedConversationId) {
+    return;
+  }
+
+  const current = inboxSummaryStore.get(normalizedConversationId) ?? null;
+  const nextValue = updater(current);
+
+  inboxSummaryStore.set(normalizedConversationId, {
+    ...nextValue,
+    conversationId: normalizedConversationId,
+  });
+  emitInboxConversationSummaryChange(normalizedConversationId);
+}
+
 export function markInboxConversationRemoved(conversationId: string) {
   const normalizedConversationId = conversationId.trim();
 

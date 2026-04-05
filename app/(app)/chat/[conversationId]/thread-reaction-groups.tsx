@@ -1,22 +1,26 @@
 'use client';
 
 import type { MessageReactionGroup } from '@/modules/messaging/data/server';
-import { useThreadLiveReactionGroups } from '@/modules/messaging/realtime/thread-live-state-store';
-import { GuardedServerActionForm } from '../../guarded-server-action-form';
+import {
+  applyThreadReactionMutationResult,
+  useThreadLiveReactionGroups,
+} from '@/modules/messaging/realtime/thread-live-state-store';
+import { useState } from 'react';
+import { toggleReactionMutationAction } from './actions';
 
 type ThreadReactionGroupsProps = {
-  action: (formData: FormData) => void | Promise<void>;
   ariaLabel: string;
   conversationId: string;
+  currentUserId: string;
   initialReactions: MessageReactionGroup[];
   isOwnMessage: boolean;
   messageId: string;
 };
 
 export function ThreadReactionGroups({
-  action,
   ariaLabel,
   conversationId,
+  currentUserId,
   initialReactions,
   isOwnMessage,
   messageId,
@@ -26,6 +30,7 @@ export function ThreadReactionGroups({
     messageId,
     initialReactions,
   );
+  const [pendingEmoji, setPendingEmoji] = useState<string | null>(null);
 
   if (!reactions.length) {
     return null;
@@ -37,25 +42,47 @@ export function ThreadReactionGroups({
       aria-label={ariaLabel}
     >
       {reactions.map((reaction) => (
-        <GuardedServerActionForm
+        <button
           key={`${messageId}-${reaction.emoji}`}
-          action={action}
-        >
-          <input name="conversationId" type="hidden" value={conversationId} />
-          <input name="messageId" type="hidden" value={messageId} />
-          <input name="emoji" type="hidden" value={reaction.emoji} />
-          <button
-            className={
-              reaction.selectedByCurrentUser
-                ? 'reaction-pill reaction-pill-selected'
-                : 'reaction-pill'
+          className={
+            reaction.selectedByCurrentUser
+              ? 'reaction-pill reaction-pill-selected'
+              : 'reaction-pill'
+          }
+          disabled={pendingEmoji === reaction.emoji}
+          onClick={async () => {
+            if (pendingEmoji) {
+              return;
             }
-            type="submit"
-          >
-            <span>{reaction.emoji}</span>
-            <span className="reaction-count">{reaction.count}</span>
-          </button>
-        </GuardedServerActionForm>
+
+            setPendingEmoji(reaction.emoji);
+            try {
+              const formData = new FormData();
+              formData.set('conversationId', conversationId);
+              formData.set('messageId', messageId);
+              formData.set('emoji', reaction.emoji);
+              const result = await toggleReactionMutationAction(formData);
+
+              if (!result.ok) {
+                return;
+              }
+
+              applyThreadReactionMutationResult({
+                conversationId,
+                currentUserId,
+                emoji: result.data.emoji,
+                messageId: result.data.messageId,
+                selected: result.data.selected,
+              });
+            } finally {
+              setPendingEmoji(null);
+            }
+          }}
+          type="button"
+        >
+          <span>{reaction.emoji}</span>
+          <span className="reaction-count">{reaction.count}</span>
+        </button>
       ))}
     </div>
   );

@@ -8,6 +8,7 @@ import {
   assertConversationExists,
   assertConversationMembership,
   getConversationForUser,
+  getConversationSummaryForUser,
   assertMessageInConversation,
   assertMessageOwnedByUser,
   CHAT_ATTACHMENT_HELP_TEXT,
@@ -26,6 +27,7 @@ import {
   updateConversationIdentity,
   updateConversationNotificationLevel,
   updateConversationTitle,
+  type InboxConversationSummarySnapshot,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import {
@@ -177,6 +179,473 @@ function redirectWithSettingsSaved(
   });
   const href = withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId);
   redirect(`${href}#conversation-settings`);
+}
+
+type ChatMutationSuccess<T> = {
+  data: T;
+  ok: true;
+};
+
+type ChatMutationFailure = {
+  code?: string | null;
+  error: string;
+  ok: false;
+};
+
+type ChatMutationResult<T> = ChatMutationSuccess<T> | ChatMutationFailure;
+
+export type ChatConversationSummaryMutationPayload =
+  InboxConversationSummarySnapshot;
+
+export type SendMessageMutationPayload = {
+  clientId: string | null;
+  conversationId: string;
+  lastReadMessageSeq: number | null;
+  messageId: string;
+  summary: ChatConversationSummaryMutationPayload | null;
+  timestamp: string;
+};
+
+export type ToggleReactionMutationPayload = {
+  conversationId: string;
+  emoji: string;
+  messageId: string;
+  selected: boolean;
+};
+
+export type EditMessageMutationPayload = {
+  body: string;
+  conversationId: string;
+  editedAt: string;
+  messageId: string;
+  summary: ChatConversationSummaryMutationPayload | null;
+};
+
+export type MarkConversationReadMutationPayload = {
+  conversationId: string;
+  lastReadMessageSeq: number | null;
+  summary: ChatConversationSummaryMutationPayload | null;
+};
+
+function mutationOk<T>(data: T): ChatMutationSuccess<T> {
+  return {
+    data,
+    ok: true,
+  };
+}
+
+function mutationError(
+  fallback: string,
+  rawMessage: string,
+  surface: string,
+  options?: {
+    code?: string | null;
+  },
+): ChatMutationFailure {
+  logControlledUiError({
+    fallback,
+    rawMessage,
+    surface,
+  });
+
+  return {
+    code: options?.code ?? null,
+    error: sanitizeUserFacingErrorMessage({
+      fallback,
+      language: 'en',
+      rawMessage,
+    }),
+    ok: false,
+  };
+}
+
+export async function sendMessageMutationAction(
+  formData: FormData,
+): Promise<ChatMutationResult<SendMessageMutationPayload>> {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const body = String(formData.get('body') ?? '').trim();
+  const clientId = String(formData.get('clientId') ?? '').trim() || undefined;
+  const replyToMessageId = String(formData.get('replyToMessageId') ?? '').trim();
+  const attachmentEntry = formData.get('attachment');
+  const attachment =
+    attachmentEntry instanceof File && attachmentEntry.size > 0
+      ? attachmentEntry
+      : null;
+
+  if (!conversationId) {
+    return {
+      error: 'Unable to send that message right now.',
+      ok: false,
+    };
+  }
+
+  if (!body && !attachment) {
+    return {
+      error: 'Write a message or choose a file.',
+      ok: false,
+    };
+  }
+
+  if (attachment && attachment.size > CHAT_ATTACHMENT_MAX_SIZE_BYTES) {
+    return {
+      error: 'Attachments can be up to 10 MB in this first version.',
+      ok: false,
+    };
+  }
+
+  if (attachment && !isSupportedChatAttachmentType(attachment.type)) {
+    return {
+      error: CHAT_ATTACHMENT_HELP_TEXT,
+      ok: false,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return {
+      error: 'Please log in and try again.',
+      ok: false,
+    };
+  }
+
+  const conversationExists = await assertConversationExists(conversationId);
+
+  if (!conversationExists) {
+    return {
+      error: 'This chat is no longer available.',
+      ok: false,
+    };
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    return {
+      error: 'You can no longer send messages in this chat.',
+      ok: false,
+    };
+  }
+
+  const conversation = await getConversationForUser(conversationId, user.id);
+
+  if (!conversation) {
+    return {
+      error: 'This chat is no longer available.',
+      ok: false,
+    };
+  }
+
+  if (conversation.kind === 'dm' && body) {
+    if (
+      !isDmE2eeEnabledForUser(user.id, user.email ?? null, {
+        source: 'chat-send-mutation',
+      })
+    ) {
+      return {
+        error: 'Encrypted direct messages are not enabled for this account yet.',
+        ok: false,
+      };
+    }
+
+    return {
+      error: 'Direct-message text must use the encrypted client path.',
+      ok: false,
+    };
+  }
+
+  if (replyToMessageId) {
+    const replyTargetExists = await assertMessageInConversation(
+      replyToMessageId,
+      conversationId,
+    );
+
+    if (!replyTargetExists) {
+      return {
+        error: 'Reply target is not available in this conversation.',
+        ok: false,
+      };
+    }
+  }
+
+  try {
+    const messageResult = attachment
+      ? await sendMessageWithAttachment({
+          body: body || null,
+          clientId,
+          conversationId,
+          file: attachment,
+          replyToMessageId: replyToMessageId || null,
+          senderId: user.id,
+        })
+      : await sendTextMessage({
+          body,
+          clientId,
+          conversationId,
+          replyToMessageId: replyToMessageId || null,
+          senderId: user.id,
+        });
+
+    const readResult = await markConversationRead({
+      conversationId,
+      userId: user.id,
+      lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
+    });
+    const summary = await getConversationSummaryForUser(conversationId, user.id);
+
+    return mutationOk({
+      clientId: messageResult.clientId ?? null,
+      conversationId,
+      lastReadMessageSeq: readResult.lastReadMessageSeq,
+      messageId: messageResult.messageId,
+      summary,
+      timestamp: messageResult.timestamp,
+    });
+  } catch (error) {
+    return mutationError(
+      'Unable to send that message right now.',
+      error instanceof Error ? error.message : 'Unable to send that message right now.',
+      'chat:send-message-mutation',
+    );
+  }
+}
+
+export async function toggleReactionMutationAction(
+  formData: FormData,
+): Promise<ChatMutationResult<ToggleReactionMutationPayload>> {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const messageId = String(formData.get('messageId') ?? '').trim();
+  const emoji = String(formData.get('emoji') ?? '').trim();
+
+  if (!conversationId || !messageId) {
+    return {
+      error: 'Unable to update reactions right now.',
+      ok: false,
+    };
+  }
+
+  if (!STARTER_REACTIONS.includes(emoji as (typeof STARTER_REACTIONS)[number])) {
+    return {
+      error: 'Invalid reaction.',
+      ok: false,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return {
+      error: 'Please log in and try again.',
+      ok: false,
+    };
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    return {
+      error: 'This chat is no longer available.',
+      ok: false,
+    };
+  }
+
+  const messageExists = await assertMessageInConversation(messageId, conversationId);
+
+  if (!messageExists) {
+    return {
+      error: 'This message is no longer available.',
+      ok: false,
+    };
+  }
+
+  try {
+    const reactionResult = await toggleMessageReaction({
+      emoji,
+      messageId,
+      userId: user.id,
+    });
+
+    return mutationOk({
+      conversationId,
+      emoji,
+      messageId,
+      selected: reactionResult.selected,
+    });
+  } catch (error) {
+    return mutationError(
+      'Unable to update reactions right now.',
+      error instanceof Error ? error.message : 'Unable to update reactions right now.',
+      'chat:toggle-reaction-mutation',
+    );
+  }
+}
+
+export async function editMessageMutationAction(
+  formData: FormData,
+): Promise<ChatMutationResult<EditMessageMutationPayload>> {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const messageId = String(formData.get('messageId') ?? '').trim();
+  const body = String(formData.get('body') ?? '').trim();
+
+  if (!conversationId || !messageId) {
+    return {
+      error: 'Choose a message to edit.',
+      ok: false,
+    };
+  }
+
+  if (!body) {
+    return {
+      error: 'Edited message cannot be empty.',
+      ok: false,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return {
+      error: 'Please log in and try again.',
+      ok: false,
+    };
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    return {
+      error: 'This chat is no longer available.',
+      ok: false,
+    };
+  }
+
+  const isOwner = await assertMessageOwnedByUser(messageId, conversationId, user.id);
+
+  if (!isOwner) {
+    return {
+      error: 'Only the sender can edit this message.',
+      ok: false,
+    };
+  }
+
+  const messageMetadata = await supabase
+    .from('messages')
+    .select('content_mode, deleted_at')
+    .eq('id', messageId)
+    .eq('conversation_id', conversationId)
+    .eq('sender_id', user.id)
+    .maybeSingle();
+
+  if (messageMetadata.error) {
+    return {
+      error: 'Unable to load this message right now.',
+      ok: false,
+    };
+  }
+
+  if (messageMetadata.data?.deleted_at) {
+    return {
+      error: 'This message is no longer available.',
+      ok: false,
+    };
+  }
+
+  if (messageMetadata.data?.content_mode === 'dm_e2ee_v1') {
+    return {
+      error: 'Editing encrypted direct messages is not available yet.',
+      ok: false,
+    };
+  }
+
+  try {
+    const editResult = await editMessage({
+      body,
+      conversationId,
+      messageId,
+      senderId: user.id,
+    });
+    const summary = await getConversationSummaryForUser(conversationId, user.id);
+
+    return mutationOk({
+      body: editResult.body,
+      conversationId,
+      editedAt: editResult.editedAt,
+      messageId,
+      summary,
+    });
+  } catch (error) {
+    return mutationError(
+      'Unable to save that edit right now.',
+      error instanceof Error ? error.message : 'Unable to save that edit right now.',
+      'chat:edit-message-mutation',
+    );
+  }
+}
+
+export async function markConversationReadMutationAction(input: {
+  conversationId: string;
+  latestVisibleMessageSeq: number;
+}): Promise<ChatMutationResult<MarkConversationReadMutationPayload>> {
+  if (!input.conversationId || !Number.isFinite(input.latestVisibleMessageSeq)) {
+    return {
+      error: 'Unable to update read state right now.',
+      ok: false,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return {
+      error: 'Please log in and try again.',
+      ok: false,
+    };
+  }
+
+  const isMember = await assertConversationMembership(input.conversationId, user.id);
+
+  if (!isMember) {
+    return {
+      error: 'This chat is no longer available.',
+      ok: false,
+    };
+  }
+
+  try {
+    const readResult = await markConversationRead({
+      conversationId: input.conversationId,
+      lastReadMessageSeq: input.latestVisibleMessageSeq,
+      userId: user.id,
+    });
+    const summary = await getConversationSummaryForUser(
+      input.conversationId,
+      user.id,
+    );
+
+    return mutationOk({
+      conversationId: input.conversationId,
+      lastReadMessageSeq: readResult.lastReadMessageSeq,
+      summary,
+    });
+  } catch (error) {
+    return mutationError(
+      'Unable to update read state right now.',
+      error instanceof Error ? error.message : 'Unable to update read state right now.',
+      'chat:mark-read-mutation',
+    );
+  }
 }
 
 export async function sendMessageAction(formData: FormData) {

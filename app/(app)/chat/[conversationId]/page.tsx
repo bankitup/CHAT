@@ -50,20 +50,15 @@ import {
   addGroupParticipantsAction,
   deleteMessageAction,
   deleteDirectConversationAction,
-  editMessageAction,
   hideConversationAction,
   leaveGroupAction,
   removeGroupParticipantAction,
   sendMessageAction,
-  toggleReactionAction,
   updateConversationNotificationLevelAction,
 } from './actions';
-import { AutoGrowTextarea } from './auto-grow-textarea';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import { ConversationPresenceStatus } from './conversation-presence-status';
-import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
-import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
 import {
   DmThreadClientSubtree,
@@ -80,6 +75,10 @@ import { GroupChatSettingsForm } from './group-chat-settings-form';
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
+import { PlaintextChatComposerForm } from './plaintext-chat-composer-form';
+import { ThreadEditedIndicator } from './thread-edited-indicator';
+import { ThreadInlineEditForm } from './thread-inline-edit-form';
+import { ThreadReactionPicker } from './thread-reaction-picker';
 import { ThreadReactionGroups } from './thread-reaction-groups';
 import { ThreadLiveStateHydrator } from '@/modules/messaging/realtime/thread-live-state-store';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
@@ -225,10 +224,6 @@ function formatAttachmentSize(value: number | null) {
   }
 
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function isEditedMessage(value: { edited_at: string | null; deleted_at: string | null }) {
-  return Boolean(value.edited_at && !value.deleted_at);
 }
 
 function getMessageSeq(value: number | string) {
@@ -1489,44 +1484,26 @@ export default async function ChatPage({
                         {isDeletedMessage ? (
                           <p className="message-deleted-text">{t.chat.messageDeleted}</p>
                         ) : isMessageInEditMode ? (
-                          <form action={editMessageAction} className="stack message-edit-form">
-                            <input
-                              name="conversationId"
-                              type="hidden"
-                              value={conversationId}
-                            />
-                            <input name="messageId" type="hidden" value={message.id} />
-                            <label className="field">
-                              <span className="sr-only">{t.chat.edit}</span>
-                              <AutoGrowTextarea
-                                className="input textarea"
-                                defaultValue={
-                                  isEncryptedDmTextMessage(message)
-                                    ? ''
-                                    : normalizedMessageBody ?? ''
-                                }
-                                maxHeight={160}
-                                name="body"
-                                required
-                                rows={2}
-                              />
-                            </label>
-                            <div className="message-edit-actions">
-                              <button className="button button-compact" type="submit">
-                                {t.chat.save}
-                              </button>
-                              <Link
-                                className="pill message-edit-cancel"
-                                href={buildChatHref({
-                                  conversationId,
-                                  hash: `#message-${message.id}`,
-                                  spaceId: activeSpaceId,
-                                })}
-                              >
-                                {t.chat.cancel}
-                              </Link>
-                            </div>
-                          </form>
+                          <ThreadInlineEditForm
+                            cancelHref={buildChatHref({
+                              conversationId,
+                              hash: `#message-${message.id}`,
+                              spaceId: activeSpaceId,
+                            })}
+                            conversationId={conversationId}
+                            emptyMessageLabel={t.chat.emptyMessage}
+                            hasAttachments={messageAttachments.length > 0}
+                            initialBody={
+                              isEncryptedDmTextMessage(message)
+                                ? ''
+                                : normalizedMessageBody ?? ''
+                            }
+                            labels={{
+                              cancel: t.chat.cancel,
+                              save: t.chat.save,
+                            }}
+                            messageId={message.id}
+                          />
                         ) : activeEditMessageId === message.id &&
                           isOwnMessage &&
                           isEncryptedDmTextMessage(message) ? (
@@ -1703,11 +1680,12 @@ export default async function ChatPage({
                         }
                       >
                         <span>{formatMessageTimestamp(message.created_at, language) || t.chat.justNow}</span>
-                        {isEditedMessage(message) ? (
-                          <span className="message-edited" aria-label={t.chat.edited}>
-                            {t.chat.edited}
-                          </span>
-                        ) : null}
+                        <ThreadEditedIndicator
+                          conversationId={conversationId}
+                          editedAt={message.edited_at}
+                          label={t.chat.edited}
+                          messageId={message.id}
+                        />
                         {isOwnMessage && outgoingMessageStatus ? (
                           otherParticipantUserId ? (
                             <DmThreadClientSubtree
@@ -1749,9 +1727,9 @@ export default async function ChatPage({
 
                       {!isDeletedMessage ? (
                         <ThreadReactionGroups
-                          action={toggleReactionAction}
                           ariaLabel={t.chat.messageReactions}
                           conversationId={conversationId}
+                          currentUserId={user.id}
                           initialReactions={reactionsByMessage.get(message.id) ?? []}
                           isOwnMessage={isOwnMessage}
                           messageId={message.id}
@@ -1836,6 +1814,7 @@ export default async function ChatPage({
                 bottomSentinelId="message-thread-bottom-sentinel"
                 conversationId={conversationId}
                 currentReadMessageSeq={readState.lastReadMessageSeq}
+                key={`mark-read-${conversationId}-${readState.lastReadMessageSeq ?? 'none'}-${latestVisibleMessageSeq ?? 'none'}`}
                 latestVisibleMessageSeq={
                   latestVisibleMessageSeq !== null && Number.isFinite(latestVisibleMessageSeq)
                     ? latestVisibleMessageSeq
@@ -1848,6 +1827,7 @@ export default async function ChatPage({
               bottomSentinelId="message-thread-bottom-sentinel"
               conversationId={conversationId}
               currentReadMessageSeq={readState.lastReadMessageSeq}
+              key={`mark-read-${conversationId}-${readState.lastReadMessageSeq ?? 'none'}-${latestVisibleMessageSeq ?? 'none'}`}
               latestVisibleMessageSeq={
                 latestVisibleMessageSeq !== null && Number.isFinite(latestVisibleMessageSeq)
                   ? latestVisibleMessageSeq
@@ -1946,68 +1926,23 @@ export default async function ChatPage({
                 mentionSuggestionsLabel={t.chat.mentionSuggestions}
                 messagePlaceholder={t.chat.messagePlaceholder}
                 replyToMessageId={activeReplyTarget?.id ?? null}
-                spaceId={activeSpaceId}
               />
             </DmThreadClientSubtree>
           ) : (
-            <GuardedServerActionForm
-              action={sendMessageAction}
-              className="stack composer-form"
-            >
-              <input name="conversationId" type="hidden" value={conversationId} />
-              {activeReplyTarget ? (
-                <input
-                  name="replyToMessageId"
-                  type="hidden"
-                  value={activeReplyTarget.id}
-                />
-              ) : null}
-              <div className="composer-input-shell">
-                <ComposerAttachmentPicker
-                  accept={CHAT_ATTACHMENT_ACCEPT}
-                  helperText={attachmentHelpText}
-                  maxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
-                  maxSizeLabel={attachmentMaxSizeLabel}
-                  language={language}
-                />
-
-                <label className="field composer-input-field">
-                  <span className="sr-only">{t.chat.messagePlaceholder}</span>
-                  <ComposerTypingTextarea
-                    className="input textarea"
-                    conversationId={conversationId}
-                    currentUserId={user.id}
-                    currentUserLabel={currentUserDisplayLabel}
-                    mentionParticipants={mentionParticipants}
-                    mentionSuggestionsLabel={t.chat.mentionSuggestions}
-                    name="body"
-                    placeholder={t.chat.messagePlaceholder}
-                    rows={1}
-                    maxHeight={136}
-                  />
-                </label>
-
-                <div className="composer-action-cluster">
-                  <button
-                    aria-label={t.chat.microphone}
-                    className="button button-secondary composer-button composer-button-mic"
-                    disabled
-                    title={t.chat.voiceMessagesSoon}
-                    type="button"
-                  >
-                    <span aria-hidden="true" className="composer-mic-icon" />
-                  </button>
-
-                  <PendingSubmitButton
-                    aria-label={t.chat.sendMessage}
-                    className="button composer-button composer-button-icon"
-                    type="submit"
-                  >
-                    <span aria-hidden="true">➤</span>
-                  </PendingSubmitButton>
-                </div>
-              </div>
-            </GuardedServerActionForm>
+            <PlaintextChatComposerForm
+              accept={CHAT_ATTACHMENT_ACCEPT}
+              attachmentHelpText={attachmentHelpText}
+              attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
+              attachmentMaxSizeLabel={attachmentMaxSizeLabel}
+              conversationId={conversationId}
+              currentUserId={user.id}
+              currentUserLabel={currentUserDisplayLabel}
+              language={language}
+              mentionParticipants={mentionParticipants}
+              mentionSuggestionsLabel={t.chat.mentionSuggestions}
+              messagePlaceholder={t.chat.messagePlaceholder}
+              replyToMessageId={activeReplyTarget?.id ?? null}
+            />
           )}
         </section>
       </section>
@@ -2496,51 +2431,14 @@ export default async function ChatPage({
             </div>
 
             <div className="stack message-sheet-section">
-              <div
-                className={
-                  activeActionMessage.sender_id === user.id
-                    ? 'reaction-picker reaction-picker-own message-sheet-reactions'
-                    : 'reaction-picker message-sheet-reactions'
-                }
-              >
-                {STARTER_REACTIONS.map((emoji) => {
-                  const currentReaction = activeActionReactions.find(
-                    (reaction) => reaction.emoji === emoji,
-                  );
-
-                  return (
-                    <form
-                      key={`${activeActionMessage.id}-sheet-${emoji}`}
-                      action={toggleReactionAction}
-                    >
-                      <input
-                        name="conversationId"
-                        type="hidden"
-                        value={conversationId}
-                      />
-                      <input
-                        name="messageId"
-                        type="hidden"
-                        value={activeActionMessage.id}
-                      />
-                      <input name="emoji" type="hidden" value={emoji} />
-                      <button
-                        className={
-                          currentReaction?.selectedByCurrentUser
-                            ? 'reaction-toggle reaction-toggle-selected'
-                            : 'reaction-toggle'
-                        }
-                        type="submit"
-                      >
-                        <span>{emoji}</span>
-                        {currentReaction ? (
-                          <span className="reaction-count">{currentReaction.count}</span>
-                        ) : null}
-                      </button>
-                    </form>
-                  );
-                })}
-              </div>
+              <ThreadReactionPicker
+                conversationId={conversationId}
+                currentUserId={user.id}
+                emojis={STARTER_REACTIONS}
+                initialReactions={activeActionReactions}
+                isOwnMessage={activeActionMessage.sender_id === user.id}
+                messageId={activeActionMessage.id}
+              />
             </div>
 
             <div className="stack message-sheet-section">

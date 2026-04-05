@@ -257,6 +257,23 @@ export type InboxConversation = {
   unreadCount: number;
 };
 
+export type InboxConversationSummarySnapshot = {
+  conversationId: string;
+  createdAt: string | null;
+  hiddenAt: string | null;
+  lastMessageAt: string | null;
+  lastReadAt: string | null;
+  lastReadMessageSeq: number | null;
+  latestMessageBody: string | null;
+  latestMessageContentMode: string | null;
+  latestMessageDeletedAt: string | null;
+  latestMessageId: string | null;
+  latestMessageKind: string | null;
+  latestMessageSenderId: string | null;
+  latestMessageSeq: number | null;
+  unreadCount: number;
+};
+
 export type ConversationNotificationLevel = 'default' | 'muted';
 
 export type ConversationMessage = {
@@ -1478,6 +1495,112 @@ export async function getConversationForUser(
     notificationLevel:
       scopedRow.notification_level === 'muted' ? 'muted' : 'default',
   };
+}
+
+export async function getConversationSummaryForUser(
+  conversationId: string,
+  userId: string,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  const supabase = await createSupabaseServerClient();
+  const membershipResponse = await supabase
+    .from('conversation_members')
+    .select('conversation_id, hidden_at, last_read_message_seq, last_read_at')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+    .eq('state', 'active')
+    .maybeSingle();
+
+  if (membershipResponse.error) {
+    throw new Error(membershipResponse.error.message);
+  }
+
+  if (!membershipResponse.data) {
+    return null;
+  }
+
+  const [scopedRow] = await attachConversationsToMembershipRows(
+    [
+      {
+        conversation_id: membershipResponse.data.conversation_id,
+        hidden_at: membershipResponse.data.hidden_at ?? null,
+        last_read_at: membershipResponse.data.last_read_at ?? null,
+        last_read_message_seq:
+          typeof membershipResponse.data.last_read_message_seq === 'number'
+            ? membershipResponse.data.last_read_message_seq
+            : null,
+        conversations: null,
+      } satisfies ConversationMemberRow,
+    ],
+    supabase,
+    options,
+  );
+  const conversation = normalizeConversation(scopedRow?.conversations ?? null);
+
+  if (!scopedRow || !conversation) {
+    return null;
+  }
+
+  let latestMessageSeq =
+    normalizeConversationLatestMessageSeq(conversation.last_message_seq ?? null);
+  let latestMessage = hasConversationSummaryProjectionFields(conversation)
+    ? {
+        body: conversation.last_message_body ?? null,
+        contentMode: conversation.last_message_content_mode ?? null,
+        deletedAt: conversation.last_message_deleted_at ?? null,
+        id: conversation.last_message_id ?? null,
+        kind: conversation.last_message_kind ?? null,
+        senderId: conversation.last_message_sender_id ?? null,
+      }
+    : null;
+
+  if (!hasConversationSummaryProjectionFields(conversation)) {
+    const latestRow = await loadLatestConversationSummaryMessageRow(
+      supabase,
+      conversationId,
+    );
+    latestMessageSeq = normalizeConversationLatestMessageSeq(latestRow?.seq ?? null);
+    latestMessage = latestRow
+      ? {
+          body: latestRow.body ?? null,
+          contentMode: latestRow.content_mode ?? null,
+          deletedAt: latestRow.deleted_at ?? null,
+          id: latestRow.id ?? null,
+          kind: latestRow.kind ?? null,
+          senderId: latestRow.sender_id ?? null,
+        }
+      : null;
+  }
+
+  const lastReadMessageSeq =
+    typeof scopedRow.last_read_message_seq === 'number'
+      ? scopedRow.last_read_message_seq
+      : null;
+  const unreadCount =
+    latestMessageSeq === null
+      ? 0
+      : lastReadMessageSeq === null
+        ? latestMessageSeq
+        : Math.max(0, latestMessageSeq - lastReadMessageSeq);
+
+  return {
+    conversationId: scopedRow.conversation_id,
+    createdAt: conversation.created_at ?? null,
+    hiddenAt: scopedRow.hidden_at ?? null,
+    lastMessageAt: conversation.last_message_at ?? null,
+    lastReadAt: scopedRow.last_read_at ?? null,
+    lastReadMessageSeq,
+    latestMessageBody: latestMessage?.body ?? null,
+    latestMessageContentMode: latestMessage?.contentMode ?? null,
+    latestMessageDeletedAt: latestMessage?.deletedAt ?? null,
+    latestMessageId: latestMessage?.id ?? null,
+    latestMessageKind: latestMessage?.kind ?? null,
+    latestMessageSenderId: latestMessage?.senderId ?? null,
+    latestMessageSeq,
+    unreadCount,
+  } satisfies InboxConversationSummarySnapshot;
 }
 
 export async function getConversationReadState(
@@ -5244,7 +5367,9 @@ export async function toggleMessageReaction(input: {
       throw new Error(deleteError.message);
     }
 
-    return;
+    return {
+      selected: false,
+    } as const;
   }
 
   if (userRows.length >= 3) {
@@ -5260,6 +5385,10 @@ export async function toggleMessageReaction(input: {
   if (insertError) {
     throw new Error(insertError.message);
   }
+
+  return {
+    selected: true,
+  } as const;
 }
 
 type ConversationSummaryMessageRow = {
@@ -5427,11 +5556,13 @@ export async function sendTextMessage(input: {
   body: string;
   senderId: string;
   replyToMessageId?: string | null;
+  clientId?: string;
 }) {
-  await createMessageRecord({
+  return createMessageRecord({
     conversationId: input.conversationId,
     senderId: input.senderId,
     body: input.body,
+    clientId: input.clientId,
     replyToMessageId: input.replyToMessageId ?? null,
   });
 }
@@ -5876,6 +6007,11 @@ export async function editMessage(input: {
     supabase,
     input.conversationId,
   );
+
+  return {
+    body: input.body.trim(),
+    editedAt: timestamp,
+  };
 }
 
 export async function softDeleteMessage(input: {
@@ -6400,6 +6536,7 @@ export async function sendMessageWithAttachment(input: {
   senderId: string;
   body?: string | null;
   replyToMessageId?: string | null;
+  clientId?: string;
   file: File;
 }) {
   if (!input.file || input.file.size === 0) {
@@ -6421,6 +6558,7 @@ export async function sendMessageWithAttachment(input: {
     conversationId: input.conversationId,
     senderId: input.senderId,
     body: input.body ?? null,
+    clientId: input.clientId,
     replyToMessageId: input.replyToMessageId ?? null,
     touchConversation: false,
     kind: attachmentMessageKind,

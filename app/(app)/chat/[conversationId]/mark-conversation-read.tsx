@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { markConversationReadAction } from './actions';
+import { useEffect, useRef, useState } from 'react';
+import { patchInboxConversationSummary } from '@/modules/messaging/realtime/inbox-summary-store';
+import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
+import { markConversationReadMutationAction } from './actions';
 
 type MarkConversationReadProps = {
   bottomSentinelId?: string;
@@ -16,13 +18,11 @@ export function MarkConversationRead({
   latestVisibleMessageSeq,
   currentReadMessageSeq,
 }: MarkConversationReadProps) {
-  const formRef = useRef<HTMLFormElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const hasSubmittedRef = useRef(false);
-
-  useEffect(() => {
-    hasSubmittedRef.current = false;
-  }, [conversationId, latestVisibleMessageSeq, currentReadMessageSeq]);
+  const [acknowledgedReadMessageSeq, setAcknowledgedReadMessageSeq] = useState<
+    number | null
+  >(currentReadMessageSeq);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -34,8 +34,8 @@ export function MarkConversationRead({
     if (
       latestVisibleMessageSeq === null ||
       !Number.isFinite(latestVisibleMessageSeq) ||
-      (currentReadMessageSeq !== null &&
-        currentReadMessageSeq >= latestVisibleMessageSeq)
+      (acknowledgedReadMessageSeq !== null &&
+        acknowledgedReadMessageSeq >= latestVisibleMessageSeq)
     ) {
       return;
     }
@@ -50,7 +50,32 @@ export function MarkConversationRead({
         }
 
         hasSubmittedRef.current = true;
-        formRef.current?.requestSubmit();
+        void (async () => {
+          try {
+            const result = await markConversationReadMutationAction({
+              conversationId,
+              latestVisibleMessageSeq,
+            });
+
+            if (!result.ok) {
+              hasSubmittedRef.current = false;
+              return;
+            }
+
+            setAcknowledgedReadMessageSeq(result.data.lastReadMessageSeq);
+            patchThreadConversationReadState({
+              conversationId,
+              isCurrentUser: true,
+              lastReadMessageSeq: result.data.lastReadMessageSeq,
+            });
+
+            if (result.data.summary) {
+              patchInboxConversationSummary(result.data.summary);
+            }
+          } catch {
+            hasSubmittedRef.current = false;
+          }
+        })();
       },
       {
         root: root instanceof Element ? root : null,
@@ -63,24 +88,14 @@ export function MarkConversationRead({
     return () => {
       observer.disconnect();
     };
-  }, [conversationId, latestVisibleMessageSeq, currentReadMessageSeq]);
+  }, [acknowledgedReadMessageSeq, conversationId, latestVisibleMessageSeq]);
 
   return (
-    <>
-      <form action={markConversationReadAction} className="sr-only" ref={formRef}>
-        <input name="conversationId" type="hidden" value={conversationId} />
-        <input
-          name="latestVisibleMessageSeq"
-          type="hidden"
-          value={latestVisibleMessageSeq ?? ''}
-        />
-      </form>
-      <div
-        aria-hidden="true"
-        className="message-read-sentinel"
-        id={bottomSentinelId}
-        ref={sentinelRef}
-      />
-    </>
+    <div
+      aria-hidden="true"
+      className="message-read-sentinel"
+      id={bottomSentinelId}
+      ref={sentinelRef}
+    />
   );
 }

@@ -31,7 +31,6 @@ import {
   LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
   type OptimisticThreadRetryPayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
-import { withSpaceParam } from '@/modules/spaces/url';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 
@@ -63,7 +62,6 @@ type EncryptedDmComposerFormProps = {
   mentionSuggestionsLabel: string;
   messagePlaceholder: string;
   replyToMessageId?: string | null;
-  spaceId?: string | null;
 };
 
 async function fetchRecipientBundle(conversationId: string) {
@@ -443,6 +441,20 @@ function getEncryptedDmErrorMessage(
   });
 }
 
+function clearReplyTargetFromCurrentUrl() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.delete('replyToMessageId');
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
+  );
+}
+
 export function EncryptedDmComposerForm({
   action,
   accept,
@@ -458,7 +470,6 @@ export function EncryptedDmComposerForm({
   mentionSuggestionsLabel,
   messagePlaceholder,
   replyToMessageId,
-  spaceId,
 }: EncryptedDmComposerFormProps) {
   const router = useRouter();
   const [, startNavigationTransition] = useTransition();
@@ -714,10 +725,7 @@ export function EncryptedDmComposerForm({
             }
           }
 
-          startNavigationTransition(() => {
-            router.replace(withSpaceParam(`/chat/${conversationId}`, spaceId));
-            router.refresh();
-          });
+          clearReplyTargetFromCurrentUrl();
         } catch (error) {
           const nextCode =
             error instanceof Error && 'code' in error
