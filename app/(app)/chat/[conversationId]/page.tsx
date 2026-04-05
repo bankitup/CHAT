@@ -71,6 +71,7 @@ type ChatPageProps = {
   searchParams: Promise<{
     error?: string;
     saved?: string;
+    details?: string;
     replyToMessageId?: string;
     editMessageId?: string;
     deleteMessageId?: string;
@@ -273,7 +274,7 @@ function buildChatHref(input: {
   error?: string | null;
   saved?: string | null;
   replyToMessageId?: string | null;
-  settings?: string | null;
+  details?: string | null;
   hash?: string | null;
 }) {
   const params = new URLSearchParams();
@@ -302,8 +303,8 @@ function buildChatHref(input: {
     params.set('replyToMessageId', input.replyToMessageId.trim());
   }
 
-  if (input.settings?.trim()) {
-    params.set('settings', input.settings.trim());
+  if (input.details?.trim()) {
+    params.set('details', input.details.trim());
   }
 
   const search = params.toString();
@@ -409,7 +410,7 @@ export default async function ChatPage({
         editMessageId: query.editMessageId ?? null,
         error: query.error ?? null,
         replyToMessageId: query.replyToMessageId ?? null,
-        settings: query.settings ?? null,
+        details: query.details ?? query.settings ?? null,
       }),
     );
   }
@@ -431,7 +432,8 @@ export default async function ChatPage({
     },
   );
 
-  const isSettingsOpen = query.settings === 'open';
+  const isSettingsOpen =
+    query.details === 'open' || query.settings === 'open';
   const hasSettingsSavedState = query.saved === '1';
   const [messages, readState, memberReadStates, participants] =
     await Promise.all([
@@ -661,7 +663,7 @@ export default async function ChatPage({
           className="card chat-header-card chat-header-link"
           href={buildChatHref({
             conversationId,
-            settings: 'open',
+            details: 'open',
             spaceId: activeSpaceId,
           })}
         >

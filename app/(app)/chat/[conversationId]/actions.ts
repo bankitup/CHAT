@@ -43,7 +43,7 @@ function redirectToChat(
   spaceId?: string | null,
   options?: {
     error?: string | null;
-    settings?: 'open' | null;
+    details?: 'open' | null;
     hash?: string | null;
   },
 ): never {
@@ -53,8 +53,8 @@ function redirectToChat(
     params.set('error', options.error.trim());
   }
 
-  if (options?.settings === 'open') {
-    params.set('settings', 'open');
+  if (options?.details === 'open') {
+    params.set('details', 'open');
   }
 
   const baseHref = params.toString()
@@ -81,7 +81,7 @@ function redirectWithSettingsError(
 ): never {
   const params = new URLSearchParams({
     error: message,
-    settings: 'open',
+    details: 'open',
   });
   const href = withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId);
   redirect(`${href}#conversation-settings`);
@@ -93,7 +93,7 @@ function redirectWithSettingsSaved(
 ): never {
   const params = new URLSearchParams({
     saved: '1',
-    settings: 'open',
+    details: 'open',
   });
   const href = withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId);
   redirect(`${href}#conversation-settings`);
