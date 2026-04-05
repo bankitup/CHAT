@@ -59,6 +59,20 @@ function isRenderableAvatarPath(value: string | null | undefined) {
   );
 }
 
+function getAvatarSourceKey(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    const queryIndex = value.indexOf('?');
+    return queryIndex >= 0 ? value.slice(0, queryIndex) : value;
+  }
+}
+
 function withAvatarRetryParam(value: string, attempt: number) {
   if (attempt <= 0) {
     return value;
@@ -104,26 +118,39 @@ export function IdentityAvatar({
   const avatarPath = isRenderableAvatarPath(identity?.avatarPath)
     ? (identity?.avatarPath ?? null)
     : null;
+  const avatarSourceKey = getAvatarSourceKey(avatarPath);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [avatarRenderState, setAvatarRenderState] = useState(() => ({
     hasPermanentImageError: false,
     loadedAvatarPath: null as string | null,
     path: avatarPath,
+    sourceKey: avatarSourceKey,
     retryAttempt: 0,
   }));
+  const stateMatchesCurrentSourceKey =
+    avatarRenderState.sourceKey === avatarSourceKey;
   const retryAttempt =
-    avatarRenderState.path === avatarPath ? avatarRenderState.retryAttempt : 0;
+    stateMatchesCurrentSourceKey ? avatarRenderState.retryAttempt : 0;
   const hasPermanentImageError =
-    avatarRenderState.path === avatarPath
+    stateMatchesCurrentSourceKey
       ? avatarRenderState.hasPermanentImageError
       : false;
+  const stableAvatarPath =
+    stateMatchesCurrentSourceKey &&
+    avatarRenderState.loadedAvatarPath &&
+    avatarSourceKey
+      ? avatarRenderState.loadedAvatarPath
+      : avatarPath;
   const effectiveAvatarPath = useMemo(
-    () => (avatarPath ? withAvatarRetryParam(avatarPath, retryAttempt) : null),
-    [avatarPath, retryAttempt],
+    () =>
+      stableAvatarPath
+        ? withAvatarRetryParam(stableAvatarPath, retryAttempt)
+        : null,
+    [retryAttempt, stableAvatarPath],
   );
   const isImageLoaded = Boolean(
     effectiveAvatarPath &&
-      avatarRenderState.path === avatarPath &&
+      avatarRenderState.sourceKey === avatarSourceKey &&
       avatarRenderState.loadedAvatarPath === effectiveAvatarPath,
   );
   const shouldRenderImage = Boolean(avatarPath && !hasPermanentImageError);
@@ -152,6 +179,7 @@ export function IdentityAvatar({
       label,
       hasAvatarUrl: Boolean(avatarPath),
       avatarUrl: effectiveAvatarPath,
+      avatarSourceKey,
       retryAttempt,
       fallingBackToInitials: !avatarPath || hasPermanentImageError,
       imageLoaded: isImageLoaded,
@@ -165,6 +193,7 @@ export function IdentityAvatar({
     identity?.userId,
     isImageLoaded,
     label,
+    avatarSourceKey,
     retryAttempt,
   ]);
 
@@ -211,7 +240,8 @@ export function IdentityAvatar({
             setAvatarRenderState((currentState) => ({
               ...currentState,
               loadedAvatarPath: null,
-              path: avatarPath,
+              path: stableAvatarPath,
+              sourceKey: avatarSourceKey,
             }));
 
             if (retryAttempt < AVATAR_RETRY_MAX_ATTEMPTS) {
@@ -223,11 +253,11 @@ export function IdentityAvatar({
                 setAvatarRenderState((currentState) => ({
                   hasPermanentImageError: false,
                   loadedAvatarPath: null,
-                  path: avatarPath,
-                  retryAttempt:
-                    currentState.path === avatarPath
-                      ? currentState.retryAttempt + 1
-                      : 1,
+                  path: stableAvatarPath,
+                  sourceKey: avatarSourceKey,
+                  retryAttempt: stateMatchesCurrentSourceKey
+                    ? currentState.retryAttempt + 1
+                    : 1,
                 }));
                 retryTimeoutRef.current = null;
               }, AVATAR_RETRY_DELAY_MS);
@@ -237,7 +267,8 @@ export function IdentityAvatar({
             setAvatarRenderState({
               hasPermanentImageError: true,
               loadedAvatarPath: null,
-              path: avatarPath,
+              path: stableAvatarPath,
+              sourceKey: avatarSourceKey,
               retryAttempt,
             });
           }}
@@ -259,7 +290,8 @@ export function IdentityAvatar({
             setAvatarRenderState({
               hasPermanentImageError: false,
               loadedAvatarPath: effectiveAvatarPath,
-              path: avatarPath,
+              path: stableAvatarPath,
+              sourceKey: avatarSourceKey,
               retryAttempt,
             });
           }}
