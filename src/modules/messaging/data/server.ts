@@ -917,20 +917,26 @@ async function attachConversationsToMembershipRows(
   let conversations = (data ?? null) as ConversationRecord[] | null;
 
   if (error) {
-    if (
-      isMissingColumnErrorMessage(error.message, 'space_id') ||
-      isMissingColumnErrorMessage(error.message, 'avatar_path')
-    ) {
-      if (options?.spaceId) {
+    const missingSpaceId = isMissingColumnErrorMessage(error.message, 'space_id');
+    const missingAvatarPath = isMissingColumnErrorMessage(error.message, 'avatar_path');
+
+    if (missingSpaceId || missingAvatarPath) {
+      if (options?.spaceId && missingSpaceId) {
         throw createSchemaRequirementError(
           'Active space scoping requires public.conversations.space_id.',
         );
       }
 
-      const fallback = await supabase
-        .from('conversations')
-        .select('id, kind, title, created_by, last_message_at, created_at')
-        .in('id', conversationIds);
+      const fallback =
+        missingAvatarPath && !missingSpaceId
+          ? await supabase
+              .from('conversations')
+              .select('id, kind, title, space_id, created_by, last_message_at, created_at')
+              .in('id', conversationIds)
+          : await supabase
+              .from('conversations')
+              .select('id, kind, title, created_by, last_message_at, created_at')
+              .in('id', conversationIds);
 
       if (fallback.error) {
         throw new Error(fallback.error.message);

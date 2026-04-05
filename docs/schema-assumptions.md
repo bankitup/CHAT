@@ -67,6 +67,7 @@ Required columns used by current code:
 Optional / hardening support:
 
 - `dm_key`
+- `avatar_path`
 
 Assumptions:
 
@@ -76,6 +77,7 @@ Assumptions:
 - `created_by` is used for group ownership-sensitive UI like title editing.
 - `last_message_at` drives inbox ordering and recency labels.
 - `dm_key`, when present, is the canonical unordered DM pair key (`sorted(user_a,user_b).join(':')`) used to make direct-message creation race-safe and reuse exactly one DM for the same pair.
+- `avatar_path`, when present, stores group chat avatar identity in the private avatars bucket; inbox/chat loading tolerates it being absent, but editable group avatars require it.
 - `space_id` makes each conversation belong to exactly one space.
 - direct-message uniqueness must now be enforced per space via `space_id` plus `dm_key`; the runtime no longer treats DMs as global.
 
@@ -359,6 +361,9 @@ These schema changes must exist in Supabase for the current app to run safely:
 
 1. `public.conversations.dm_key`
    Source file: [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
+
+2. `public.conversations.avatar_path`
+   Source file: [2026-04-05-conversations-avatar-path.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-05-conversations-avatar-path.sql)
 
 ## Historical space-scoping migrations
 
