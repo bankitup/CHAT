@@ -265,6 +265,14 @@ function logThreadRenderDiagnostics(
   console.info('[chat-thread-render]', stage, details);
 }
 
+function getThreadDeploymentMarker() {
+  return {
+    deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
+    gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+    vercelUrl: process.env.VERCEL_URL ?? null,
+  };
+}
+
 function normalizeComparableMessageSeq(value: unknown) {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
@@ -832,6 +840,106 @@ export default async function ChatPage({
   const activeActionReactions = activeActionMessage
     ? reactionsByMessage.get(activeActionMessage.id) ?? []
     : [];
+  const firstMessage = messages[0] ?? null;
+  const firstMessageCreatedAtValid = firstMessage
+    ? Boolean(parseSafeDate(firstMessage.created_at))
+    : null;
+  const firstMessageBodyType = firstMessage
+    ? firstMessage.body === null
+      ? 'null'
+      : typeof firstMessage.body
+    : null;
+  const dateFallbackUsed = messages.some(
+    (message) => parseSafeDate(message.created_at) === null,
+  );
+  const threadMetadataFallbackCount = messages.reduce(
+    (count, message) =>
+      count +
+      (parseSafeDate(message.created_at) ? 0 : 1) +
+      (message.body !== null && typeof message.body !== 'string' ? 1 : 0),
+    0,
+  );
+  const otherParticipantReadSeqRaw =
+    conversation.kind === 'dm'
+      ? otherParticipantReadState?.lastReadMessageSeq ?? null
+      : null;
+  const hasInvalidReadSeqFallback =
+    otherParticipantReadSeqRaw !== null &&
+    normalizeComparableMessageSeq(otherParticipantReadSeqRaw) === null;
+  const threadStatusFallbackCount = messages.reduce((count, message) => {
+    const isOwnMessage = message.sender_id === user.id;
+    const isDeletedMessage = Boolean(message.deleted_at);
+
+    if (!isOwnMessage || isDeletedMessage) {
+      return count;
+    }
+
+    if (normalizeComparableMessageSeq(message.seq) === null) {
+      return count + 1;
+    }
+
+    if (hasInvalidReadSeqFallback) {
+      return count + 1;
+    }
+
+    return count;
+  }, 0);
+  const unreadSeparatorFallbackUsed =
+    hasInvalidReadSeqFallback ||
+    (readState.lastReadMessageSeq !== null &&
+      messages.some((message, index) => {
+        const normalizedMessageSeq = normalizeComparableMessageSeq(message.seq);
+        const normalizedPreviousSeq =
+          index > 0
+            ? normalizeComparableMessageSeq(messages[index - 1]?.seq)
+            : null;
+
+        return (
+          normalizedMessageSeq === null ||
+          (index > 0 && normalizedPreviousSeq === null)
+        );
+      }));
+  const daySeparatorFallbackUsed = dateFallbackUsed;
+  const encryptedRenderFallbackCount = encryptedMessageIds.filter((messageId) => {
+    const message = messagesById.get(messageId);
+    const encryptedEnvelope = e2eeEnvelopesByMessage.get(messageId) ?? null;
+
+    return (
+      Boolean(message) &&
+      !canRenderEncryptedDmBody({
+        clientId: message?.client_id,
+        envelopePresent: Boolean(encryptedEnvelope),
+      })
+    );
+  }).length;
+
+  if (
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+    conversation.kind === 'dm'
+  ) {
+    logThreadRenderDiagnostics('dm-thread:open-summary', {
+      ...getThreadDeploymentMarker(),
+      conversationId,
+      dateFallbackUsed,
+      daySeparatorFallbackUsed,
+      encryptedRenderFallbackCount,
+      envelopeCount: e2eeEnvelopesByMessage.size,
+      firstMessageBodyType,
+      firstMessageCreatedAtValid,
+      firstMessageId: firstMessage?.id ?? null,
+      historyWindowSize: messages.length,
+      kind: conversation.kind,
+      messageCount: messages.length,
+      metadataFallbackUsed: threadMetadataFallbackCount > 0,
+      metadataFallbackCount: threadMetadataFallbackCount,
+      missingEnvelopeCount: encryptedMessageIds.filter(
+        (messageId) => !e2eeEnvelopesByMessage.has(messageId),
+      ).length,
+      statusFallbackUsed: threadStatusFallbackCount > 0,
+      statusFallbackCount: threadStatusFallbackCount,
+      unreadSeparatorFallbackUsed,
+    });
+  }
   const timelineItems = messages.flatMap((message, index) => {
     const previousMessage = messages[index - 1];
     const currentDayKey = getCalendarDayKey(message.created_at);
