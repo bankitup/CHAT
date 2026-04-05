@@ -1772,6 +1772,41 @@ main {
   padding-bottom: 2px;
 }
 
+.settings-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(100dvh - env(safe-area-inset-top) - var(--app-bottom-nav-reserve) - 32px);
+}
+
+.settings-main-content {
+  gap: 12px;
+  min-height: 0;
+  padding-bottom: calc(18px + 132px + var(--safe-area-bottom-pad));
+}
+
+.settings-bottom-actions {
+  position: sticky;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  z-index: 3;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.settings-bottom-actions::before {
+  content: '';
+  position: absolute;
+  inset: -18px -12px 0;
+  z-index: -1;
+  background: linear-gradient(
+    180deg,
+    rgba(244, 247, 251, 0),
+    rgba(244, 247, 251, 0.84) 28%,
+    rgba(244, 247, 251, 0.96)
+  );
+  pointer-events: none;
+}
+
 .activity-screen {
   gap: 12px;
   padding-bottom: 2px;
@@ -2133,8 +2168,13 @@ main {
 }
 
 .settings-home-card-session {
+  gap: 12px;
   padding-top: 14px;
   padding-bottom: 14px;
+  border-color: rgba(221, 228, 238, 0.94);
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.04),
+    0 16px 40px rgba(17, 24, 39, 0.08);
 }
 
 .settings-card {
@@ -2809,6 +2849,7 @@ main {
 
 .settings-logout-button {
   width: 100%;
+  min-height: 46px;
 }
 
 .settings-language-form {
