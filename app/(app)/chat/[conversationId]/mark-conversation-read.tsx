@@ -4,12 +4,14 @@ import { useEffect, useRef } from 'react';
 import { markConversationReadAction } from './actions';
 
 type MarkConversationReadProps = {
+  bottomSentinelId?: string;
   conversationId: string;
   latestVisibleMessageSeq: number | null;
   currentReadMessageSeq: number | null;
 };
 
 export function MarkConversationRead({
+  bottomSentinelId = 'message-thread-bottom-sentinel',
   conversationId,
   latestVisibleMessageSeq,
   currentReadMessageSeq,
@@ -73,7 +75,12 @@ export function MarkConversationRead({
           value={latestVisibleMessageSeq ?? ''}
         />
       </form>
-      <div aria-hidden="true" className="message-read-sentinel" ref={sentinelRef} />
+      <div
+        aria-hidden="true"
+        className="message-read-sentinel"
+        id={bottomSentinelId}
+        ref={sentinelRef}
+      />
     </>
   );
 }

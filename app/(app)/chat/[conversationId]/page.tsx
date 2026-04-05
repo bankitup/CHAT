@@ -764,6 +764,7 @@ export default async function ChatPage({
       <section className="chat-main">
         <section className="message-thread" id="message-thread-scroll">
           <AutoScrollToLatest
+            bottomSentinelId="message-thread-bottom-sentinel"
             conversationId={conversationId}
             latestVisibleMessageSeq={latestVisibleMessageSeq}
             targetId="message-thread-scroll"
@@ -1219,6 +1220,7 @@ export default async function ChatPage({
             }}
           />
           <MarkConversationRead
+            bottomSentinelId="message-thread-bottom-sentinel"
             conversationId={conversationId}
             currentReadMessageSeq={readState.lastReadMessageSeq}
             latestVisibleMessageSeq={
