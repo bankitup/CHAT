@@ -6,6 +6,10 @@ import { getCurrentUserProfile } from '@/modules/messaging/data/server';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import {
+  getUserFacingErrorFallback,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
 
 type SettingsPageProps = {
   searchParams: Promise<{
@@ -47,6 +51,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   const profileLabel = getProfileLabel(profile.email, profile.displayName, t.settings.heroEyebrow);
   const currentLanguage = (profile.preferredLanguage ?? language) as AppLanguage;
   const hasAvatar = Boolean(profile.avatarPath);
+  const visibleError = params.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: getUserFacingErrorFallback(language, 'settings'),
+        language,
+        rawMessage: params.error,
+      })
+    : null;
 
   return (
     <section className="stack settings-screen settings-shell">
@@ -111,7 +122,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         </div>
       </section>
 
-      {params.error ? <p className="notice notice-error">{params.error}</p> : null}
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
       {params.message ? (
         <div aria-live="polite" className="notice notice-success notice-inline">
           <span aria-hidden="true" className="notice-check">

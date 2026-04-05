@@ -29,6 +29,10 @@ import {
   updateConversationTitle,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
+import {
+  logControlledUiError,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 function readSpaceId(formData: FormData) {
@@ -66,12 +70,37 @@ function redirectToChat(
   redirect(options?.hash ? `${href}${options.hash}` : href);
 }
 
+function getFriendlyChatActionErrorMessage(
+  error: unknown,
+  fallback: string,
+  surface: string,
+) {
+  const rawMessage = error instanceof Error ? error.message : fallback;
+
+  logControlledUiError({
+    fallback,
+    rawMessage,
+    surface,
+  });
+
+  return sanitizeUserFacingErrorMessage({
+    fallback,
+    language: 'en',
+    rawMessage,
+  });
+}
+
 function redirectWithError(
   conversationId: string,
   message: string,
   spaceId?: string | null,
 ): never {
-  const params = new URLSearchParams({ error: message });
+  const safeMessage = sanitizeUserFacingErrorMessage({
+    fallback: 'Unable to open this chat right now. Please try again.',
+    language: 'en',
+    rawMessage: message,
+  });
+  const params = new URLSearchParams({ error: safeMessage });
   redirect(withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId));
 }
 
@@ -81,7 +110,11 @@ function redirectWithSettingsError(
   spaceId?: string | null,
 ): never {
   const params = new URLSearchParams({
-    error: message,
+    error: sanitizeUserFacingErrorMessage({
+      fallback: 'Unable to update chat settings right now. Please try again.',
+      language: 'en',
+      rawMessage: message,
+    }),
     details: 'open',
   });
   const href = withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId);
@@ -226,8 +259,11 @@ export async function sendMessageAction(formData: FormData) {
       lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to send message.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to send that message right now.',
+      'chat:send-message',
+    );
 
     redirectWithError(conversationId, message, spaceId);
   }
@@ -279,8 +315,11 @@ export async function toggleReactionAction(formData: FormData) {
       emoji,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to update reaction.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to update reactions right now.',
+      'chat:toggle-reaction',
+    );
 
     redirectWithError(conversationId, message, spaceId);
   }
@@ -363,8 +402,11 @@ export async function editMessageAction(formData: FormData) {
       body,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to edit message.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to save that edit right now.',
+      'chat:edit-message',
+    );
 
     redirectWithError(conversationId, message, spaceId);
   }
@@ -422,8 +464,11 @@ export async function deleteMessageAction(formData: FormData) {
       senderId: user.id,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to delete message.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to delete that message right now.',
+      'chat:delete-message',
+    );
 
     redirectWithError(conversationId, message, spaceId);
   }
@@ -467,8 +512,11 @@ export async function updateConversationTitleAction(formData: FormData) {
       title,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to update group title.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to update this group right now.',
+      'chat:update-title',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }
@@ -519,8 +567,11 @@ export async function updateConversationIdentityAction(formData: FormData) {
       removeAvatar,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to update chat settings.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to update chat settings right now.',
+      'chat:update-identity',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }
@@ -560,8 +611,11 @@ export async function hideConversationAction(formData: FormData) {
       userId: user.id,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to hide this chat.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to hide this chat right now.',
+      'chat:hide-conversation',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }
@@ -600,8 +654,11 @@ export async function deleteDirectConversationAction(formData: FormData) {
       userId: user.id,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to delete this chat.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to delete this chat right now.',
+      'chat:delete-direct-conversation',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }
@@ -655,10 +712,11 @@ export async function updateConversationNotificationLevelAction(
       notificationLevel,
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Unable to update notification settings.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to update notification settings right now.',
+      'chat:update-notifications',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }
@@ -744,8 +802,11 @@ export async function addGroupParticipantsAction(formData: FormData) {
       participantUserIds,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to add participants.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to add people right now.',
+      'chat:add-participants',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }
@@ -786,8 +847,11 @@ export async function removeGroupParticipantAction(formData: FormData) {
       targetUserId,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to remove participant.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to remove that person right now.',
+      'chat:remove-participant',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }
@@ -826,8 +890,11 @@ export async function leaveGroupAction(formData: FormData) {
       userId: user.id,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Unable to leave this group.';
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to leave this group right now.',
+      'chat:leave-group',
+    );
 
     redirectWithSettingsError(conversationId, message, spaceId);
   }

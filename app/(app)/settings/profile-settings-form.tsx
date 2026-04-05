@@ -367,6 +367,10 @@ export function ProfileSettingsForm({
   }
 
   async function handleExplicitSave() {
+    if (isSavingProfile || isUploadingAvatar || isPreparingAvatar) {
+      return;
+    }
+
     if (avatarEditorDraft) {
       setLocalError(labels.avatarEditorApplyBeforeSave);
       return;
@@ -439,6 +443,10 @@ export function ProfileSettingsForm({
   }
 
   async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+    if (isBusy) {
+      return;
+    }
+
     const file = event.target.files?.[0] ?? null;
 
     if (!file) {

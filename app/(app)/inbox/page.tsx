@@ -28,6 +28,10 @@ import {
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import {
+  getUserFacingErrorFallback,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
@@ -39,6 +43,8 @@ import { notFound, redirect } from 'next/navigation';
 import {
   restoreConversationAction,
 } from './actions';
+import { GuardedServerActionForm } from '../guarded-server-action-form';
+import { PendingSubmitButton } from '../pending-submit-button';
 import { NewChatSheet } from './new-chat-sheet';
 
 type InboxPageProps = {
@@ -318,6 +324,13 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
   const language = await getRequestLanguage();
   const t = getTranslations(language);
+  const visibleError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: getUserFacingErrorFallback(language, 'inbox'),
+        language,
+        rawMessage: query.error,
+      })
+    : null;
 
   const emptyArchivedConversations =
     [] as Awaited<ReturnType<typeof getArchivedConversations>>;
@@ -797,7 +810,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         </div>
       </section>
 
-      {query.error ? <p className="notice notice-error">{query.error}</p> : null}
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
 
       {activeView === 'archived' ? (
         <section className="card stack inbox-archived-note">
@@ -991,20 +1004,20 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                   </div>
                 </Link>
                 {activeView === 'archived' ? (
-                  <form action={restoreConversationAction}>
+                  <GuardedServerActionForm action={restoreConversationAction}>
                     <input
                       name="conversationId"
                       type="hidden"
                       value={conversation.conversationId}
                     />
                     <input name="spaceId" type="hidden" value={activeSpaceId} />
-                    <button
+                    <PendingSubmitButton
                       className="button button-compact button-secondary conversation-restore-button"
                       type="submit"
                     >
                       {t.inbox.restore}
-                    </button>
-                  </form>
+                    </PendingSubmitButton>
+                  </GuardedServerActionForm>
                 ) : null}
               </div>
             </article>

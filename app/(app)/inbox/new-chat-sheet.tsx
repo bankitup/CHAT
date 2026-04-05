@@ -7,6 +7,8 @@ import {
   type AppLanguage,
 } from '@/modules/i18n';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import { GuardedServerActionForm } from '../guarded-server-action-form';
+import { PendingSubmitButton } from '../pending-submit-button';
 import { createDmAction, createGroupAction } from './actions';
 
 type NewChatSheetUser = {
@@ -162,7 +164,10 @@ export function NewChatSheet({
           )}
 
           {selectedDmUser ? (
-            <form action={createDmAction} className="stack inbox-create-action-block">
+            <GuardedServerActionForm
+              action={createDmAction}
+              className="stack inbox-create-action-block"
+            >
               <input name="spaceId" type="hidden" value={spaceId} />
               <input
                 name="participantUserId"
@@ -172,10 +177,14 @@ export function NewChatSheet({
               <p className="muted inbox-create-selection-note">
                 {t.inbox.create.messageSelection(selectedDmUser.label)}
               </p>
-              <button className="button" type="submit">
+              <PendingSubmitButton
+                className="button"
+                pendingLabel={t.inbox.create.createDm}
+                type="submit"
+              >
                 {t.inbox.create.createDm}
-              </button>
-            </form>
+              </PendingSubmitButton>
+            </GuardedServerActionForm>
           ) : null}
         </section>
       ) : (
@@ -185,7 +194,10 @@ export function NewChatSheet({
             <p className="muted">{t.inbox.create.groupSubtitle}</p>
           </div>
 
-          <form action={createGroupAction} className="stack compact-form">
+          <GuardedServerActionForm
+            action={createGroupAction}
+            className="stack compact-form"
+          >
             <input name="spaceId" type="hidden" value={spaceId} />
             <label className="field">
               <span className="sr-only">{t.inbox.create.groupTitle}</span>
@@ -261,11 +273,16 @@ export function NewChatSheet({
                   ? t.inbox.create.groupSelectionCount(selectedGroupUserIds.length)
                   : t.inbox.create.groupSelectionEmpty}
               </p>
-              <button className="button" disabled={!isGroupReady} type="submit">
+              <PendingSubmitButton
+                className="button"
+                disabled={!isGroupReady}
+                pendingLabel={t.inbox.create.createGroup}
+                type="submit"
+              >
                 {t.inbox.create.createGroup}
-              </button>
+              </PendingSubmitButton>
             </div>
-          </form>
+          </GuardedServerActionForm>
         </section>
       )}
     </section>

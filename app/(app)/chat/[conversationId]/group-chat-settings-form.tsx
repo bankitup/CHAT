@@ -98,6 +98,10 @@ export function GroupChatSettingsForm({
   }
 
   async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+    if (isSaving) {
+      return;
+    }
+
     const file = event.target.files?.[0] ?? null;
 
     if (!file) {
@@ -127,6 +131,10 @@ export function GroupChatSettingsForm({
   }
 
   async function handleSave() {
+    if (isSaving) {
+      return;
+    }
+
     const normalizedDraftTitle = draftTitle.trim();
     const normalizedDefaultTitle = defaultTitle.trim();
     const hasTitleChange = normalizedDraftTitle !== normalizedDefaultTitle;

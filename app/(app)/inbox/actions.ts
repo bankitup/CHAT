@@ -9,12 +9,43 @@ import {
   restoreConversationForUser,
   isUniqueConstraintErrorMessage,
 } from '@/modules/messaging/data/server';
+import {
+  logControlledUiError,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 
+const INBOX_ERROR_FALLBACK = 'Unable to load your chats right now. Please try again.';
+
 function redirectWithError(message: string, spaceId?: string | null): never {
-  const params = new URLSearchParams({ error: message });
+  const safeMessage = sanitizeUserFacingErrorMessage({
+    fallback: INBOX_ERROR_FALLBACK,
+    language: 'en',
+    rawMessage: message,
+  });
+  const params = new URLSearchParams({ error: safeMessage });
   const href = withSpaceParam(`/inbox?${params.toString()}`, spaceId);
   redirect(href);
+}
+
+function getFriendlyInboxActionErrorMessage(
+  error: unknown,
+  fallback: string,
+  surface: string,
+) {
+  const rawMessage = error instanceof Error ? error.message : fallback;
+
+  logControlledUiError({
+    fallback,
+    rawMessage,
+    surface,
+  });
+
+  return sanitizeUserFacingErrorMessage({
+    fallback,
+    language: 'en',
+    rawMessage,
+  });
 }
 
 function readText(formData: FormData, key: string) {
@@ -114,9 +145,11 @@ export async function createDmAction(formData: FormData) {
       error instanceof Error &&
         isUniqueConstraintErrorMessage(error.message, 'conversations_dm_key_unique')
         ? 'This direct chat already exists. Please try again.'
-        : error instanceof Error
-          ? error.message
-          : 'Unable to create DM.',
+        : getFriendlyInboxActionErrorMessage(
+            error,
+            'Unable to open that chat right now.',
+            'inbox:create-dm',
+          ),
       spaceId,
     );
   }
@@ -152,7 +185,11 @@ export async function createGroupAction(formData: FormData) {
     }
 
     redirectWithError(
-      error instanceof Error ? error.message : 'Unable to create group.',
+      getFriendlyInboxActionErrorMessage(
+        error,
+        'Unable to create that group right now.',
+        'inbox:create-group',
+      ),
       readText(formData, 'spaceId'),
     );
   }
@@ -181,8 +218,11 @@ export async function restoreConversationAction(formData: FormData) {
 
     const params = new URLSearchParams({
       view: 'archived',
-      error:
-        error instanceof Error ? error.message : 'Unable to restore this chat.',
+      error: getFriendlyInboxActionErrorMessage(
+        error,
+        'Unable to restore this chat right now.',
+        'inbox:restore-conversation',
+      ),
     });
     redirect(withSpaceParam(`/inbox?${params.toString()}`, readText(formData, 'spaceId')));
   }

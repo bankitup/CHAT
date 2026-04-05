@@ -38,6 +38,10 @@ import {
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import {
+  getUserFacingErrorFallback,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import {
@@ -67,6 +71,8 @@ import { GroupChatSettingsForm } from './group-chat-settings-form';
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
+import { GuardedServerActionForm } from '../../guarded-server-action-form';
+import { PendingSubmitButton } from '../../pending-submit-button';
 
 type ChatPageProps = {
   params: Promise<{
@@ -475,6 +481,20 @@ export default async function ChatPage({
 
   const language = await languagePromise;
   const t = getTranslations(language);
+  const visibleRouteError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: getUserFacingErrorFallback(language, 'chat'),
+        language,
+        rawMessage: query.error,
+      })
+    : null;
+  const visibleSettingsError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: getUserFacingErrorFallback(language, 'chat-settings'),
+        language,
+        rawMessage: query.error,
+      })
+    : null;
   const encryptedDmEnabled = isDmE2eeEnabledForUser(
     user.id,
     user.email ?? null,
@@ -704,6 +724,7 @@ export default async function ChatPage({
           aria-label={t.chat.backToChats}
           className="back-arrow-link conversation-back"
           href={withSpaceParam('/inbox', activeSpaceId)}
+          prefetch
         >
           <span aria-hidden="true">←</span>
         </Link>
@@ -755,8 +776,8 @@ export default async function ChatPage({
         </Link>
       </section>
 
-      {query.error && !isSettingsOpen ? (
-        <p className="notice notice-error">{query.error}</p>
+      {visibleRouteError && !isSettingsOpen ? (
+        <p className="notice notice-error">{visibleRouteError}</p>
       ) : null}
 
       <section className="chat-main">
@@ -1738,7 +1759,10 @@ export default async function ChatPage({
               spaceId={activeSpaceId}
             />
           ) : (
-            <form action={sendMessageAction} className="stack composer-form">
+            <GuardedServerActionForm
+              action={sendMessageAction}
+              className="stack composer-form"
+            >
               <input name="conversationId" type="hidden" value={conversationId} />
               {activeReplyTarget ? (
                 <input
@@ -1783,16 +1807,16 @@ export default async function ChatPage({
                     <span aria-hidden="true" className="composer-mic-icon" />
                   </button>
 
-                  <button
+                  <PendingSubmitButton
                     aria-label={t.chat.sendMessage}
                     className="button composer-button composer-button-icon"
                     type="submit"
                   >
                     <span aria-hidden="true">➤</span>
-                  </button>
+                  </PendingSubmitButton>
                 </div>
               </div>
-            </form>
+            </GuardedServerActionForm>
           )}
         </section>
       </section>
@@ -1827,8 +1851,8 @@ export default async function ChatPage({
               </Link>
             </div>
 
-            {query.error ? (
-              <p className="notice notice-error">{query.error}</p>
+            {visibleSettingsError ? (
+              <p className="notice notice-error">{visibleSettingsError}</p>
             ) : null}
 
             {hasSettingsSavedState ? (
@@ -1951,7 +1975,7 @@ export default async function ChatPage({
                     canManageGroupParticipants &&
                     !participant.isCurrentUser &&
                     participant.role !== 'owner' ? (
-                      <form action={removeGroupParticipantAction}>
+                      <GuardedServerActionForm action={removeGroupParticipantAction}>
                         <input
                           name="conversationId"
                           type="hidden"
@@ -1962,13 +1986,13 @@ export default async function ChatPage({
                           type="hidden"
                           value={participant.userId}
                         />
-                        <button
+                        <PendingSubmitButton
                           className="button button-compact button-danger-subtle"
                           type="submit"
                         >
                           {t.chat.remove}
-                        </button>
-                      </form>
+                        </PendingSubmitButton>
+                      </GuardedServerActionForm>
                     ) : null}
                   </div>
                 ))}
@@ -2049,7 +2073,10 @@ export default async function ChatPage({
                           {t.chat.everyoneIsHere}
                         </p>
                       ) : (
-                        <form action={addGroupParticipantsAction} className="stack compact-form">
+                        <GuardedServerActionForm
+                          action={addGroupParticipantsAction}
+                          className="stack compact-form"
+                        >
                           <input
                             name="conversationId"
                             type="hidden"
@@ -2080,10 +2107,13 @@ export default async function ChatPage({
                               </label>
                             ))}
                           </div>
-                          <button className="button button-compact" type="submit">
+                          <PendingSubmitButton
+                            className="button button-compact"
+                            type="submit"
+                          >
                             {t.chat.addPeople}
-                          </button>
-                        </form>
+                          </PendingSubmitButton>
+                        </GuardedServerActionForm>
                       )
                     ) : null}
                   </section>
@@ -2092,19 +2122,19 @@ export default async function ChatPage({
                     <div className="stack conversation-settings-panel-copy">
                       <h4 className="conversation-settings-subtitle">{t.chat.leaveGroup}</h4>
                     </div>
-                    <form action={leaveGroupAction}>
+                    <GuardedServerActionForm action={leaveGroupAction}>
                       <input
                         name="conversationId"
                         type="hidden"
                         value={conversationId}
                       />
-                      <button
+                      <PendingSubmitButton
                         className="button button-compact button-danger-subtle"
                         type="submit"
                       >
                         {t.chat.leaveGroupButton}
-                      </button>
-                    </form>
+                      </PendingSubmitButton>
+                    </GuardedServerActionForm>
                   </section>
                 </div>
               </section>
@@ -2118,7 +2148,7 @@ export default async function ChatPage({
                 </p>
               </div>
 
-              <form
+              <GuardedServerActionForm
                 action={updateConversationNotificationLevelAction}
                 className="conversation-notification-form"
               >
@@ -2128,7 +2158,7 @@ export default async function ChatPage({
                   value={conversationId}
                 />
 
-                <button
+                <PendingSubmitButton
                   className={
                     conversation.notificationLevel === 'default'
                       ? 'conversation-choice-button conversation-choice-button-active'
@@ -2144,9 +2174,9 @@ export default async function ChatPage({
                         {t.chat.notificationsDefaultNote}
                       </span>
                     </span>
-                </button>
+                </PendingSubmitButton>
 
-                <button
+                <PendingSubmitButton
                   className={
                     conversation.notificationLevel === 'muted'
                       ? 'conversation-choice-button conversation-choice-button-active'
@@ -2162,8 +2192,8 @@ export default async function ChatPage({
                         {t.chat.notificationsMutedNote}
                       </span>
                     </span>
-                </button>
-              </form>
+                </PendingSubmitButton>
+              </GuardedServerActionForm>
             </section>
 
             {conversation.kind === 'dm' ? (
@@ -2176,7 +2206,7 @@ export default async function ChatPage({
                 </div>
 
                 <div className="conversation-manage-actions">
-                  <form action={deleteDirectConversationAction}>
+                  <GuardedServerActionForm action={deleteDirectConversationAction}>
                     <input
                       name="conversationId"
                       type="hidden"
@@ -2187,13 +2217,13 @@ export default async function ChatPage({
                       type="hidden"
                       value={activeSpaceId ?? ''}
                     />
-                    <button
+                    <PendingSubmitButton
                       className="button button-compact button-danger-subtle"
                       type="submit"
                     >
                       {t.chat.deleteChatButton}
-                    </button>
-                  </form>
+                    </PendingSubmitButton>
+                  </GuardedServerActionForm>
                 </div>
               </section>
             ) : (
@@ -2206,7 +2236,7 @@ export default async function ChatPage({
                 </div>
 
                 <div className="conversation-manage-actions">
-                  <form action={hideConversationAction}>
+                  <GuardedServerActionForm action={hideConversationAction}>
                     <input
                       name="conversationId"
                       type="hidden"
@@ -2217,13 +2247,13 @@ export default async function ChatPage({
                       type="hidden"
                       value={activeSpaceId ?? ''}
                     />
-                    <button
+                    <PendingSubmitButton
                       className="button button-compact button-secondary"
                       type="submit"
                     >
                       {t.chat.hideFromInbox}
-                    </button>
-                  </form>
+                    </PendingSubmitButton>
+                  </GuardedServerActionForm>
                 </div>
               </section>
             )}

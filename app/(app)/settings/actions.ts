@@ -10,6 +10,10 @@ import {
   updateCurrentUserLanguagePreference,
   updateCurrentUserProfile,
 } from '@/modules/messaging/data/server';
+import {
+  logControlledUiError,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
 
 function redirectWithMessage(
   kind: 'error' | 'message',
@@ -143,9 +147,26 @@ export async function updateLanguagePreferenceAction(formData: FormData) {
     });
     await setLanguageCookie(preferredLanguage);
   } catch (error) {
+    const rawMessage =
+      error instanceof Error ? error.message : 'Unable to update language.';
+    const fallbackMessage =
+      preferredLanguage === 'ru'
+        ? 'Не удалось обновить язык. Попробуйте еще раз.'
+        : 'Unable to update language right now. Please try again.';
+
+    logControlledUiError({
+      fallback: fallbackMessage,
+      rawMessage,
+      surface: 'settings:update-language',
+    });
+
     redirectWithMessage(
       'error',
-      error instanceof Error ? error.message : 'Unable to update language.',
+      sanitizeUserFacingErrorMessage({
+        fallback: fallbackMessage,
+        language: preferredLanguage,
+        rawMessage,
+      }),
     );
   }
 
