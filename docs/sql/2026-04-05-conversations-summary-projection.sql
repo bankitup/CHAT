@@ -1,3 +1,7 @@
+-- Production repair for the conversation summary projection runtime.
+-- Safe to apply when public.conversations currently has only:
+-- id, kind, title, created_by, last_message_at, created_at, space_id, dm_key.
+
 alter table public.conversations
   add column if not exists last_message_id uuid,
   add column if not exists last_message_seq bigint,

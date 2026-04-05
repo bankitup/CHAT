@@ -539,9 +539,33 @@ const CONVERSATION_SUMMARY_PROJECTION_COLUMNS = [
   'last_message_body',
 ] as const;
 
+type ConversationSummaryProjectionAvailability =
+  | 'unknown'
+  | 'available'
+  | 'missing';
+
+let conversationSummaryProjectionAvailability: ConversationSummaryProjectionAvailability =
+  'unknown';
+
 function isMissingConversationSummaryProjectionErrorMessage(message: string) {
   return CONVERSATION_SUMMARY_PROJECTION_COLUMNS.some((columnName) =>
     isMissingColumnErrorMessage(message, columnName),
+  );
+}
+
+function markConversationSummaryProjectionAvailability(
+  next: ConversationSummaryProjectionAvailability,
+  reason?: string,
+) {
+  if (conversationSummaryProjectionAvailability === next) {
+    return;
+  }
+
+  conversationSummaryProjectionAvailability = next;
+
+  logConversationSchemaDiagnostics(
+    `conversation-summary-projection:${next}`,
+    reason ? { reason } : undefined,
   );
 }
 
@@ -573,6 +597,9 @@ function getConversationSummarySelect(input?: {
   includeSpaceId?: boolean;
   includeSummaryProjection?: boolean;
 }) {
+  const includeSummaryProjection =
+    input?.includeSummaryProjection !== false &&
+    conversationSummaryProjectionAvailability !== 'missing';
   const columns = [
     'id',
     'kind',
@@ -582,9 +609,8 @@ function getConversationSummarySelect(input?: {
     'created_by',
     'last_message_at',
     'created_at',
-    ...(input?.includeSummaryProjection === false
-      ? []
-      : [
+    ...(includeSummaryProjection
+      ? [
           'last_message_id',
           'last_message_seq',
           'last_message_sender_id',
@@ -592,7 +618,8 @@ function getConversationSummarySelect(input?: {
           'last_message_content_mode',
           'last_message_deleted_at',
           'last_message_body',
-        ]),
+        ]
+      : []),
   ];
 
   return columns.join(', ');
@@ -1085,6 +1112,10 @@ async function attachConversationsToMembershipRows(
     const missingSummaryProjection =
       isMissingConversationSummaryProjectionErrorMessage(error.message);
 
+    if (missingSummaryProjection) {
+      markConversationSummaryProjectionAvailability('missing', error.message);
+    }
+
     if (missingSpaceId || missingAvatarPath || missingSummaryProjection) {
       logConversationSchemaDiagnostics('attachConversationsToMembershipRows:select-error', {
         actualFailingColumn: missingAvatarPath
@@ -1168,6 +1199,16 @@ async function attachConversationsToMembershipRows(
       conversations = (fallback.data ?? null) as unknown as ConversationRecord[] | null;
     } else {
       throw new Error(error.message);
+    }
+  } else if (conversationSummaryProjectionAvailability === 'unknown') {
+    const projectionWasRequested =
+      rows.length > 0 &&
+      Object.prototype.hasOwnProperty.call(
+        (conversations ?? [])[0] ?? {},
+        'last_message_id',
+      );
+    if (projectionWasRequested) {
+      markConversationSummaryProjectionAvailability('available');
     }
   }
 
@@ -5574,6 +5615,21 @@ async function updateConversationSummaryProjectionFromRow(
   conversationId: string,
   row: ConversationSummaryMessageRow | null,
 ) {
+  if (conversationSummaryProjectionAvailability === 'missing') {
+    const { error: fallbackUpdate } = await supabase
+      .from('conversations')
+      .update({
+        last_message_at: row?.created_at ?? null,
+      })
+      .eq('id', conversationId);
+
+    if (fallbackUpdate) {
+      throw new Error(fallbackUpdate.message);
+    }
+
+    return;
+  }
+
   const latestMessageSeq = normalizeConversationLatestMessageSeq(row?.seq ?? null);
   const updatePayload = row
     ? {
@@ -5606,6 +5662,7 @@ async function updateConversationSummaryProjectionFromRow(
     if (
       isMissingConversationSummaryProjectionErrorMessage(error.message)
     ) {
+      markConversationSummaryProjectionAvailability('missing', error.message);
       const fallbackUpdate = await supabase
         .from('conversations')
         .update({
