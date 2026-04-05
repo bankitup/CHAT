@@ -33,6 +33,7 @@ type GroupChatSettingsFormProps = {
     avatarStorageUnavailable: string;
   };
   spaceId?: string | null;
+  returnTo?: 'settings-screen' | null;
 };
 
 function revokeObjectUrl(value: string | null) {
@@ -47,6 +48,7 @@ export function GroupChatSettingsForm({
   defaultTitle,
   labels,
   spaceId,
+  returnTo,
 }: GroupChatSettingsFormProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -158,6 +160,10 @@ export function GroupChatSettingsForm({
 
     if (spaceId?.trim()) {
       formData.set('spaceId', spaceId.trim());
+    }
+
+    if (returnTo === 'settings-screen') {
+      formData.set('returnTo', 'settings-screen');
     }
 
     if (pendingAvatarFile) {

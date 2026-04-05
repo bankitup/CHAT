@@ -13,7 +13,6 @@ import {
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   editMessage,
-  deleteDirectConversationForUser,
   hideConversationForUser,
   isSupportedChatAttachmentType,
   leaveGroupConversation,
@@ -37,6 +36,12 @@ import { withSpaceParam } from '@/modules/spaces/url';
 
 function readSpaceId(formData: FormData) {
   return String(formData.get('spaceId') ?? '').trim() || null;
+}
+
+function readSettingsReturnTarget(formData: FormData) {
+  return String(formData.get('returnTo') ?? '').trim() === 'settings-screen'
+    ? 'settings-screen'
+    : 'settings-overlay';
 }
 
 function redirectToInbox(spaceId?: string | null): never {
@@ -68,6 +73,31 @@ function redirectToChat(
   const href = withSpaceParam(baseHref, spaceId);
 
   redirect(options?.hash ? `${href}${options.hash}` : href);
+}
+
+function redirectToChatSettings(
+  conversationId: string,
+  spaceId?: string | null,
+  options?: {
+    error?: string | null;
+    saved?: boolean;
+  },
+): never {
+  const params = new URLSearchParams();
+
+  if (options?.error?.trim()) {
+    params.set('error', options.error.trim());
+  }
+
+  if (options?.saved) {
+    params.set('saved', '1');
+  }
+
+  const baseHref = params.toString()
+    ? `/chat/${conversationId}/settings?${params.toString()}`
+    : `/chat/${conversationId}/settings`;
+
+  redirect(withSpaceParam(baseHref, spaceId));
 }
 
 function getFriendlyChatActionErrorMessage(
@@ -108,13 +138,22 @@ function redirectWithSettingsError(
   conversationId: string,
   message: string,
   spaceId?: string | null,
+  target: 'settings-overlay' | 'settings-screen' = 'settings-overlay',
 ): never {
+  const sanitizedMessage = sanitizeUserFacingErrorMessage({
+    fallback: 'Unable to update chat settings right now. Please try again.',
+    language: 'en',
+    rawMessage: message,
+  });
+
+  if (target === 'settings-screen') {
+    redirectToChatSettings(conversationId, spaceId, {
+      error: sanitizedMessage,
+    });
+  }
+
   const params = new URLSearchParams({
-    error: sanitizeUserFacingErrorMessage({
-      fallback: 'Unable to update chat settings right now. Please try again.',
-      language: 'en',
-      rawMessage: message,
-    }),
+    error: sanitizedMessage,
     details: 'open',
   });
   const href = withSpaceParam(`/chat/${conversationId}?${params.toString()}`, spaceId);
@@ -124,7 +163,14 @@ function redirectWithSettingsError(
 function redirectWithSettingsSaved(
   conversationId: string,
   spaceId?: string | null,
+  target: 'settings-overlay' | 'settings-screen' = 'settings-overlay',
 ): never {
+  if (target === 'settings-screen') {
+    redirectToChatSettings(conversationId, spaceId, {
+      saved: true,
+    });
+  }
+
   const params = new URLSearchParams({
     saved: '1',
     details: 'open',
@@ -482,6 +528,7 @@ export async function deleteMessageAction(formData: FormData) {
 export async function updateConversationTitleAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
   const title = String(formData.get('title') ?? '').trim();
 
   if (!conversationId) {
@@ -489,7 +536,12 @@ export async function updateConversationTitleAction(formData: FormData) {
   }
 
   if (!title) {
-    redirectWithSettingsError(conversationId, 'Group title cannot be empty.', spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      'Group title cannot be empty.',
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   const supabase = await createSupabaseServerClient();
@@ -498,7 +550,12 @@ export async function updateConversationTitleAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      'Please log in and try again.',
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -520,17 +577,24 @@ export async function updateConversationTitleAction(formData: FormData) {
       'chat:update-title',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectWithSettingsSaved(conversationId, spaceId);
+  revalidatePath(`/chat/${conversationId}/settings`);
+  redirectWithSettingsSaved(conversationId, spaceId, settingsReturnTarget);
 }
 
 export async function updateConversationIdentityAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
   const title = String(formData.get('title') ?? '').trim();
   const removeAvatar = String(formData.get('removeAvatar') ?? '').trim() === '1';
   const avatarEntry = formData.get('avatar');
@@ -542,7 +606,12 @@ export async function updateConversationIdentityAction(formData: FormData) {
   }
 
   if (!title) {
-    redirectWithSettingsError(conversationId, 'Group title cannot be empty.', spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      'Group title cannot be empty.',
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   const supabase = await createSupabaseServerClient();
@@ -551,7 +620,12 @@ export async function updateConversationIdentityAction(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    redirectWithSettingsError(conversationId, 'Please log in and try again.', spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      'Please log in and try again.',
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   const isMember = await assertConversationMembership(conversationId, user.id);
@@ -575,18 +649,25 @@ export async function updateConversationIdentityAction(formData: FormData) {
       'chat:update-identity',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath('/inbox');
   revalidatePath('/activity');
   revalidatePath(`/chat/${conversationId}`);
-  redirectWithSettingsSaved(conversationId, spaceId);
+  revalidatePath(`/chat/${conversationId}/settings`);
+  redirectWithSettingsSaved(conversationId, spaceId, settingsReturnTarget);
 }
 
 export async function hideConversationAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
 
   if (!conversationId) {
     redirectToInbox(spaceId);
@@ -619,20 +700,38 @@ export async function hideConversationAction(formData: FormData) {
       'chat:hide-conversation',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
+  revalidatePath(`/chat/${conversationId}/settings`);
   redirectToInbox(spaceId);
 }
 
 export async function deleteDirectConversationAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
+  const confirmationMode = String(formData.get('confirmationMode') ?? '').trim();
+  const confirmationText = String(formData.get('confirmationText') ?? '').trim();
 
   if (!conversationId) {
     redirectToInbox(spaceId);
+  }
+
+  if (confirmationMode === 'typed-delete-ru' && confirmationText !== 'Удалить') {
+    redirectWithSettingsError(
+      conversationId,
+      'Type "Удалить" to confirm deleting this chat from your side.',
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   const supabase = await createSupabaseServerClient();
@@ -651,23 +750,29 @@ export async function deleteDirectConversationAction(formData: FormData) {
   }
 
   try {
-    await deleteDirectConversationForUser({
+    await hideConversationForUser({
       conversationId,
       userId: user.id,
     });
   } catch (error) {
     const message = getFriendlyChatActionErrorMessage(
       error,
-      'Unable to delete this chat right now.',
+      'Unable to remove this chat from your inbox right now.',
       'chat:delete-direct-conversation',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath('/inbox');
   revalidatePath('/activity');
   revalidatePath(`/chat/${conversationId}`);
+  revalidatePath(`/chat/${conversationId}/settings`);
   redirectToInbox(spaceId);
 }
 
@@ -676,6 +781,7 @@ export async function updateConversationNotificationLevelAction(
 ) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
   const notificationLevel = String(
     formData.get('notificationLevel') ?? '',
   ).trim();
@@ -720,11 +826,17 @@ export async function updateConversationNotificationLevelAction(
       'chat:update-notifications',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirectWithSettingsSaved(conversationId, spaceId);
+  revalidatePath(`/chat/${conversationId}/settings`);
+  redirectWithSettingsSaved(conversationId, spaceId, settingsReturnTarget);
 }
 
 export async function markConversationReadAction(formData: FormData) {
@@ -773,6 +885,7 @@ export async function markConversationReadAction(formData: FormData) {
 export async function addGroupParticipantsAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
   const participantUserIds = formData
     .getAll('participantUserIds')
     .map((value) => String(value).trim())
@@ -810,17 +923,24 @@ export async function addGroupParticipantsAction(formData: FormData) {
       'chat:add-participants',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectWithSettingsSaved(conversationId, spaceId);
+  revalidatePath(`/chat/${conversationId}/settings`);
+  redirectWithSettingsSaved(conversationId, spaceId, settingsReturnTarget);
 }
 
 export async function removeGroupParticipantAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
   const targetUserId = String(formData.get('targetUserId') ?? '').trim();
 
   if (!conversationId) {
@@ -855,17 +975,24 @@ export async function removeGroupParticipantAction(formData: FormData) {
       'chat:remove-participant',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
-  redirectWithSettingsSaved(conversationId, spaceId);
+  revalidatePath(`/chat/${conversationId}/settings`);
+  redirectWithSettingsSaved(conversationId, spaceId, settingsReturnTarget);
 }
 
 export async function leaveGroupAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
 
   if (!conversationId) {
     redirectToInbox(spaceId);
@@ -898,10 +1025,16 @@ export async function leaveGroupAction(formData: FormData) {
       'chat:leave-group',
     );
 
-    redirectWithSettingsError(conversationId, message, spaceId);
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   revalidatePath('/inbox');
   revalidatePath(`/chat/${conversationId}`);
+  revalidatePath(`/chat/${conversationId}/settings`);
   redirectToInbox(spaceId);
 }

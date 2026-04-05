@@ -1241,24 +1241,24 @@ main {
   border: 1px solid transparent;
   border-bottom: 1px solid rgba(221, 226, 232, 0.62);
   border-radius: 16px;
-  padding: 9px 9px;
+  padding: 11px 11px;
 }
 
 .conversation-card-minimal {
-  padding: 7px 8px;
+  padding: 9px 10px;
   border-radius: 16px;
 }
 
 .conversation-list {
-  gap: 0;
+  gap: 8px;
 }
 
 .conversation-list-dm {
-  gap: 10px;
+  gap: 14px;
 }
 
 .conversation-list-minimal {
-  gap: 0;
+  gap: 8px;
 }
 
 .conversation-list-minimal > .conversation-card:last-child {
@@ -1266,12 +1266,12 @@ main {
 }
 
 .conversation-card-copy {
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .conversation-card-dm {
-  padding: 10px 11px;
+  padding: 12px 13px;
   border-color: rgba(224, 231, 241, 0.9);
   border-bottom-color: rgba(224, 231, 241, 0.9);
   border-radius: 22px;
@@ -1283,19 +1283,19 @@ main {
 }
 
 .conversation-card-copy-dm {
-  gap: 6px;
+  gap: 8px;
 }
 
 .conversation-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 11px;
+  gap: 13px;
   min-height: 58px;
 }
 
 .conversation-row-dm {
-  gap: 14px;
+  gap: 16px;
   min-height: 72px;
 }
 
@@ -1304,16 +1304,16 @@ main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 11px;
-  padding: 4px 0;
+  gap: 13px;
+  padding: 5px 0;
   color: inherit;
   width: 100%;
   grid-column: 1 / -1;
 }
 
 .conversation-row-link-dm {
-  gap: 14px;
-  padding: 6px 0;
+  gap: 16px;
+  padding: 7px 0;
 }
 
 .conversation-row-with-action {
@@ -1331,22 +1331,22 @@ main {
 }
 
 .conversation-main-copy {
-  gap: 3px;
+  gap: 5px;
 }
 
 .conversation-main-copy-dm {
-  gap: 5px;
+  gap: 7px;
 }
 
 .conversation-title-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 9px;
+  gap: 11px;
 }
 
 .conversation-title-row-dm {
-  gap: 10px;
+  gap: 12px;
 }
 
 .conversation-title-meta {
@@ -1452,7 +1452,7 @@ main {
   max-width: 100%;
   color: rgba(91, 100, 112, 0.8);
   font-size: 0.77rem;
-  line-height: 1.34;
+  line-height: 1.42;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -1474,7 +1474,7 @@ main {
 
 .conversation-preview-dm {
   font-size: 0.83rem;
-  line-height: 1.4;
+  line-height: 1.48;
   color: rgba(91, 100, 112, 0.76);
 }
 
@@ -1491,25 +1491,25 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
 }
 
 .conversation-footer-dm {
-  gap: 12px;
+  gap: 14px;
 }
 
 .conversation-footer-meta {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  min-height: 18px;
+  min-height: 20px;
   flex-wrap: wrap;
 }
 
 .conversation-list-dm .conversation-footer-meta {
-  gap: 6px;
-  min-height: 20px;
+  gap: 7px;
+  min-height: 22px;
 }
 
 .conversation-kind-label {
@@ -3040,6 +3040,23 @@ main {
   background: rgba(91, 100, 112, 0.22);
 }
 
+.conversation-settings-route-screen {
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+
+.conversation-settings-route-hero {
+  gap: 0;
+}
+
+.conversation-settings-route-header {
+  padding-bottom: 0;
+}
+
+.conversation-settings-route-surface {
+  gap: 14px;
+  padding: 14px 14px 18px;
+}
+
 .conversation-settings-header {
   display: flex;
   align-items: center;
@@ -3077,6 +3094,83 @@ main {
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 251, 255, 0.82));
+}
+
+.conversation-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.conversation-stats-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 13px;
+  border: 1px solid rgba(221, 228, 238, 0.88);
+  border-radius: 18px;
+  background: rgba(247, 250, 254, 0.88);
+}
+
+.conversation-stats-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.conversation-stats-value {
+  color: var(--foreground);
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.conversation-stats-list {
+  gap: 8px;
+}
+
+.conversation-stats-row {
+  padding: 0;
+}
+
+.chat-delete-confirm-overlay {
+  z-index: 30;
+}
+
+.chat-delete-confirm-backdrop {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.chat-delete-confirm-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 30rem);
+  margin: 0 auto;
+  padding: 12px 12px 14px;
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(248, 251, 255, 0.97));
+  box-shadow:
+    0 24px 60px rgba(17, 24, 39, 0.14),
+    0 10px 28px rgba(31, 111, 235, 0.05);
+}
+
+.chat-delete-confirm-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(250, 250, 251, 0.92);
+  color: var(--foreground);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.chat-delete-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .conversation-info-identity {

@@ -1170,11 +1170,7 @@ export default async function ChatPage({
         <Link
           aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
           className="card chat-header-card chat-header-link"
-          href={buildChatHref({
-            conversationId,
-            details: 'open',
-            spaceId: activeSpaceId,
-          })}
+          href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
         >
           <div className="chat-header-identity">
             {conversation.kind === 'group' ? (
@@ -2411,7 +2407,7 @@ export default async function ChatPage({
                 <div className="stack conversation-settings-panel-copy">
                   <h3 className="card-title">{t.chat.deleteChat}</h3>
                   <p className="muted conversation-settings-note">
-                    {t.chat.deleteChatNote}
+                    {t.chat.deleteChatCurrentUserOnlyNote}
                   </p>
                 </div>
 

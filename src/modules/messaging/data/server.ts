@@ -345,6 +345,11 @@ export type ConversationParticipantIdentity = {
   avatarPath?: string | null;
 };
 
+export type ConversationMessageStats = {
+  totalMessages: number;
+  perSenderCount: Map<string, number>;
+};
+
 type ConversationNameInput = {
   kind: string | null;
   title?: string | null;
@@ -1478,6 +1483,38 @@ export async function getConversationParticipants(conversationId: string) {
 
     return left.userId.localeCompare(right.userId);
   }) satisfies ConversationParticipant[];
+}
+
+export async function getConversationMessageStats(
+  conversationId: string,
+): Promise<ConversationMessageStats> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('messages')
+    .select('sender_id')
+    .eq('conversation_id', conversationId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const rows = (data ?? []) as Array<{ sender_id?: string | null }>;
+  const perSenderCount = new Map<string, number>();
+
+  for (const row of rows) {
+    const senderId = row.sender_id?.trim();
+
+    if (!senderId) {
+      continue;
+    }
+
+    perSenderCount.set(senderId, (perSenderCount.get(senderId) ?? 0) + 1);
+  }
+
+  return {
+    totalMessages: rows.length,
+    perSenderCount,
+  };
 }
 
 async function getActiveConversationMembershipRows(

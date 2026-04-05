@@ -268,7 +268,19 @@ type LanguageDictionary = {
     hideFromInbox: string;
     deleteChat: string;
     deleteChatNote: string;
+    deleteChatCurrentUserOnlyNote: string;
     deleteChatButton: string;
+    deleteChatConfirmTitle: string;
+    deleteChatConfirmBody: string;
+    deleteChatConfirmHint: string;
+    deleteChatConfirmPlaceholder: string;
+    deleteChatConfirmButton: string;
+    messageStatsTitle: string;
+    messageStatsNote: string;
+    totalMessagesStat: string;
+    messageSplitStat: string;
+    messageLeadSummary: (label: string, count: number) => string;
+    messageLeadTie: string;
     noMessagesYet: string;
     unreadMessages: string;
     today: string;
@@ -622,6 +634,20 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       deleteChat: 'Delete chat',
       deleteChatNote: 'Delete this direct chat and its current message history.',
       deleteChatButton: 'Delete chat',
+      deleteChatCurrentUserOnlyNote:
+        'Remove this direct chat from your side only. The other person keeps their copy.',
+      deleteChatConfirmTitle: 'Delete chat from your side',
+      deleteChatConfirmBody:
+        'This removes the direct chat from your inbox for your account only.',
+      deleteChatConfirmHint: 'Type "Удалить" to confirm.',
+      deleteChatConfirmPlaceholder: 'Удалить',
+      deleteChatConfirmButton: 'Delete from my side',
+      messageStatsTitle: 'Messages',
+      messageStatsNote: 'How messages are split in this chat.',
+      totalMessagesStat: 'Total sent',
+      messageSplitStat: 'Split',
+      messageLeadSummary: (label, count) => `${label} sent ${count} more message${count === 1 ? '' : 's'}.`,
+      messageLeadTie: 'Both participants sent the same number of messages.',
       noMessagesYet: 'No messages yet',
       unreadMessages: 'Unread messages',
       today: 'Today',
@@ -983,6 +1009,20 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       deleteChat: 'Удалить чат',
       deleteChatNote: 'Удалить этот личный чат и его текущую историю сообщений.',
       deleteChatButton: 'Удалить чат',
+      deleteChatCurrentUserOnlyNote:
+        'Убрать этот личный чат только с вашей стороны. У другого участника чат останется.',
+      deleteChatConfirmTitle: 'Удалить чат с вашей стороны',
+      deleteChatConfirmBody:
+        'Чат исчезнет из ваших чатов только для вашего аккаунта.',
+      deleteChatConfirmHint: 'Введите "Удалить", чтобы подтвердить.',
+      deleteChatConfirmPlaceholder: 'Удалить',
+      deleteChatConfirmButton: 'Удалить с моей стороны',
+      messageStatsTitle: 'Сообщения',
+      messageStatsNote: 'Как распределены сообщения в этом чате.',
+      totalMessagesStat: 'Всего отправлено',
+      messageSplitStat: 'Распределение',
+      messageLeadSummary: (label, count) => `${label} отправил${label === 'Вы' ? 'и' : ''} на ${count} больше.`,
+      messageLeadTie: 'Оба участника отправили одинаковое число сообщений.',
       noMessagesYet: 'Пока нет сообщений',
       unreadMessages: 'Непрочитанные сообщения',
       today: 'Сегодня',
