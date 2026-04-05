@@ -959,58 +959,57 @@ export default async function ChatPage({
         vercelUrl={threadDeploymentMarker.vercelUrl}
       >
       <section className="stack chat-header-stack" id="chat-header-shell">
-        <Link
-          aria-label={t.chat.backToChats}
-          className="back-arrow-link conversation-back"
-          href={withSpaceParam('/inbox', activeSpaceId)}
-          prefetch
-        >
-          <span aria-hidden="true">←</span>
-        </Link>
+        <section className="card chat-header-card chat-header-shell">
+          <Link
+            aria-label={t.chat.backToChats}
+            className="back-arrow-link conversation-back chat-header-back"
+            href={withSpaceParam('/inbox', activeSpaceId)}
+            prefetch
+          >
+            <span aria-hidden="true">←</span>
+          </Link>
 
-        <Link
-          aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
-          className="card chat-header-card chat-header-link"
-          href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
-        >
-          <div className="chat-header-identity">
-            <ChatHeaderAvatarVisual
-              conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
-              groupAvatarPath={conversation.avatarPath}
-              participant={
-                directParticipantIdentity
-                  ? {
-                      avatarPath: directParticipantIdentity.avatarPath ?? null,
-                      displayName: directParticipantIdentity.displayName ?? null,
-                      userId: directParticipantIdentity.userId,
-                    }
-                  : null
-              }
-              title={directConversationDisplayTitle}
-            />
+          <Link
+            aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
+            className="chat-header-main-link"
+            href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
+          >
+            <div className="chat-header-identity">
+              <ChatHeaderAvatarVisual
+                conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
+                groupAvatarPath={conversation.avatarPath}
+                participant={
+                  directParticipantIdentity
+                    ? {
+                        avatarPath: directParticipantIdentity.avatarPath ?? null,
+                        displayName: directParticipantIdentity.displayName ?? null,
+                        userId: directParticipantIdentity.userId,
+                      }
+                    : null
+                }
+                title={directConversationDisplayTitle}
+              />
 
-            <div className="stack chat-header-copy">
-              <h1 className="conversation-screen-title">
-                {directConversationDisplayTitle}
-              </h1>
-              {conversation.kind === 'group' ? (
-                <p className="muted chat-member-summary">{groupMemberSummary}</p>
-              ) : otherParticipants[0] ? (
-                <DmThreadClientSubtree
-                  conversationId={conversationId}
-                  {...threadClientDiagnostics}
-                  fallback={null}
-                  surface="conversation-presence-status"
-                >
-                  <ConversationPresenceStatus language={language} />
-                </DmThreadClientSubtree>
-              ) : null}
+              <div className="stack chat-header-copy">
+                <h1 className="conversation-screen-title">
+                  {directConversationDisplayTitle}
+                </h1>
+                {conversation.kind === 'group' ? (
+                  <p className="muted chat-member-summary">{groupMemberSummary}</p>
+                ) : otherParticipants[0] ? (
+                  <DmThreadClientSubtree
+                    conversationId={conversationId}
+                    {...threadClientDiagnostics}
+                    fallback={null}
+                    surface="conversation-presence-status"
+                  >
+                    <ConversationPresenceStatus language={language} />
+                  </DmThreadClientSubtree>
+                ) : null}
+              </div>
             </div>
-          </div>
-          <span className="chat-header-chevron" aria-hidden="true">
-            ›
-          </span>
-        </Link>
+          </Link>
+        </section>
       </section>
 
       {visibleRouteError && !isSettingsOpen ? (
