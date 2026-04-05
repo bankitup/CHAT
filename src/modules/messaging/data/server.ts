@@ -3995,12 +3995,15 @@ export async function getConversationMessages(
         conversationId,
         count: normalizedMessages.length,
         debugRequestId: options?.debugRequestId ?? null,
+        deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
         firstMessageId: normalizedMessages[0]?.id ?? null,
+        gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
         hasMoreOlder,
         lastMessageId:
           normalizedMessages[normalizedMessages.length - 1]?.id ?? null,
         limitLatest: normalizedLimit,
         queryLimit,
+        vercelUrl: process.env.VERCEL_URL ?? null,
       });
     }
 

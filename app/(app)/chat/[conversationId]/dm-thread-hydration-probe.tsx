@@ -9,6 +9,7 @@ type DmThreadHydrationProbeProps = {
   historyWindowLimit: number;
   initialServerMessageCount: number;
   kind: 'dm' | 'group';
+  lastMessageId: string | null;
   renderedEmptyState: boolean;
 };
 
@@ -40,6 +41,7 @@ export function DmThreadHydrationProbe({
   historyWindowLimit,
   initialServerMessageCount,
   kind,
+  lastMessageId,
   renderedEmptyState,
 }: DmThreadHydrationProbeProps) {
   useEffect(() => {
@@ -56,6 +58,7 @@ export function DmThreadHydrationProbe({
       firstMessageId,
       historyWindowLimit,
       kind,
+      lastMessageId,
       loggedAt: new Date().toISOString(),
       renderedEmptyState,
       serverProvidedInitialMessageCount: initialServerMessageCount,
@@ -70,6 +73,7 @@ export function DmThreadHydrationProbe({
     historyWindowLimit,
     initialServerMessageCount,
     kind,
+    lastMessageId,
     renderedEmptyState,
   ]);
 

@@ -16,6 +16,12 @@ type PresenceStateEntry = {
 
 const ConversationPresenceContext = createContext(false);
 
+declare global {
+  interface Window {
+    __chatDmPresenceSubscriptions?: Record<string, number>;
+  }
+}
+
 function hasTrackedUser(
   presenceState: Record<string, PresenceStateEntry[]>,
   userId: string,
@@ -40,6 +46,9 @@ export function ConversationPresenceProvider({
     () => `chat-presence:${conversationId}`,
     [conversationId],
   );
+  const diagnosticsEnabled =
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -55,6 +64,21 @@ export function ConversationPresenceProvider({
       const presenceState = channel.presenceState<PresenceStateEntry>();
       setIsOtherParticipantPresent(hasTrackedUser(presenceState, otherUserId));
     };
+
+    if (diagnosticsEnabled && typeof window !== 'undefined') {
+      const currentCounts = window.__chatDmPresenceSubscriptions ?? {};
+      const nextCount = (currentCounts[conversationId] ?? 0) + 1;
+      window.__chatDmPresenceSubscriptions = {
+        ...currentCounts,
+        [conversationId]: nextCount,
+      };
+
+      console.info('[chat-presence]', 'subscription:create', {
+        activeConversationSubscriptionCount: nextCount,
+        channelName,
+        conversationId,
+      });
+    }
 
     channel
       .on('presence', { event: 'sync' }, syncPresenceState)
@@ -73,10 +97,25 @@ export function ConversationPresenceProvider({
       });
 
     return () => {
+      if (diagnosticsEnabled && typeof window !== 'undefined') {
+        const currentCounts = window.__chatDmPresenceSubscriptions ?? {};
+        const nextCount = Math.max(0, (currentCounts[conversationId] ?? 1) - 1);
+        window.__chatDmPresenceSubscriptions = {
+          ...currentCounts,
+          [conversationId]: nextCount,
+        };
+
+        console.info('[chat-presence]', 'subscription:dispose', {
+          activeConversationSubscriptionCount: nextCount,
+          channelName,
+          conversationId,
+        });
+      }
+
       void channel.untrack();
       void supabase.removeChannel(channel);
     };
-  }, [channelName, conversationId, currentUserId, otherUserId]);
+  }, [channelName, conversationId, currentUserId, diagnosticsEnabled, otherUserId]);
 
   return (
     <ConversationPresenceContext.Provider value={isOtherParticipantPresent}>

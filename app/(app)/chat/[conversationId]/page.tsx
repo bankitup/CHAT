@@ -59,12 +59,15 @@ import {
 import { AutoGrowTextarea } from './auto-grow-textarea';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import { ConversationPresenceStatus } from './conversation-presence-status';
-import { ConversationPresenceProvider } from './conversation-presence-provider';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { MarkConversationRead } from './mark-conversation-read';
-import { DmThreadClientSubtree } from './dm-thread-client-diagnostics';
+import {
+  DmThreadClientSubtree,
+  DmThreadComposerFallback,
+  DmThreadPresenceScope,
+} from './dm-thread-client-diagnostics';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
 import { ProgressiveHistoryLoader } from './progressive-history-loader';
 import { TypingIndicator } from './typing-indicator';
@@ -673,6 +676,7 @@ export default async function ChatPage({
     process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
       ? crypto.randomUUID()
       : null;
+  const threadDeploymentMarker = getThreadDeploymentMarker();
   const [{ messages, hasMoreOlder }, readState, memberReadStates, participants] =
     await Promise.all([
       getConversationMessages(conversationId, {
@@ -689,6 +693,8 @@ export default async function ChatPage({
       ? await getAvailableUsers(user.id, { spaceId: activeSpaceId })
       : [];
   const messageIds = messages.map((message) => message.id);
+  const firstMessage = messages[0] ?? null;
+  const lastMessage = messages[messages.length - 1] ?? null;
   const encryptedMessageIds = messages
     .filter((message) => isEncryptedDmTextMessage(message))
     .map((message) => message.id);
@@ -721,10 +727,18 @@ export default async function ChatPage({
     console.info('[dm-e2ee-history]', 'thread:envelope-availability', {
       conversationId,
       currentUserId: user.id,
+      debugRequestId: threadRenderRequestId,
+      deploymentId: threadDeploymentMarker.deploymentId,
       encryptedMessageCount: encryptedMessageIds.length,
       envelopeCount: e2eeEnvelopesByMessage.size,
+      firstMessageId: firstMessage?.id ?? null,
+      gitCommitSha: threadDeploymentMarker.gitCommitSha,
+      historyWindowLimit: threadHistoryLimit,
+      lastMessageId: lastMessage?.id ?? null,
+      messageCount: messages.length,
       missingEnvelopeCount: missingEnvelopeMessageIds.length,
       missingEnvelopeMessageIds,
+      vercelUrl: threadDeploymentMarker.vercelUrl,
     });
   }
   const senderNames = new Map<string, string>(
@@ -848,7 +862,6 @@ export default async function ChatPage({
   const activeActionReactions = activeActionMessage
     ? reactionsByMessage.get(activeActionMessage.id) ?? []
     : [];
-  const firstMessage = messages[0] ?? null;
   const firstMessageCreatedAtValid = firstMessage
     ? Boolean(parseSafeDate(firstMessage.created_at))
     : null;
@@ -920,13 +933,19 @@ export default async function ChatPage({
       })
     );
   }).length;
+  const threadClientDiagnostics = {
+    debugRequestId: threadRenderRequestId,
+    deploymentId: threadDeploymentMarker.deploymentId,
+    gitCommitSha: threadDeploymentMarker.gitCommitSha,
+    vercelUrl: threadDeploymentMarker.vercelUrl,
+  };
 
   if (
     process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
     conversation.kind === 'dm'
   ) {
     logThreadRenderDiagnostics('dm-thread:open-summary', {
-      ...getThreadDeploymentMarker(),
+      ...threadDeploymentMarker,
       conversationId,
       debugRequestId: threadRenderRequestId,
       dateFallbackUsed,
@@ -936,6 +955,7 @@ export default async function ChatPage({
       firstMessageBodyType,
       firstMessageCreatedAtValid,
       firstMessageId: firstMessage?.id ?? null,
+      lastMessageId: lastMessage?.id ?? null,
       hasMoreOlder,
       historyWindowSize: messages.length,
       historyWindowLimit: threadHistoryLimit,
@@ -1008,12 +1028,14 @@ export default async function ChatPage({
           historyWindowLimit={threadHistoryLimit}
           initialServerMessageCount={messages.length}
           kind="dm"
+          lastMessageId={lastMessage?.id ?? null}
           renderedEmptyState={messages.length === 0}
         />
       ) : null}
       {conversation.kind === 'dm' ? (
         <DmThreadClientSubtree
           conversationId={conversationId}
+          {...threadClientDiagnostics}
           surface="active-chat-realtime-sync"
         >
           <ActiveChatRealtimeSync
@@ -1030,6 +1052,7 @@ export default async function ChatPage({
       {conversation.kind === 'dm' ? (
         <DmThreadClientSubtree
           conversationId={conversationId}
+          {...threadClientDiagnostics}
           surface="composer-keyboard-offset"
         >
           <ComposerKeyboardOffset />
@@ -1038,6 +1061,15 @@ export default async function ChatPage({
         <ComposerKeyboardOffset />
       )}
 
+      <DmThreadPresenceScope
+        conversationId={conversationId}
+        currentUserId={user.id}
+        debugRequestId={threadRenderRequestId}
+        deploymentId={threadDeploymentMarker.deploymentId}
+        gitCommitSha={threadDeploymentMarker.gitCommitSha}
+        otherUserId={conversation.kind === 'dm' ? otherParticipantUserId : null}
+        vercelUrl={threadDeploymentMarker.vercelUrl}
+      >
       <section className="stack chat-header-stack" id="chat-header-shell">
         <Link
           aria-label={t.chat.backToChats}
@@ -1082,14 +1114,11 @@ export default async function ChatPage({
               ) : otherParticipants[0] ? (
                 <DmThreadClientSubtree
                   conversationId={conversationId}
+                  {...threadClientDiagnostics}
+                  fallback={null}
                   surface="conversation-presence-status"
                 >
-                  <ConversationPresenceStatus
-                    conversationId={conversationId}
-                    currentUserId={user.id}
-                    language={language}
-                    otherUserId={otherParticipants[0].userId}
-                  />
+                  <ConversationPresenceStatus language={language} />
                 </DmThreadClientSubtree>
               ) : null}
             </div>
@@ -1109,6 +1138,7 @@ export default async function ChatPage({
           {conversation.kind === 'dm' ? (
             <DmThreadClientSubtree
               conversationId={conversationId}
+              {...threadClientDiagnostics}
               surface="progressive-history-loader"
             >
               <ProgressiveHistoryLoader
@@ -1135,6 +1165,7 @@ export default async function ChatPage({
           {conversation.kind === 'dm' ? (
             <DmThreadClientSubtree
               conversationId={conversationId}
+              {...threadClientDiagnostics}
               surface="auto-scroll-to-latest"
             >
               <AutoScrollToLatest
@@ -1156,497 +1187,6 @@ export default async function ChatPage({
             <div className="chat-empty-state" aria-label={t.chat.noMessagesYet}>
               <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
             </div>
-          ) : otherParticipantUserId ? (
-            <DmThreadClientSubtree
-              conversationId={conversationId}
-              surface="conversation-presence-provider"
-            >
-              <ConversationPresenceProvider
-                conversationId={conversationId}
-                currentUserId={user.id}
-                otherUserId={otherParticipantUserId}
-              >
-                {timelineItems.map((item) => {
-                if (item.type === 'separator') {
-                  return (
-                    <div
-                      key={item.key}
-                      className="message-day-separator"
-                      aria-label={item.label}
-                    >
-                      <span className="message-day-label">{item.label}</span>
-                    </div>
-                  );
-                }
-
-                if (item.type === 'unread') {
-                  return (
-                    <div
-                      key={item.key}
-                      className="message-unread-separator"
-                      aria-label={item.label}
-                    >
-                      <span className="message-unread-label">{item.label}</span>
-                    </div>
-                  );
-                }
-
-                const { message } = item;
-                const isOwnMessage = message.sender_id === user.id;
-                const isDeletedMessage = Boolean(message.deleted_at);
-                const messageSeq = getMessageSeq(message.seq);
-                const normalizedMessageBody = normalizeMessageBodyText(message.body);
-                const isLatestConversationMessage =
-                  latestVisibleMessageSeq !== null &&
-                  Number.isFinite(messageSeq) &&
-                  messageSeq === latestVisibleMessageSeq;
-                const isMessageInEditMode =
-                  activeEditMessageId === message.id &&
-                  isOwnMessage &&
-                  !isDeletedMessage &&
-                  !isEncryptedDmTextMessage(message);
-                const isMessageInDeleteMode =
-                  activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
-                const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
-                const encryptedEnvelope =
-                  e2eeEnvelopesByMessage.get(message.id) ?? null;
-                const canAttemptEncryptedRender = canRenderEncryptedDmBody({
-                  clientId: message.client_id,
-                  envelopePresent: Boolean(encryptedEnvelope),
-                });
-                if (isEncryptedDmTextMessage(message) && !canAttemptEncryptedRender) {
-                  logEncryptedDmRenderFallback({
-                    clientId: message.client_id,
-                    conversationId,
-                    envelopePresent: Boolean(encryptedEnvelope),
-                    messageId: message.id,
-                  });
-                }
-                const otherParticipantReadSeq =
-                  otherParticipantReadState?.lastReadMessageSeq ?? null;
-                const outgoingMessageStatus = getOutgoingMessageStatus({
-                  conversationId,
-                  isOwnMessage,
-                  isDeletedMessage,
-                  messageId: message.id,
-                  messageSeq: message.seq,
-                  otherParticipantReadSeq:
-                    conversation.kind === 'dm' ? otherParticipantReadSeq : null,
-                });
-                const isMessageActionActive = activeActionMessage?.id === message.id;
-
-                if (!parseSafeDate(message.created_at)) {
-                  logThreadRenderDiagnostics('fallback:invalid-message-created-at', {
-                    conversationId,
-                    createdAt: message.created_at ?? null,
-                    messageId: message.id,
-                  });
-                }
-
-                if (message.body !== null && typeof message.body !== 'string') {
-                  logThreadRenderDiagnostics('fallback:invalid-message-body-type', {
-                    bodyType: typeof message.body,
-                    conversationId,
-                    messageId: message.id,
-                  });
-                }
-
-                return (
-                  <article
-                    key={item.key}
-                    className={isOwnMessage ? 'message-row message-row-own' : 'message-row'}
-                  >
-                    <div
-                      className={
-                        isDeletedMessage
-                          ? isOwnMessage
-                            ? 'message-card message-card-own message-card-deleted'
-                            : 'message-card message-card-deleted'
-                          : isOwnMessage
-                            ? 'message-card message-card-own'
-                            : 'message-card'
-                      }
-                      id={`message-${message.id}`}
-                    >
-                      {!isDeletedMessage ? (
-                        <div
-                          className={
-                            isOwnMessage
-                              ? 'message-header message-header-own'
-                              : 'message-header'
-                          }
-                        >
-                          <div className="message-header-side">
-                            {!isDeletedMessage ? (
-                              <Link
-                                aria-label={t.chat.openMessageActions}
-                                className={
-                                  isMessageActionActive
-                                    ? 'message-actions-trigger message-actions-trigger-active'
-                                    : 'message-actions-trigger'
-                                }
-                                href={buildChatHref({
-                                  actionMessageId: message.id,
-                                  conversationId,
-                                  hash: `#message-${message.id}`,
-                                  spaceId: activeSpaceId,
-                                })}
-                              >
-                                <span aria-hidden="true">⋯</span>
-                              </Link>
-                            ) : null}
-                          </div>
-                        </div>
-                      ) : null}
-                      <div
-                        className={
-                          isOwnMessage
-                            ? 'message-bubble message-bubble-own'
-                            : 'message-bubble'
-                        }
-                      >
-                        {message.reply_to_message_id && !isDeletedMessage ? (
-                          <div className="message-reply-reference">
-                            <span className="message-reply-sender">
-                              {(() => {
-                                const repliedMessage = messagesById.get(
-                                  message.reply_to_message_id,
-                                );
-
-                                if (!repliedMessage) {
-                                  return t.chat.earlierMessage;
-                                }
-
-                                if (repliedMessage.deleted_at) {
-                                  return t.chat.deletedMessage;
-                                }
-
-                                return (
-                                  senderNames.get(repliedMessage.sender_id ?? '') ||
-                                  t.chat.unknownUser
-                                );
-                              })()}
-                            </span>
-                            <span className="message-reply-snippet">
-                              {(() => {
-                                const repliedMessage = messagesById.get(
-                                  message.reply_to_message_id,
-                                );
-
-                                if (repliedMessage?.deleted_at) {
-                                  return t.chat.messageDeleted;
-                                }
-
-                                if (repliedMessage?.kind === 'voice') {
-                                  return t.chat.voiceMessage;
-                                }
-
-                                if (repliedMessage && isEncryptedDmTextMessage(repliedMessage)) {
-                                  return t.chat.replyToEncryptedMessage;
-                                }
-
-                                return getMessageSnippet(
-                                  repliedMessage?.body ?? null,
-                                  t,
-                                  72,
-                                );
-                              })()}
-                            </span>
-                          </div>
-                        ) : null}
-                        {isDeletedMessage ? (
-                          <p className="message-deleted-text">{t.chat.messageDeleted}</p>
-                        ) : isMessageInEditMode ? (
-                          <form action={editMessageAction} className="stack message-edit-form">
-                            <input
-                              name="conversationId"
-                              type="hidden"
-                              value={conversationId}
-                            />
-                            <input name="messageId" type="hidden" value={message.id} />
-                            <label className="field">
-                              <span className="sr-only">{t.chat.edit}</span>
-                              <AutoGrowTextarea
-                                className="input textarea"
-                                defaultValue={
-                                  isEncryptedDmTextMessage(message)
-                                    ? ''
-                                    : normalizedMessageBody ?? ''
-                                }
-                                maxHeight={160}
-                                name="body"
-                                required
-                                rows={2}
-                              />
-                            </label>
-                            <div className="message-edit-actions">
-                              <button className="button button-compact" type="submit">
-                                {t.chat.save}
-                              </button>
-                              <Link
-                                className="pill message-edit-cancel"
-                                href={buildChatHref({
-                                  conversationId,
-                                  hash: `#message-${message.id}`,
-                                  spaceId: activeSpaceId,
-                                })}
-                              >
-                                {t.chat.cancel}
-                              </Link>
-                            </div>
-                          </form>
-                        ) : activeEditMessageId === message.id &&
-                          isOwnMessage &&
-                          isEncryptedDmTextMessage(message) ? (
-                          <div className="message-edit-unavailable">
-                            <p className="message-edit-unavailable-copy">
-                              {t.chat.encryptedEditUnavailable}
-                            </p>
-                            <div className="message-edit-actions">
-                              <Link
-                                className="pill message-edit-cancel"
-                                href={buildChatHref({
-                                  conversationId,
-                                  hash: `#message-${message.id}`,
-                                  spaceId: activeSpaceId,
-                                })}
-                              >
-                                {t.chat.cancel}
-                              </Link>
-                            </div>
-                          </div>
-                        ) : isEncryptedDmTextMessage(message) ? (
-                          canAttemptEncryptedRender ? (
-                            <DmThreadClientSubtree
-                              conversationId={conversationId}
-                              messageId={message.id}
-                              surface="encrypted-dm-message-body"
-                            >
-                              <EncryptedDmMessageBody
-                                clientId={message.client_id}
-                                conversationId={conversationId}
-                                currentUserId={user.id}
-                                envelope={encryptedEnvelope}
-                                fallbackLabel={t.chat.encryptedMessage}
-                                refreshSetupLabel={t.chat.refreshEncryptedSetup}
-                                reloadConversationLabel={t.chat.reloadConversation}
-                                retryLabel={t.chat.retryEncryptedAction}
-                                setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
-                                unavailableLabel={t.chat.encryptedMessageUnavailable}
-                                messageId={message.id}
-                                messageCreatedAt={message.created_at}
-                                shouldCachePreview={
-                                  conversation.kind === 'dm' && isLatestConversationMessage
-                                }
-                              />
-                            </DmThreadClientSubtree>
-                          ) : (
-                            <div className="message-encryption-state">
-                              <p className="message-body">
-                                {t.chat.encryptedMessageUnavailable}
-                              </p>
-                            </div>
-                          )
-                        ) : normalizedMessageBody ? (
-                          <p className="message-body">{normalizedMessageBody}</p>
-                        ) : !messageAttachments.length ? (
-                          <p className="message-body">{t.chat.emptyMessage}</p>
-                        ) : null}
-                        {messageAttachments.length && !isDeletedMessage ? (
-                          <div className="message-attachments">
-                            {messageAttachments.map((attachment) => {
-                              const attachmentContent = (
-                                <>
-                                  {attachment.isImage && attachment.signedUrl ? (
-                                    <span
-                                      aria-hidden="true"
-                                      className="message-attachment-preview"
-                                      style={{
-                                        backgroundImage: `url("${attachment.signedUrl}")`,
-                                      }}
-                                    />
-                                  ) : (
-                                    <span
-                                      aria-hidden="true"
-                                      className="message-attachment-file"
-                                    >
-                                      {attachment.isAudio ? t.chat.audio : t.chat.file}
-                                    </span>
-                                  )}
-                                  <span className="message-attachment-copy">
-                                    <span className="message-attachment-name">
-                                      {attachment.fileName}
-                                    </span>
-                                    <span className="message-attachment-meta">
-                                      {attachment.isVoiceMessage
-                                        ? t.chat.voiceMessage
-                                        : attachment.isAudio
-                                          ? t.chat.audio
-                                          : attachment.isImage
-                                            ? t.chat.image
-                                            : t.chat.attachment}
-                                      {formatAttachmentSize(attachment.sizeBytes)
-                                        ? ` · ${formatAttachmentSize(
-                                            attachment.sizeBytes,
-                                          )}`
-                                        : ''}
-                                      {!attachment.signedUrl
-                                        ? ` · ${t.chat.unavailableRightNow}`
-                                        : ''}
-                                    </span>
-                                  </span>
-                                </>
-                              );
-
-                              if (!attachment.signedUrl) {
-                                return (
-                                  <div
-                                    key={attachment.id}
-                                    className="message-attachment-card message-attachment-card-unavailable"
-                                  >
-                                    {attachmentContent}
-                                  </div>
-                                );
-                              }
-
-                              if (attachment.isAudio) {
-                                return (
-                                  <div
-                                    key={attachment.id}
-                                    className="message-attachment-card message-attachment-card-audio"
-                                  >
-                                    {attachmentContent}
-                                    <audio
-                                      className="message-attachment-audio"
-                                      controls
-                                      preload="metadata"
-                                      src={attachment.signedUrl}
-                                    />
-                                  </div>
-                                );
-                              }
-
-                              return (
-                                <a
-                                  key={attachment.id}
-                                  className="message-attachment-card"
-                                  href={attachment.signedUrl}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                >
-                                  {attachmentContent}
-                                </a>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                      <span
-                        className={
-                          isOwnMessage
-                            ? 'message-meta message-meta-own'
-                            : 'message-meta'
-                        }
-                      >
-                        <span>{formatMessageTimestamp(message.created_at, language) || t.chat.justNow}</span>
-                        {isEditedMessage(message) ? (
-                          <span className="message-edited" aria-label={t.chat.edited}>
-                            {t.chat.edited}
-                          </span>
-                        ) : null}
-                        {isOwnMessage && outgoingMessageStatus ? (
-                          <DmThreadClientSubtree
-                            conversationId={conversationId}
-                            messageId={message.id}
-                            surface="live-outgoing-message-status"
-                          >
-                            <LiveOutgoingMessageStatus
-                              labels={{
-                                delivered: t.chat.delivered,
-                                seen: t.chat.seen,
-                                sent: t.chat.sent,
-                              }}
-                              status={outgoingMessageStatus}
-                            />
-                          </DmThreadClientSubtree>
-                        ) : null}
-                      </span>
-
-                      {reactionsByMessage.get(message.id)?.length && !isDeletedMessage ? (
-                        <div
-                          className={
-                            isOwnMessage
-                              ? 'reaction-groups reaction-groups-own'
-                              : 'reaction-groups'
-                          }
-                          aria-label={t.chat.messageReactions}
-                        >
-                          {reactionsByMessage.get(message.id)?.map((reaction) => (
-                            <form
-                              key={`${message.id}-${reaction.emoji}`}
-                              action={toggleReactionAction}
-                            >
-                              <input
-                                name="conversationId"
-                                type="hidden"
-                                value={conversationId}
-                              />
-                              <input
-                                name="messageId"
-                                type="hidden"
-                                value={message.id}
-                              />
-                              <input name="emoji" type="hidden" value={reaction.emoji} />
-                              <button
-                                className={
-                                  reaction.selectedByCurrentUser
-                                    ? 'reaction-pill reaction-pill-selected'
-                                    : 'reaction-pill'
-                                }
-                                type="submit"
-                              >
-                                <span>{reaction.emoji}</span>
-                                <span>{reaction.count}</span>
-                              </button>
-                            </form>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {isMessageInDeleteMode ? (
-                        <form action={deleteMessageAction} className="message-delete-form">
-                          <input
-                            name="conversationId"
-                            type="hidden"
-                            value={conversationId}
-                          />
-                          <input name="messageId" type="hidden" value={message.id} />
-                          <span className="message-delete-confirmation">
-                            {t.chat.deleteConfirm}
-                          </span>
-                          <div className="message-delete-actions">
-                            <button className="button button-danger button-compact" type="submit">
-                              {t.chat.delete}
-                            </button>
-                            <Link
-                              className="pill message-delete-cancel"
-                              href={buildChatHref({
-                                conversationId,
-                                hash: `#message-${message.id}`,
-                                spaceId: activeSpaceId,
-                              })}
-                            >
-                              {t.chat.cancel}
-                            </Link>
-                          </div>
-                        </form>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-                })}
-              </ConversationPresenceProvider>
-            </DmThreadClientSubtree>
           ) : (
             timelineItems.map((item) => {
               if (item.type === 'separator') {
@@ -1901,6 +1441,14 @@ export default async function ChatPage({
                           canAttemptEncryptedRender ? (
                             <DmThreadClientSubtree
                               conversationId={conversationId}
+                              {...threadClientDiagnostics}
+                              fallback={
+                                <div className="message-encryption-state">
+                                  <p className="message-body">
+                                    {t.chat.encryptedMessageUnavailable}
+                                  </p>
+                                </div>
+                              }
                               messageId={message.id}
                               surface="encrypted-dm-message-body"
                             >
@@ -2040,6 +1588,13 @@ export default async function ChatPage({
                           otherParticipantUserId ? (
                             <DmThreadClientSubtree
                               conversationId={conversationId}
+                              {...threadClientDiagnostics}
+                              fallback={
+                                <MessageStatusIndicator
+                                  label={t.chat.sent}
+                                  status="sent"
+                                />
+                              }
                               messageId={message.id}
                               surface="live-outgoing-message-status"
                             >
@@ -2142,6 +1697,7 @@ export default async function ChatPage({
           {conversation.kind === 'dm' ? (
             <DmThreadClientSubtree
               conversationId={conversationId}
+              {...threadClientDiagnostics}
               surface="optimistic-thread-messages"
             >
               <OptimisticThreadMessages
@@ -2176,6 +1732,7 @@ export default async function ChatPage({
           {conversation.kind === 'dm' ? (
             <DmThreadClientSubtree
               conversationId={conversationId}
+              {...threadClientDiagnostics}
               surface="mark-conversation-read"
             >
               <MarkConversationRead
@@ -2207,6 +1764,7 @@ export default async function ChatPage({
           {conversation.kind === 'dm' ? (
             <DmThreadClientSubtree
               conversationId={conversationId}
+              {...threadClientDiagnostics}
               surface="typing-indicator"
             >
               <TypingIndicator
@@ -2260,6 +1818,13 @@ export default async function ChatPage({
           {conversation.kind === 'dm' ? (
             <DmThreadClientSubtree
               conversationId={conversationId}
+              {...threadClientDiagnostics}
+              fallback={
+                <DmThreadComposerFallback
+                  copy={t.chat.encryptionNeedsRefresh}
+                  reloadLabel={t.chat.reloadConversation}
+                />
+              }
               surface="encrypted-dm-composer-form"
             >
               <EncryptedDmComposerForm
@@ -2342,6 +1907,7 @@ export default async function ChatPage({
           )}
         </section>
       </section>
+      </DmThreadPresenceScope>
 
       {isSettingsOpen ? (
         <section
