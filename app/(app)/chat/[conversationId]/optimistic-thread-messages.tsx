@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { emitOptimisticThreadRetry, LOCAL_OPTIMISTIC_MESSAGE_EVENT, type OptimisticThreadMessagePayload } from '@/modules/messaging/realtime/optimistic-thread';
+import { MessageStatusIndicator } from './message-status-indicator';
 
 type OptimisticThreadMessagesProps = {
   confirmedClientIds: string[];
@@ -123,50 +124,40 @@ export function OptimisticThreadMessages({
               </div>
               <span className="message-meta message-meta-own message-meta-optimistic">
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
-                <span
-                  className={
-                    isFailed
-                      ? 'message-status message-status-failed'
-                      : isPending
-                        ? 'message-status message-status-pending'
-                        : 'message-status'
-                  }
-                >
-                  {isPending ? (
-                    <>
-                      <span
-                        aria-hidden="true"
-                        className="message-status-spinner"
-                      />
-                      <span>{labels.sending}</span>
-                    </>
-                  ) : isFailed ? (
-                    <>
-                      <span>{item.errorMessage ?? labels.failed}</span>
-                      <button
-                        className="message-status-retry"
-                        onClick={() => {
-                          setItems((currentItems) =>
-                            currentItems.filter(
-                              (currentItem) => currentItem.clientId !== item.clientId,
-                            ),
-                          );
-                          emitOptimisticThreadRetry({
-                            body: item.body,
-                            clientId: item.clientId,
-                            conversationId,
-                            replyToMessageId: item.replyToMessageId ?? null,
-                          });
-                        }}
-                        type="button"
-                      >
-                        {labels.retry}
-                      </button>
-                    </>
-                  ) : (
-                    labels.sent
-                  )}
-                </span>
+                {isPending ? (
+                  <MessageStatusIndicator
+                    label={labels.sending}
+                    status="pending"
+                  />
+                ) : isFailed ? (
+                  <span className="message-status message-status-failed">
+                    <span>{item.errorMessage ?? labels.failed}</span>
+                    <button
+                      className="message-status-retry"
+                      onClick={() => {
+                        setItems((currentItems) =>
+                          currentItems.filter(
+                            (currentItem) => currentItem.clientId !== item.clientId,
+                          ),
+                        );
+                        emitOptimisticThreadRetry({
+                          body: item.body,
+                          clientId: item.clientId,
+                          conversationId,
+                          replyToMessageId: item.replyToMessageId ?? null,
+                        });
+                      }}
+                      type="button"
+                    >
+                      {labels.retry}
+                    </button>
+                  </span>
+                ) : (
+                  <MessageStatusIndicator
+                    label={labels.sent}
+                    status="sent"
+                  />
+                )}
               </span>
             </div>
           </article>

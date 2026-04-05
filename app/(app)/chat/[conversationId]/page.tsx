@@ -63,6 +63,7 @@ import { MarkConversationRead } from './mark-conversation-read';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
+import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
 
 type ChatPageProps = {
@@ -191,6 +192,24 @@ function isEditedMessage(value: { edited_at: string | null; deleted_at: string |
 
 function getMessageSeq(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
+}
+
+function getOutgoingMessageStatus(input: {
+  isOwnMessage: boolean;
+  isSeen: boolean;
+  isDeletedMessage: boolean;
+}) {
+  if (!input.isOwnMessage || input.isDeletedMessage) {
+    return null;
+  }
+
+  if (input.isSeen) {
+    return 'seen' as const;
+  }
+
+  // Honest limitation: the current backend exposes persistence and read state,
+  // but not a distinct message-delivered receipt from the recipient device yet.
+  return 'sent' as const;
 }
 
 function isEncryptedDmTextMessage(value: {
@@ -806,6 +825,11 @@ export default async function ChatPage({
                 Number.isFinite(messageSeq) &&
                 otherParticipantReadSeq >= messageSeq;
               const ownMessageStatusLabel = showSeenState ? t.chat.seen : t.chat.sent;
+              const outgoingMessageStatus = getOutgoingMessageStatus({
+                isOwnMessage,
+                isSeen: showSeenState,
+                isDeletedMessage,
+              });
               const isMessageActionActive = activeActionMessage?.id === message.id;
 
               return (
@@ -1098,23 +1122,12 @@ export default async function ChatPage({
                           </span>
                         ) : null}
                         {isOwnMessage ? (
-                          <span
-                            className={
-                              showSeenState
-                                ? 'message-status message-status-seen'
-                                : 'message-status'
-                            }
-                            aria-label={ownMessageStatusLabel}
-                          >
-                            {showSeenState ? (
-                              <>
-                                <span className="message-status-dot" aria-hidden="true" />
-                                <span>{t.chat.seen}</span>
-                              </>
-                            ) : (
-                              t.chat.sent
-                            )}
-                          </span>
+                          outgoingMessageStatus ? (
+                            <MessageStatusIndicator
+                              label={ownMessageStatusLabel}
+                              status={outgoingMessageStatus}
+                            />
+                          ) : null
                         ) : null}
                       </span>
 

@@ -3494,16 +3494,54 @@ main {
   }
 }
 
-.message-status-seen {
-  color: rgba(15, 118, 110, 0.72);
+.message-status-telegram {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
-.message-status-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.9;
+.message-status-telegram-pending {
+  color: rgba(31, 111, 235, 0.76);
+}
+
+.message-status-telegram-sent,
+.message-status-telegram-delivered {
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.message-status-telegram-seen {
+  color: rgba(31, 111, 235, 0.82);
+}
+
+.message-status-checks {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.message-status-checks-double .message-status-check + .message-status-check {
+  margin-left: -3px;
+}
+
+.message-status-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 8px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.message-status-telegram-sent .message-status-check,
+.message-status-telegram-delivered .message-status-check {
+  text-shadow:
+    0 0 1px rgba(17, 24, 39, 0.3),
+    0 1px 2px rgba(17, 24, 39, 0.18);
+}
+
+.message-status-telegram-seen .message-status-check {
+  text-shadow: 0 1px 1px rgba(31, 111, 235, 0.12);
 }
 
 .message-edited {
