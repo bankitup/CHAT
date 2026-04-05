@@ -667,9 +667,14 @@ export default async function ChatPage({
     query.details === 'open' || query.settings === 'open';
   const hasSettingsSavedState = query.saved === '1';
   const threadHistoryLimit = getNormalizedThreadHistoryLimit(query.history);
+  const threadRenderRequestId =
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+      ? crypto.randomUUID()
+      : null;
   const [{ messages, hasMoreOlder }, readState, memberReadStates, participants] =
     await Promise.all([
       getConversationMessages(conversationId, {
+        debugRequestId: threadRenderRequestId,
         limitLatest: threadHistoryLimit,
       }),
       getConversationReadState(conversationId, user.id),
@@ -702,6 +707,7 @@ export default async function ChatPage({
     getGroupedReactionsForMessages(messageIds, user.id),
     getMessageAttachments(messageIds),
     getCurrentUserDmE2eeEnvelopesForMessages({
+      debugRequestId: threadRenderRequestId,
       userId: user.id,
       messageIds: encryptedMessageIds,
     }),
@@ -920,6 +926,7 @@ export default async function ChatPage({
     logThreadRenderDiagnostics('dm-thread:open-summary', {
       ...getThreadDeploymentMarker(),
       conversationId,
+      debugRequestId: threadRenderRequestId,
       dateFallbackUsed,
       daySeparatorFallbackUsed,
       encryptedRenderFallbackCount,
@@ -927,7 +934,9 @@ export default async function ChatPage({
       firstMessageBodyType,
       firstMessageCreatedAtValid,
       firstMessageId: firstMessage?.id ?? null,
+      hasMoreOlder,
       historyWindowSize: messages.length,
+      historyWindowLimit: threadHistoryLimit,
       kind: conversation.kind,
       messageCount: messages.length,
       metadataFallbackUsed: threadMetadataFallbackCount > 0,

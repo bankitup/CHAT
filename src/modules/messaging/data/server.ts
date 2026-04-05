@@ -3051,6 +3051,7 @@ async function getCurrentUserActiveDmE2eeDeviceRecordId(userId: string) {
 }
 
 export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
+  debugRequestId?: string | null;
   userId: string;
   messageIds: string[];
 }) {
@@ -3081,12 +3082,14 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   logDiagnostics('envelopes:active-device-resolved', {
     currentUserId: input.userId,
     activeDeviceRecordId,
+    debugRequestId: input.debugRequestId ?? null,
     messageCount: uniqueMessageIds.length,
   });
 
   if (!activeDeviceRecordId) {
     logDiagnostics('envelopes:no-active-device', {
       currentUserId: input.userId,
+      debugRequestId: input.debugRequestId ?? null,
     });
     return new Map<string, StoredDmE2eeEnvelope>();
   }
@@ -3129,6 +3132,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
         malformedEnvelopeCount += 1;
         logDiagnostics('envelopes:skip-malformed', {
           currentUserId: input.userId,
+          debugRequestId: input.debugRequestId ?? null,
           hasCiphertext: Boolean(ciphertext),
           messageId: row.message_id,
           recipientDeviceRecordId: row.recipient_device_id,
@@ -3156,6 +3160,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   logDiagnostics('envelopes:loaded', {
     currentUserId: input.userId,
     activeDeviceRecordId,
+    debugRequestId: input.debugRequestId ?? null,
     malformedEnvelopeCount,
     requestedMessageCount: uniqueMessageIds.length,
     envelopeCount: envelopes.length,
@@ -3945,6 +3950,7 @@ export async function updateCurrentUserLanguagePreference(input: {
 export async function getConversationMessages(
   conversationId: string,
   options?: {
+    debugRequestId?: string | null;
     limitLatest?: number | null;
   },
 ) {
@@ -3982,9 +3988,25 @@ export async function getConversationMessages(
         ? data.slice(0, normalizedLimit)
         : data;
 
+    const normalizedMessages = [...pagedRows].reverse();
+
+    if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
+      console.info('[chat-history-load]', 'messages:loaded', {
+        conversationId,
+        count: normalizedMessages.length,
+        debugRequestId: options?.debugRequestId ?? null,
+        firstMessageId: normalizedMessages[0]?.id ?? null,
+        hasMoreOlder,
+        lastMessageId:
+          normalizedMessages[normalizedMessages.length - 1]?.id ?? null,
+        limitLatest: normalizedLimit,
+        queryLimit,
+      });
+    }
+
     return {
       hasMoreOlder,
-      messages: [...pagedRows].reverse(),
+      messages: normalizedMessages,
     };
   };
 
