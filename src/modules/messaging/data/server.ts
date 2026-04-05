@@ -181,6 +181,22 @@ function logDmE2eeBootstrapDiagnostics(
   console.info('[dm-e2ee-bootstrap]', stage);
 }
 
+function logConversationSchemaDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_SCHEMA !== '1') {
+    return;
+  }
+
+  if (details) {
+    console.info('[conversation-schema]', stage, details);
+    return;
+  }
+
+  console.info('[conversation-schema]', stage);
+}
+
 function isDmE2eeDevResetEnabled() {
   return (
     process.env.NODE_ENV !== 'production' ||
@@ -921,7 +937,32 @@ async function attachConversationsToMembershipRows(
     const missingAvatarPath = isMissingColumnErrorMessage(error.message, 'avatar_path');
 
     if (missingSpaceId || missingAvatarPath) {
+      logConversationSchemaDiagnostics('attachConversationsToMembershipRows:select-error', {
+        actualFailingColumn: missingAvatarPath
+          ? 'avatar_path'
+          : missingSpaceId
+            ? 'space_id'
+            : 'unknown',
+        helper: 'attachConversationsToMembershipRows',
+        message: error.message,
+        requestedSpaceId: options?.spaceId ?? null,
+        schemaCheckAvatarPathMissing: missingAvatarPath,
+        schemaCheckSpaceIdMissing: missingSpaceId,
+      });
+
       if (options?.spaceId && missingSpaceId) {
+        logConversationSchemaDiagnostics('attachConversationsToMembershipRows:throw-space-id-required', {
+          actualFailingColumn: missingAvatarPath
+            ? 'avatar_path'
+            : missingSpaceId
+              ? 'space_id'
+              : 'unknown',
+          helper: 'attachConversationsToMembershipRows',
+          message: error.message,
+          requestedSpaceId: options.spaceId,
+          schemaCheckAvatarPathMissing: missingAvatarPath,
+          schemaCheckSpaceIdMissing: missingSpaceId,
+        });
         throw createSchemaRequirementError(
           'Active space scoping requires public.conversations.space_id.',
         );
@@ -939,6 +980,25 @@ async function attachConversationsToMembershipRows(
               .in('id', conversationIds);
 
       if (fallback.error) {
+        logConversationSchemaDiagnostics('attachConversationsToMembershipRows:fallback-error', {
+          actualFailingColumn:
+            isMissingColumnErrorMessage(fallback.error.message, 'avatar_path')
+              ? 'avatar_path'
+              : isMissingColumnErrorMessage(fallback.error.message, 'space_id')
+                ? 'space_id'
+                : 'unknown',
+          helper: 'attachConversationsToMembershipRows',
+          message: fallback.error.message,
+          requestedSpaceId: options?.spaceId ?? null,
+          schemaCheckAvatarPathMissing: isMissingColumnErrorMessage(
+            fallback.error.message,
+            'avatar_path',
+          ),
+          schemaCheckSpaceIdMissing: isMissingColumnErrorMessage(
+            fallback.error.message,
+            'space_id',
+          ),
+        });
         throw new Error(fallback.error.message);
       }
 
@@ -3333,6 +3393,27 @@ export async function findExistingActiveDmConversation(
 
   if (otherError) {
     if (options?.spaceId && isMissingColumnErrorMessage(otherError.message, 'space_id')) {
+      logConversationSchemaDiagnostics('findExistingActiveDmConversation:throw-space-id-required', {
+        actualFailingColumn: isMissingColumnErrorMessage(
+          otherError.message,
+          'avatar_path',
+        )
+          ? 'avatar_path'
+          : isMissingColumnErrorMessage(otherError.message, 'space_id')
+            ? 'space_id'
+            : 'unknown',
+        helper: 'findExistingActiveDmConversation',
+        message: otherError.message,
+        requestedSpaceId: options.spaceId,
+        schemaCheckAvatarPathMissing: isMissingColumnErrorMessage(
+          otherError.message,
+          'avatar_path',
+        ),
+        schemaCheckSpaceIdMissing: isMissingColumnErrorMessage(
+          otherError.message,
+          'space_id',
+        ),
+      });
       throw createSchemaRequirementError(
         'Space-scoped DM lookup requires public.conversations.space_id.',
       );
