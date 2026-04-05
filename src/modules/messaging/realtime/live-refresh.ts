@@ -7,6 +7,7 @@ export const LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT = 'chat:message-committed';
 
 export type MessageCommittedPayload = {
   conversationId: string;
+  clientId?: string | null;
   emittedAt?: string;
   messageId?: string | null;
   source?: string;

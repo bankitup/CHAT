@@ -63,6 +63,7 @@ import { MarkConversationRead } from './mark-conversation-read';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
+import { OptimisticThreadMessages } from './optimistic-thread-messages';
 
 type ChatPageProps = {
   params: Promise<{
@@ -1160,6 +1161,19 @@ export default async function ChatPage({
               );
             })
           )}
+          <OptimisticThreadMessages
+            confirmedClientIds={messages
+              .map((message) => message.client_id ?? null)
+              .filter((clientId): clientId is string => Boolean(clientId))}
+            conversationId={conversationId}
+            labels={{
+              failed: t.chat.sendFailed,
+              justNow: t.chat.justNow,
+              retry: t.chat.retrySend,
+              sending: t.chat.sending,
+              sent: t.chat.sent,
+            }}
+          />
           <MarkConversationRead
             conversationId={conversationId}
             currentReadMessageSeq={readState.lastReadMessageSeq}
