@@ -884,7 +884,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
                     `/chat/${conversation.conversationId}`,
                     activeSpaceId,
                   )}
-                  prefetch
+                  prefetch={false}
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar

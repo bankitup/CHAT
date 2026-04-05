@@ -2,7 +2,7 @@
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useTransition } from 'react';
 import {
   LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
   MESSAGE_COMMITTED_BROADCAST_EVENT,
@@ -14,7 +14,9 @@ type InboxRealtimeSyncProps = {
   userId: string;
 };
 
-const INBOX_REFRESH_POLL_MS = 5000;
+const INBOX_REFRESH_DEBOUNCE_MS = 220;
+const INBOX_REFRESH_MIN_INTERVAL_MS = 1200;
+const INBOX_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
 
 export function InboxRealtimeSync({
   conversationIds,
@@ -22,7 +24,21 @@ export function InboxRealtimeSync({
 }: InboxRealtimeSyncProps) {
   const router = useRouter();
   const [, startRefreshTransition] = useTransition();
+  const normalizedConversationIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          conversationIds
+            .map((conversationId) => conversationId.trim())
+            .filter(Boolean),
+        ),
+      ),
+    [conversationIds],
+  );
+  const conversationIdsKey = normalizedConversationIds.join(',');
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRefreshAtRef = useRef(0);
+  const hiddenAtRef = useRef<number | null>(null);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
@@ -33,9 +49,7 @@ export function InboxRealtimeSync({
     }
 
     const supabase = createSupabaseBrowserClient();
-    const trackedConversationIds = new Set(
-      conversationIds.map((conversationId) => conversationId.trim()).filter(Boolean),
-    );
+    const trackedConversationIds = new Set(normalizedConversationIds);
 
     const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
       if (!diagnosticsEnabled) {
@@ -50,7 +64,22 @@ export function InboxRealtimeSync({
       console.info('[inbox-live-sync]', stage);
     };
 
-    const scheduleRefresh = (reason: string) => {
+    const scheduleRefresh = (
+      reason: string,
+      options?: {
+        force?: boolean;
+      },
+    ) => {
+      const now = Date.now();
+
+      if (
+        !options?.force &&
+        now - lastRefreshAtRef.current < INBOX_REFRESH_MIN_INTERVAL_MS
+      ) {
+        logDiagnostics('refresh-skipped:cooldown', { reason });
+        return;
+      }
+
       if (refreshTimeoutRef.current) {
         logDiagnostics('refresh-skipped:pending', { reason });
         return;
@@ -58,24 +87,28 @@ export function InboxRealtimeSync({
 
       refreshTimeoutRef.current = setTimeout(() => {
         refreshTimeoutRef.current = null;
+        lastRefreshAtRef.current = Date.now();
         logDiagnostics('refresh:start', { reason });
         startRefreshTransition(() => {
           router.refresh();
         });
-      }, 220);
-    };
-
-    const scheduleForegroundRefresh = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return;
-      }
-
-      scheduleRefresh('foreground');
+      }, INBOX_REFRESH_DEBOUNCE_MS);
     };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        scheduleRefresh('visibility-visible');
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
+        return;
+      }
+
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+
+      if (
+        hiddenAt !== null &&
+        Date.now() - hiddenAt >= INBOX_VISIBILITY_REFRESH_MIN_HIDDEN_MS
+      ) {
+        scheduleRefresh('visibility-visible', { force: true });
       }
     };
 
@@ -128,7 +161,7 @@ export function InboxRealtimeSync({
       () => scheduleRefresh('membership-postgres'),
     );
 
-    for (const conversationId of conversationIds) {
+    for (const conversationId of normalizedConversationIds) {
       channel.on(
         'postgres_changes',
         {
@@ -152,7 +185,7 @@ export function InboxRealtimeSync({
     );
 
     channel.subscribe();
-    const broadcastChannels = conversationIds.map((conversationId) =>
+    const broadcastChannels = normalizedConversationIds.map((conversationId) =>
       supabase
         .channel(`chat-sync:${conversationId}`)
         .on(
@@ -164,23 +197,17 @@ export function InboxRealtimeSync({
         )
         .subscribe(),
     );
-    window.addEventListener('focus', scheduleForegroundRefresh);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener(
       LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
       handleLocalMessageCommitted as EventListener,
     );
-    const pollIntervalId = window.setInterval(() => {
-      scheduleForegroundRefresh();
-    }, INBOX_REFRESH_POLL_MS);
 
     return () => {
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
 
-      window.clearInterval(pollIntervalId);
-      window.removeEventListener('focus', scheduleForegroundRefresh);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener(
         LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
@@ -191,7 +218,14 @@ export function InboxRealtimeSync({
       }
       void supabase.removeChannel(channel);
     };
-  }, [conversationIds, diagnosticsEnabled, router, startRefreshTransition, userId]);
+  }, [
+    conversationIdsKey,
+    diagnosticsEnabled,
+    normalizedConversationIds,
+    router,
+    startRefreshTransition,
+    userId,
+  ]);
 
   return null;
 }

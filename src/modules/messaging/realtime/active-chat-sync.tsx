@@ -2,7 +2,7 @@
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useTransition } from 'react';
 import {
   LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
   MESSAGE_COMMITTED_BROADCAST_EVENT,
@@ -14,7 +14,9 @@ type ActiveChatRealtimeSyncProps = {
   messageIds: string[];
 };
 
-const THREAD_REFRESH_POLL_MS = 4000;
+const THREAD_REFRESH_DEBOUNCE_MS = 180;
+const THREAD_REFRESH_MIN_INTERVAL_MS = 900;
+const THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
 
 export function ActiveChatRealtimeSync({
   conversationId,
@@ -22,16 +24,24 @@ export function ActiveChatRealtimeSync({
 }: ActiveChatRealtimeSyncProps) {
   const router = useRouter();
   const [, startRefreshTransition] = useTransition();
+  const normalizedMessageIds = useMemo(
+    () =>
+      Array.from(
+        new Set(messageIds.map((messageId) => messageId.trim()).filter(Boolean)),
+      ),
+    [messageIds],
+  );
+  const messageIdsKey = normalizedMessageIds.join(',');
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRefreshAtRef = useRef(0);
+  const hiddenAtRef = useRef<number | null>(null);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
-    const trackedMessageIds = new Set(
-      messageIds.map((messageId) => messageId.trim()).filter(Boolean),
-    );
+    const trackedMessageIds = new Set(normalizedMessageIds);
 
     const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
       if (!diagnosticsEnabled) {
@@ -46,7 +56,22 @@ export function ActiveChatRealtimeSync({
       console.info('[chat-live-sync]', stage);
     };
 
-    const scheduleRefresh = (reason: string) => {
+    const scheduleRefresh = (
+      reason: string,
+      options?: {
+        force?: boolean;
+      },
+    ) => {
+      const now = Date.now();
+
+      if (
+        !options?.force &&
+        now - lastRefreshAtRef.current < THREAD_REFRESH_MIN_INTERVAL_MS
+      ) {
+        logDiagnostics('refresh-skipped:cooldown', { conversationId, reason });
+        return;
+      }
+
       if (refreshTimeoutRef.current) {
         logDiagnostics('refresh-skipped:pending', { conversationId, reason });
         return;
@@ -54,24 +79,28 @@ export function ActiveChatRealtimeSync({
 
       refreshTimeoutRef.current = setTimeout(() => {
         refreshTimeoutRef.current = null;
+        lastRefreshAtRef.current = Date.now();
         logDiagnostics('refresh:start', { conversationId, reason });
         startRefreshTransition(() => {
           router.refresh();
         });
-      }, 180);
-    };
-
-    const scheduleForegroundRefresh = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return;
-      }
-
-      scheduleRefresh('foreground');
+      }, THREAD_REFRESH_DEBOUNCE_MS);
     };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        scheduleRefresh('visibility-visible');
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now();
+        return;
+      }
+
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+
+      if (
+        hiddenAt !== null &&
+        Date.now() - hiddenAt >= THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS
+      ) {
+        scheduleRefresh('visibility-visible', { force: true });
       }
     };
 
@@ -133,30 +162,28 @@ export function ActiveChatRealtimeSync({
       .on('broadcast', {
         event: MESSAGE_COMMITTED_BROADCAST_EVENT,
       }, scheduleMessageBroadcastRefresh)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'message_reactions',
-      }, scheduleReactionRefresh)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'message_reactions',
+        },
+        scheduleReactionRefresh,
+      )
       .subscribe();
 
-    window.addEventListener('focus', scheduleForegroundRefresh);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener(
       LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
       handleLocalMessageCommitted as EventListener,
     );
-    const pollIntervalId = window.setInterval(() => {
-      scheduleForegroundRefresh();
-    }, THREAD_REFRESH_POLL_MS);
 
     return () => {
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
 
-      window.clearInterval(pollIntervalId);
-      window.removeEventListener('focus', scheduleForegroundRefresh);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener(
         LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
@@ -164,7 +191,14 @@ export function ActiveChatRealtimeSync({
       );
       void supabase.removeChannel(channel);
     };
-  }, [conversationId, diagnosticsEnabled, messageIds, router, startRefreshTransition]);
+  }, [
+    conversationId,
+    diagnosticsEnabled,
+    messageIdsKey,
+    normalizedMessageIds,
+    router,
+    startRefreshTransition,
+  ]);
 
   return null;
 }

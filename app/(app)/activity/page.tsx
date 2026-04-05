@@ -12,7 +12,7 @@ import {
   getConversationDisplayName,
   getDirectMessageDisplayName,
   getConversationParticipantIdentities,
-  getInboxConversations,
+  getInboxConversationsStable,
   type InboxConversation,
 } from '@/modules/messaging/data/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
@@ -209,7 +209,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     InboxConversation[],
     InboxConversation[],
   ] = await Promise.all([
-    getInboxConversations(user.id, { spaceId: activeSpaceId }),
+    getInboxConversationsStable(user.id, { spaceId: activeSpaceId }),
     getArchivedConversations(user.id, { spaceId: activeSpaceId }),
   ]);
   const participantIdentities = await getConversationParticipantIdentities(
@@ -336,7 +336,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     `/chat/${conversation.conversationId}`,
                     activeSpaceId,
                   )}
-                  prefetch
+                  prefetch={false}
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar
@@ -413,7 +413,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     `/chat/${conversation.conversationId}`,
                     activeSpaceId,
                   )}
-                  prefetch
+                  prefetch={false}
                 >
                   {conversation.isGroupConversation ? (
                     <GroupIdentityAvatar
