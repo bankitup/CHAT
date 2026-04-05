@@ -1,13 +1,45 @@
 type MessageStatusIndicatorProps = {
   label: string;
-  status: 'pending' | 'sent' | 'delivered' | 'seen';
+  status: 'pending' | 'sent' | 'delivered' | 'seen' | null | undefined | string;
 };
+
+function normalizeMessageStatus(
+  status: MessageStatusIndicatorProps['status'],
+) {
+  if (status === 'pending') {
+    return 'pending' as const;
+  }
+
+  if (status === 'delivered' || status === 'seen') {
+    return status;
+  }
+
+  return 'sent' as const;
+}
 
 export function MessageStatusIndicator({
   label,
   status,
 }: MessageStatusIndicatorProps) {
-  if (status === 'pending') {
+  if (
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_MESSAGE_STATUS === '1' &&
+    status !== null &&
+    status !== undefined &&
+    status !== 'pending' &&
+    status !== 'sent' &&
+    status !== 'delivered' &&
+    status !== 'seen'
+  ) {
+    console.info('[message-status]', 'fallback:invalid-status-prop', {
+      label,
+      rawStatus: status,
+      resolvedStatus: 'sent',
+    });
+  }
+
+  const normalizedStatus = normalizeMessageStatus(status);
+
+  if (normalizedStatus === 'pending') {
     return (
       <span
         aria-label={label}
@@ -19,12 +51,13 @@ export function MessageStatusIndicator({
     );
   }
 
-  const isDoubleCheck = status === 'delivered' || status === 'seen';
+  const isDoubleCheck =
+    normalizedStatus === 'delivered' || normalizedStatus === 'seen';
 
   return (
     <span
       aria-label={label}
-      className={`message-status message-status-telegram message-status-telegram-${status}`}
+      className={`message-status message-status-telegram message-status-telegram-${normalizedStatus}`}
     >
       <span
         aria-hidden="true"

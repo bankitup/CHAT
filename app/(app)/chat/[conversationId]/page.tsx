@@ -202,17 +202,75 @@ function getMessageSeq(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
 }
 
+function normalizeComparableMessageSeq(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (typeof value === 'bigint') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function logMessageStatusDiagnostics(
+  stage: string,
+  details: Record<string, unknown>,
+) {
+  if (process.env.CHAT_DEBUG_MESSAGE_STATUS !== '1') {
+    return;
+  }
+
+  console.info('[message-status]', stage, details);
+}
+
 function getOutgoingMessageStatus(input: {
+  conversationId: string;
   isOwnMessage: boolean;
-  isSeen: boolean;
   isDeletedMessage: boolean;
+  messageId: string;
+  messageSeq: unknown;
+  otherParticipantReadSeq: unknown;
 }) {
   if (!input.isOwnMessage || input.isDeletedMessage) {
     return null;
   }
 
-  if (input.isSeen) {
+  const normalizedMessageSeq = normalizeComparableMessageSeq(input.messageSeq);
+  const normalizedReadSeq = normalizeComparableMessageSeq(
+    input.otherParticipantReadSeq,
+  );
+
+  if (normalizedMessageSeq === null) {
+    logMessageStatusDiagnostics('fallback:invalid-message-seq', {
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      rawMessageSeq: input.messageSeq ?? null,
+      rawReadSeq: input.otherParticipantReadSeq ?? null,
+      resolvedStatus: 'sent',
+    });
+    return 'sent' as const;
+  }
+
+  if (normalizedReadSeq !== null && normalizedReadSeq >= normalizedMessageSeq) {
     return 'seen' as const;
+  }
+
+  if (normalizedReadSeq === null && input.otherParticipantReadSeq !== null) {
+    logMessageStatusDiagnostics('fallback:invalid-read-seq', {
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      rawMessageSeq: input.messageSeq ?? null,
+      rawReadSeq: input.otherParticipantReadSeq ?? null,
+      resolvedStatus: 'sent',
+    });
   }
 
   return 'sent' as const;
@@ -841,17 +899,14 @@ export default async function ChatPage({
                 const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
                 const otherParticipantReadSeq =
                   otherParticipantReadState?.lastReadMessageSeq ?? null;
-                const showSeenState =
-                  conversation.kind === 'dm' &&
-                  isOwnMessage &&
-                  !isDeletedMessage &&
-                  otherParticipantReadSeq !== null &&
-                  Number.isFinite(messageSeq) &&
-                  otherParticipantReadSeq >= messageSeq;
                 const outgoingMessageStatus = getOutgoingMessageStatus({
+                  conversationId,
                   isOwnMessage,
-                  isSeen: showSeenState,
                   isDeletedMessage,
+                  messageId: message.id,
+                  messageSeq: message.seq,
+                  otherParticipantReadSeq:
+                    conversation.kind === 'dm' ? otherParticipantReadSeq : null,
                 });
                 const isMessageActionActive = activeActionMessage?.id === message.id;
 
@@ -1274,17 +1329,14 @@ export default async function ChatPage({
               const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
               const otherParticipantReadSeq =
                 otherParticipantReadState?.lastReadMessageSeq ?? null;
-              const showSeenState =
-                conversation.kind === 'dm' &&
-                isOwnMessage &&
-                !isDeletedMessage &&
-                otherParticipantReadSeq !== null &&
-                Number.isFinite(messageSeq) &&
-                otherParticipantReadSeq >= messageSeq;
               const outgoingMessageStatus = getOutgoingMessageStatus({
+                conversationId,
                 isOwnMessage,
-                isSeen: showSeenState,
                 isDeletedMessage,
+                messageId: message.id,
+                messageSeq: message.seq,
+                otherParticipantReadSeq:
+                  conversation.kind === 'dm' ? otherParticipantReadSeq : null,
               });
               const isMessageActionActive = activeActionMessage?.id === message.id;
 

@@ -9,17 +9,30 @@ type LiveOutgoingMessageStatusProps = {
     seen: string;
     sent: string;
   };
-  status: 'sent' | 'delivered' | 'seen';
+  status: 'sent' | 'delivered' | 'seen' | null | undefined | string;
 };
+
+function normalizeOutgoingStatus(
+  status: LiveOutgoingMessageStatusProps['status'],
+) {
+  if (status === 'seen' || status === 'delivered') {
+    return status;
+  }
+
+  return 'sent' as const;
+}
 
 export function LiveOutgoingMessageStatus({
   labels,
   status,
 }: LiveOutgoingMessageStatusProps) {
   const isOtherParticipantPresent = useIsOtherParticipantPresent();
+  const normalizedStatus = normalizeOutgoingStatus(status);
 
   const effectiveStatus =
-    status === 'sent' && isOtherParticipantPresent ? 'delivered' : status;
+    normalizedStatus === 'sent' && isOtherParticipantPresent
+      ? 'delivered'
+      : normalizedStatus;
   const label =
     effectiveStatus === 'seen'
       ? labels.seen
