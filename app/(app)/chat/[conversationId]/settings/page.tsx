@@ -335,9 +335,7 @@ export default async function ChatSettingsPage({
     participants.some(
       (participant) => participant.userId === user.id && participant.role === 'owner',
     );
-  const canDeleteDirectConversation =
-    conversation.kind === 'dm' &&
-    participants.some((participant) => participant.userId === user.id);
+  const canDeleteDirectConversation = conversation.kind === 'dm';
   const participantItems = participants.map((participant) => {
     const identity = identitiesByUserId.get(participant.userId);
     const label = resolvePublicIdentityLabel(identity, t.chat.unknownUser);
