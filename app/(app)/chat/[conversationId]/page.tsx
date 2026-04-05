@@ -55,7 +55,6 @@ import {
 } from './actions';
 import { AutoGrowTextarea } from './auto-grow-textarea';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
-import { ChatLayoutMetrics } from './chat-layout-metrics';
 import { ConversationPresenceStatus } from './conversation-presence-status';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
@@ -634,7 +633,6 @@ export default async function ChatPage({
         messageIds={messages.map((message) => message.id)}
       />
       <ComposerKeyboardOffset />
-      <ChatLayoutMetrics />
 
       <section className="stack chat-header-stack" id="chat-header-shell">
         <Link

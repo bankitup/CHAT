@@ -21,10 +21,8 @@
   --safe-area-bottom-pad: max(8px, env(safe-area-inset-bottom));
   --app-bottom-nav-reserve: calc(84px + env(safe-area-inset-bottom));
   --chat-composer-bottom-offset: calc(var(--safe-area-bottom-pad) + var(--chat-keyboard-offset));
-  --chat-header-measured-height: 0px;
-  --chat-composer-measured-height: 136px;
-  --chat-thread-bottom-reserve: calc(var(--chat-composer-measured-height) + var(--chat-keyboard-offset) + 12px);
-  --chat-thread-scroll-reserve: calc(var(--chat-composer-measured-height) + var(--chat-keyboard-offset) + 28px);
+  --chat-thread-bottom-reserve: calc(18px + var(--safe-area-bottom-pad));
+  --chat-thread-scroll-reserve: calc(28px + var(--safe-area-bottom-pad));
 }
 
 * {
@@ -2497,17 +2495,19 @@ main {
   color: #b42318;
 }
 
+/* The thread is the only scroll region; header and composer live in fixed flex rows. */
 .chat-main {
-  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   min-height: 0;
-  flex: 1;
   overflow: hidden;
 }
 
 .message-thread {
   display: grid;
+  flex: 1 1 auto;
   gap: 10px;
-  height: 100%;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -2895,13 +2895,11 @@ main {
 }
 
 .composer-card {
-  position: absolute;
-  right: 0;
-  bottom: var(--chat-keyboard-offset);
-  left: 0;
-  z-index: 5;
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
   gap: 6px;
-  padding: 12px 0 calc(4px + var(--safe-area-bottom-pad));
+  padding: 12px 0 var(--chat-composer-bottom-offset);
   border-radius: 0;
   margin-bottom: 0;
   border: 0;
