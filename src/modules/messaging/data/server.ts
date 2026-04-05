@@ -1358,6 +1358,33 @@ export async function getConversationReadState(
   } satisfies ConversationReadState;
 }
 
+export async function getConversationMemberJoinedAt(
+  conversationId: string,
+  userId: string,
+) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('conversation_members')
+    .select('created_at')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId)
+    .eq('state', 'active')
+    .maybeSingle();
+
+  if (error) {
+    if (
+      error.message.includes('created_at') ||
+      error.message.includes('column')
+    ) {
+      return null;
+    }
+
+    throw new Error(error.message);
+  }
+
+  return typeof data?.created_at === 'string' ? data.created_at : null;
+}
+
 export async function getConversationMemberReadStates(conversationId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -3073,7 +3100,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   );
 
   if (uniqueMessageIds.length === 0) {
-    return new Map<string, StoredDmE2eeEnvelope>();
+    return {
+      activeDeviceRecordId: null,
+      envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
+    };
   }
 
   const activeDeviceRecordId = await getCurrentUserActiveDmE2eeDeviceRecordId(
@@ -3091,7 +3121,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       currentUserId: input.userId,
       debugRequestId: input.debugRequestId ?? null,
     });
-    return new Map<string, StoredDmE2eeEnvelope>();
+    return {
+      activeDeviceRecordId: null,
+      envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
+    };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -3112,7 +3145,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       isMissingColumnErrorMessage(response.error.message, 'sender_device_id') ||
       isMissingColumnErrorMessage(response.error.message, 'ciphertext')
     ) {
-      return new Map<string, StoredDmE2eeEnvelope>();
+      return {
+        activeDeviceRecordId,
+        envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
+      };
     }
 
     throw new Error(response.error.message);
@@ -3166,7 +3202,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     envelopeCount: envelopes.length,
   });
 
-  return new Map(envelopes);
+  return {
+    activeDeviceRecordId,
+    envelopesByMessage: new Map(envelopes),
+  };
 }
 
 export async function getAvailableUsers(

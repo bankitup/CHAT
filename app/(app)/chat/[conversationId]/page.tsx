@@ -14,6 +14,7 @@ import {
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   getConversationDisplayName,
   getDirectMessageDisplayName,
+  getConversationMemberJoinedAt,
   getCurrentUserDmE2eeEnvelopesForMessages,
   getConversationForUser,
   getConversationMessages,
@@ -26,6 +27,7 @@ import {
   STARTER_REACTIONS,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
+import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
 import {
   resolveV1TestSpaceFallback,
@@ -366,18 +368,14 @@ function isEncryptedDmTextMessage(value: {
 
 function canRenderEncryptedDmBody(input: {
   clientId: unknown;
-  envelopePresent: boolean;
 }) {
-  return (
-    typeof input.clientId === 'string' &&
-    input.clientId.trim().length > 0 &&
-    input.envelopePresent
-  );
+  return typeof input.clientId === 'string' && input.clientId.trim().length > 0;
 }
 
 function logEncryptedDmRenderFallback(input: {
   clientId: unknown;
   conversationId: string;
+  diagnosticHintCode?: string | null;
   envelopePresent: boolean;
   messageId: string;
 }) {
@@ -391,6 +389,7 @@ function logEncryptedDmRenderFallback(input: {
     envelopePresent: input.envelopePresent,
     hasUsableClientId:
       typeof input.clientId === 'string' && input.clientId.trim().length > 0,
+    diagnosticHintCode: input.diagnosticHintCode ?? null,
     messageId: input.messageId,
   });
 }
@@ -677,7 +676,13 @@ export default async function ChatPage({
       ? crypto.randomUUID()
       : null;
   const threadDeploymentMarker = getThreadDeploymentMarker();
-  const [{ messages, hasMoreOlder }, readState, memberReadStates, participants] =
+  const [
+    { messages, hasMoreOlder },
+    readState,
+    memberReadStates,
+    participants,
+    currentUserConversationJoinedAt,
+  ] =
     await Promise.all([
       getConversationMessages(conversationId, {
         debugRequestId: threadRenderRequestId,
@@ -686,6 +691,7 @@ export default async function ChatPage({
       getConversationReadState(conversationId, user.id),
       getConversationMemberReadStates(conversationId),
       getConversationParticipants(conversationId),
+      getConversationMemberJoinedAt(conversationId, user.id),
     ]);
   // Temporary v1 unblocker: do not trigger space_members-backed available user lookup in TEST bypass flow.
   const availableUsers =
@@ -709,7 +715,7 @@ export default async function ChatPage({
     senderProfiles,
     reactionsByMessage,
     attachmentsByMessage,
-    e2eeEnvelopesByMessage,
+    e2eeEnvelopeHistory,
   ] = await Promise.all([
     getMessageSenderProfiles(senderProfileIds),
     getGroupedReactionsForMessages(messageIds, user.id),
@@ -720,9 +726,46 @@ export default async function ChatPage({
       messageIds: encryptedMessageIds,
     }),
   ]);
+  const e2eeEnvelopesByMessage = e2eeEnvelopeHistory.envelopesByMessage;
+  const messagesById = new Map(messages.map((message) => [message.id, message]));
+  const currentUserJoinedAtDate = parseSafeDate(currentUserConversationJoinedAt);
+  const encryptedHistoryHintsByMessage = new Map<
+    string,
+    EncryptedDmServerHistoryHint
+  >(
+    encryptedMessageIds.map((messageId) => {
+      const message = messagesById.get(messageId) ?? null;
+      const messageCreatedAtDate = parseSafeDate(message?.created_at ?? null);
+      const wasSentBeforeViewerJoined =
+        Boolean(message) &&
+        message?.sender_id !== user.id &&
+        messageCreatedAtDate !== null &&
+        currentUserJoinedAtDate !== null &&
+        messageCreatedAtDate.getTime() < currentUserJoinedAtDate.getTime();
+
+      return [
+        messageId,
+        {
+          code: e2eeEnvelopesByMessage.has(messageId)
+            ? 'envelope-present'
+            : wasSentBeforeViewerJoined
+              ? 'policy-blocked-history'
+              : 'missing-envelope',
+          activeDeviceRecordId: e2eeEnvelopeHistory.activeDeviceRecordId,
+          messageCreatedAt: message?.created_at ?? null,
+          viewerJoinedAt: currentUserConversationJoinedAt,
+        } satisfies EncryptedDmServerHistoryHint,
+      ] as const;
+    }),
+  );
   if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' && encryptedMessageIds.length > 0) {
     const missingEnvelopeMessageIds = encryptedMessageIds.filter(
       (messageId) => !e2eeEnvelopesByMessage.has(messageId),
+    );
+    const policyBlockedMessageIds = encryptedMessageIds.filter(
+      (messageId) =>
+        encryptedHistoryHintsByMessage.get(messageId)?.code ===
+        'policy-blocked-history',
     );
     console.info('[dm-e2ee-history]', 'thread:envelope-availability', {
       conversationId,
@@ -738,6 +781,8 @@ export default async function ChatPage({
       messageCount: messages.length,
       missingEnvelopeCount: missingEnvelopeMessageIds.length,
       missingEnvelopeMessageIds,
+      policyBlockedCount: policyBlockedMessageIds.length,
+      policyBlockedMessageIds,
       vercelUrl: threadDeploymentMarker.vercelUrl,
     });
   }
@@ -750,7 +795,6 @@ export default async function ChatPage({
   const senderIdentities = new Map<string, (typeof senderProfiles)[number]>(
     senderProfiles.map((profile) => [profile.userId, profile] as const),
   );
-  const messagesById = new Map(messages.map((message) => [message.id, message]));
   const otherParticipants = participants.filter(
     (participant) => participant.userId !== user.id,
   );
@@ -923,13 +967,11 @@ export default async function ChatPage({
   const daySeparatorFallbackUsed = dateFallbackUsed;
   const encryptedRenderFallbackCount = encryptedMessageIds.filter((messageId) => {
     const message = messagesById.get(messageId);
-    const encryptedEnvelope = e2eeEnvelopesByMessage.get(messageId) ?? null;
 
     return (
       Boolean(message) &&
       !canRenderEncryptedDmBody({
         clientId: message?.client_id,
-        envelopePresent: Boolean(encryptedEnvelope),
       })
     );
   }).length;
@@ -965,6 +1007,11 @@ export default async function ChatPage({
       metadataFallbackCount: threadMetadataFallbackCount,
       missingEnvelopeCount: encryptedMessageIds.filter(
         (messageId) => !e2eeEnvelopesByMessage.has(messageId),
+      ).length,
+      policyBlockedCount: encryptedMessageIds.filter(
+        (messageId) =>
+          encryptedHistoryHintsByMessage.get(messageId)?.code ===
+          'policy-blocked-history',
       ).length,
       statusFallbackUsed: threadStatusFallbackCount > 0,
       statusFallbackCount: threadStatusFallbackCount,
@@ -1232,14 +1279,21 @@ export default async function ChatPage({
               const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
               const encryptedEnvelope =
                 e2eeEnvelopesByMessage.get(message.id) ?? null;
+              const encryptedHistoryHint =
+                encryptedHistoryHintsByMessage.get(message.id) ?? {
+                  code: encryptedEnvelope ? 'envelope-present' : 'missing-envelope',
+                  activeDeviceRecordId: e2eeEnvelopeHistory.activeDeviceRecordId,
+                  messageCreatedAt: message.created_at ?? null,
+                  viewerJoinedAt: currentUserConversationJoinedAt,
+                };
               const canAttemptEncryptedRender = canRenderEncryptedDmBody({
                 clientId: message.client_id,
-                envelopePresent: Boolean(encryptedEnvelope),
               });
               if (isEncryptedDmTextMessage(message) && !canAttemptEncryptedRender) {
                 logEncryptedDmRenderFallback({
                   clientId: message.client_id,
                   conversationId,
+                  diagnosticHintCode: encryptedHistoryHint.code,
                   envelopePresent: Boolean(encryptedEnvelope),
                   messageId: message.id,
                 });
@@ -1458,6 +1512,8 @@ export default async function ChatPage({
                                 currentUserId={user.id}
                                 envelope={encryptedEnvelope}
                                 fallbackLabel={t.chat.encryptedMessage}
+                                historyDiagnosticHint={encryptedHistoryHint}
+                                messageSenderId={message.sender_id}
                                 refreshSetupLabel={t.chat.refreshEncryptedSetup}
                                 reloadConversationLabel={t.chat.reloadConversation}
                                 retryLabel={t.chat.retryEncryptedAction}
@@ -1471,10 +1527,22 @@ export default async function ChatPage({
                               />
                             </DmThreadClientSubtree>
                           ) : (
-                            <div className="message-encryption-state">
+                            <div
+                              className="message-encryption-state"
+                              data-dm-e2ee-debug-bucket={
+                                process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+                                  ? encryptedHistoryHint.code
+                                  : undefined
+                              }
+                            >
                               <p className="message-body">
                                 {t.chat.encryptedMessageUnavailable}
                               </p>
+                              {process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ? (
+                                <p className="message-encryption-debug-label">
+                                  {encryptedHistoryHint.code}
+                                </p>
+                              ) : null}
                             </div>
                           )
                         ) : normalizedMessageBody ? (

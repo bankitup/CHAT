@@ -1,33 +1,120 @@
 export type EncryptedDmFailureKind = 'device-setup' | 'unavailable';
 
-export function classifyEncryptedDmFailure(error: unknown): EncryptedDmFailureKind {
+export type EncryptedDmDiagnosticCode =
+  | 'temporary-loading'
+  | 'missing-envelope'
+  | 'policy-blocked-history'
+  | 'same-user-new-device-history-gap'
+  | 'device-retired-or-mismatched'
+  | 'client-session-lookup-failed'
+  | 'client-key-material-missing'
+  | 'local-device-record-missing'
+  | 'malformed-envelope'
+  | 'decrypt-failed'
+  | 'stale-cached-failure-state';
+
+export type EncryptedDmServerHistoryHint = {
+  code: 'envelope-present' | 'missing-envelope' | 'policy-blocked-history';
+  activeDeviceRecordId: string | null;
+  messageCreatedAt: string | null;
+  viewerJoinedAt: string | null;
+};
+
+export function getEncryptedDmFailureKindForDiagnostic(
+  diagnosticCode: EncryptedDmDiagnosticCode,
+): EncryptedDmFailureKind {
+  switch (diagnosticCode) {
+    case 'same-user-new-device-history-gap':
+    case 'device-retired-or-mismatched':
+    case 'client-session-lookup-failed':
+    case 'client-key-material-missing':
+    case 'local-device-record-missing':
+      return 'device-setup';
+    default:
+      return 'unavailable';
+  }
+}
+
+export function getEncryptedDmDebugBucket(
+  diagnosticCode: EncryptedDmDiagnosticCode,
+) {
+  switch (diagnosticCode) {
+    case 'temporary-loading':
+    case 'stale-cached-failure-state':
+      return 'temporary-loading' as const;
+    case 'policy-blocked-history':
+      return 'policy-blocked-history' as const;
+    case 'missing-envelope':
+    case 'same-user-new-device-history-gap':
+    case 'device-retired-or-mismatched':
+    case 'client-key-material-missing':
+    case 'local-device-record-missing':
+      return 'missing-envelope' as const;
+    default:
+      return 'decrypt-failure' as const;
+  }
+}
+
+export function classifyEncryptedDmFailureDiagnostic(
+  error: unknown,
+): EncryptedDmDiagnosticCode {
   if (!(error instanceof Error)) {
-    return 'unavailable';
+    return 'decrypt-failed';
   }
 
   if (
-    error.message.includes('Local DM E2EE device record is missing') ||
-    error.message.includes('one-time prekey is missing locally')
+    error.message.includes('Unable to open DM E2EE device storage') ||
+    error.message.includes('Unable to read DM E2EE device record') ||
+    error.message.includes('Unable to read DM E2EE device records by server id')
   ) {
-    return 'device-setup';
+    return 'client-session-lookup-failed';
   }
 
-  return 'unavailable';
+  if (
+    error.message.includes('one-time prekey is missing locally') ||
+    error.message.includes('Required DM E2EE one-time prekey is missing locally')
+  ) {
+    return 'client-key-material-missing';
+  }
+
+  if (error.message.includes('Local DM E2EE device record is missing')) {
+    return 'local-device-record-missing';
+  }
+
+  if (
+    error.message.includes('Unsupported DM E2EE envelope type') ||
+    error.message.includes('Unsupported DM E2EE payload scheme')
+  ) {
+    return 'malformed-envelope';
+  }
+
+  return 'decrypt-failed';
+}
+
+export function classifyEncryptedDmFailure(error: unknown): EncryptedDmFailureKind {
+  return getEncryptedDmFailureKindForDiagnostic(
+    classifyEncryptedDmFailureDiagnostic(error),
+  );
 }
 
 export function getEncryptedDmBodyRenderState(input: {
   plaintext: string | null;
   isUnavailable: boolean;
   failureKind: EncryptedDmFailureKind;
+  diagnosticCode?: EncryptedDmDiagnosticCode;
   fallbackLabel: string;
   setupUnavailableLabel: string;
   unavailableLabel: string;
 }) {
+  const diagnosticCode = input.diagnosticCode ?? 'temporary-loading';
+
   if (input.plaintext?.trim()) {
     return {
       kind: 'plaintext' as const,
       text: input.plaintext.trim(),
       showRefreshSetup: false,
+      diagnosticCode: null,
+      debugBucket: null,
     };
   }
 
@@ -39,6 +126,8 @@ export function getEncryptedDmBodyRenderState(input: {
           ? input.setupUnavailableLabel
           : input.unavailableLabel,
       showRefreshSetup: input.failureKind === 'device-setup',
+      diagnosticCode,
+      debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
     };
   }
 
@@ -46,6 +135,8 @@ export function getEncryptedDmBodyRenderState(input: {
     kind: 'fallback' as const,
     text: input.fallbackLabel,
     showRefreshSetup: false,
+    diagnosticCode,
+    debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
   };
 }
 

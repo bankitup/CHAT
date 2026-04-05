@@ -1,16 +1,24 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import { reinitializeLocalDmE2eeStateForUser } from '@/modules/messaging/e2ee/lifecycle';
 import { decryptStoredDmEnvelope } from '@/modules/messaging/e2ee/prekey-encrypt';
-import { getLocalDmE2eeDeviceRecordByServerDeviceId } from '@/modules/messaging/e2ee/device-store';
+import {
+  getLocalDmE2eeDeviceRecord,
+  getLocalDmE2eeDeviceRecordByServerDeviceId,
+  type LocalDmE2eeDeviceRecord,
+} from '@/modules/messaging/e2ee/device-store';
 import { writeLocalEncryptedDmPreview } from '@/modules/messaging/e2ee/preview-cache';
 import {
   classifyEncryptedDmFailure,
+  classifyEncryptedDmFailureDiagnostic,
+  getEncryptedDmFailureKindForDiagnostic,
   getEncryptedDmBodyRenderState,
+  type EncryptedDmDiagnosticCode,
   type EncryptedDmFailureKind,
+  type EncryptedDmServerHistoryHint,
 } from '@/modules/messaging/e2ee/ui-policy';
 
 type EncryptedDmMessageBodyProps = {
@@ -19,6 +27,8 @@ type EncryptedDmMessageBodyProps = {
   currentUserId: string;
   envelope: StoredDmE2eeEnvelope | null;
   fallbackLabel: string;
+  historyDiagnosticHint: EncryptedDmServerHistoryHint;
+  messageSenderId: string | null;
   refreshSetupLabel: string;
   reloadConversationLabel: string;
   retryLabel: string;
@@ -29,12 +39,43 @@ type EncryptedDmMessageBodyProps = {
   shouldCachePreview?: boolean;
 };
 
+function parseSafeDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function shouldClassifySelfHistoryGap(input: {
+  currentUserId: string;
+  localRecord: LocalDmE2eeDeviceRecord | null;
+  messageCreatedAt: string | null;
+  messageSenderId: string | null;
+}) {
+  if (input.messageSenderId !== input.currentUserId || !input.localRecord) {
+    return false;
+  }
+
+  const messageCreatedAt = parseSafeDate(input.messageCreatedAt);
+  const localDeviceCreatedAt = parseSafeDate(input.localRecord.createdAt);
+
+  if (!messageCreatedAt || !localDeviceCreatedAt) {
+    return false;
+  }
+
+  return localDeviceCreatedAt.getTime() > messageCreatedAt.getTime();
+}
+
 export function EncryptedDmMessageBody({
   clientId,
   conversationId,
   currentUserId,
   envelope,
   fallbackLabel,
+  historyDiagnosticHint,
+  messageSenderId,
   refreshSetupLabel,
   reloadConversationLabel,
   retryLabel,
@@ -49,8 +90,12 @@ export function EncryptedDmMessageBody({
   const [plaintext, setPlaintext] = useState<string | null>(null);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [failureKind, setFailureKind] = useState<EncryptedDmFailureKind>('unavailable');
+  const [diagnosticCode, setDiagnosticCode] =
+    useState<EncryptedDmDiagnosticCode>('temporary-loading');
   const [retryNonce, setRetryNonce] = useState(0);
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
+  const previousFailureCodeRef =
+    useRef<EncryptedDmDiagnosticCode | null>(null);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
@@ -60,23 +105,24 @@ export function EncryptedDmMessageBody({
 
   useEffect(() => {
     let cancelled = false;
+    const previousFailureCode = previousFailureCodeRef.current;
+    const normalizedClientId = normalizeString(clientId);
 
-    if (!envelope) {
-      if (diagnosticsEnabled) {
-        console.info('[dm-e2ee-history-client]', 'decrypt:no-envelope', {
-          currentUserId,
-          conversationId,
-          clientId,
-          messageId,
-        });
-      }
-      setPlaintext(null);
-      setIsUnavailable(true);
-      setFailureKind('unavailable');
-      return;
+    if (previousFailureCode && diagnosticsEnabled) {
+      console.info('[dm-e2ee-history-client]', 'decrypt:stale-failure-state', {
+        conversationId,
+        currentUserId,
+        messageId,
+        previousFailureCode,
+        retryNonce,
+      });
     }
 
-    const normalizedClientId = normalizeString(clientId);
+    previousFailureCodeRef.current = null;
+    setPlaintext(null);
+    setIsUnavailable(false);
+    setFailureKind('unavailable');
+    setDiagnosticCode('temporary-loading');
 
     if (!normalizedClientId) {
       if (diagnosticsEnabled) {
@@ -90,45 +136,123 @@ export function EncryptedDmMessageBody({
       setPlaintext(null);
       setIsUnavailable(true);
       setFailureKind('unavailable');
-      return;
-    }
-
-    const senderDeviceRecordId = normalizeString(envelope.senderDeviceRecordId);
-    const recipientDeviceRecordId = normalizeString(
-      envelope.recipientDeviceRecordId,
-    );
-    const ciphertext = normalizeString(envelope.ciphertext);
-
-    if (
-      !senderDeviceRecordId ||
-      !recipientDeviceRecordId ||
-      !ciphertext
-    ) {
-      if (diagnosticsEnabled) {
-        console.info('[dm-e2ee-history-client]', 'decrypt:malformed-envelope', {
-          currentUserId,
-          conversationId,
-          clientId: normalizedClientId,
-          ciphertextType: typeof envelope.ciphertext,
-          hasCiphertext: Boolean(ciphertext),
-          messageId,
-          recipientDeviceRecordId: recipientDeviceRecordId || null,
-          recipientDeviceRecordIdType: typeof envelope.recipientDeviceRecordId,
-          senderDeviceRecordId: senderDeviceRecordId || null,
-          senderDeviceRecordIdType: typeof envelope.senderDeviceRecordId,
-        });
-      }
-      setPlaintext(null);
-      setIsUnavailable(true);
-      setFailureKind('unavailable');
+      setDiagnosticCode('malformed-envelope');
+      previousFailureCodeRef.current = 'malformed-envelope';
       return;
     }
 
     void (async () => {
+      const resolveUnavailable = (
+        nextDiagnosticCode: EncryptedDmDiagnosticCode,
+        details?: Record<string, unknown>,
+      ) => {
+        if (diagnosticsEnabled) {
+          console.info('[dm-e2ee-history-client]', 'decrypt:resolved-unavailable', {
+            conversationId,
+            currentUserId,
+            currentUserConversationJoinedAt:
+              historyDiagnosticHint.viewerJoinedAt ?? null,
+            diagnosticCode: nextDiagnosticCode,
+            historyHintCode: historyDiagnosticHint.code,
+            messageCreatedAt: historyDiagnosticHint.messageCreatedAt ?? null,
+            messageId,
+            messageSenderId,
+            ...details,
+          });
+        }
+
+        if (!cancelled) {
+          setPlaintext(null);
+          setIsUnavailable(true);
+          setFailureKind(
+            getEncryptedDmFailureKindForDiagnostic(nextDiagnosticCode),
+          );
+          setDiagnosticCode(nextDiagnosticCode);
+          previousFailureCodeRef.current = nextDiagnosticCode;
+        }
+      };
+
+      let currentLocalRecord: LocalDmE2eeDeviceRecord | null = null;
+
       try {
-        const localRecord = await getLocalDmE2eeDeviceRecordByServerDeviceId(
-          recipientDeviceRecordId,
-        );
+        currentLocalRecord = await getLocalDmE2eeDeviceRecord(currentUserId);
+      } catch (error) {
+        resolveUnavailable('client-session-lookup-failed', {
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          lookupStage: 'current-local-device-record',
+        });
+        return;
+      }
+
+      if (!envelope) {
+        let nextDiagnosticCode: EncryptedDmDiagnosticCode = 'missing-envelope';
+
+        if (historyDiagnosticHint.code === 'policy-blocked-history') {
+          nextDiagnosticCode = 'policy-blocked-history';
+        } else if (!currentLocalRecord) {
+          nextDiagnosticCode = 'local-device-record-missing';
+        } else if (
+          shouldClassifySelfHistoryGap({
+            currentUserId,
+            localRecord: currentLocalRecord,
+            messageCreatedAt,
+            messageSenderId,
+          })
+        ) {
+          nextDiagnosticCode = 'same-user-new-device-history-gap';
+        } else if (
+          !historyDiagnosticHint.activeDeviceRecordId ||
+          (currentLocalRecord.serverDeviceRecordId &&
+            currentLocalRecord.serverDeviceRecordId !==
+              historyDiagnosticHint.activeDeviceRecordId)
+        ) {
+          nextDiagnosticCode = 'device-retired-or-mismatched';
+        }
+
+        resolveUnavailable(nextDiagnosticCode, {
+          activeDeviceRecordId: historyDiagnosticHint.activeDeviceRecordId,
+          currentLocalDeviceCreatedAt: currentLocalRecord?.createdAt ?? null,
+          currentLocalServerDeviceRecordId:
+            currentLocalRecord?.serverDeviceRecordId ?? null,
+          envelopePresent: false,
+        });
+        return;
+      }
+
+      const senderDeviceRecordId = normalizeString(envelope.senderDeviceRecordId);
+      const recipientDeviceRecordId = normalizeString(
+        envelope.recipientDeviceRecordId,
+      );
+      const ciphertext = normalizeString(envelope.ciphertext);
+
+      if (!senderDeviceRecordId || !recipientDeviceRecordId || !ciphertext) {
+        if (diagnosticsEnabled) {
+          console.info('[dm-e2ee-history-client]', 'decrypt:malformed-envelope', {
+            currentUserId,
+            conversationId,
+            clientId: normalizedClientId,
+            ciphertextType: typeof envelope.ciphertext,
+            hasCiphertext: Boolean(ciphertext),
+            messageId,
+            recipientDeviceRecordId: recipientDeviceRecordId || null,
+            recipientDeviceRecordIdType: typeof envelope.recipientDeviceRecordId,
+            senderDeviceRecordId: senderDeviceRecordId || null,
+            senderDeviceRecordIdType: typeof envelope.senderDeviceRecordId,
+          });
+        }
+        resolveUnavailable('malformed-envelope', {
+          envelopePresent: true,
+        });
+        return;
+      }
+
+      try {
+        const localRecord =
+          currentLocalRecord?.serverDeviceRecordId === recipientDeviceRecordId
+            ? currentLocalRecord
+            : await getLocalDmE2eeDeviceRecordByServerDeviceId(
+                recipientDeviceRecordId,
+              );
 
         if (diagnosticsEnabled) {
           console.info('[dm-e2ee-history-client]', 'decrypt:local-record-lookup', {
@@ -138,6 +262,8 @@ export function EncryptedDmMessageBody({
             messageId,
             envelopeRecipientDeviceRecordId: recipientDeviceRecordId,
             envelopeSenderDeviceRecordId: senderDeviceRecordId,
+            currentLocalServerDeviceRecordId:
+              currentLocalRecord?.serverDeviceRecordId ?? null,
             localRecordFound: Boolean(localRecord),
             localRecordUserId: localRecord?.userId ?? null,
             localRecordServerDeviceRecordId:
@@ -146,7 +272,19 @@ export function EncryptedDmMessageBody({
         }
 
         if (!localRecord) {
-          throw new Error('Local DM E2EE device record is missing.');
+          resolveUnavailable(
+            currentLocalRecord?.serverDeviceRecordId &&
+              currentLocalRecord.serverDeviceRecordId !== recipientDeviceRecordId
+              ? 'device-retired-or-mismatched'
+              : 'local-device-record-missing',
+            {
+              envelopePresent: true,
+              envelopeRecipientDeviceRecordId: recipientDeviceRecordId,
+              currentLocalServerDeviceRecordId:
+                currentLocalRecord?.serverDeviceRecordId ?? null,
+            },
+          );
+          return;
         }
 
         const nextPlaintext = await decryptStoredDmEnvelope({
@@ -165,6 +303,7 @@ export function EncryptedDmMessageBody({
           setPlaintext(nextPlaintext);
           setIsUnavailable(false);
           setFailureKind('unavailable');
+          setDiagnosticCode('temporary-loading');
         }
 
         if (shouldCachePreview) {
@@ -177,6 +316,20 @@ export function EncryptedDmMessageBody({
           });
         }
       } catch (error) {
+        let nextDiagnosticCode = classifyEncryptedDmFailureDiagnostic(error);
+
+        if (
+          nextDiagnosticCode === 'decrypt-failed' &&
+          shouldClassifySelfHistoryGap({
+            currentUserId,
+            localRecord: currentLocalRecord,
+            messageCreatedAt,
+            messageSenderId,
+          })
+        ) {
+          nextDiagnosticCode = 'same-user-new-device-history-gap';
+        }
+
         if (diagnosticsEnabled) {
           console.info('[dm-e2ee-history-client]', 'decrypt:error', {
             currentUserId,
@@ -185,15 +338,19 @@ export function EncryptedDmMessageBody({
             messageId,
             envelopeRecipientDeviceRecordId:
               recipientDeviceRecordId || null,
+            diagnosticCode: nextDiagnosticCode,
             failureKind: classifyEncryptedDmFailure(error),
             errorMessage: error instanceof Error ? error.message : 'Unknown error',
           });
         }
-        if (!cancelled) {
-          setPlaintext(null);
-          setIsUnavailable(true);
-          setFailureKind(classifyEncryptedDmFailure(error));
-        }
+        resolveUnavailable(nextDiagnosticCode, {
+          currentLocalDeviceCreatedAt: currentLocalRecord?.createdAt ?? null,
+          currentLocalServerDeviceRecordId:
+            currentLocalRecord?.serverDeviceRecordId ?? null,
+          envelopePresent: true,
+          envelopeRecipientDeviceRecordId: recipientDeviceRecordId,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     })();
 
@@ -205,8 +362,13 @@ export function EncryptedDmMessageBody({
     conversationId,
     diagnosticsEnabled,
     envelope,
+    historyDiagnosticHint.activeDeviceRecordId,
+    historyDiagnosticHint.code,
+    historyDiagnosticHint.messageCreatedAt,
+    historyDiagnosticHint.viewerJoinedAt,
     messageCreatedAt,
     messageId,
+    messageSenderId,
     retryNonce,
     shouldCachePreview,
     currentUserId,
@@ -216,6 +378,7 @@ export function EncryptedDmMessageBody({
     plaintext,
     isUnavailable,
     failureKind,
+    diagnosticCode,
     fallbackLabel,
     setupUnavailableLabel,
     unavailableLabel,
@@ -227,8 +390,21 @@ export function EncryptedDmMessageBody({
 
   if (renderState.kind === 'unavailable') {
     return (
-      <div className="message-encryption-state">
+      <div
+        className="message-encryption-state"
+        data-dm-e2ee-debug-bucket={
+          diagnosticsEnabled ? renderState.debugBucket ?? undefined : undefined
+        }
+        data-dm-e2ee-diagnostic={
+          diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
+        }
+      >
         <p className="message-body">{renderState.text}</p>
+        {diagnosticsEnabled && renderState.diagnosticCode ? (
+          <p className="message-encryption-debug-label">
+            {renderState.diagnosticCode}
+          </p>
+        ) : null}
         <div className="message-encryption-actions">
           <button
             className="button button-secondary button-compact message-encryption-action"
@@ -276,5 +452,21 @@ export function EncryptedDmMessageBody({
     );
   }
 
-  return <p className="message-body">{renderState.text}</p>;
+  return (
+    <div
+      data-dm-e2ee-debug-bucket={
+        diagnosticsEnabled ? renderState.debugBucket ?? undefined : undefined
+      }
+      data-dm-e2ee-diagnostic={
+        diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
+      }
+    >
+      <p className="message-body">{renderState.text}</p>
+      {diagnosticsEnabled && renderState.diagnosticCode ? (
+        <p className="message-encryption-debug-label">
+          {renderState.diagnosticCode}
+        </p>
+      ) : null}
+    </div>
+  );
 }
