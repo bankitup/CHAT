@@ -4194,20 +4194,36 @@ export async function createConversationWithMembers(input: {
     throw new Error(conversationError.message);
   }
 
-  const membershipRows = [
-    {
-      conversation_id: conversationId,
-      user_id: input.creatorUserId,
-      role: 'owner',
-      state: 'active',
-    },
-    ...participantUserIds.map((userId) => ({
-      conversation_id: conversationId,
-      user_id: userId,
-      role: 'member',
-      state: 'active',
-    })),
-  ];
+  const membershipRows =
+    input.kind === 'dm'
+      ? [
+          {
+            conversation_id: conversationId,
+            user_id: input.creatorUserId,
+            role: 'member',
+            state: 'active',
+          },
+          ...participantUserIds.map((userId) => ({
+            conversation_id: conversationId,
+            user_id: userId,
+            role: 'member',
+            state: 'active',
+          })),
+        ]
+      : [
+          {
+            conversation_id: conversationId,
+            user_id: input.creatorUserId,
+            role: 'owner',
+            state: 'active',
+          },
+          ...participantUserIds.map((userId) => ({
+            conversation_id: conversationId,
+            user_id: userId,
+            role: 'member',
+            state: 'active',
+          })),
+        ];
 
   const { error: membershipError } = await supabase
     .from('conversation_members')

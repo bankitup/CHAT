@@ -1198,6 +1198,23 @@ export async function deleteDirectConversationAction(formData: FormData) {
     redirect('/login');
   }
 
+  const conversation = await getConversationForUser(conversationId, user.id, {
+    spaceId,
+  });
+
+  if (!conversation) {
+    redirectToInbox(spaceId);
+  }
+
+  if (conversation.kind !== 'dm') {
+    redirectWithSettingsError(
+      conversationId,
+      'This delete action is only available for direct chats.',
+      spaceId,
+      settingsReturnTarget,
+    );
+  }
+
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {

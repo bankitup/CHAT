@@ -729,7 +729,9 @@ export default async function ChatPage({
     participants.some(
       (participant) => participant.userId === user.id && participant.role === 'owner',
     );
-  const canDeleteDirectConversation = conversation.kind === 'dm';
+  const canDeleteDirectConversation =
+    conversation.kind === 'dm' &&
+    participants.some((participant) => participant.userId === user.id);
   const participantItems = participants.map((participant) => {
     const identity = senderIdentities.get(participant.userId);
     const label = resolvePublicIdentityLabel(identity, t.chat.unknownUser);
@@ -1290,9 +1292,11 @@ export default async function ChatPage({
                           {participant.label}
                         </span>
                         <div className="conversation-member-meta">
-                          <span className="conversation-role-chip">
-                            {participant.roleLabel}
-                          </span>
+                          {conversation.kind === 'group' ? (
+                            <span className="conversation-role-chip">
+                              {participant.roleLabel}
+                            </span>
+                          ) : null}
                           {participant.isCurrentUser ? (
                             <span className="conversation-member-self-chip">{t.chat.you}</span>
                           ) : null}
