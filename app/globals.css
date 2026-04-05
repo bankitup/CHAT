@@ -656,8 +656,8 @@ main {
 }
 
 .inbox-home-shell-dm {
-  gap: 12px;
-  padding: 15px 15px 18px;
+  gap: 10px;
+  padding: 14px 14px 17px;
   border-radius: 28px;
   border-color: rgba(224, 231, 241, 0.96);
   background:
@@ -674,11 +674,25 @@ main {
   gap: 9px;
 }
 
+.inbox-topbar-compact {
+  align-items: stretch;
+  gap: 10px;
+}
+
+.inbox-topbar-compact-dm {
+  gap: 11px;
+}
+
 .inbox-topbar-actions {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.inbox-search-form-topbar {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .inbox-topbar-copy {
@@ -720,7 +734,7 @@ main {
 }
 
 .inbox-toolbar-dm {
-  gap: 10px;
+  gap: 9px;
 }
 
 .inbox-search-form {
@@ -744,7 +758,7 @@ main {
 }
 
 .inbox-search-shell-dm {
-  border-radius: 20px;
+  border-radius: 22px;
 }
 
 .inbox-search-icon {
@@ -773,17 +787,17 @@ main {
 }
 
 .inbox-search-input-dm {
-  min-height: 50px;
+  min-height: 54px;
   padding-left: 42px;
-  padding-right: 15px;
-  border-radius: 18px;
+  padding-right: 16px;
+  border-radius: 20px;
   border-color: rgba(221, 228, 238, 0.94);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 253, 0.95));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(246, 249, 253, 0.96));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 10px 24px rgba(17, 24, 39, 0.04);
-  font-size: 0.93rem;
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 12px 28px rgba(17, 24, 39, 0.05);
+  font-size: 0.96rem;
 }
 
 .inbox-search-input-dm::placeholder {
@@ -892,22 +906,53 @@ main {
   backdrop-filter: blur(12px);
 }
 
+.inbox-topbar-action-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid rgba(221, 228, 238, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 10px 22px rgba(17, 24, 39, 0.08);
+}
+
+.inbox-topbar-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .inbox-settings-trigger {
   color: rgba(91, 100, 112, 0.92);
   font-size: 0.94rem;
   line-height: 1;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 247, 251, 0.94));
 }
 
 .inbox-compose-trigger {
   color: rgba(37, 45, 57, 0.94);
   font-size: 1.22rem;
   line-height: 1;
+  border-color: rgba(31, 111, 235, 0.14);
+  background:
+    linear-gradient(180deg, rgba(244, 248, 255, 1), rgba(233, 242, 255, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 12px 24px rgba(31, 111, 235, 0.12);
 }
 
 .inbox-screen-dm .inbox-settings-trigger,
 .inbox-screen-dm .inbox-compose-trigger {
   width: 38px;
   height: 38px;
+}
+
+.inbox-screen-dm .inbox-topbar-action-button {
+  width: 46px;
+  height: 46px;
 }
 
 .inbox-compose-empty {

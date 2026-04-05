@@ -275,8 +275,6 @@ export function InboxFilterableContent({
   );
   const activeBuckets = activeView === 'archived' ? archivedBuckets : mainBuckets;
   const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
-  const unreadVisibleConversationCount = activeBuckets.unreadByFilter[activeFilter];
-  const activeConversationCount = activeBuckets.totalByFilter[activeFilter];
   const activeConversationSourceCount =
     activeView === 'archived'
       ? archivedConversationItems.length
@@ -288,23 +286,6 @@ export function InboxFilterableContent({
   const searchPlaceholder = isDmFilter
     ? t.inbox.searchDmPlaceholder
     : t.inbox.searchPlaceholder;
-  const headerTitle = t.inbox.title;
-  const headerSubtitle =
-    activeView === 'archived'
-      ? archivedConversationCount > 0
-        ? t.inbox.subtitleArchivedCount(archivedConversationCount)
-        : t.inbox.subtitleArchivedEmpty
-      : isDmFilter
-        ? unreadVisibleConversationCount > 0
-          ? t.inbox.subtitleDmNew(unreadVisibleConversationCount)
-          : activeConversationCount > 0
-            ? t.inbox.subtitleDmCaughtUp
-            : t.inbox.subtitleDmStart
-        : unreadVisibleConversationCount > 0
-          ? t.inbox.subtitleNew(unreadVisibleConversationCount)
-          : activeConversationCount > 0
-            ? t.inbox.subtitleCaughtUp
-            : t.inbox.subtitleStart;
   const searchScopeSummary = searchTerm
     ? (() => {
         const parts = [
@@ -344,68 +325,19 @@ export function InboxFilterableContent({
             : 'card inbox-home-shell stack'
         }
       >
-        <div className="inbox-topbar">
-          <div
-            className={
-              isPrimaryChatsView
-                ? 'stack inbox-topbar-copy inbox-topbar-copy-dm'
-                : 'stack inbox-topbar-copy'
-            }
-          >
-            <h1
-              className={
-                isPrimaryChatsView
-                  ? 'inbox-home-title inbox-home-title-dm'
-                  : 'inbox-home-title'
-              }
-            >
-              {headerTitle}
-            </h1>
-            <p
-              className={
-                isPrimaryChatsView
-                  ? 'muted inbox-home-subtitle inbox-home-subtitle-dm'
-                  : 'muted inbox-home-subtitle'
-              }
-            >
-              {headerSubtitle}
-            </p>
-          </div>
-          <div className="inbox-topbar-actions">
-            <Link
-              aria-label={t.inbox.settingsAria}
-              className="inbox-settings-trigger"
-              href={`/settings?space=${encodeURIComponent(activeSpaceId)}`}
-            >
-              <span aria-hidden="true">⚙</span>
-            </Link>
-            <Link
-              aria-label={t.inbox.createAria}
-              className="inbox-compose-trigger"
-              href={buildInboxHref({
-                create: true,
-                filter: activeFilter,
-                query: queryValue,
-                spaceId: activeSpaceId,
-                view: activeView,
-              })}
-            >
-              <span aria-hidden="true">+</span>
-            </Link>
-          </div>
-        </div>
-
         <div
           className={
-            isPrimaryChatsView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
+            isPrimaryChatsView
+              ? 'inbox-topbar inbox-topbar-compact inbox-topbar-compact-dm'
+              : 'inbox-topbar inbox-topbar-compact'
           }
         >
           <form
             action="/inbox"
             className={
               isPrimaryChatsView
-                ? 'inbox-search-form inbox-search-form-minimal inbox-search-form-dm'
-                : 'inbox-search-form inbox-search-form-minimal'
+                ? 'inbox-search-form inbox-search-form-minimal inbox-search-form-topbar inbox-search-form-dm'
+                : 'inbox-search-form inbox-search-form-minimal inbox-search-form-topbar'
             }
             aria-label={searchAria}
             role="search"
@@ -450,6 +382,39 @@ export function InboxFilterableContent({
             ) : null}
           </form>
 
+          <div className="inbox-topbar-actions">
+            <Link
+              aria-label={t.inbox.settingsAria}
+              className="inbox-settings-trigger inbox-topbar-action-button"
+              href={`/settings?space=${encodeURIComponent(activeSpaceId)}`}
+            >
+              <span aria-hidden="true" className="inbox-topbar-action-icon">
+                ⚙
+              </span>
+            </Link>
+            <Link
+              aria-label={t.inbox.createAria}
+              className="inbox-compose-trigger inbox-topbar-action-button"
+              href={buildInboxHref({
+                create: true,
+                filter: activeFilter,
+                query: queryValue,
+                spaceId: activeSpaceId,
+                view: activeView,
+              })}
+            >
+              <span aria-hidden="true" className="inbox-topbar-action-icon">
+                +
+              </span>
+            </Link>
+          </div>
+        </div>
+
+        <div
+          className={
+            isPrimaryChatsView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
+          }
+        >
           <div
             className={
               isPrimaryChatsView
