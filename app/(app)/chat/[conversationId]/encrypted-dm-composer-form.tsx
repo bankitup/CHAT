@@ -476,8 +476,11 @@ export function EncryptedDmComposerForm({
   const showDevResetAction =
     process.env.NODE_ENV !== 'production' ||
     process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
+  const showDebugFailureUi =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
   const showDebugFailureDetails =
-    showDevResetAction &&
+    showDebugFailureUi &&
     Boolean(
       errorDebugDetails?.exact400ReasonCode ||
         errorDebugDetails?.failedValidationBranch ||
