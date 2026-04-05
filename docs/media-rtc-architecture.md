@@ -181,6 +181,12 @@ This scaffolding introduces two new top-level messaging boundaries:
 
 They are currently type/interface-first.
 
+Current media scaffolding entrypoints:
+
+- `src/modules/messaging/media/message-metadata.ts`
+- `src/modules/messaging/media/upload-jobs.ts`
+- `src/modules/messaging/media/voice.ts`
+
 Use them for all future work in these areas before adding feature logic to:
 
 - `app/(app)/chat/[conversationId]/page.tsx`

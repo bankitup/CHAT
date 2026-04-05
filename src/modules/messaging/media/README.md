@@ -6,6 +6,8 @@ Planned responsibilities:
 
 - Stable media asset contracts.
 - Upload-job lifecycle types and orchestration interfaces.
+- Message-to-media metadata separation.
+- Voice-message draft, commit, and playback contracts.
 - Separation between binary upload transport and message-visible metadata.
 - Future media-specific runtime helpers that should not live in the chat route.
 
