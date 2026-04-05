@@ -325,7 +325,9 @@ export async function toggleReactionAction(formData: FormData) {
   }
 
   revalidatePath(`/chat/${conversationId}`);
-  redirectWithSettingsSaved(conversationId, spaceId);
+  redirectToChat(conversationId, spaceId, {
+    hash: `#message-${messageId}`,
+  });
 }
 
 export async function editMessageAction(formData: FormData) {
