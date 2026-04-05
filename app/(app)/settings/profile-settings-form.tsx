@@ -1,6 +1,7 @@
 'use client';
 
 import NextImage from 'next/image';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
@@ -11,7 +12,7 @@ import {
   isSupportedProfileAvatarType,
   sanitizeProfileFileName,
 } from '@/modules/messaging/profile-avatar';
-import { removeAvatarAction, updateProfileAction } from './actions';
+import { updateProfileAction } from './actions';
 
 const AVATAR_EDITOR_PREVIEW_SIZE = 260;
 const AVATAR_EDITOR_OUTPUT_SIZE = 512;
@@ -221,19 +222,22 @@ export function ProfileSettingsForm({
   hasAvatar,
   labels,
 }: ProfileSettingsFormProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isPreparingAvatar, setIsPreparingAvatar] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [draftDisplayName, setDraftDisplayName] = useState(defaultDisplayName);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [avatarEditorDraft, setAvatarEditorDraft] =
     useState<AvatarEditorDraft | null>(null);
   const [pendingAvatarDraft, setPendingAvatarDraft] =
     useState<PendingAvatarDraft | null>(null);
+  const [isAvatarRemovalDraft, setIsAvatarRemovalDraft] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const avatarObjectPathRef = useRef<HTMLInputElement | null>(null);
-  const bypassNextSubmitRef = useRef(false);
   const latestEditorSourceUrlRef = useRef<string | null>(null);
   const latestPendingPreviewUrlRef = useRef<string | null>(null);
   const dragStateRef = useRef<{
@@ -277,16 +281,22 @@ export function ProfileSettingsForm({
     };
   }, [avatarEditorDraft]);
 
-  function clearAvatarObjectPath() {
-    if (avatarObjectPathRef.current) {
-      avatarObjectPathRef.current.value = '';
-    }
-  }
-
   function resetAvatarPickerInput() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  }
+
+  function clearStatusQueryParams() {
+    if (!searchParams.has('message') && !searchParams.has('error')) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('message');
+    nextParams.delete('error');
+    const nextHref = nextParams.size > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
+    router.replace(nextHref, { scroll: false });
   }
 
   function clearPendingAvatarState() {
@@ -295,7 +305,6 @@ export function ProfileSettingsForm({
     setAvatarEditorDraft(null);
     setPendingAvatarDraft(null);
     setSelectedFileName(null);
-    clearAvatarObjectPath();
     resetAvatarPickerInput();
   }
 
@@ -304,8 +313,11 @@ export function ProfileSettingsForm({
     setLocalError(null);
     setIsUploadingAvatar(false);
     setIsPreparingAvatar(false);
+    setIsSavingProfile(false);
+    setIsAvatarRemovalDraft(false);
     setIsEditing(false);
     clearPendingAvatarState();
+    clearStatusQueryParams();
   }
 
   async function applyCurrentAvatarDraft() {
@@ -327,6 +339,7 @@ export function ProfileSettingsForm({
       revokeObjectUrl(pendingAvatarDraft?.previewUrl ?? null);
       setPendingAvatarDraft(nextPendingDraft);
       setSelectedFileName(avatarEditorDraft.fileName);
+      setIsAvatarRemovalDraft(false);
       revokeObjectUrl(avatarEditorDraft.sourceUrl);
       setAvatarEditorDraft(null);
       setLocalError(null);
@@ -353,70 +366,76 @@ export function ProfileSettingsForm({
     resetAvatarPickerInput();
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    if (bypassNextSubmitRef.current) {
-      bypassNextSubmitRef.current = false;
-      return;
-    }
-
-    const nativeEvent = event.nativeEvent;
-    const submitter =
-      nativeEvent instanceof SubmitEvent &&
-      nativeEvent.submitter instanceof HTMLButtonElement
-        ? nativeEvent.submitter
-        : null;
-
-    if (submitter?.dataset.profileAction === 'remove-avatar') {
-      clearPendingAvatarState();
-      setLocalError(null);
-      return;
-    }
-
+  async function handleExplicitSave() {
     if (avatarEditorDraft) {
-      event.preventDefault();
       setLocalError(labels.avatarEditorApplyBeforeSave);
       return;
     }
 
+    const normalizedDraftDisplayName = draftDisplayName.trim();
+    const normalizedPersistedDisplayName = defaultDisplayName.trim();
+    const hasDisplayNameChanged =
+      normalizedDraftDisplayName !== normalizedPersistedDisplayName;
+    const hasAvatarDraftChange = Boolean(pendingAvatarDraft);
+    const hasAvatarRemovalChange = isAvatarRemovalDraft;
+
+    if (!hasDisplayNameChanged && !hasAvatarDraftChange && !hasAvatarRemovalChange) {
+      resetEditingState();
+      return;
+    }
+
     const avatarDraftToUpload = pendingAvatarDraft;
+    let uploadedAvatarObjectPath: string | null = null;
 
-    if (!avatarDraftToUpload) {
-      setLocalError(null);
-      return;
-    }
-
-    event.preventDefault();
     setLocalError(null);
-    setIsUploadingAvatar(true);
+    setIsSavingProfile(true);
 
-    const supabase = createSupabaseBrowserClient();
-    const objectPath = `${userId}/${crypto.randomUUID()}-${sanitizeProfileFileName(
-      avatarDraftToUpload.fileName.replace(/\.[a-z0-9]+$/i, '') || 'avatar',
-    )}.png`;
-    const { error } = await supabase.storage
-      .from(PROFILE_AVATAR_BUCKET)
-      .upload(objectPath, avatarDraftToUpload.blob, {
-        upsert: false,
-        contentType: 'image/png',
-      });
+    if (avatarDraftToUpload) {
+      setIsUploadingAvatar(true);
 
-    if (error) {
-      setLocalError(
-        isBucketNotFoundStorageErrorMessage(error.message)
-          ? labels.avatarStorageUnavailable
-          : labels.avatarUploadFailed,
-      );
+      const supabase = createSupabaseBrowserClient();
+      const objectPath = `${userId}/${crypto.randomUUID()}-${sanitizeProfileFileName(
+        avatarDraftToUpload.fileName.replace(/\.[a-z0-9]+$/i, '') || 'avatar',
+      )}.png`;
+      const { error } = await supabase.storage
+        .from(PROFILE_AVATAR_BUCKET)
+        .upload(objectPath, avatarDraftToUpload.blob, {
+          upsert: false,
+          contentType: 'image/png',
+        });
+
+      if (error) {
+        setLocalError(
+          isBucketNotFoundStorageErrorMessage(error.message)
+            ? labels.avatarStorageUnavailable
+            : labels.avatarUploadFailed,
+        );
+        setIsUploadingAvatar(false);
+        setIsSavingProfile(false);
+        return;
+      }
+
+      uploadedAvatarObjectPath = objectPath;
       setIsUploadingAvatar(false);
-      return;
     }
 
-    if (avatarObjectPathRef.current) {
-      avatarObjectPathRef.current.value = objectPath;
+    const formData = new FormData();
+    formData.set('displayName', normalizedDraftDisplayName);
+
+    if (uploadedAvatarObjectPath) {
+      formData.set('avatarObjectPath', uploadedAvatarObjectPath);
     }
 
-    bypassNextSubmitRef.current = true;
-    setIsUploadingAvatar(false);
-    event.currentTarget.requestSubmit();
+    if (isAvatarRemovalDraft && !uploadedAvatarObjectPath) {
+      formData.set('removeAvatar', '1');
+    }
+
+    try {
+      await updateProfileAction(formData);
+    } finally {
+      setIsUploadingAvatar(false);
+      setIsSavingProfile(false);
+    }
   }
 
   async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -440,7 +459,7 @@ export function ProfileSettingsForm({
       revokeObjectUrl(avatarEditorDraft?.sourceUrl ?? null);
       setAvatarEditorDraft(nextDraft);
       setSelectedFileName(file.name);
-      clearAvatarObjectPath();
+      setIsAvatarRemovalDraft(false);
       setLocalError(null);
     } catch {
       event.target.value = '';
@@ -508,42 +527,48 @@ export function ProfileSettingsForm({
   }
 
   const visibleAvatarPath =
-    pendingAvatarDraft?.previewUrl ?? avatarPath ?? null;
+    pendingAvatarDraft?.previewUrl ?? (isAvatarRemovalDraft ? null : avatarPath ?? null);
   const visibleDisplayName = draftDisplayName.trim() || defaultDisplayName.trim();
   const avatarDraftNote = avatarEditorDraft
     ? labels.avatarEditorHint
     : pendingAvatarDraft
       ? labels.avatarEditorDraftReady
+      : isAvatarRemovalDraft
+        ? labels.profilePhotoEmpty
       : isEditing
         ? selectedFileName ?? labels.tapPhotoToChange
         : hasAvatar
           ? labels.profilePhotoCurrent
           : labels.profilePhotoEmpty;
   const hasPersistedAvatarWithoutDraft =
-    hasAvatar && !avatarEditorDraft && !pendingAvatarDraft;
+    hasAvatar &&
+    !isAvatarRemovalDraft &&
+    !avatarEditorDraft &&
+    !pendingAvatarDraft;
   const editorMetrics = avatarEditorDraft
     ? getAvatarRenderMetrics(avatarEditorDraft)
     : null;
+  const isBusy = isUploadingAvatar || isPreparingAvatar || isSavingProfile;
 
   return (
     <>
       {localError ? <p className="notice notice-error">{localError}</p> : null}
 
       <form
-        action={updateProfileAction}
         className={
           isEditing
             ? 'stack profile-settings-form profile-settings-form-editing'
             : 'stack profile-settings-form'
         }
-        onSubmit={handleSubmit}
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
       >
-        <input name="avatarObjectPath" ref={avatarObjectPathRef} type="hidden" />
         <input
           ref={fileInputRef}
           className="sr-only"
           accept={PROFILE_AVATAR_ACCEPT}
-          disabled={isUploadingAvatar || isPreparingAvatar || !isEditing}
+          disabled={isBusy || !isEditing}
           onChange={handleAvatarChange}
           type="file"
         />
@@ -555,18 +580,17 @@ export function ProfileSettingsForm({
                 <button
                   aria-label={labels.saveChanges}
                   className="profile-inline-save"
-                  disabled={
-                    isUploadingAvatar ||
-                    isPreparingAvatar ||
-                    Boolean(avatarEditorDraft)
-                  }
-                  type="submit"
+                  disabled={isBusy || Boolean(avatarEditorDraft)}
+                  onClick={() => {
+                    void handleExplicitSave();
+                  }}
+                  type="button"
                 >
                   <span aria-hidden="true">✓</span>
                 </button>
                 <button
                   className="pill profile-inline-cancel"
-                  disabled={isUploadingAvatar || isPreparingAvatar}
+                  disabled={isBusy}
                   onClick={resetEditingState}
                   type="button"
                 >
@@ -577,7 +601,10 @@ export function ProfileSettingsForm({
               <button
                 aria-label={labels.editProfile}
                 className="pill profile-inline-edit"
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  clearStatusQueryParams();
+                  setIsEditing(true);
+                }}
                 type="button"
               >
                 <span aria-hidden="true">✎</span>
@@ -594,7 +621,7 @@ export function ProfileSettingsForm({
                 ? 'profile-inline-avatar profile-inline-avatar-editable'
                 : 'profile-inline-avatar'
             }
-            disabled={!isEditing || isUploadingAvatar || isPreparingAvatar}
+            disabled={!isEditing || isBusy}
             onClick={() => fileInputRef.current?.click()}
             type="button"
           >
@@ -621,9 +648,8 @@ export function ProfileSettingsForm({
                 <span className="sr-only">{labels.displayName}</span>
                 <input
                   className="input profile-inline-name-input"
-                  disabled={isUploadingAvatar || isPreparingAvatar}
+                  disabled={isBusy}
                   maxLength={40}
-                  name="displayName"
                   onChange={(event) => setDraftDisplayName(event.target.value)}
                   placeholder={labels.displayNamePlaceholder}
                   value={draftDisplayName}
@@ -642,10 +668,13 @@ export function ProfileSettingsForm({
             {isEditing && hasPersistedAvatarWithoutDraft ? (
               <button
                 className="button button-secondary button-compact profile-inline-remove"
-                data-profile-action="remove-avatar"
-                disabled={isUploadingAvatar || isPreparingAvatar}
-                formAction={removeAvatarAction}
-                type="submit"
+                disabled={isBusy}
+                onClick={() => {
+                  clearPendingAvatarState();
+                  setIsAvatarRemovalDraft(true);
+                  setLocalError(null);
+                }}
+                type="button"
               >
                 {labels.removePhoto}
               </button>

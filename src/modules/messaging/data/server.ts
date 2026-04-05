@@ -3438,6 +3438,7 @@ export async function updateCurrentUserProfile(input: {
   displayName: string | null;
   avatarObjectPath?: string | null;
   avatarFile?: File | null;
+  removeAvatar?: boolean;
 }) {
   const supabase = await createSupabaseServerClient();
 
@@ -3491,6 +3492,10 @@ export async function updateCurrentUserProfile(input: {
   let nextAvatarPath: string | null | undefined;
   let uploadedAvatarObjectPath: string | null = null;
   const requestedAvatarObjectPath = input.avatarObjectPath?.trim() || null;
+  const shouldRemoveAvatar =
+    Boolean(input.removeAvatar) &&
+    !requestedAvatarObjectPath &&
+    !(input.avatarFile && input.avatarFile.size > 0);
 
   if (requestedAvatarObjectPath) {
     if (!isManagedAvatarObjectPath(input.userId, requestedAvatarObjectPath)) {
@@ -3527,6 +3532,8 @@ export async function updateCurrentUserProfile(input: {
 
     uploadedAvatarObjectPath = objectPath;
     nextAvatarPath = objectPath;
+  } else if (shouldRemoveAvatar) {
+    nextAvatarPath = null;
   }
 
   const profilePayload = {
@@ -3571,7 +3578,7 @@ export async function updateCurrentUserProfile(input: {
     existingAvatarPath &&
     isManagedAvatarObjectPath(input.userId, existingAvatarPath) &&
     existingAvatarPath !== uploadedAvatarObjectPath &&
-    uploadedAvatarObjectPath
+    (uploadedAvatarObjectPath || shouldRemoveAvatar)
   ) {
     await supabase.storage.from(PROFILE_AVATAR_BUCKET).remove([existingAvatarPath]);
   }

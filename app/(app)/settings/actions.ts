@@ -50,6 +50,7 @@ export async function updateProfileAction(formData: FormData) {
   const displayName = String(formData.get('displayName') ?? '').trim();
   const avatarObjectPath =
     String(formData.get('avatarObjectPath') ?? '').trim() || null;
+  const removeAvatar = String(formData.get('removeAvatar') ?? '').trim() === '1';
   const avatarEntry = formData.get('avatar');
   const avatarFile =
     avatarEntry instanceof File && avatarEntry.size > 0 ? avatarEntry : null;
@@ -69,6 +70,7 @@ export async function updateProfileAction(formData: FormData) {
       displayName: displayName || null,
       avatarObjectPath,
       avatarFile,
+      removeAvatar,
     });
   } catch (error) {
     redirectWithMessage(
