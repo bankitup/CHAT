@@ -20,6 +20,7 @@ import {
   type EncryptedDmFailureKind,
   type EncryptedDmServerHistoryHint,
 } from '@/modules/messaging/e2ee/ui-policy';
+import { setDmThreadVisibleMessageState } from './dm-thread-visible-message-store';
 
 type EncryptedDmMessageBodyProps = {
   clientId: string | null;
@@ -123,6 +124,12 @@ export function EncryptedDmMessageBody({
     setIsUnavailable(false);
     setFailureKind('unavailable');
     setDiagnosticCode('temporary-loading');
+    setDmThreadVisibleMessageState({
+      conversationId,
+      diagnosticCode: 'temporary-loading',
+      messageId,
+      plaintext: null,
+    });
 
     if (!normalizedClientId) {
       if (diagnosticsEnabled) {
@@ -138,6 +145,12 @@ export function EncryptedDmMessageBody({
       setFailureKind('unavailable');
       setDiagnosticCode('malformed-envelope');
       previousFailureCodeRef.current = 'malformed-envelope';
+      setDmThreadVisibleMessageState({
+        conversationId,
+        diagnosticCode: 'malformed-envelope',
+        messageId,
+        plaintext: null,
+      });
       return;
     }
 
@@ -170,6 +183,13 @@ export function EncryptedDmMessageBody({
           setDiagnosticCode(nextDiagnosticCode);
           previousFailureCodeRef.current = nextDiagnosticCode;
         }
+
+        setDmThreadVisibleMessageState({
+          conversationId,
+          diagnosticCode: nextDiagnosticCode,
+          messageId,
+          plaintext: null,
+        });
       };
 
       let currentLocalRecord: LocalDmE2eeDeviceRecord | null = null;
@@ -319,6 +339,13 @@ export function EncryptedDmMessageBody({
           setFailureKind('unavailable');
           setDiagnosticCode('temporary-loading');
         }
+
+        setDmThreadVisibleMessageState({
+          conversationId,
+          diagnosticCode: null,
+          messageId,
+          plaintext: nextPlaintext,
+        });
 
         if (shouldCachePreview) {
           writeLocalEncryptedDmPreview({

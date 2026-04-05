@@ -71,6 +71,7 @@ import {
   DmThreadPresenceScope,
 } from './dm-thread-client-diagnostics';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
+import { DmReplyTargetSnippet } from './dm-reply-target-snippet';
 import { ProgressiveHistoryLoader } from './progressive-history-loader';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
@@ -1403,31 +1404,38 @@ export default async function ChatPage({
                                 );
                               })()}
                             </span>
-                            <span className="message-reply-snippet">
-                              {(() => {
-                                const repliedMessage = messagesById.get(
-                                  message.reply_to_message_id,
-                                );
-
-                                if (repliedMessage?.deleted_at) {
-                                  return t.chat.messageDeleted;
-                                }
-
-                                if (repliedMessage?.kind === 'voice') {
-                                  return t.chat.voiceMessage;
-                                }
-
-                                if (repliedMessage && isEncryptedDmTextMessage(repliedMessage)) {
-                                  return t.chat.replyToEncryptedMessage;
-                                }
-
-                                return getMessageSnippet(
-                                  repliedMessage?.body ?? null,
-                                  t,
-                                  72,
-                                );
-                              })()}
-                            </span>
+                            <DmReplyTargetSnippet
+                              body={
+                                messagesById.get(message.reply_to_message_id)?.body ?? null
+                              }
+                              conversationId={conversationId}
+                              currentUserId={user.id}
+                              debugRequestId={threadRenderRequestId}
+                              deletedFallbackLabel={t.chat.messageDeleted}
+                              emptyFallbackLabel={t.chat.emptyMessage}
+                              encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                              encryptedReferenceNote={null}
+                              loadedFallbackLabel={t.chat.earlierMessage}
+                              messageId={message.id}
+                              surface="message-reply-reference"
+                              targetDeleted={Boolean(
+                                messagesById.get(message.reply_to_message_id)?.deleted_at,
+                              )}
+                              targetIsEncrypted={Boolean(
+                                messagesById.get(message.reply_to_message_id) &&
+                                  isEncryptedDmTextMessage(
+                                    messagesById.get(message.reply_to_message_id)!,
+                                  ),
+                              )}
+                              targetIsLoaded={Boolean(
+                                messagesById.get(message.reply_to_message_id),
+                              )}
+                              targetKind={
+                                messagesById.get(message.reply_to_message_id)?.kind ?? null
+                              }
+                              targetMessageId={message.reply_to_message_id}
+                              voiceFallbackLabel={t.chat.voiceMessage}
+                            />
                           </div>
                         ) : null}
                         {isDeletedMessage ? (
@@ -1858,18 +1866,25 @@ export default async function ChatPage({
                     : senderNames.get(activeReplyTarget.sender_id ?? '') ||
                       t.chat.unknownUser}
                 </span>
-                <span className="composer-reply-snippet">
-                  {activeReplyTarget.deleted_at
-                    ? t.chat.thisMessageWasDeleted
-                    : isEncryptedDmTextMessage(activeReplyTarget)
-                      ? t.chat.replyToEncryptedMessage
-                      : getMessageSnippet(activeReplyTarget.body, t, 88)}
-                </span>
-                {isEncryptedDmTextMessage(activeReplyTarget) ? (
-                  <span className="composer-reply-note">
-                    {t.chat.encryptedReplyInfo}
-                  </span>
-                ) : null}
+                <DmReplyTargetSnippet
+                  body={activeReplyTarget.body}
+                  conversationId={conversationId}
+                  currentUserId={user.id}
+                  debugRequestId={threadRenderRequestId}
+                  deletedFallbackLabel={t.chat.thisMessageWasDeleted}
+                  emptyFallbackLabel={t.chat.emptyMessage}
+                  encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                  encryptedReferenceNote={t.chat.encryptedReplyInfo}
+                  loadedFallbackLabel={t.chat.earlierMessage}
+                  messageId={activeReplyTarget.id}
+                  surface="composer-reply-preview"
+                  targetDeleted={Boolean(activeReplyTarget.deleted_at)}
+                  targetIsEncrypted={isEncryptedDmTextMessage(activeReplyTarget)}
+                  targetIsLoaded
+                  targetKind={activeReplyTarget.kind}
+                  targetMessageId={activeReplyTarget.id}
+                  voiceFallbackLabel={t.chat.voiceMessage}
+                />
               </div>
               <Link
                 className="pill composer-reply-cancel"

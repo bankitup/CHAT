@@ -1,0 +1,232 @@
+'use client';
+
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import {
+  getDmThreadVisibleMessageState,
+  subscribeToDmThreadVisibleMessages,
+} from './dm-thread-visible-message-store';
+
+export type ReplyTargetResolutionCode =
+  | 'target-not-loaded'
+  | 'target-deleted'
+  | 'target-voice'
+  | 'target-empty-body'
+  | 'target-plain-body'
+  | 'resolved-from-visible-plaintext'
+  | 'temporary-loading'
+  | 'missing-envelope'
+  | 'policy-blocked-history'
+  | 'same-user-new-device-history-gap'
+  | 'device-retired-or-mismatched'
+  | 'client-session-lookup-failed'
+  | 'client-key-material-missing'
+  | 'local-device-record-missing'
+  | 'malformed-envelope'
+  | 'decrypt-failed'
+  | 'stale-cached-failure-state';
+
+type DmReplyTargetSnippetProps = {
+  body: unknown;
+  conversationId: string;
+  currentUserId: string;
+  debugRequestId?: string | null;
+  deletedFallbackLabel: string;
+  emptyFallbackLabel: string;
+  encryptedFallbackLabel: string;
+  encryptedReferenceNote?: string | null;
+  loadedFallbackLabel: string;
+  messageId: string;
+  surface: 'composer-reply-preview' | 'message-reply-reference';
+  targetDeleted: boolean;
+  targetIsEncrypted: boolean;
+  targetIsLoaded: boolean;
+  targetKind: string | null;
+  targetMessageId: string;
+  voiceFallbackLabel: string;
+};
+
+function isDiagnosticsEnabled() {
+  return process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
+}
+
+function normalizeBodySnippet(value: unknown, maxLength = 90) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, maxLength).trimEnd()}...`;
+}
+
+function logReplyTargetResolution(
+  stage: string,
+  details: Record<string, unknown>,
+) {
+  if (!isDiagnosticsEnabled() || typeof window === 'undefined') {
+    return;
+  }
+
+  console.info('[chat-reply-target]', stage, details);
+}
+
+export function DmReplyTargetSnippet({
+  body,
+  conversationId,
+  currentUserId,
+  debugRequestId = null,
+  deletedFallbackLabel,
+  emptyFallbackLabel,
+  encryptedFallbackLabel,
+  encryptedReferenceNote = null,
+  loadedFallbackLabel,
+  messageId,
+  surface,
+  targetDeleted,
+  targetIsEncrypted,
+  targetIsLoaded,
+  targetKind,
+  targetMessageId,
+  voiceFallbackLabel,
+}: DmReplyTargetSnippetProps) {
+  const visibleMessageState = useSyncExternalStore(
+    subscribeToDmThreadVisibleMessages,
+    () => getDmThreadVisibleMessageState(conversationId, targetMessageId),
+    () => ({ diagnosticCode: null, plaintextSnippet: null }),
+  );
+
+  const resolution = useMemo(() => {
+    if (!targetIsLoaded) {
+      return {
+        diagnosticCode: 'target-not-loaded' as const,
+        note: null,
+        text: loadedFallbackLabel,
+      };
+    }
+
+    if (targetDeleted) {
+      return {
+        diagnosticCode: 'target-deleted' as const,
+        note: null,
+        text: deletedFallbackLabel,
+      };
+    }
+
+    if (targetKind === 'voice') {
+      return {
+        diagnosticCode: 'target-voice' as const,
+        note: null,
+        text: voiceFallbackLabel,
+      };
+    }
+
+    if (targetIsEncrypted) {
+      if (visibleMessageState.plaintextSnippet) {
+        return {
+          diagnosticCode: 'resolved-from-visible-plaintext' as const,
+          note: null,
+          text: visibleMessageState.plaintextSnippet,
+        };
+      }
+
+      return {
+        diagnosticCode:
+          (visibleMessageState.diagnosticCode ?? 'temporary-loading') as ReplyTargetResolutionCode,
+        note: visibleMessageState.diagnosticCode,
+        text: encryptedFallbackLabel,
+      };
+    }
+
+    const normalizedBody = normalizeBodySnippet(body);
+
+    if (!normalizedBody) {
+      return {
+        diagnosticCode: 'target-empty-body' as const,
+        note: null,
+        text: emptyFallbackLabel,
+      };
+    }
+
+    return {
+      diagnosticCode: 'target-plain-body' as const,
+      note: null,
+      text: normalizedBody,
+    };
+  }, [
+    body,
+    deletedFallbackLabel,
+    emptyFallbackLabel,
+    encryptedFallbackLabel,
+    loadedFallbackLabel,
+    targetDeleted,
+    targetIsEncrypted,
+    targetIsLoaded,
+    targetKind,
+    visibleMessageState.diagnosticCode,
+    visibleMessageState.plaintextSnippet,
+    voiceFallbackLabel,
+  ]);
+
+  useEffect(() => {
+    logReplyTargetResolution('resolve', {
+      bodyType: body === null ? 'null' : typeof body,
+      conversationId,
+      currentUserId,
+      debugRequestId,
+      diagnosticCode: resolution.diagnosticCode,
+      messageId,
+      surface,
+      targetIsEncrypted,
+      targetIsLoaded,
+      targetMessageId,
+      visibleDiagnosticCode: visibleMessageState.diagnosticCode,
+      usedVisiblePlaintext: Boolean(visibleMessageState.plaintextSnippet),
+    });
+  }, [
+    body,
+    conversationId,
+    currentUserId,
+    debugRequestId,
+    messageId,
+    resolution.diagnosticCode,
+    surface,
+    targetIsEncrypted,
+    targetIsLoaded,
+    targetMessageId,
+    visibleMessageState.diagnosticCode,
+    visibleMessageState.plaintextSnippet,
+  ]);
+
+  return (
+    <>
+      <span
+        className={
+          surface === 'composer-reply-preview'
+            ? 'composer-reply-snippet'
+            : 'message-reply-snippet'
+        }
+        data-reply-target-diagnostic={
+          isDiagnosticsEnabled() ? resolution.diagnosticCode : undefined
+        }
+      >
+        {resolution.text}
+      </span>
+      {isDiagnosticsEnabled() && resolution.note ? (
+        <span className="reply-target-debug-label">{resolution.note}</span>
+      ) : null}
+      {encryptedReferenceNote &&
+      targetIsEncrypted &&
+      resolution.diagnosticCode !== 'resolved-from-visible-plaintext' ? (
+        <span className="composer-reply-note">{encryptedReferenceNote}</span>
+      ) : null}
+    </>
+  );
+}

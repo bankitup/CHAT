@@ -3659,6 +3659,12 @@ main {
   line-height: 1.34;
 }
 
+.reply-target-debug-label {
+  color: rgba(91, 100, 112, 0.78);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
 .message-meta {
   display: inline-flex;
   align-items: center;
