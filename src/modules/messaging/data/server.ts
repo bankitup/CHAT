@@ -239,7 +239,7 @@ export type ConversationMessage = {
   reply_to_message_id: string | null;
   seq: number | string;
   kind: string;
-  client_id: string;
+  client_id: string | null;
   body: string | null;
   content_mode?: string | null;
   sender_device_id?: string | null;
@@ -3055,28 +3055,48 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     throw new Error(response.error.message);
   }
 
-  const envelopes: Array<[string, StoredDmE2eeEnvelope]> = ((response.data ?? []) as MessageE2eeEnvelopeRow[]).map((row) => {
+  let malformedEnvelopeCount = 0;
+  const envelopes = ((response.data ?? []) as MessageE2eeEnvelopeRow[]).flatMap<
+    [string, StoredDmE2eeEnvelope]
+  >((row) => {
       const messageRecord = normalizeJoinedRecord(row.messages);
+      const senderDeviceRecordId = String(
+        messageRecord?.sender_device_id ?? '',
+      ).trim();
+      const ciphertext = String(row.ciphertext ?? '').trim();
 
-      return [
+      if (!senderDeviceRecordId || !ciphertext) {
+        malformedEnvelopeCount += 1;
+        logDiagnostics('envelopes:skip-malformed', {
+          currentUserId: input.userId,
+          hasCiphertext: Boolean(ciphertext),
+          messageId: row.message_id,
+          recipientDeviceRecordId: row.recipient_device_id,
+          senderDeviceRecordId,
+        });
+        return [];
+      }
+
+      return [[
         row.message_id,
         {
           messageId: row.message_id,
-          senderDeviceRecordId: messageRecord?.sender_device_id ?? '',
+          senderDeviceRecordId,
           recipientDeviceRecordId: row.recipient_device_id,
           envelopeType:
             row.envelope_type === 'signal_message'
               ? 'signal_message'
               : 'prekey_signal_message',
-          ciphertext: row.ciphertext,
+          ciphertext,
           usedOneTimePrekeyId: row.used_one_time_prekey_id ?? null,
           createdAt: row.created_at ?? null,
         } satisfies StoredDmE2eeEnvelope,
-      ] as [string, StoredDmE2eeEnvelope];
+      ]];
     });
   logDiagnostics('envelopes:loaded', {
     currentUserId: input.userId,
     activeDeviceRecordId,
+    malformedEnvelopeCount,
     requestedMessageCount: uniqueMessageIds.length,
     envelopeCount: envelopes.length,
   });

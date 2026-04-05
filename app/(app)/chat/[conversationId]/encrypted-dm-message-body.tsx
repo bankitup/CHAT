@@ -14,7 +14,7 @@ import {
 } from '@/modules/messaging/e2ee/ui-policy';
 
 type EncryptedDmMessageBodyProps = {
-  clientId: string;
+  clientId: string | null;
   conversationId: string;
   currentUserId: string;
   envelope: StoredDmE2eeEnvelope | null;
@@ -65,6 +65,42 @@ export function EncryptedDmMessageBody({
           conversationId,
           clientId,
           messageId,
+        });
+      }
+      setPlaintext(null);
+      setIsUnavailable(true);
+      setFailureKind('unavailable');
+      return;
+    }
+
+    if (!clientId?.trim()) {
+      if (diagnosticsEnabled) {
+        console.info('[dm-e2ee-history-client]', 'decrypt:missing-client-id', {
+          currentUserId,
+          conversationId,
+          messageId,
+        });
+      }
+      setPlaintext(null);
+      setIsUnavailable(true);
+      setFailureKind('unavailable');
+      return;
+    }
+
+    if (
+      !envelope.senderDeviceRecordId?.trim() ||
+      !envelope.recipientDeviceRecordId?.trim() ||
+      !envelope.ciphertext?.trim()
+    ) {
+      if (diagnosticsEnabled) {
+        console.info('[dm-e2ee-history-client]', 'decrypt:malformed-envelope', {
+          currentUserId,
+          conversationId,
+          clientId,
+          hasCiphertext: Boolean(envelope.ciphertext?.trim()),
+          messageId,
+          recipientDeviceRecordId: envelope.recipientDeviceRecordId ?? null,
+          senderDeviceRecordId: envelope.senderDeviceRecordId ?? null,
         });
       }
       setPlaintext(null);
