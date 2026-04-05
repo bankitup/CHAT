@@ -7,6 +7,7 @@ import {
   createConversationWithMembers,
   findExistingActiveDmConversation,
   restoreConversationForUser,
+  isUniqueConstraintErrorMessage,
 } from '@/modules/messaging/data/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
@@ -83,9 +84,40 @@ export async function createDmAction(formData: FormData) {
       throw error;
     }
 
+    const spaceId = readText(formData, 'spaceId');
+    const participantUserId = readText(formData, 'participantUserId');
+
+    if (
+      error instanceof Error &&
+      participantUserId &&
+      isUniqueConstraintErrorMessage(error.message, 'conversations_dm_key_unique')
+    ) {
+      try {
+        const creatorUserId = await getAuthenticatedUserId();
+        const existingConversationId = await findExistingActiveDmConversation(
+          creatorUserId,
+          participantUserId,
+          {
+            spaceId: spaceId || null,
+          },
+        );
+
+        if (existingConversationId) {
+          redirect(withSpaceParam(`/chat/${existingConversationId}`, spaceId));
+        }
+      } catch {
+        // Fall through to the friendly generic error below.
+      }
+    }
+
     redirectWithError(
-      error instanceof Error ? error.message : 'Unable to create DM.',
-      readText(formData, 'spaceId'),
+      error instanceof Error &&
+        isUniqueConstraintErrorMessage(error.message, 'conversations_dm_key_unique')
+        ? 'This direct chat already exists. Please try again.'
+        : error instanceof Error
+          ? error.message
+          : 'Unable to create DM.',
+      spaceId,
     );
   }
 }

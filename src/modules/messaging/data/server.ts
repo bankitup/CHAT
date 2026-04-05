@@ -534,7 +534,7 @@ function isMissingFunctionErrorMessage(message: string, functionName: string) {
   );
 }
 
-function isUniqueConstraintErrorMessage(message: string, constraintName?: string) {
+export function isUniqueConstraintErrorMessage(message: string, constraintName?: string) {
   const normalizedMessage = message.toLowerCase();
   return (
     normalizedMessage.includes('duplicate key') ||
@@ -551,6 +551,51 @@ function uniqueNonEmptyLabels(labels: string[]) {
 
 function buildDmConversationKey(leftUserId: string, rightUserId: string) {
   return [leftUserId, rightUserId].filter(Boolean).sort().join(':');
+}
+
+async function findExistingDmConversationByKey(input: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  creatorUserId: string;
+  otherUserId: string;
+  spaceId?: string | null;
+}) {
+  const dmConversationKey = buildDmConversationKey(
+    input.creatorUserId,
+    input.otherUserId,
+  );
+
+  let directKeyLookup = input.supabase
+    .from('conversations')
+    .select(
+      input.spaceId
+        ? 'id, kind, dm_key, space_id, created_at, last_message_at'
+        : 'id, kind, dm_key, created_at, last_message_at',
+    )
+    .eq('kind', 'dm')
+    .eq('dm_key', dmConversationKey);
+
+  if (input.spaceId) {
+    directKeyLookup = directKeyLookup.eq('space_id', input.spaceId);
+  }
+
+  const { data, error } = await directKeyLookup
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  if (error) {
+    if (
+      isMissingColumnErrorMessage(error.message, 'dm_key') ||
+      isMissingColumnErrorMessage(error.message, 'space_id')
+    ) {
+      return null;
+    }
+
+    throw new Error(error.message);
+  }
+
+  const match = ((data ?? []) as Array<{ id?: string | null }>)[0]?.id?.trim() || null;
+  return match;
 }
 
 type DmConversationLookupCandidate = {
@@ -3208,6 +3253,17 @@ export async function findExistingActiveDmConversation(
     if (keyedMatch) {
       return keyedMatch;
     }
+
+    const directKeyMatch = await findExistingDmConversationByKey({
+      supabase,
+      creatorUserId,
+      otherUserId,
+      spaceId: options?.spaceId ?? null,
+    });
+
+    if (directKeyMatch) {
+      return directKeyMatch;
+    }
   }
 
   const { data: creatorMemberships, error: creatorError } = await supabase
@@ -3259,7 +3315,7 @@ export async function findExistingActiveDmConversation(
     throw new Error(otherError.message);
   }
 
-  return selectCanonicalExactPairDmConversationId({
+  const exactMembershipMatch = await selectCanonicalExactPairDmConversationId({
     supabase,
     candidateRows: (otherMemberships ?? []) as Array<{
       conversation_id: string;
@@ -3281,6 +3337,17 @@ export async function findExistingActiveDmConversation(
         | null;
     }>,
     expectedUserIds: [creatorUserId, otherUserId],
+  });
+
+  if (exactMembershipMatch) {
+    return exactMembershipMatch;
+  }
+
+  return findExistingDmConversationByKey({
+    supabase,
+    creatorUserId,
+    otherUserId,
+    spaceId: options?.spaceId ?? null,
   });
 }
 
