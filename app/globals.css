@@ -632,21 +632,21 @@ main {
 }
 
 .inbox-screen {
-  gap: 14px;
+  gap: 16px;
   padding-bottom: 2px;
 }
 
 .inbox-screen-minimal {
-  gap: 9px;
+  gap: 11px;
 }
 
 .inbox-screen-dm {
-  gap: 12px;
+  gap: 14px;
 }
 
 .inbox-home-shell {
-  gap: 6px;
-  padding: 8px 11px 9px;
+  gap: 8px;
+  padding: 10px 12px 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.68));
   border: 1px solid rgba(224, 231, 241, 0.88);
@@ -656,8 +656,8 @@ main {
 }
 
 .inbox-home-shell-dm {
-  gap: 10px;
-  padding: 13px 13px 15px;
+  gap: 12px;
+  padding: 15px 15px 18px;
   border-radius: 28px;
   border-color: rgba(224, 231, 241, 0.96);
   background:
@@ -671,7 +671,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 7px;
+  gap: 9px;
 }
 
 .inbox-topbar-actions {
@@ -682,12 +682,12 @@ main {
 }
 
 .inbox-topbar-copy {
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 
 .inbox-topbar-copy-dm {
-  gap: 3px;
+  gap: 4px;
 }
 
 .inbox-home-title {
@@ -1241,24 +1241,24 @@ main {
   border: 1px solid transparent;
   border-bottom: 1px solid rgba(221, 226, 232, 0.62);
   border-radius: 16px;
-  padding: 11px 11px;
+  padding: 12px 12px;
 }
 
 .conversation-card-minimal {
-  padding: 9px 10px;
-  border-radius: 16px;
+  padding: 11px 12px;
+  border-radius: 18px;
 }
 
 .conversation-list {
-  gap: 8px;
+  gap: 10px;
 }
 
 .conversation-list-dm {
-  gap: 14px;
+  gap: 18px;
 }
 
 .conversation-list-minimal {
-  gap: 8px;
+  gap: 11px;
 }
 
 .conversation-list-minimal > .conversation-card:last-child {
@@ -1266,15 +1266,15 @@ main {
 }
 
 .conversation-card-copy {
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .conversation-card-dm {
-  padding: 12px 13px;
+  padding: 15px 15px;
   border-color: rgba(224, 231, 241, 0.9);
   border-bottom-color: rgba(224, 231, 241, 0.9);
-  border-radius: 22px;
+  border-radius: 24px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 251, 254, 0.82));
   box-shadow:
@@ -1283,20 +1283,20 @@ main {
 }
 
 .conversation-card-copy-dm {
-  gap: 8px;
+  gap: 10px;
 }
 
 .conversation-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 13px;
-  min-height: 58px;
+  gap: 15px;
+  min-height: 62px;
 }
 
 .conversation-row-dm {
-  gap: 16px;
-  min-height: 72px;
+  gap: 18px;
+  min-height: 78px;
 }
 
 .conversation-row-link {
@@ -1304,16 +1304,16 @@ main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 13px;
-  padding: 5px 0;
+  gap: 15px;
+  padding: 6px 0;
   color: inherit;
   width: 100%;
   grid-column: 1 / -1;
 }
 
 .conversation-row-link-dm {
-  gap: 16px;
-  padding: 7px 0;
+  gap: 18px;
+  padding: 9px 0;
 }
 
 .conversation-row-with-action {
@@ -1331,32 +1331,32 @@ main {
 }
 
 .conversation-main-copy {
-  gap: 5px;
+  gap: 6px;
 }
 
 .conversation-main-copy-dm {
-  gap: 7px;
+  gap: 9px;
 }
 
 .conversation-title-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 11px;
+  gap: 12px;
 }
 
 .conversation-title-row-dm {
-  gap: 12px;
+  gap: 14px;
 }
 
 .conversation-title-meta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .conversation-list-dm .conversation-title-meta {
-  gap: 7px;
+  gap: 8px;
 }
 
 .conversation-title,
@@ -1451,8 +1451,8 @@ main {
   position: relative;
   max-width: 100%;
   color: rgba(91, 100, 112, 0.8);
-  font-size: 0.77rem;
-  line-height: 1.42;
+  font-size: 0.79rem;
+  line-height: 1.48;
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
@@ -1473,8 +1473,8 @@ main {
 }
 
 .conversation-preview-dm {
-  font-size: 0.83rem;
-  line-height: 1.48;
+  font-size: 0.86rem;
+  line-height: 1.52;
   color: rgba(91, 100, 112, 0.76);
 }
 
@@ -1491,25 +1491,25 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
 }
 
 .conversation-footer-dm {
-  gap: 14px;
+  gap: 16px;
 }
 
 .conversation-footer-meta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
-  min-height: 20px;
+  min-height: 22px;
   flex-wrap: wrap;
 }
 
 .conversation-list-dm .conversation-footer-meta {
-  gap: 7px;
-  min-height: 22px;
+  gap: 8px;
+  min-height: 24px;
 }
 
 .conversation-kind-label {
@@ -1544,8 +1544,8 @@ main {
 }
 
 .conversation-timestamp {
-  font-size: 0.63rem;
-  line-height: 1.2;
+  font-size: 0.64rem;
+  line-height: 1.24;
   text-align: right;
   white-space: nowrap;
   color: rgba(91, 100, 112, 0.64);
@@ -1553,7 +1553,7 @@ main {
 }
 
 .conversation-list-dm .conversation-timestamp {
-  font-size: 0.64rem;
+  font-size: 0.66rem;
   color: rgba(91, 100, 112, 0.58);
 }
 
