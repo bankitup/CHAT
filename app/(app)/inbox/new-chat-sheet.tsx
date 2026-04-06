@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import {
   getTranslations,
   type AppLanguage,
@@ -43,9 +43,41 @@ export function NewChatSheet({
 }: NewChatSheetProps) {
   const t = getTranslations(language);
   const [mode, setMode] = useState<NewChatMode>('dm');
+  const [peopleSearch, setPeopleSearch] = useState('');
   const [selectedDmUserId, setSelectedDmUserId] = useState<string | null>(null);
   const [selectedGroupUserIds, setSelectedGroupUserIds] = useState<string[]>([]);
   const [groupTitle, setGroupTitle] = useState('');
+  const deferredPeopleSearch = useDeferredValue(peopleSearch);
+  const normalizedPeopleSearch = deferredPeopleSearch.trim().toLowerCase();
+
+  const filteredDmUsers = useMemo(
+    () =>
+      !normalizedPeopleSearch
+        ? availableDmUsers
+        : availableDmUsers.filter((user) => {
+            const haystack = [user.label, user.displayName, user.statusText]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+
+            return haystack.includes(normalizedPeopleSearch);
+          }),
+    [availableDmUsers, normalizedPeopleSearch],
+  );
+  const filteredGroupUsers = useMemo(
+    () =>
+      !normalizedPeopleSearch
+        ? availableGroupUsers
+        : availableGroupUsers.filter((user) => {
+            const haystack = [user.label, user.displayName, user.statusText]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+
+            return haystack.includes(normalizedPeopleSearch);
+          }),
+    [availableGroupUsers, normalizedPeopleSearch],
+  );
 
   const selectedDmUser = useMemo(
     () =>
@@ -124,6 +156,18 @@ export function NewChatSheet({
             {t.inbox.create.group}
           </button>
         </div>
+
+        <label className="field inbox-create-search-shell">
+          <span className="sr-only">{t.inbox.create.searchAria}</span>
+          <input
+            className="input inbox-create-search-input"
+            enterKeyHint="search"
+            onChange={(event) => setPeopleSearch(event.target.value)}
+            placeholder={t.inbox.create.searchPlaceholder}
+            type="search"
+            value={peopleSearch}
+          />
+        </label>
       </div>
 
       {mode === 'dm' ? (
@@ -135,7 +179,7 @@ export function NewChatSheet({
             </div>
             {hasAnyDmUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
-                {availableDmUsers.length}
+                {filteredDmUsers.length}
               </span>
             ) : null}
           </div>
@@ -148,14 +192,14 @@ export function NewChatSheet({
             <p className="muted inbox-compose-empty">
               {t.inbox.create.existingDmOnly}
             </p>
-          ) : availableDmUsers.length === 0 ? (
+          ) : filteredDmUsers.length === 0 ? (
             <p className="muted inbox-compose-empty">
               {t.inbox.create.noMatches}
             </p>
           ) : (
             <div className="inbox-create-list-frame">
               <div className="inbox-compose-user-list inbox-create-user-list">
-              {availableDmUsers.map((availableUser) => {
+              {filteredDmUsers.map((availableUser) => {
                 const isSelected = availableUser.userId === selectedDmUserId;
 
                 return (
@@ -240,7 +284,7 @@ export function NewChatSheet({
             </div>
             {hasAnyUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
-                {availableGroupUsers.length}
+                {filteredGroupUsers.length}
               </span>
             ) : null}
           </div>
@@ -266,14 +310,14 @@ export function NewChatSheet({
               <p className="muted inbox-compose-empty">
                 {t.inbox.create.noUsers}
               </p>
-          ) : availableGroupUsers.length === 0 ? (
+          ) : filteredGroupUsers.length === 0 ? (
             <p className="muted inbox-compose-empty">
               {t.inbox.create.noMatches}
             </p>
           ) : (
               <div className="inbox-create-list-frame">
                 <div className="inbox-compose-user-list inbox-create-user-list">
-                {availableGroupUsers.map((availableUser) => {
+                {filteredGroupUsers.map((availableUser) => {
                   const isSelected = selectedGroupUserIds.includes(
                     availableUser.userId,
                   );

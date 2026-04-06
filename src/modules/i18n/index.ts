@@ -248,6 +248,8 @@ type LanguageDictionary = {
       group: string;
       peopleTitle: string;
       peopleSubtitle: string;
+      searchAria: string;
+      searchPlaceholder: string;
       noUsers: string;
       existingDmOnly: string;
       noMatches: string;
@@ -676,6 +678,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         group: 'Group chat',
         peopleTitle: 'People',
         peopleSubtitle: 'Pick one person to start chatting.',
+        searchAria: 'Search people',
+        searchPlaceholder: 'Search people',
         noUsers: 'No other registered users are available yet.',
         existingDmOnly: 'Everyone here already has a direct chat with you.',
         noMatches: 'No matching people yet.',
@@ -1116,6 +1120,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         group: 'Групповой чат',
         peopleTitle: 'Люди',
         peopleSubtitle: 'Выберите одного человека, чтобы начать чат.',
+        searchAria: 'Поиск людей',
+        searchPlaceholder: 'Поиск людей',
         noUsers: 'Других зарегистрированных пользователей пока нет.',
         existingDmOnly: 'Со всеми доступными людьми у вас уже есть личные чаты.',
         noMatches: 'Подходящих людей нет.',
