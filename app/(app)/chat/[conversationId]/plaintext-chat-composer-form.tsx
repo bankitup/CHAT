@@ -12,7 +12,9 @@ import { patchThreadConversationReadState } from '@/modules/messaging/realtime/t
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
+import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
 import { sendMessageMutationAction } from './actions';
+import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
 type MentionParticipant = {
@@ -67,6 +69,11 @@ export function PlaintextChatComposerForm({
   const formRef = useRef<HTMLFormElement | null>(null);
   const [composerResetKey, setComposerResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const voiceDraft = useComposerVoiceDraft({
+    contentMode: 'plaintext',
+    conversationId,
+    replyToMessageId: replyToMessageId ?? null,
+  });
   const { enqueue } = useConversationOutgoingQueue({
     conversationId,
     processItem: async (item) => {
@@ -206,6 +213,16 @@ export function PlaintextChatComposerForm({
       {replyToMessageId ? (
         <input name="replyToMessageId" type="hidden" value={replyToMessageId} />
       ) : null}
+      <ComposerVoiceDraftPanel
+        captureState={voiceDraft.captureState}
+        draft={voiceDraft.draft}
+        elapsedMs={voiceDraft.elapsedMs}
+        errorCode={voiceDraft.errorCode}
+        language={language}
+        onCancel={voiceDraft.cancelRecording}
+        onRetry={voiceDraft.startRecording}
+        onStop={voiceDraft.stopRecording}
+      />
       <div className="composer-input-shell">
         <ComposerAttachmentPicker
           key={`attachment-${composerResetKey}`}
@@ -237,9 +254,21 @@ export function PlaintextChatComposerForm({
           <button
             aria-label={t.chat.microphone}
             className="button button-secondary composer-button composer-button-mic"
-            disabled
-            title={t.chat.voiceMessagesSoon}
+            disabled={
+              !voiceDraft.isSupported ||
+              voiceDraft.captureState === 'requesting-permission' ||
+              voiceDraft.captureState === 'recording' ||
+              Boolean(voiceDraft.draft)
+            }
+            title={
+              voiceDraft.isSupported
+                ? t.chat.microphone
+                : t.chat.voiceRecorderUnavailable
+            }
             type="button"
+            onClick={() => {
+              void voiceDraft.startRecording();
+            }}
           >
             <span aria-hidden="true" className="composer-mic-icon" />
           </button>

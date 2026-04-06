@@ -424,6 +424,15 @@ type LanguageDictionary = {
     soon: string;
     microphone: string;
     voiceMessagesSoon: string;
+    voiceRecorderPreparing: string;
+    voiceRecorderRecording: string;
+    voiceRecorderDraftReady: string;
+    voiceRecorderStop: string;
+    voiceRecorderRetry: string;
+    voiceRecorderRecordAgain: string;
+    voiceRecorderPermissionDenied: string;
+    voiceRecorderUnavailable: string;
+    voiceRecorderFailed: string;
     mentionSuggestions: string;
     clearAttachment: string;
     attachmentSizeError: (maxSizeLabel: string) => string;
@@ -887,6 +896,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       soon: 'Soon',
       microphone: 'Voice message',
       voiceMessagesSoon: 'Voice messages are coming soon.',
+      voiceRecorderPreparing: 'Preparing microphone…',
+      voiceRecorderRecording: 'Recording',
+      voiceRecorderDraftReady: 'Voice draft ready',
+      voiceRecorderStop: 'Stop',
+      voiceRecorderRetry: 'Try again',
+      voiceRecorderRecordAgain: 'Record again',
+      voiceRecorderPermissionDenied: 'Microphone access is blocked.',
+      voiceRecorderUnavailable: 'Voice recording is not available here.',
+      voiceRecorderFailed: 'Could not finish the recording.',
       mentionSuggestions: 'Mention suggestions',
       clearAttachment: 'Clear',
       attachmentSizeError: (maxSizeLabel) =>
@@ -1362,6 +1380,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       soon: 'Скоро',
       microphone: 'Голосовое сообщение',
       voiceMessagesSoon: 'Голосовые сообщения скоро появятся.',
+      voiceRecorderPreparing: 'Готовим микрофон…',
+      voiceRecorderRecording: 'Идёт запись',
+      voiceRecorderDraftReady: 'Черновик готов',
+      voiceRecorderStop: 'Стоп',
+      voiceRecorderRetry: 'Повторить',
+      voiceRecorderRecordAgain: 'Записать заново',
+      voiceRecorderPermissionDenied: 'Нет доступа к микрофону.',
+      voiceRecorderUnavailable: 'Запись голоса здесь недоступна.',
+      voiceRecorderFailed: 'Не удалось завершить запись.',
       mentionSuggestions: 'Подсказки упоминаний',
       clearAttachment: 'Убрать',
       attachmentSizeError: (maxSizeLabel) =>

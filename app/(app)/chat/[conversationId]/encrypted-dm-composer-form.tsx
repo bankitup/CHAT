@@ -33,6 +33,8 @@ import {
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
+import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
+import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
 type MentionParticipant = {
@@ -529,6 +531,11 @@ export function EncryptedDmComposerForm({
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
   const [errorDebugDetails, setErrorDebugDetails] =
     useState<EncryptedDmDebugFailureDetails | null>(null);
+  const voiceDraft = useComposerVoiceDraft({
+    contentMode: 'dm_e2ee_v1',
+    conversationId,
+    replyToMessageId: replyToMessageId ?? null,
+  });
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
   const [isResettingSetup, setIsResettingSetup] = useState(false);
   const showDevResetAction =
@@ -784,6 +791,16 @@ export function EncryptedDmComposerForm({
       {replyToMessageId ? (
         <input name="replyToMessageId" type="hidden" value={replyToMessageId} />
       ) : null}
+      <ComposerVoiceDraftPanel
+        captureState={voiceDraft.captureState}
+        draft={voiceDraft.draft}
+        elapsedMs={voiceDraft.elapsedMs}
+        errorCode={voiceDraft.errorCode}
+        language={language}
+        onCancel={voiceDraft.cancelRecording}
+        onRetry={voiceDraft.startRecording}
+        onStop={voiceDraft.stopRecording}
+      />
       <div className="composer-input-shell">
         <ComposerAttachmentPicker
           accept={accept}
@@ -813,9 +830,21 @@ export function EncryptedDmComposerForm({
           <button
             aria-label={t.chat.microphone}
             className="button button-secondary composer-button composer-button-mic"
-            disabled
-            title={t.chat.voiceMessagesSoon}
+            disabled={
+              !voiceDraft.isSupported ||
+              voiceDraft.captureState === 'requesting-permission' ||
+              voiceDraft.captureState === 'recording' ||
+              Boolean(voiceDraft.draft)
+            }
+            title={
+              voiceDraft.isSupported
+                ? t.chat.microphone
+                : t.chat.voiceRecorderUnavailable
+            }
             type="button"
+            onClick={() => {
+              void voiceDraft.startRecording();
+            }}
           >
             <span aria-hidden="true" className="composer-mic-icon" />
           </button>
