@@ -5034,6 +5034,17 @@ export async function getConversationHistorySnapshot(input: {
           : wasSentBeforeViewerJoined
             ? 'policy-blocked-history'
             : 'missing-envelope',
+        committedHistoryState: 'present',
+        currentDeviceAvailability: e2eeEnvelopeHistory.envelopesByMessage.has(messageId)
+          ? 'envelope-present'
+          : wasSentBeforeViewerJoined
+            ? 'policy-blocked-history'
+            : 'missing-envelope',
+        recoveryDisposition: e2eeEnvelopeHistory.envelopesByMessage.has(messageId)
+          ? 'already-readable'
+          : wasSentBeforeViewerJoined
+            ? 'policy-blocked'
+            : 'not-supported-v1',
         activeDeviceRecordId: e2eeEnvelopeHistory.activeDeviceRecordId,
         messageCreatedAt: message?.created_at ?? null,
         viewerJoinedAt: currentUserConversationJoinedAt,

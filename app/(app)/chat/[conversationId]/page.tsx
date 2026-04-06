@@ -626,12 +626,19 @@ export default async function ChatPage({
           : policyBlocked
             ? 'not-applicable-policy-blocked'
             : 'not-attempted-no-history-sync-path',
+        committedHistoryState: 'present',
         currentDeviceRowId: e2eeEnvelopeHistory.activeDeviceRecordId ?? null,
         currentDeviceRowSelectionSource: e2eeEnvelopeHistory.selectionSource ?? null,
+        currentDeviceAvailability: policyBlocked
+          ? 'policy-blocked-history'
+          : 'missing-envelope',
         envelopeFoundForCurrentDevice: false,
         memberJoinedAt: currentUserConversationJoinedAt,
         messageCreatedAt,
         messageId,
+        recoveryDisposition: policyBlocked
+          ? 'policy-blocked'
+          : 'not-supported-v1',
         sameUserNewDevice,
       };
     });

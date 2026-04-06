@@ -1,9 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
-import { reinitializeLocalDmE2eeStateForUser } from '@/modules/messaging/e2ee/lifecycle';
 import { decryptStoredDmEnvelope } from '@/modules/messaging/e2ee/prekey-encrypt';
 import {
   getLocalDmE2eeDeviceRecord,
@@ -31,8 +29,6 @@ type EncryptedDmMessageBodyProps = {
   historyDiagnosticHint: EncryptedDmServerHistoryHint;
   historyUnavailableNoteLabel: string;
   messageSenderId: string | null;
-  refreshSetupLabel: string;
-  reloadConversationLabel: string;
   policyUnavailableNoteLabel: string;
   retryLabel: string;
   setupUnavailableLabel: string;
@@ -83,8 +79,6 @@ export function EncryptedDmMessageBody({
   historyDiagnosticHint,
   historyUnavailableNoteLabel,
   messageSenderId,
-  refreshSetupLabel,
-  reloadConversationLabel,
   policyUnavailableNoteLabel,
   retryLabel,
   setupUnavailableLabel,
@@ -93,15 +87,12 @@ export function EncryptedDmMessageBody({
   messageCreatedAt,
   shouldCachePreview = false,
 }: EncryptedDmMessageBodyProps) {
-  const router = useRouter();
-  const [, startRefreshTransition] = useTransition();
   const [plaintext, setPlaintext] = useState<string | null>(null);
   const [isUnavailable, setIsUnavailable] = useState(false);
   const [failureKind, setFailureKind] = useState<EncryptedDmFailureKind>('unavailable');
   const [diagnosticCode, setDiagnosticCode] =
     useState<EncryptedDmDiagnosticCode>('temporary-loading');
   const [retryNonce, setRetryNonce] = useState(0);
-  const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
   const previousFailureCodeRef =
     useRef<EncryptedDmDiagnosticCode | null>(null);
   const diagnosticsEnabled =
@@ -126,42 +117,44 @@ export function EncryptedDmMessageBody({
       });
     }
 
-    previousFailureCodeRef.current = null;
-    setPlaintext(null);
-    setIsUnavailable(false);
-    setFailureKind('unavailable');
-    setDiagnosticCode('temporary-loading');
-    setDmThreadVisibleMessageState({
-      conversationId,
-      diagnosticCode: 'temporary-loading',
-      messageId,
-      plaintext: null,
-    });
-
-    if (!normalizedClientId) {
-      if (diagnosticsEnabled) {
-        console.info('[dm-e2ee-history-client]', 'decrypt:missing-client-id', {
-          currentUserId,
-          conversationId,
-          clientIdType: typeof clientId,
-          messageId,
-        });
-      }
+    void (async () => {
+      previousFailureCodeRef.current = null;
       setPlaintext(null);
-      setIsUnavailable(true);
+      setIsUnavailable(false);
       setFailureKind('unavailable');
-      setDiagnosticCode('malformed-envelope');
-      previousFailureCodeRef.current = 'malformed-envelope';
+      setDiagnosticCode('temporary-loading');
       setDmThreadVisibleMessageState({
         conversationId,
-        diagnosticCode: 'malformed-envelope',
+        diagnosticCode: 'temporary-loading',
         messageId,
         plaintext: null,
       });
-      return;
-    }
 
-    void (async () => {
+      if (!normalizedClientId) {
+        if (diagnosticsEnabled) {
+          console.info('[dm-e2ee-history-client]', 'decrypt:missing-client-id', {
+            currentUserId,
+            conversationId,
+            clientIdType: typeof clientId,
+            messageId,
+          });
+        }
+        if (!cancelled) {
+          setPlaintext(null);
+          setIsUnavailable(true);
+          setFailureKind('unavailable');
+          setDiagnosticCode('malformed-envelope');
+          previousFailureCodeRef.current = 'malformed-envelope';
+        }
+        setDmThreadVisibleMessageState({
+          conversationId,
+          diagnosticCode: 'malformed-envelope',
+          messageId,
+          plaintext: null,
+        });
+        return;
+      }
+
       const resolveUnavailable = (
         nextDiagnosticCode: EncryptedDmDiagnosticCode,
         details?: Record<string, unknown>,
@@ -170,13 +163,17 @@ export function EncryptedDmMessageBody({
           console.info('[dm-e2ee-history-client]', 'decrypt:resolved-unavailable', {
             conversationId,
             currentUserId,
+            currentDeviceAvailability:
+              historyDiagnosticHint.currentDeviceAvailability,
             currentUserConversationJoinedAt:
               historyDiagnosticHint.viewerJoinedAt ?? null,
             diagnosticCode: nextDiagnosticCode,
             historyHintCode: historyDiagnosticHint.code,
+            historyPresence: historyDiagnosticHint.committedHistoryState,
             messageCreatedAt: historyDiagnosticHint.messageCreatedAt ?? null,
             messageId,
             messageSenderId,
+            recoveryDisposition: historyDiagnosticHint.recoveryDisposition,
             ...details,
           });
         }
@@ -410,7 +407,10 @@ export function EncryptedDmMessageBody({
     envelope,
     historyDiagnosticHint.activeDeviceRecordId,
     historyDiagnosticHint.code,
+    historyDiagnosticHint.committedHistoryState,
+    historyDiagnosticHint.currentDeviceAvailability,
     historyDiagnosticHint.messageCreatedAt,
+    historyDiagnosticHint.recoveryDisposition,
     historyDiagnosticHint.viewerJoinedAt,
     messageCreatedAt,
     messageId,
@@ -448,6 +448,8 @@ export function EncryptedDmMessageBody({
         data-dm-e2ee-debug-bucket={
           diagnosticsEnabled ? renderState.debugBucket ?? undefined : undefined
         }
+        data-dm-e2ee-history-state={renderState.committedHistoryState}
+        data-dm-e2ee-access-state={renderState.currentDeviceAccessState}
         data-dm-e2ee-diagnostic={
           diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
         }
@@ -461,7 +463,7 @@ export function EncryptedDmMessageBody({
             {renderState.diagnosticCode}
           </p>
         ) : null}
-        {renderState.showRecoveryActions ? (
+        {renderState.showRetryAction ? (
           <div className="message-encryption-actions">
             <button
               className="button button-secondary button-compact message-encryption-action"
@@ -469,40 +471,6 @@ export function EncryptedDmMessageBody({
               type="button"
             >
               {retryLabel}
-            </button>
-            {renderState.showRefreshSetup ? (
-              <button
-                className="button button-secondary button-compact message-encryption-action"
-                disabled={isRefreshingSetup}
-                onClick={async () => {
-                  setIsRefreshingSetup(true);
-                  try {
-                    const bootstrap = await reinitializeLocalDmE2eeStateForUser(
-                      currentUserId,
-                    );
-
-                    if (bootstrap.status === 'registered') {
-                      setRetryNonce((value) => value + 1);
-                    }
-                  } finally {
-                    setIsRefreshingSetup(false);
-                  }
-                }}
-                type="button"
-              >
-                {refreshSetupLabel}
-              </button>
-            ) : null}
-            <button
-              className="button button-secondary button-compact message-encryption-action"
-              onClick={() => {
-                startRefreshTransition(() => {
-                  router.refresh();
-                });
-              }}
-              type="button"
-            >
-              {reloadConversationLabel}
             </button>
           </div>
         ) : null}
@@ -515,6 +483,8 @@ export function EncryptedDmMessageBody({
       data-dm-e2ee-debug-bucket={
         diagnosticsEnabled ? renderState.debugBucket ?? undefined : undefined
       }
+      data-dm-e2ee-history-state={renderState.committedHistoryState}
+      data-dm-e2ee-access-state={renderState.currentDeviceAccessState}
       data-dm-e2ee-diagnostic={
         diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
       }

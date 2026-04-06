@@ -755,7 +755,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       encryptedMessage: 'Encrypted message',
       newEncryptedMessage: 'New encrypted message',
       replyToEncryptedMessage: 'Reply to encrypted message',
-      encryptedMessageUnavailable: 'Encrypted message is not available on this device yet.',
+      encryptedMessageUnavailable: 'Encrypted message is not available on this device.',
       attachment: 'Attachment',
       file: 'File',
       unavailableRightNow: 'Unavailable right now',
@@ -815,9 +815,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       encryptedMessageSetupUnavailable:
         'This encrypted message is not available on this device right now.',
       encryptedHistoryUnavailableNote:
-        'Older encrypted history is not available on this device. New messages in this chat still work.',
+        'This message is part of the chat history, but its encrypted content is not available on this device. New messages in this chat still work.',
       encryptedHistoryPolicyBlockedNote:
-        'This encrypted message was sent before your current access to this chat.',
+        'This message is part of the chat history, but it was sent before your current access to this chat.',
       encryptedReplyInfo:
         'Replies keep the message reference, not the encrypted text.',
       encryptedEditUnavailable:
@@ -1180,7 +1180,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       newEncryptedMessage: 'Новое зашифрованное сообщение',
       replyToEncryptedMessage: 'Ответ на зашифрованное сообщение',
       encryptedMessageUnavailable:
-        'Зашифрованное сообщение пока недоступно на этом устройстве.',
+        'Зашифрованное сообщение недоступно на этом устройстве.',
       attachment: 'Файл',
       file: 'Файл',
       unavailableRightNow: 'Сейчас недоступно',
@@ -1243,9 +1243,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       encryptedMessageSetupUnavailable:
         'Это зашифрованное сообщение сейчас недоступно на этом устройстве.',
       encryptedHistoryUnavailableNote:
-        'Более ранняя зашифрованная история недоступна на этом устройстве. Новые сообщения в этом чате будут работать.',
+        'Это сообщение есть в истории чата, но его зашифрованное содержимое недоступно на этом устройстве. Новые сообщения в этом чате будут работать.',
       encryptedHistoryPolicyBlockedNote:
-        'Это зашифрованное сообщение было отправлено до вашего текущего доступа к этому чату.',
+        'Это сообщение есть в истории чата, но оно было отправлено до вашего текущего доступа к этому чату.',
       encryptedReplyInfo:
         'Ответ сохраняет ссылку на сообщение, но не раскрывает зашифрованный текст.',
       encryptedEditUnavailable:

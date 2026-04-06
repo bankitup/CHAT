@@ -761,6 +761,13 @@ function ThreadMessageRow({
   const encryptedHistoryHint =
     encryptedHistoryHintsByMessage.get(message.id) ?? {
       code: encryptedEnvelope ? 'envelope-present' : 'missing-envelope',
+      committedHistoryState: 'present',
+      currentDeviceAvailability: encryptedEnvelope
+        ? 'envelope-present'
+        : 'missing-envelope',
+      recoveryDisposition: encryptedEnvelope
+        ? 'already-readable'
+        : 'not-supported-v1',
       activeDeviceRecordId: null,
       messageCreatedAt: message.created_at ?? null,
       viewerJoinedAt: null,
@@ -953,8 +960,6 @@ function ThreadMessageRow({
                   policyUnavailableNoteLabel={
                     t.chat.encryptedHistoryPolicyBlockedNote
                   }
-                  refreshSetupLabel={t.chat.refreshEncryptedSetup}
-                  reloadConversationLabel={t.chat.reloadConversation}
                   retryLabel={t.chat.retryEncryptedAction}
                   setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
                   shouldCachePreview={

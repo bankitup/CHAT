@@ -3,6 +3,20 @@ export type EncryptedDmUnavailableNoteKind =
   | 'history-unavailable'
   | 'policy-blocked'
   | null;
+export type EncryptedDmCommittedHistoryState = 'present';
+export type EncryptedDmCurrentDeviceAvailability =
+  | 'envelope-present'
+  | 'missing-envelope'
+  | 'policy-blocked-history';
+export type EncryptedDmHistoryRecoveryDisposition =
+  | 'already-readable'
+  | 'not-supported-v1'
+  | 'policy-blocked';
+export type EncryptedDmCurrentDeviceAccessState =
+  | 'readable'
+  | 'temporary-local-read-failure'
+  | 'history-unavailable-on-this-device'
+  | 'policy-blocked';
 
 export type EncryptedDmDiagnosticCode =
   | 'temporary-loading'
@@ -19,6 +33,9 @@ export type EncryptedDmDiagnosticCode =
 
 export type EncryptedDmServerHistoryHint = {
   code: 'envelope-present' | 'missing-envelope' | 'policy-blocked-history';
+  committedHistoryState: EncryptedDmCommittedHistoryState;
+  currentDeviceAvailability: EncryptedDmCurrentDeviceAvailability;
+  recoveryDisposition: EncryptedDmHistoryRecoveryDisposition;
   activeDeviceRecordId: string | null;
   messageCreatedAt: string | null;
   viewerJoinedAt: string | null;
@@ -29,21 +46,17 @@ export function getEncryptedDmFailureKindForDiagnostic(
 ): EncryptedDmFailureKind {
   switch (diagnosticCode) {
     case 'client-session-lookup-failed':
-    case 'client-key-material-missing':
-    case 'local-device-record-missing':
       return 'device-setup';
     default:
       return 'unavailable';
   }
 }
 
-export function shouldOfferEncryptedDmRecoveryActions(
+export function shouldOfferEncryptedDmRetryAction(
   diagnosticCode: EncryptedDmDiagnosticCode,
 ) {
   switch (diagnosticCode) {
     case 'client-session-lookup-failed':
-    case 'client-key-material-missing':
-    case 'local-device-record-missing':
       return true;
     default:
       return false;
@@ -59,10 +72,32 @@ export function getEncryptedDmUnavailableNoteKind(
     case 'missing-envelope':
     case 'same-user-new-device-history-gap':
     case 'device-retired-or-mismatched':
+    case 'client-key-material-missing':
+    case 'local-device-record-missing':
       return 'history-unavailable';
     default:
       return null;
   }
+}
+
+export function getEncryptedDmCurrentDeviceAccessState(input: {
+  diagnosticCode: EncryptedDmDiagnosticCode;
+  failureKind: EncryptedDmFailureKind;
+  plaintext: string | null;
+}) {
+  if (input.plaintext?.trim()) {
+    return 'readable' as const;
+  }
+
+  if (input.diagnosticCode === 'policy-blocked-history') {
+    return 'policy-blocked' as const;
+  }
+
+  if (input.failureKind === 'device-setup') {
+    return 'temporary-local-read-failure' as const;
+  }
+
+  return 'history-unavailable-on-this-device' as const;
 }
 
 export function getEncryptedDmDebugBucket(
@@ -141,22 +176,31 @@ export function getEncryptedDmBodyRenderState(input: {
   if (input.plaintext?.trim()) {
     return {
       kind: 'plaintext' as const,
+      committedHistoryState: 'present' as const,
+      currentDeviceAccessState: 'readable' as const,
       text: input.plaintext.trim(),
-      showRefreshSetup: false,
+      showRetryAction: false,
       diagnosticCode: null,
       debugBucket: null,
     };
   }
 
   if (input.isUnavailable) {
+    const currentDeviceAccessState = getEncryptedDmCurrentDeviceAccessState({
+      diagnosticCode,
+      failureKind: input.failureKind,
+      plaintext: input.plaintext,
+    });
+
     return {
       kind: 'unavailable' as const,
+      committedHistoryState: 'present' as const,
+      currentDeviceAccessState,
       text:
         input.failureKind === 'device-setup'
           ? input.setupUnavailableLabel
           : input.unavailableLabel,
-      showRefreshSetup: input.failureKind === 'device-setup',
-      showRecoveryActions: shouldOfferEncryptedDmRecoveryActions(diagnosticCode),
+      showRetryAction: shouldOfferEncryptedDmRetryAction(diagnosticCode),
       unavailableNoteKind: getEncryptedDmUnavailableNoteKind(diagnosticCode),
       diagnosticCode,
       debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
@@ -165,13 +209,14 @@ export function getEncryptedDmBodyRenderState(input: {
 
   return {
     kind: 'fallback' as const,
+    committedHistoryState: 'present' as const,
+    currentDeviceAccessState: 'temporary-local-read-failure' as const,
     text: input.fallbackLabel,
-      showRefreshSetup: false,
-      showRecoveryActions: false,
-      unavailableNoteKind: null,
-      diagnosticCode,
-      debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
-    };
+    showRetryAction: false,
+    unavailableNoteKind: null,
+    diagnosticCode,
+    debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
+  };
 }
 
 export function getEncryptedDmComposerErrorMessage(input: {

@@ -6,30 +6,30 @@ import {
   getEncryptedDmComposerErrorMessage,
 } from '../../src/modules/messaging/e2ee/ui-policy.ts';
 
-test('decrypt failure with missing local key material is classified as device setup issue', () => {
+test('decrypt failure with missing local key material is classified as unavailable history on this device', () => {
   const failureKind = classifyEncryptedDmFailure(
     new Error('Required DM E2EE one-time prekey is missing locally.'),
   );
 
-  assert.equal(failureKind, 'device-setup');
+  assert.equal(failureKind, 'unavailable');
 });
 
-test('encrypted DM body does not silently fall back to generic preview text after decrypt failure', () => {
+test('encrypted DM body keeps old unavailable history truthful without recovery setup actions', () => {
   const state = getEncryptedDmBodyRenderState({
     plaintext: null,
     isUnavailable: true,
-    failureKind: 'device-setup',
+    failureKind: 'unavailable',
     fallbackLabel: 'Encrypted message',
-    setupUnavailableLabel: 'Encrypted message is not available on this device yet',
-    unavailableLabel: 'Encrypted message is unavailable right now',
+    setupUnavailableLabel: 'Encrypted setup needs attention',
+    unavailableLabel: 'Encrypted message is not available on this device',
   });
 
   assert.equal(state.kind, 'unavailable');
   assert.equal(
     state.text,
-    'Encrypted message is not available on this device yet',
+    'Encrypted message is not available on this device',
   );
-  assert.equal(state.showRefreshSetup, true);
+  assert.equal(state.showRetryAction, false);
 });
 
 test('encrypted send surfaces recipient readiness problems as explicit blocked state', () => {
