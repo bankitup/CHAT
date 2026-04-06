@@ -4309,6 +4309,75 @@ main {
   margin-top: 2px;
 }
 
+.inbox-settings-accordion {
+  overflow: hidden;
+}
+
+.inbox-settings-accordion > summary {
+  list-style: none;
+}
+
+.inbox-settings-accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.inbox-settings-accordion-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.inbox-settings-accordion-copy {
+  gap: 4px;
+  min-width: 0;
+}
+
+.inbox-settings-accordion-value {
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(91, 100, 112, 0.84);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.34;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+}
+
+.inbox-settings-accordion-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(221, 228, 238, 0.78);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(91, 100, 112, 0.74);
+  font-size: 1rem;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition:
+    transform 180ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.inbox-settings-accordion[open] .inbox-settings-accordion-chevron {
+  transform: rotate(-90deg);
+  border-color: rgba(31, 111, 235, 0.18);
+  background: rgba(31, 111, 235, 0.08);
+  color: rgba(31, 111, 235, 0.82);
+}
+
+.inbox-settings-accordion-panel {
+  gap: 12px;
+  padding-top: 13px;
+}
+
 .inbox-settings-section-copy {
   gap: 5px;
 }

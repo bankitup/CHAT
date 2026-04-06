@@ -21,6 +21,10 @@ type InboxSettingsPageProps = {
   }>;
 };
 
+function joinSummaryParts(parts: Array<string | null | undefined>) {
+  return parts.filter(Boolean).join(' · ');
+}
+
 export default async function InboxSettingsPage({
   searchParams,
 }: InboxSettingsPageProps) {
@@ -37,6 +41,38 @@ export default async function InboxSettingsPage({
 
   const t = getTranslations(language);
   const activeSpaceId = query.space?.trim() || null;
+  const filterLabels = {
+    all: t.inbox.filters.all,
+    dm: t.inbox.filters.dm,
+    groups: t.inbox.filters.groups,
+  } as const;
+  const visibleFilterSummary = preferences.visibleFilters
+    .map((value) => filterLabels[value])
+    .filter(Boolean)
+    .join(', ');
+  const defaultFilterSummary = filterLabels[preferences.defaultFilter];
+  const previewModeSummary =
+    preferences.previewMode === 'mask'
+      ? t.inboxSettings.previewModeMaskSummary
+      : preferences.previewMode === 'reveal_after_open'
+        ? t.inboxSettings.previewModeRevealAfterOpenSummary
+        : t.inboxSettings.previewModeShowSummary;
+  const groupingSummaryParts = [
+    preferences.showGroupsSeparately
+      ? t.inboxSettings.showGroupsSeparately
+      : null,
+    preferences.showPersonalChatsFirst
+      ? t.inboxSettings.showPersonalChatsFirst
+      : null,
+  ].filter(Boolean);
+  const groupingSummary =
+    groupingSummaryParts.length > 0
+      ? groupingSummaryParts.join(', ')
+      : t.inboxSettings.summaryNoExtraRules;
+  const viewSummary =
+    preferences.density === 'compact'
+      ? t.inboxSettings.densityCompactSummary
+      : t.inboxSettings.densityComfortableSummary;
   const visibleError = query.error
     ? sanitizeUserFacingErrorMessage({
         fallback: getUserFacingErrorFallback(language, 'inbox'),
@@ -83,268 +119,308 @@ export default async function InboxSettingsPage({
         >
           <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
 
-          <section className="conversation-settings-panel inbox-settings-section stack">
-            <div className="stack conversation-settings-panel-copy inbox-settings-section-copy">
-              <h2 className="card-title">{t.inboxSettings.filtersTitle}</h2>
-              <p className="muted conversation-settings-note">
-                {t.inboxSettings.filtersNote}
-              </p>
-            </div>
-
-            <div className="stack inbox-settings-block inbox-settings-subsection">
-              <div className="stack conversation-settings-panel-copy inbox-settings-subsection-copy">
-                <h3 className="conversation-settings-subtitle">
-                  {t.inboxSettings.visibleFiltersTitle}
-                </h3>
-              </div>
-
-              <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
-                {(
-                  [
-                    ['all', t.inbox.filters.all],
-                    ['dm', t.inbox.filters.dm],
-                    ['groups', t.inbox.filters.groups],
-                  ] as const
-                ).map(([value, label]) => (
-                  <label
-                    key={value}
-                    className="checkbox-row inbox-settings-option-row"
-                  >
-                    <input
-                      className="inbox-settings-option-input"
-                      defaultChecked={preferences.visibleFilters.includes(value)}
-                      name="visibleFilters"
-                      type="checkbox"
-                      value={value}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="inbox-settings-option-mark"
-                    />
-                    <span className="checkbox-copy inbox-settings-option-copy">
-                      <span className="user-label inbox-settings-option-title">
-                        {label}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="stack inbox-settings-block inbox-settings-subsection">
-              <div className="stack conversation-settings-panel-copy inbox-settings-subsection-copy">
-                <h3 className="conversation-settings-subtitle">
-                  {t.inboxSettings.defaultFilterTitle}
-                </h3>
-                <p className="muted conversation-settings-note">
-                  {t.inboxSettings.defaultFilterNote}
-                </p>
-              </div>
-
-              <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
-                {(
-                  [
-                    ['all', t.inbox.filters.all],
-                    ['dm', t.inbox.filters.dm],
-                    ['groups', t.inbox.filters.groups],
-                  ] as const
-                ).map(([value, label]) => (
-                  <label
-                    key={`default-${value}`}
-                    className="checkbox-row inbox-settings-option-row"
-                  >
-                    <input
-                      className="inbox-settings-option-input"
-                      defaultChecked={preferences.defaultFilter === value}
-                      name="defaultFilter"
-                      type="radio"
-                      value={value}
-                    />
-                    <span
-                      aria-hidden="true"
-                      className="inbox-settings-option-mark"
-                    />
-                    <span className="checkbox-copy inbox-settings-option-copy">
-                      <span className="user-label inbox-settings-option-title">
-                        {label}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="conversation-settings-panel inbox-settings-section stack">
-            <div className="stack conversation-settings-panel-copy inbox-settings-section-copy">
-              <h2 className="card-title">{t.inboxSettings.groupingTitle}</h2>
-              <p className="muted conversation-settings-note">
-                {t.inboxSettings.groupingNote}
-              </p>
-            </div>
-
-            <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  className="inbox-settings-option-input"
-                  defaultChecked={preferences.showGroupsSeparately}
-                  name="showGroupsSeparately"
-                  type="checkbox"
-                  value="1"
-                />
-                <span
-                  aria-hidden="true"
-                  className="inbox-settings-option-mark"
-                />
-                <span className="checkbox-copy inbox-settings-option-copy">
-                  <span className="user-label inbox-settings-option-title">
-                    {t.inboxSettings.showGroupsSeparately}
-                  </span>
+          <details className="inbox-settings-section inbox-settings-accordion" open>
+            <summary className="inbox-settings-accordion-summary">
+              <span className="stack inbox-settings-accordion-copy">
+                <span className="card-title">{t.inboxSettings.previewsTitle}</span>
+                <span className="inbox-settings-accordion-value">
+                  {previewModeSummary}
                 </span>
-              </label>
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  className="inbox-settings-option-input"
-                  defaultChecked={preferences.showPersonalChatsFirst}
-                  name="showPersonalChatsFirst"
-                  type="checkbox"
-                  value="1"
-                />
-                <span
-                  aria-hidden="true"
-                  className="inbox-settings-option-mark"
-                />
-                <span className="checkbox-copy inbox-settings-option-copy">
-                  <span className="user-label inbox-settings-option-title">
-                    {t.inboxSettings.showPersonalChatsFirst}
-                  </span>
-                </span>
-              </label>
-            </div>
-          </section>
-
-          <section className="conversation-settings-panel inbox-settings-section stack">
-            <div className="stack conversation-settings-panel-copy inbox-settings-section-copy">
-              <h2 className="card-title">{t.inboxSettings.viewTitle}</h2>
-              <p className="muted conversation-settings-note">
-                {t.inboxSettings.viewNote}
-              </p>
-            </div>
-
-            <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  className="inbox-settings-option-input"
-                  defaultChecked={preferences.density === 'comfortable'}
-                  name="density"
-                  type="radio"
-                  value="comfortable"
-                />
-                <span
-                  aria-hidden="true"
-                  className="inbox-settings-option-mark"
-                />
-                <span className="checkbox-copy inbox-settings-option-copy">
-                  <span className="user-label inbox-settings-option-title">
-                    {t.inboxSettings.densityComfortable}
-                  </span>
-                </span>
-              </label>
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  className="inbox-settings-option-input"
-                  defaultChecked={preferences.density === 'compact'}
-                  name="density"
-                  type="radio"
-                  value="compact"
-                />
-                <span
-                  aria-hidden="true"
-                  className="inbox-settings-option-mark"
-                />
-                <span className="checkbox-copy inbox-settings-option-copy">
-                  <span className="user-label inbox-settings-option-title">
-                    {t.inboxSettings.densityCompact}
-                  </span>
-                </span>
-              </label>
-            </div>
-          </section>
-
-          <section className="conversation-settings-panel inbox-settings-section stack">
-            <div className="stack conversation-settings-panel-copy inbox-settings-section-copy">
-              <h2 className="card-title">{t.inboxSettings.previewsTitle}</h2>
+              </span>
+              <span aria-hidden="true" className="inbox-settings-accordion-chevron">
+                ›
+              </span>
+            </summary>
+            <div className="stack inbox-settings-accordion-panel">
               <p className="muted conversation-settings-note">
                 {t.inboxSettings.previewsNote}
               </p>
+              <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
+                <label className="checkbox-row inbox-settings-option-row">
+                  <input
+                    className="inbox-settings-option-input"
+                    defaultChecked={preferences.previewMode === 'show'}
+                    name="previewMode"
+                    type="radio"
+                    value="show"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="inbox-settings-option-mark"
+                  />
+                  <span className="checkbox-copy inbox-settings-option-copy">
+                    <span className="user-label inbox-settings-option-title">
+                      {t.inboxSettings.previewModeShow}
+                    </span>
+                    <span className="muted conversation-settings-note">
+                      {t.inboxSettings.previewModeShowNote}
+                    </span>
+                  </span>
+                </label>
+                <label className="checkbox-row inbox-settings-option-row">
+                  <input
+                    className="inbox-settings-option-input"
+                    defaultChecked={preferences.previewMode === 'mask'}
+                    name="previewMode"
+                    type="radio"
+                    value="mask"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="inbox-settings-option-mark"
+                  />
+                  <span className="checkbox-copy inbox-settings-option-copy">
+                    <span className="user-label inbox-settings-option-title">
+                      {t.inboxSettings.previewModeMask}
+                    </span>
+                    <span className="muted conversation-settings-note">
+                      {t.inboxSettings.previewModeMaskNote}
+                    </span>
+                  </span>
+                </label>
+                <label className="checkbox-row inbox-settings-option-row">
+                  <input
+                    className="inbox-settings-option-input"
+                    defaultChecked={preferences.previewMode === 'reveal_after_open'}
+                    name="previewMode"
+                    type="radio"
+                    value="reveal_after_open"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="inbox-settings-option-mark"
+                  />
+                  <span className="checkbox-copy inbox-settings-option-copy">
+                    <span className="user-label inbox-settings-option-title">
+                      {t.inboxSettings.previewModeRevealAfterOpen}
+                    </span>
+                    <span className="muted conversation-settings-note">
+                      {t.inboxSettings.previewModeRevealAfterOpenNote}
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
+          </details>
 
-            <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  className="inbox-settings-option-input"
-                  defaultChecked={preferences.previewMode === 'show'}
-                  name="previewMode"
-                  type="radio"
-                  value="show"
-                />
-                <span
-                  aria-hidden="true"
-                  className="inbox-settings-option-mark"
-                />
-                <span className="checkbox-copy inbox-settings-option-copy">
-                  <span className="user-label inbox-settings-option-title">
-                    {t.inboxSettings.previewModeShow}
-                  </span>
-                  <span className="muted conversation-settings-note">
-                    {t.inboxSettings.previewModeShowNote}
-                  </span>
+          <details className="inbox-settings-section inbox-settings-accordion">
+            <summary className="inbox-settings-accordion-summary">
+              <span className="stack inbox-settings-accordion-copy">
+                <span className="card-title">{t.inboxSettings.filtersTitle}</span>
+                <span className="inbox-settings-accordion-value">
+                  {joinSummaryParts([
+                    `${t.inboxSettings.summaryShown}: ${visibleFilterSummary}`,
+                    `${t.inboxSettings.summaryDefault}: ${defaultFilterSummary}`,
+                  ])}
                 </span>
-              </label>
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  className="inbox-settings-option-input"
-                  defaultChecked={preferences.previewMode === 'mask'}
-                  name="previewMode"
-                  type="radio"
-                  value="mask"
-                />
-                <span
-                  aria-hidden="true"
-                  className="inbox-settings-option-mark"
-                />
-                <span className="checkbox-copy inbox-settings-option-copy">
-                  <span className="user-label inbox-settings-option-title">
-                    {t.inboxSettings.previewModeMask}
-                  </span>
-                  <span className="muted conversation-settings-note">
-                    {t.inboxSettings.previewModeMaskNote}
-                  </span>
-                </span>
-              </label>
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  className="inbox-settings-option-input"
-                  defaultChecked={preferences.previewMode === 'reveal_after_open'}
-                  name="previewMode"
-                  type="radio"
-                  value="reveal_after_open"
-                />
-                <span
-                  aria-hidden="true"
-                  className="inbox-settings-option-mark"
-                />
-                <span className="checkbox-copy inbox-settings-option-copy">
-                  <span className="user-label inbox-settings-option-title">
-                    {t.inboxSettings.previewModeRevealAfterOpen}
-                  </span>
-                  <span className="muted conversation-settings-note">
-                    {t.inboxSettings.previewModeRevealAfterOpenNote}
-                  </span>
-                </span>
-              </label>
+              </span>
+              <span aria-hidden="true" className="inbox-settings-accordion-chevron">
+                ›
+              </span>
+            </summary>
+            <div className="stack inbox-settings-accordion-panel">
+              <p className="muted conversation-settings-note">
+                {t.inboxSettings.filtersNote}
+              </p>
+
+              <div className="stack inbox-settings-block inbox-settings-subsection">
+                <div className="stack conversation-settings-panel-copy inbox-settings-subsection-copy">
+                  <h3 className="conversation-settings-subtitle">
+                    {t.inboxSettings.visibleFiltersTitle}
+                  </h3>
+                </div>
+
+                <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
+                  {(
+                    [
+                      ['all', t.inbox.filters.all],
+                      ['dm', t.inbox.filters.dm],
+                      ['groups', t.inbox.filters.groups],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label
+                      key={value}
+                      className="checkbox-row inbox-settings-option-row"
+                    >
+                      <input
+                        className="inbox-settings-option-input"
+                        defaultChecked={preferences.visibleFilters.includes(value)}
+                        name="visibleFilters"
+                        type="checkbox"
+                        value={value}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="inbox-settings-option-mark"
+                      />
+                      <span className="checkbox-copy inbox-settings-option-copy">
+                        <span className="user-label inbox-settings-option-title">
+                          {label}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="stack inbox-settings-block inbox-settings-subsection">
+                <div className="stack conversation-settings-panel-copy inbox-settings-subsection-copy">
+                  <h3 className="conversation-settings-subtitle">
+                    {t.inboxSettings.defaultFilterTitle}
+                  </h3>
+                  <p className="muted conversation-settings-note">
+                    {t.inboxSettings.defaultFilterNote}
+                  </p>
+                </div>
+
+                <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
+                  {(
+                    [
+                      ['all', t.inbox.filters.all],
+                      ['dm', t.inbox.filters.dm],
+                      ['groups', t.inbox.filters.groups],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label
+                      key={`default-${value}`}
+                      className="checkbox-row inbox-settings-option-row"
+                    >
+                      <input
+                        className="inbox-settings-option-input"
+                        defaultChecked={preferences.defaultFilter === value}
+                        name="defaultFilter"
+                        type="radio"
+                        value={value}
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="inbox-settings-option-mark"
+                      />
+                      <span className="checkbox-copy inbox-settings-option-copy">
+                        <span className="user-label inbox-settings-option-title">
+                          {label}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
-          </section>
+          </details>
+
+          <details className="inbox-settings-section inbox-settings-accordion">
+            <summary className="inbox-settings-accordion-summary">
+              <span className="stack inbox-settings-accordion-copy">
+                <span className="card-title">{t.inboxSettings.groupingTitle}</span>
+                <span className="inbox-settings-accordion-value">
+                  {groupingSummary}
+                </span>
+              </span>
+              <span aria-hidden="true" className="inbox-settings-accordion-chevron">
+                ›
+              </span>
+            </summary>
+            <div className="stack inbox-settings-accordion-panel">
+              <p className="muted conversation-settings-note">
+                {t.inboxSettings.groupingNote}
+              </p>
+
+              <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
+                <label className="checkbox-row inbox-settings-option-row">
+                  <input
+                    className="inbox-settings-option-input"
+                    defaultChecked={preferences.showGroupsSeparately}
+                    name="showGroupsSeparately"
+                    type="checkbox"
+                    value="1"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="inbox-settings-option-mark"
+                  />
+                  <span className="checkbox-copy inbox-settings-option-copy">
+                    <span className="user-label inbox-settings-option-title">
+                      {t.inboxSettings.showGroupsSeparately}
+                    </span>
+                  </span>
+                </label>
+                <label className="checkbox-row inbox-settings-option-row">
+                  <input
+                    className="inbox-settings-option-input"
+                    defaultChecked={preferences.showPersonalChatsFirst}
+                    name="showPersonalChatsFirst"
+                    type="checkbox"
+                    value="1"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="inbox-settings-option-mark"
+                  />
+                  <span className="checkbox-copy inbox-settings-option-copy">
+                    <span className="user-label inbox-settings-option-title">
+                      {t.inboxSettings.showPersonalChatsFirst}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <details className="inbox-settings-section inbox-settings-accordion">
+            <summary className="inbox-settings-accordion-summary">
+              <span className="stack inbox-settings-accordion-copy">
+                <span className="card-title">{t.inboxSettings.viewTitle}</span>
+                <span className="inbox-settings-accordion-value">{viewSummary}</span>
+              </span>
+              <span aria-hidden="true" className="inbox-settings-accordion-chevron">
+                ›
+              </span>
+            </summary>
+            <div className="stack inbox-settings-accordion-panel">
+              <p className="muted conversation-settings-note">
+                {t.inboxSettings.viewNote}
+              </p>
+
+              <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
+                <label className="checkbox-row inbox-settings-option-row">
+                  <input
+                    className="inbox-settings-option-input"
+                    defaultChecked={preferences.density === 'comfortable'}
+                    name="density"
+                    type="radio"
+                    value="comfortable"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="inbox-settings-option-mark"
+                  />
+                  <span className="checkbox-copy inbox-settings-option-copy">
+                    <span className="user-label inbox-settings-option-title">
+                      {t.inboxSettings.densityComfortable}
+                    </span>
+                  </span>
+                </label>
+                <label className="checkbox-row inbox-settings-option-row">
+                  <input
+                    className="inbox-settings-option-input"
+                    defaultChecked={preferences.density === 'compact'}
+                    name="density"
+                    type="radio"
+                    value="compact"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="inbox-settings-option-mark"
+                  />
+                  <span className="checkbox-copy inbox-settings-option-copy">
+                    <span className="user-label inbox-settings-option-title">
+                      {t.inboxSettings.densityCompact}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </details>
 
           <div className="inbox-settings-actions">
             <div className="inbox-settings-actions-shell">

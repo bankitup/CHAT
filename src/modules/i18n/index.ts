@@ -166,6 +166,15 @@ type LanguageDictionary = {
     viewNote: string;
     densityComfortable: string;
     densityCompact: string;
+    previewModeShowSummary: string;
+    previewModeMaskSummary: string;
+    previewModeRevealAfterOpenSummary: string;
+    densityComfortableSummary: string;
+    densityCompactSummary: string;
+    summaryShown: string;
+    summaryDefault: string;
+    summaryStandard: string;
+    summaryNoExtraRules: string;
   };
   notifications: {
     title: string;
@@ -614,6 +623,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       viewNote: 'Pick the inbox density that feels best on your phone.',
       densityComfortable: 'Comfortable list density',
       densityCompact: 'Compact list density',
+      previewModeShowSummary: 'Show content',
+      previewModeMaskSummary: 'Masked',
+      previewModeRevealAfterOpenSummary: 'Reveal after opening',
+      densityComfortableSummary: 'Comfortable',
+      densityCompactSummary: 'Compact',
+      summaryShown: 'Shown',
+      summaryDefault: 'Default',
+      summaryStandard: 'Standard',
+      summaryNoExtraRules: 'No extra rules',
     },
     notifications: {
       title: 'Notifications',
@@ -1079,6 +1097,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       viewNote: 'Выберите плотность списка, которая удобнее на телефоне.',
       densityComfortable: 'Комфортная плотность списка',
       densityCompact: 'Компактная плотность списка',
+      previewModeShowSummary: 'Показывать текст',
+      previewModeMaskSummary: 'Скрыто',
+      previewModeRevealAfterOpenSummary: 'После открытия',
+      densityComfortableSummary: 'Комфортный',
+      densityCompactSummary: 'Компактный',
+      summaryShown: 'Видно',
+      summaryDefault: 'По умолчанию',
+      summaryStandard: 'Стандартно',
+      summaryNoExtraRules: 'Без дополнительных правил',
     },
     notifications: {
       title: 'Уведомления',
