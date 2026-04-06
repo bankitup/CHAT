@@ -492,6 +492,131 @@ function logEncryptedDmRenderFallback(input: {
   });
 }
 
+function shouldLogEncryptedDmServerRenderDiagnostics() {
+  return (
+    typeof window === 'undefined' &&
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+  );
+}
+
+function logEncryptedDmServerRenderDiagnostics(
+  stage: string,
+  details: Record<string, unknown>,
+) {
+  if (!shouldLogEncryptedDmServerRenderDiagnostics()) {
+    return;
+  }
+
+  console.info('[chat-thread-render]', stage, details);
+}
+
+function normalizeEncryptedDmBranchLabel(isOwnMessage: boolean) {
+  return isOwnMessage ? 'sender-own' : 'recipient-own';
+}
+
+function getEncryptedDmServerRenderInputIssues(input: {
+  envelope: StoredDmE2eeEnvelope | null;
+  historyHint: EncryptedDmServerHistoryHint;
+  message: ConversationMessageRow;
+}) {
+  const issues: string[] = [];
+
+  if (typeof input.message.id !== 'string' || !input.message.id.trim()) {
+    issues.push('message.id');
+  }
+
+  if (input.message.kind !== 'text') {
+    issues.push('message.kind');
+  }
+
+  if (input.message.content_mode !== 'dm_e2ee_v1') {
+    issues.push('message.content_mode');
+  }
+
+  if (
+    input.message.client_id !== null &&
+    typeof input.message.client_id !== 'string'
+  ) {
+    issues.push('message.client_id');
+  }
+
+  if (
+    input.message.sender_id !== null &&
+    typeof input.message.sender_id !== 'string'
+  ) {
+    issues.push('message.sender_id');
+  }
+
+  if (
+    input.message.body !== null &&
+    typeof input.message.body !== 'string'
+  ) {
+    issues.push('message.body');
+  }
+
+  if (
+    typeof input.historyHint.code !== 'string' ||
+    typeof input.historyHint.committedHistoryState !== 'string' ||
+    typeof input.historyHint.currentDeviceAvailability !== 'string' ||
+    typeof input.historyHint.recoveryDisposition !== 'string'
+  ) {
+    issues.push('historyHint.shape');
+  }
+
+  if (
+    input.historyHint.activeDeviceRecordId !== null &&
+    typeof input.historyHint.activeDeviceRecordId !== 'string'
+  ) {
+    issues.push('historyHint.activeDeviceRecordId');
+  }
+
+  if (
+    input.historyHint.messageCreatedAt !== null &&
+    typeof input.historyHint.messageCreatedAt !== 'string'
+  ) {
+    issues.push('historyHint.messageCreatedAt');
+  }
+
+  if (
+    input.historyHint.viewerJoinedAt !== null &&
+    typeof input.historyHint.viewerJoinedAt !== 'string'
+  ) {
+    issues.push('historyHint.viewerJoinedAt');
+  }
+
+  if (input.envelope) {
+    if (
+      typeof input.envelope.messageId !== 'string' ||
+      input.envelope.messageId !== input.message.id
+    ) {
+      issues.push('envelope.messageId');
+    }
+
+    if (
+      typeof input.envelope.senderDeviceRecordId !== 'string' ||
+      !input.envelope.senderDeviceRecordId.trim()
+    ) {
+      issues.push('envelope.senderDeviceRecordId');
+    }
+
+    if (
+      typeof input.envelope.recipientDeviceRecordId !== 'string' ||
+      !input.envelope.recipientDeviceRecordId.trim()
+    ) {
+      issues.push('envelope.recipientDeviceRecordId');
+    }
+
+    if (
+      typeof input.envelope.ciphertext !== 'string' ||
+      !input.envelope.ciphertext.trim()
+    ) {
+      issues.push('envelope.ciphertext');
+    }
+  }
+
+  return issues;
+}
+
 function getOutgoingMessageStatus(input: {
   isDeletedMessage: boolean;
   isOwnMessage: boolean;
@@ -1287,6 +1412,49 @@ function ThreadMessageRow({
   const repliedMessage = message.reply_to_message_id
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
+  const encryptedRenderBranch = normalizeEncryptedDmBranchLabel(isOwnMessage);
+
+  if (isEncryptedDmTextMessage(message)) {
+    const encryptedInputIssues = getEncryptedDmServerRenderInputIssues({
+      envelope: encryptedEnvelope,
+      historyHint: encryptedHistoryHint,
+      message,
+    });
+
+    logEncryptedDmServerRenderDiagnostics('encrypted-dm:server-input', {
+      bodyType: message.body === null ? 'null' : typeof message.body,
+      canAttemptEncryptedRender,
+      clientIdPresent:
+        typeof message.client_id === 'string' && message.client_id.trim().length > 0,
+      contentMode: message.content_mode ?? null,
+      conversationId,
+      currentDeviceAvailability: encryptedHistoryHint.currentDeviceAvailability,
+      envelopeCiphertextPresent: Boolean(encryptedEnvelope?.ciphertext?.trim()),
+      envelopeLookupResult: encryptedEnvelope ? 'present' : 'missing',
+      envelopeRecipientDeviceRecordId:
+        encryptedEnvelope?.recipientDeviceRecordId ?? null,
+      envelopeSenderDeviceRecordId:
+        encryptedEnvelope?.senderDeviceRecordId ?? null,
+      hasReplyTargetLoaded: Boolean(repliedMessage),
+      historyHintCode: encryptedHistoryHint.code,
+      isUnavailableHistoricalEncryptedHint,
+      messageId: message.id,
+      messageKind: message.kind,
+      messageSenderId: message.sender_id ?? null,
+      reactionGroupCount: reactionsByMessage.get(message.id)?.length ?? 0,
+      renderBranch: encryptedRenderBranch,
+      renderInputIssues: encryptedInputIssues,
+      senderDeviceIdPresent:
+        typeof message.sender_device_id === 'string' &&
+        message.sender_device_id.trim().length > 0,
+    });
+
+    if (encryptedInputIssues.length > 0) {
+      throw new Error(
+        `[encrypted-dm-server-render] malformed input for message ${message.id}: ${encryptedInputIssues.join(', ')}`,
+      );
+    }
+  }
 
   if (isEncryptedDmTextMessage(message) && !canAttemptEncryptedRender) {
     logEncryptedDmRenderFallback({
