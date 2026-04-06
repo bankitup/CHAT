@@ -76,10 +76,13 @@ type OrganizedConversationSection = {
 };
 
 type InboxPresentationLabels = {
+  audio: string;
   attachment: string;
   deletedMessage: string;
   encryptedMessage: string;
+  file: string;
   group: string;
+  image: string;
   newEncryptedMessage: string;
   noActivityYet: string;
   unreadAria: string;
@@ -93,6 +96,7 @@ type DerivedConversationSummarySnapshot = Pick<
   | 'createdAt'
   | 'hiddenAt'
   | 'lastMessageAt'
+  | 'latestMessageAttachmentKind'
   | 'latestMessageBody'
   | 'latestMessageContentMode'
   | 'latestMessageDeletedAt'
@@ -114,6 +118,7 @@ const EMPTY_LIVE_SUMMARY: InboxConversationLiveSummary = {
   lastMessageAt: null,
   lastReadAt: null,
   lastReadMessageSeq: null,
+  latestMessageAttachmentKind: null,
   latestMessageBody: null,
   latestMessageContentMode: null,
   latestMessageDeletedAt: null,
@@ -279,6 +284,7 @@ function getDerivedConversationSummarySnapshot(
     createdAt: liveSummary.createdAt,
     hiddenAt: liveSummary.hiddenAt,
     lastMessageAt: liveSummary.lastMessageAt,
+    latestMessageAttachmentKind: liveSummary.latestMessageAttachmentKind,
     latestMessageBody: liveSummary.latestMessageBody,
     latestMessageContentMode: liveSummary.latestMessageContentMode,
     latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
@@ -305,6 +311,7 @@ function areDerivedConversationSummariesEqual(
     left.createdAt === right.createdAt &&
     left.hiddenAt === right.hiddenAt &&
     left.lastMessageAt === right.lastMessageAt &&
+    left.latestMessageAttachmentKind === right.latestMessageAttachmentKind &&
     left.latestMessageBody === right.latestMessageBody &&
     left.latestMessageContentMode === right.latestMessageContentMode &&
     left.latestMessageDeletedAt === right.latestMessageDeletedAt &&
@@ -337,6 +344,7 @@ function deriveConversationItemFromLiveState(input: {
     preview: getInboxPreviewText(
       {
         lastMessageAt: input.summary.lastMessageAt,
+        latestMessageAttachmentKind: input.summary.latestMessageAttachmentKind,
         latestMessageBody: input.summary.latestMessageBody,
         latestMessageContentMode: input.summary.latestMessageContentMode,
         latestMessageDeletedAt: input.summary.latestMessageDeletedAt,
@@ -344,9 +352,12 @@ function deriveConversationItemFromLiveState(input: {
         unreadCount: input.summary.unreadCount,
       },
       {
+        audio: input.labels.audio,
         attachment: input.labels.attachment,
         deletedMessage: input.labels.deletedMessage,
         encryptedMessage: input.labels.encryptedMessage,
+        file: input.labels.file,
+        image: input.labels.image,
         newEncryptedMessage: input.labels.newEncryptedMessage,
         voiceMessage: input.labels.voiceMessage,
       },
@@ -767,10 +778,13 @@ export function InboxFilterableContent({
   );
   const rowLabels = useMemo(
     () => ({
+      audio: t.chat.audio,
       attachment: t.chat.attachment,
       deletedMessage: t.chat.deletedMessage,
       encryptedMessage: t.chat.encryptedMessage,
+      file: t.chat.file,
       group: t.inbox.metaGroup,
+      image: t.chat.image,
       newEncryptedMessage: t.chat.newEncryptedMessage,
       noActivityYet: t.inbox.noActivityYet,
       unreadAria: t.inbox.unreadAria,
@@ -1238,6 +1252,7 @@ export function InboxFilterableContent({
                       lastMessageAt: null,
                       lastReadAt: null,
                       lastReadMessageSeq: null,
+                      latestMessageAttachmentKind: null,
                       latestMessageBody: null,
                       latestMessageContentMode: null,
                       latestMessageDeletedAt: null,

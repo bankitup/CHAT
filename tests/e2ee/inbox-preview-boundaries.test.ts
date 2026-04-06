@@ -7,11 +7,14 @@ import {
 } from '../../src/modules/messaging/e2ee/inbox-policy.ts';
 
 const labels = {
+  audio: 'Audio',
   deletedMessage: 'Deleted message',
   voiceMessage: 'Voice message',
   encryptedMessage: 'Encrypted message',
   newEncryptedMessage: 'New encrypted message',
   attachment: 'Attachment',
+  file: 'File',
+  image: 'Image',
 };
 
 test('encrypted DM inbox preview uses truthful generic fallback instead of plaintext body', () => {

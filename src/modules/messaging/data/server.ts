@@ -16,6 +16,10 @@ import {
 } from '@/modules/messaging/avatar-delivery';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import {
+  resolveInboxAttachmentPreviewKind,
+  type InboxAttachmentPreviewKind,
+} from '@/modules/messaging/inbox/preview-kind';
+import {
   canAddParticipantsToGroupConversation,
   canEditGroupConversationIdentity,
   canRemoveParticipantFromGroupConversation,
@@ -296,6 +300,7 @@ export type InboxConversation = {
   latestMessageId: string | null;
   latestMessageSeq: number | null;
   latestMessageSenderId: string | null;
+  latestMessageAttachmentKind: InboxAttachmentPreviewKind | null;
   latestMessageBody: string | null;
   latestMessageKind: string | null;
   latestMessageContentMode: string | null;
@@ -310,6 +315,7 @@ export type InboxConversationSummarySnapshot = {
   lastMessageAt: string | null;
   lastReadAt: string | null;
   lastReadMessageSeq: number | null;
+  latestMessageAttachmentKind: InboxAttachmentPreviewKind | null;
   latestMessageBody: string | null;
   latestMessageContentMode: string | null;
   latestMessageDeletedAt: string | null;
@@ -376,6 +382,12 @@ type MessageAttachmentRow = {
   mime_type: string | null;
   size_bytes: number | null;
   created_at: string | null;
+};
+
+type MessageAttachmentPreviewRow = {
+  created_at: string | null;
+  message_id: string;
+  mime_type: string | null;
 };
 
 export type MessageAttachment = {
@@ -1510,6 +1522,18 @@ async function mapInboxConversations(
     }
   }
 
+  const latestMessageAttachmentKindByMessageId =
+    await getInboxAttachmentPreviewKindsByMessageId(
+      supabase,
+      Array.from(
+        new Set(
+          Array.from(latestMessageByConversation.values())
+            .map((message) => message.id)
+            .filter((messageId): messageId is string => Boolean(messageId)),
+        ),
+      ),
+    );
+
   const mappedRows = await Promise.all(
     rows.map(async (row) => {
       const conversation = normalizeConversation(row.conversations);
@@ -1549,6 +1573,10 @@ async function mapInboxConversations(
         latestMessageSenderId: latestMessageVisible
           ? latestMessage?.senderId ?? null
           : null,
+        latestMessageAttachmentKind:
+          latestMessageVisible && latestMessage?.id
+            ? latestMessageAttachmentKindByMessageId.get(latestMessage.id) ?? null
+            : null,
         latestMessageBody: latestMessageVisible ? latestMessage?.body ?? null : null,
         latestMessageKind: latestMessageVisible ? latestMessage?.kind ?? null : null,
         latestMessageContentMode: latestMessageVisible
@@ -1858,6 +1886,10 @@ export async function getConversationSummaryForUser(
   const latestMessageVisible =
     latestMessageSeq !== null &&
     (visibleFromSeq === null || latestMessageSeq >= visibleFromSeq);
+  const latestMessageAttachmentKindByMessageId =
+    latestMessage?.id
+      ? await getInboxAttachmentPreviewKindsByMessageId(supabase, [latestMessage.id])
+      : new Map<string, InboxAttachmentPreviewKind>();
 
   return {
     conversationId: scopedRow.conversation_id,
@@ -1866,6 +1898,10 @@ export async function getConversationSummaryForUser(
     lastMessageAt: latestMessageVisible ? conversation.last_message_at ?? null : null,
     lastReadAt: scopedRow.last_read_at ?? null,
     lastReadMessageSeq,
+    latestMessageAttachmentKind:
+      latestMessageVisible && latestMessage?.id
+        ? latestMessageAttachmentKindByMessageId.get(latestMessage.id) ?? null
+        : null,
     latestMessageBody: latestMessageVisible ? latestMessage?.body ?? null : null,
     latestMessageContentMode: latestMessageVisible
       ? latestMessage?.contentMode ?? null
@@ -5834,6 +5870,76 @@ export async function getMessageAttachments(messageIds: string[]) {
   }
 
   return grouped;
+}
+
+async function getInboxAttachmentPreviewKindsByMessageId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  messageIds: string[],
+) {
+  const uniqueMessageIds = Array.from(new Set(messageIds.filter(Boolean)));
+  type MessageAttachmentLookupClient =
+    Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+  if (uniqueMessageIds.length === 0) {
+    return new Map<string, InboxAttachmentPreviewKind>();
+  }
+
+  const loadRows = async (client: MessageAttachmentLookupClient) => {
+    return client
+      .from('message_attachments')
+      .select('message_id, mime_type, created_at')
+      .in('message_id', uniqueMessageIds)
+      .order('created_at', { ascending: true });
+  };
+
+  let response = await loadRows(supabase);
+
+  if (response.error) {
+    if (isMissingRelationErrorMessage(response.error.message, 'message_attachments')) {
+      return new Map<string, InboxAttachmentPreviewKind>();
+    }
+
+    const serviceSupabase = createSupabaseServiceRoleClient();
+
+    if (!serviceSupabase) {
+      throw new Error(response.error.message);
+    }
+
+    const serviceResponse = await loadRows(
+      serviceSupabase as MessageAttachmentLookupClient,
+    );
+
+    if (serviceResponse.error) {
+      if (
+        isMissingRelationErrorMessage(
+          serviceResponse.error.message,
+          'message_attachments',
+        )
+      ) {
+        return new Map<string, InboxAttachmentPreviewKind>();
+      }
+
+      throw new Error(serviceResponse.error.message);
+    }
+
+    response = serviceResponse;
+  }
+
+  const rows = (response.data ?? []) as MessageAttachmentPreviewRow[];
+  const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
+
+  for (const row of rows) {
+    if (previewKindsByMessageId.has(row.message_id)) {
+      continue;
+    }
+
+    previewKindsByMessageId.set(
+      row.message_id,
+      resolveInboxAttachmentPreviewKind(row.mime_type),
+    );
+  }
+
+  return previewKindsByMessageId;
 }
 
 export async function assertConversationMembership(

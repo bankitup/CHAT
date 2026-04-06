@@ -333,11 +333,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           })
         : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
       const preview = getInboxPreviewText(conversation, {
+        audio: t.chat.audio,
         deletedMessage: t.chat.deletedMessage,
         voiceMessage: t.chat.voiceMessage,
         encryptedMessage: t.chat.encryptedMessage,
         newEncryptedMessage: t.chat.newEncryptedMessage,
         attachment: t.chat.attachment,
+        file: t.chat.file,
+        image: t.chat.image,
       });
       const hasUnread = conversation.unreadCount > 0;
       const metaLabels = [
@@ -374,6 +377,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       lastMessageAt: conversation.lastMessageAt,
       lastReadAt: conversation.lastReadAt,
       lastReadMessageSeq: conversation.lastReadMessageSeq,
+      latestMessageAttachmentKind: conversation.latestMessageAttachmentKind,
       latestMessageBody: conversation.latestMessageBody,
       latestMessageContentMode: conversation.latestMessageContentMode,
       latestMessageDeletedAt: conversation.latestMessageDeletedAt,

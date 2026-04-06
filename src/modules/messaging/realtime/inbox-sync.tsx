@@ -1,6 +1,7 @@
 'use client';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useTransition } from 'react';
 import {
@@ -122,6 +123,35 @@ export function InboxRealtimeSync({
       return null;
     };
 
+    const fetchLatestMessageAttachmentKind = async (messageId: string | null) => {
+      if (!messageId) {
+        return null;
+      }
+
+      const response = await supabase
+        .from('message_attachments')
+        .select('mime_type, created_at')
+        .eq('message_id', messageId)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (response.error) {
+        logDiagnostics('summary-attachment-kind:error', {
+          message: response.error.message,
+          messageId,
+        });
+        return null;
+      }
+
+      const row = ((response.data ?? []) as Array<{ mime_type?: string | null }>)[0] ?? null;
+
+      if (!row) {
+        return null;
+      }
+
+      return resolveInboxAttachmentPreviewKind(row.mime_type ?? null);
+    };
+
     const fetchConversationSummary = async (conversationId: string) => {
       const response = await supabase
         .from('conversation_members')
@@ -151,12 +181,28 @@ export function InboxRealtimeSync({
         typeof response.data.last_read_message_seq === 'number'
           ? response.data.last_read_message_seq
           : null;
+      const latestMessageId = conversationValue?.last_message_id ?? null;
+      const latestMessageBody = conversationValue?.last_message_body ?? null;
+      const latestMessageContentMode =
+        conversationValue?.last_message_content_mode ?? null;
+      const latestMessageDeletedAt =
+        conversationValue?.last_message_deleted_at ?? null;
+      const latestMessageKind = conversationValue?.last_message_kind ?? null;
       const unreadCount =
         latestMessageSeq === null
           ? 0
           : lastReadMessageSeq === null
             ? latestMessageSeq
             : Math.max(0, latestMessageSeq - lastReadMessageSeq);
+      const shouldResolveAttachmentKind =
+        Boolean(latestMessageId) &&
+        !latestMessageDeletedAt &&
+        latestMessageKind !== 'voice' &&
+        latestMessageContentMode !== 'dm_e2ee_v1' &&
+        !latestMessageBody?.trim();
+      const latestMessageAttachmentKind = shouldResolveAttachmentKind
+        ? await fetchLatestMessageAttachmentKind(latestMessageId)
+        : null;
 
       patchInboxConversationSummary({
         conversationId,
@@ -165,13 +211,12 @@ export function InboxRealtimeSync({
         lastMessageAt: conversationValue?.last_message_at ?? null,
         lastReadAt: response.data.last_read_at ?? null,
         lastReadMessageSeq,
-        latestMessageBody: conversationValue?.last_message_body ?? null,
-        latestMessageContentMode:
-          conversationValue?.last_message_content_mode ?? null,
-        latestMessageDeletedAt:
-          conversationValue?.last_message_deleted_at ?? null,
-        latestMessageId: conversationValue?.last_message_id ?? null,
-        latestMessageKind: conversationValue?.last_message_kind ?? null,
+        latestMessageAttachmentKind,
+        latestMessageBody,
+        latestMessageContentMode,
+        latestMessageDeletedAt,
+        latestMessageId,
+        latestMessageKind,
         latestMessageSenderId:
           conversationValue?.last_message_sender_id ?? null,
         latestMessageSeq,

@@ -32,15 +32,18 @@ type ActivityConversationLiveItemProps = {
   };
   language: 'en' | 'ru';
   labels: {
+    audio: string;
     attachment: string;
     deletedMessage: string;
     encryptedMessage: string;
+    file: string;
     newEncryptedMessage: string;
     noActivityYet: string;
     unreadMessages: string;
     voiceMessage: string;
     yesterday: string;
     group: string;
+    image: string;
   };
 };
 
@@ -217,6 +220,7 @@ export function ActivityConversationLiveItem({
   const preview = getInboxPreviewText(
     {
       lastMessageAt: liveSummary.lastMessageAt,
+      latestMessageAttachmentKind: liveSummary.latestMessageAttachmentKind,
       latestMessageBody: liveSummary.latestMessageBody,
       latestMessageContentMode: liveSummary.latestMessageContentMode,
       latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
@@ -224,9 +228,12 @@ export function ActivityConversationLiveItem({
       unreadCount: liveSummary.unreadCount,
     },
     {
+      audio: labels.audio,
       attachment: labels.attachment,
       deletedMessage: labels.deletedMessage,
       encryptedMessage: labels.encryptedMessage,
+      file: labels.file,
+      image: labels.image,
       newEncryptedMessage: labels.newEncryptedMessage,
       voiceMessage: labels.voiceMessage,
     },

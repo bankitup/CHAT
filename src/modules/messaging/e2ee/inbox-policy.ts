@@ -1,9 +1,14 @@
+import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+
 export type InboxPreviewLabels = {
+  audio: string;
   deletedMessage: string;
   voiceMessage: string;
   encryptedMessage: string;
   newEncryptedMessage: string;
   attachment: string;
+  file: string;
+  image: string;
 };
 
 export type EncryptedDmPreviewCacheEntry = {
@@ -20,6 +25,7 @@ export function getInboxPreviewText(
     latestMessageKind: string | null;
     latestMessageContentMode: string | null;
     latestMessageBody: string | null;
+    latestMessageAttachmentKind?: InboxAttachmentPreviewKind | null;
     unreadCount?: number | null;
   },
   labels: InboxPreviewLabels,
@@ -46,6 +52,18 @@ export function getInboxPreviewText(
 
   if (body) {
     return body;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'image') {
+    return labels.image;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'audio') {
+    return labels.audio;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'file') {
+    return labels.file;
   }
 
   return labels.attachment;

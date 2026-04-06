@@ -38,10 +38,13 @@ type InboxConversationLiveRowProps = {
   };
   language: 'en' | 'ru';
   labels: {
+    audio: string;
     attachment: string;
     deletedMessage: string;
     encryptedMessage: string;
+    file: string;
     group: string;
+    image: string;
     newEncryptedMessage: string;
     noActivityYet: string;
     unreadAria: string;
@@ -209,6 +212,7 @@ function areInboxConversationSummariesEqual(
     previous.lastMessageAt === next.lastMessageAt &&
     previous.lastReadAt === next.lastReadAt &&
     previous.lastReadMessageSeq === next.lastReadMessageSeq &&
+    previous.latestMessageAttachmentKind === next.latestMessageAttachmentKind &&
     previous.latestMessageBody === next.latestMessageBody &&
     previous.latestMessageContentMode === next.latestMessageContentMode &&
     previous.latestMessageDeletedAt === next.latestMessageDeletedAt &&
@@ -317,6 +321,7 @@ function InboxConversationLiveRowComponent({
   const preview = getInboxPreviewText(
     {
       lastMessageAt: liveSummary.lastMessageAt,
+      latestMessageAttachmentKind: liveSummary.latestMessageAttachmentKind,
       latestMessageBody: liveSummary.latestMessageBody,
       latestMessageContentMode: liveSummary.latestMessageContentMode,
       latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
@@ -324,9 +329,12 @@ function InboxConversationLiveRowComponent({
       unreadCount: liveSummary.unreadCount,
     },
     {
+      audio: labels.audio,
       attachment: labels.attachment,
       deletedMessage: labels.deletedMessage,
       encryptedMessage: labels.encryptedMessage,
+      file: labels.file,
+      image: labels.image,
       newEncryptedMessage: labels.newEncryptedMessage,
       voiceMessage: labels.voiceMessage,
     },

@@ -1,5 +1,7 @@
 'use client';
 
+import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+
 export type InboxConversationLiveSummary = {
   conversationId: string;
   createdAt: string | null;
@@ -7,6 +9,7 @@ export type InboxConversationLiveSummary = {
   lastMessageAt: string | null;
   lastReadAt: string | null;
   lastReadMessageSeq: number | null;
+  latestMessageAttachmentKind: InboxAttachmentPreviewKind | null;
   latestMessageBody: string | null;
   latestMessageContentMode: string | null;
   latestMessageDeletedAt: string | null;
@@ -51,6 +54,7 @@ function areInboxConversationSummariesEqual(
     left.lastMessageAt === right.lastMessageAt &&
     left.lastReadAt === right.lastReadAt &&
     left.lastReadMessageSeq === right.lastReadMessageSeq &&
+    left.latestMessageAttachmentKind === right.latestMessageAttachmentKind &&
     left.latestMessageBody === right.latestMessageBody &&
     left.latestMessageContentMode === right.latestMessageContentMode &&
     left.latestMessageDeletedAt === right.latestMessageDeletedAt &&
@@ -257,6 +261,7 @@ export function markInboxConversationRemoved(conversationId: string) {
       lastMessageAt: null,
       lastReadAt: null,
       lastReadMessageSeq: null,
+      latestMessageAttachmentKind: null,
       latestMessageBody: null,
       latestMessageContentMode: null,
       latestMessageDeletedAt: null,
