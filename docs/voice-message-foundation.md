@@ -13,6 +13,7 @@ It is intentionally scoped to architecture and minimal scaffolding:
 Related boundary documents:
 
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
+- [encrypted-voice-asset-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/encrypted-voice-asset-contract.md)
 - [docs/sql/2026-04-06-message-assets-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-foundation.sql)
 - [src/modules/messaging/media/README.md](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/README.md)
 - [src/modules/messaging/media/message-assets.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/message-assets.ts)

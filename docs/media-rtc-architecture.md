@@ -83,6 +83,7 @@ This batch introduces the forward schema/model foundation for that:
 
 - [docs/sql/2026-04-06-message-assets-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-foundation.sql)
 - [src/modules/messaging/media/message-assets.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/message-assets.ts)
+- [encrypted-voice-asset-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/encrypted-voice-asset-contract.md)
 
 The intended durable split is:
 
