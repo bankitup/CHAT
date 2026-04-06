@@ -9,6 +9,7 @@ type OptimisticThreadMessagesProps = {
   conversationId: string;
   labels: {
     attachment: string;
+    delete: string;
     failed: string;
     justNow: string;
     retry: string;
@@ -147,11 +148,23 @@ export function OptimisticThreadMessages({
             key={item.clientId}
             className="message-row message-row-own message-row-optimistic"
           >
-            <div className="message-card message-card-own message-card-optimistic">
-              <div className="message-bubble message-bubble-own message-bubble-optimistic">
+            <div
+              className={
+                isFailed
+                  ? 'message-card message-card-own message-card-optimistic message-card-failed'
+                  : 'message-card message-card-own message-card-optimistic'
+              }
+            >
+              <div
+                className={
+                  isFailed
+                    ? 'message-bubble message-bubble-own message-bubble-optimistic message-bubble-failed'
+                    : 'message-bubble message-bubble-own message-bubble-optimistic'
+                }
+              >
                 <p className="message-body">{messagePreview}</p>
               </div>
-              <span className="message-meta message-meta-own message-meta-optimistic">
+              <div className="message-meta message-meta-own message-meta-optimistic">
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
                 {isPending ? (
                   <MessageStatusIndicator
@@ -159,30 +172,47 @@ export function OptimisticThreadMessages({
                     status="pending"
                   />
                 ) : isFailed ? (
-                  <span className="message-status message-status-failed">
-                    <span>{item.errorMessage ?? labels.failed}</span>
-                    <button
-                      className="message-status-retry"
-                      onClick={() => {
-                        setItems((currentItems) =>
-                          currentItems.filter(
-                            (currentItem) => currentItem.clientId !== item.clientId,
-                          ),
-                        );
-                        emitOptimisticThreadRetry({
-                          attachment: item.attachment ?? null,
-                          attachmentLabel: item.attachmentLabel ?? null,
-                          body: item.body,
-                          clientId: item.clientId,
-                          conversationId,
-                          createdAt: item.createdAt,
-                          replyToMessageId: item.replyToMessageId ?? null,
-                        });
-                      }}
-                      type="button"
-                    >
-                      {labels.retry}
-                    </button>
+                  <span className="message-status-failed-stack">
+                    <span className="message-status message-status-failed">
+                      {item.errorMessage ?? labels.failed}
+                    </span>
+                    <span className="message-status-failed-actions">
+                      <button
+                        className="message-status-action"
+                        onClick={() => {
+                          setItems((currentItems) =>
+                            currentItems.filter(
+                              (currentItem) => currentItem.clientId !== item.clientId,
+                            ),
+                          );
+                          emitOptimisticThreadRetry({
+                            attachment: item.attachment ?? null,
+                            attachmentLabel: item.attachmentLabel ?? null,
+                            body: item.body,
+                            clientId: item.clientId,
+                            conversationId,
+                            createdAt: item.createdAt,
+                            replyToMessageId: item.replyToMessageId ?? null,
+                          });
+                        }}
+                        type="button"
+                      >
+                        {labels.retry}
+                      </button>
+                      <button
+                        className="message-status-action message-status-action-muted"
+                        onClick={() => {
+                          setItems((currentItems) =>
+                            currentItems.filter(
+                              (currentItem) => currentItem.clientId !== item.clientId,
+                            ),
+                          );
+                        }}
+                        type="button"
+                      >
+                        {labels.delete}
+                      </button>
+                    </span>
                   </span>
                 ) : (
                   <MessageStatusIndicator
@@ -190,7 +220,7 @@ export function OptimisticThreadMessages({
                     status="sent"
                   />
                 )}
-              </span>
+              </div>
             </div>
           </article>
         );

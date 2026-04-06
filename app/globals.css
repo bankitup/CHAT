@@ -4956,6 +4956,10 @@ main {
   opacity: 0.98;
 }
 
+.message-card-failed {
+  opacity: 0.95;
+}
+
 .message-card-deleted {
   opacity: 0.9;
 }
@@ -5000,6 +5004,12 @@ main {
 .message-bubble-optimistic {
   border-style: dashed;
   border-color: rgba(31, 111, 235, 0.22);
+}
+
+.message-bubble-failed {
+  border-color: rgba(180, 35, 24, 0.16);
+  background: rgba(248, 242, 242, 0.9);
+  box-shadow: 0 8px 20px rgba(180, 35, 24, 0.03);
 }
 
 .message-deleted-text {
@@ -5134,6 +5144,19 @@ main {
   color: rgba(180, 35, 24, 0.84);
 }
 
+.message-status-failed-stack {
+  display: inline-grid;
+  justify-items: end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.message-status-failed-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .message-status-spinner {
   width: 11px;
   height: 11px;
@@ -5156,6 +5179,26 @@ main {
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 0.12em;
+}
+
+.message-status-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(180, 35, 24, 0.88);
+  font: inherit;
+  font-size: 0.66rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.message-status-action-muted {
+  color: rgba(91, 100, 112, 0.78);
 }
 
 @keyframes optimistic-message-enter {

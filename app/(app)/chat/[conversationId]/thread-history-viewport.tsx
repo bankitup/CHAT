@@ -2224,6 +2224,7 @@ export function ThreadHistoryViewport({
             conversationId={conversationId}
             labels={{
               attachment: t.chat.attachment,
+              delete: t.chat.delete,
               failed: t.chat.sendFailed,
               justNow: t.chat.justNow,
               retry: t.chat.retrySend,
@@ -2238,6 +2239,7 @@ export function ThreadHistoryViewport({
           conversationId={conversationId}
           labels={{
             attachment: t.chat.attachment,
+            delete: t.chat.delete,
             failed: t.chat.sendFailed,
             justNow: t.chat.justNow,
             retry: t.chat.retrySend,
