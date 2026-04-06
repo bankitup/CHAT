@@ -39,6 +39,7 @@ const CONVERSATION_SUMMARY_ONLY_KEYS = new Set([
   'last_message_seq',
   'updated_at',
 ]);
+const CONVERSATION_ROUTE_REFRESH_CRITICAL_KEYS = new Set(['kind']);
 const THREAD_VISIBLE_MESSAGE_PATCH_ONLY_KEYS = new Set([
   'body',
   'deleted_at',
@@ -364,7 +365,19 @@ export function ActiveChatRealtimeSync({
           return;
         }
 
-        scheduleRefresh('conversation-postgres:metadata');
+        const refreshCriticalKeys = changedKeys.filter((key) =>
+          CONVERSATION_ROUTE_REFRESH_CRITICAL_KEYS.has(key),
+        );
+
+        if (refreshCriticalKeys.length === 0) {
+          logDiagnostics('conversation-postgres:metadata-suppressed', {
+            changedKeys,
+            conversationId,
+          });
+          return;
+        }
+
+        scheduleRefresh('conversation-postgres:metadata-critical');
       })
       .on('postgres_changes', {
         event: 'UPDATE',
