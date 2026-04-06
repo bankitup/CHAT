@@ -10,6 +10,8 @@ This repo now relies on a few messaging schema fields that must exist in Supabas
 - `public.profiles`
 - `public.message_reactions`
 - `public.message_attachments`
+- `public.message_assets` (required for committed voice/media runtime)
+- `public.message_asset_links` (required for committed voice/media runtime)
 
 ## Required columns used by current code
 
@@ -103,6 +105,30 @@ Operational note:
 - `size_bytes`
 - `created_at`
 
+### `public.message_assets`
+
+- `id`
+- `conversation_id`
+- `created_by`
+- `kind`
+- `source`
+- `storage_bucket`
+- `storage_object_path`
+- `mime_type`
+- `file_name`
+- `size_bytes`
+- `duration_ms`
+- `created_at`
+
+### `public.message_asset_links`
+
+- `id`
+- `message_id`
+- `asset_id`
+- `ordinal`
+- `render_as_primary`
+- `created_at`
+
 ## Required SQL files in this repo
 
 Apply these if the fields are not yet present in your Supabase project:
@@ -113,6 +139,7 @@ Apply these if the fields are not yet present in your Supabase project:
 - [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
 - [2026-04-03-messages-shell-e2ee-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-shell-e2ee-v1-align.sql)
 - [2026-04-06-messages-kind-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-messages-kind-runtime-align.sql)
+- [2026-04-06-message-assets-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-runtime-align.sql)
 - [2026-04-03-avatars-storage-policies.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-avatars-storage-policies.sql)
 
 ## Defensive behavior currently in code
