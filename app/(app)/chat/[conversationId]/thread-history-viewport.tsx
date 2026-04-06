@@ -1765,6 +1765,9 @@ export function ThreadHistoryViewport({
   const lastInitialSnapshotKeyRef = useRef(getSnapshotRevisionKey(initialSnapshot));
   const pendingRestoreRef = useRef<PendingScrollRestore | null>(null);
   const pendingSyncRequestRef = useRef<ThreadHistorySyncRequestState | null>(null);
+  const pendingAfterSeqFollowupRef = useRef<{
+    reason: string | null;
+  } | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const encryptedDmRecoveryAttemptsRef = useRef(new Map<string, number>());
   const encryptedDmRecoveryTimeoutsRef = useRef(
@@ -1791,6 +1794,7 @@ export function ThreadHistoryViewport({
       setIsLoadingOlder(false);
       pendingRestoreRef.current = null;
       pendingSyncRequestRef.current = null;
+      pendingAfterSeqFollowupRef.current = null;
       return;
     }
 
@@ -1957,27 +1961,42 @@ export function ThreadHistoryViewport({
       const normalizedNextRequest = normalizeThreadHistorySyncRequestState(
         nextRequest,
       );
-      const mergedRequest = normalizeThreadHistorySyncRequestState({
-        messageIds: [
+      const mergedMessageIds = Array.from(
+        new Set([
           ...currentRequest.messageIds,
           ...normalizedNextRequest.messageIds,
-        ],
-        newerThanLatest:
-          currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest,
-        reason:
-          normalizedNextRequest.reason || currentRequest.reason || null,
-      });
+        ]),
+      );
+      const hasMergedMessageIds = mergedMessageIds.length > 0;
+      const shouldQueueAfterSeqFollowup =
+        hasMergedMessageIds &&
+        (currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest);
+      const mergedReason =
+        normalizedNextRequest.reason || currentRequest.reason || null;
+      const mergedRequest = {
+        messageIds: mergedMessageIds,
+        newerThanLatest: hasMergedMessageIds
+          ? false
+          : currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest,
+        reason: mergedReason,
+      } satisfies ThreadHistorySyncRequestState;
+
+      if (shouldQueueAfterSeqFollowup) {
+        pendingAfterSeqFollowupRef.current = {
+          reason: mergedReason,
+        };
+      }
 
       if (
         historySyncDiagnosticsEnabled &&
-        mergedRequest.messageIds.length > 0 &&
-        (currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest)
+        shouldQueueAfterSeqFollowup
       ) {
-        console.info('[chat-history]', 'topology-sync:mode-normalized', {
+        console.info('[chat-history]', 'topology-sync:mode-separated', {
           conversationId,
           mergedMessageIds: mergedRequest.messageIds,
           nextMode: getThreadHistorySyncMode(normalizedNextRequest),
-          normalizedMode: getThreadHistorySyncMode(mergedRequest),
+          queuedFollowupMode: 'after-seq',
+          selectedMode: getThreadHistorySyncMode(mergedRequest),
           previousMode: getThreadHistorySyncMode(currentRequest),
           reason: mergedRequest.reason,
         });
@@ -2193,27 +2212,6 @@ export function ThreadHistoryViewport({
       isSyncingRef.current = true;
 
       try {
-        const shouldDeferAfterSeqFetch =
-          request.messageIds.length > 0 && request.newerThanLatest;
-
-        if (shouldDeferAfterSeqFetch) {
-          mergeSyncRequest({
-            conversationId,
-            newerThanLatest: true,
-            reason: request.reason,
-          });
-
-          if (historySyncDiagnosticsEnabled) {
-            console.info('[chat-history]', 'topology-sync:after-seq-deferred', {
-              conversationId,
-              deferredMode: 'after-seq',
-              initialMode: 'by-id',
-              messageIds: request.messageIds,
-              reason: request.reason,
-            });
-          }
-        }
-
         if (historySyncDiagnosticsEnabled) {
           console.info('[chat-history]', 'topology-sync:flush', {
             afterSeqRequested: request.newerThanLatest,
@@ -2249,9 +2247,35 @@ export function ThreadHistoryViewport({
             historyStateRef.current = nextState;
             return nextState;
           });
+
+          const pendingAfterSeqFollowup = pendingAfterSeqFollowupRef.current;
+
+          if (pendingAfterSeqFollowup) {
+            pendingAfterSeqFollowupRef.current = null;
+            mergeSyncRequest({
+              conversationId,
+              newerThanLatest: true,
+              reason: pendingAfterSeqFollowup.reason ?? request.reason,
+            });
+
+            if (historySyncDiagnosticsEnabled) {
+              console.info(
+                '[chat-history]',
+                'topology-sync:after-seq-followup-queued',
+                {
+                  conversationId,
+                  followupMode: 'after-seq',
+                  initialMode: 'by-id',
+                  messageIds: request.messageIds,
+                  reason:
+                    pendingAfterSeqFollowup.reason ?? request.reason,
+                },
+              );
+            }
+          }
         }
 
-        if (request.newerThanLatest && !shouldDeferAfterSeqFetch) {
+        if (request.newerThanLatest) {
           while (true) {
             const latestLoadedSeq = resolveLatestLoadedSeq(
               historyStateRef.current.messages,
@@ -2353,6 +2377,7 @@ export function ThreadHistoryViewport({
       for (const timeoutId of encryptedDmRecoveryTimeouts.values()) {
         clearTimeout(timeoutId);
       }
+      pendingAfterSeqFollowupRef.current = null;
       encryptedDmRecoveryAttempts.clear();
       encryptedDmRecoveryTimeouts.clear();
 
