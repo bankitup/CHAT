@@ -819,6 +819,32 @@ function isMissingRelationErrorMessage(message: string, relationName: string) {
   );
 }
 
+function shouldLogChatHistoryDiagnostics() {
+  return (
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ||
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1'
+  );
+}
+
+function logChatHistoryDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+  level: 'info' | 'warn' | 'error' = 'info',
+) {
+  const shouldLog = level === 'error' || shouldLogChatHistoryDiagnostics();
+
+  if (!shouldLog) {
+    return;
+  }
+
+  if (details) {
+    console[level]('[chat-history-load]', stage, details);
+    return;
+  }
+
+  console[level]('[chat-history-load]', stage);
+}
+
 function logSpaceMembershipDiagnostics(
   stage: string,
   details?: Record<string, unknown>,
@@ -5895,11 +5921,11 @@ export async function getConversationHistorySnapshot(input: {
     new Set(messages.map((message) => message.sender_id ?? '').filter(Boolean)),
   );
   const [
-    senderProfiles,
-    reactionsByMessage,
-    attachmentsByMessage,
-    e2eeEnvelopeHistory,
-  ] = await Promise.all([
+    senderProfilesResult,
+    reactionsByMessageResult,
+    attachmentsByMessageResult,
+    e2eeEnvelopeHistoryResult,
+  ] = await Promise.allSettled([
     getMessageSenderProfiles(senderProfileIds),
     getGroupedReactionsForMessages(messageIds, input.userId),
     getMessageAttachments(messageIds),
@@ -5909,6 +5935,53 @@ export async function getConversationHistorySnapshot(input: {
       userId: input.userId,
     }),
   ]);
+  const unwrapSnapshotSubstep = <T,>(
+    stage: string,
+    result: PromiseSettledResult<T>,
+  ) => {
+    if (result.status === 'fulfilled') {
+      return result.value;
+    }
+
+    const error =
+      result.reason instanceof Error
+        ? result.reason
+        : new Error(String(result.reason));
+
+    logChatHistoryDiagnostics(
+      'snapshot:substep-failed',
+      {
+        conversationId: input.conversationId,
+        debugRequestId: input.debugRequestId ?? null,
+        encryptedMessageCount: encryptedMessageIds.length,
+        errorMessage: error.message,
+        messageCount: messages.length,
+        messageIdsCount: messageIds.length,
+        stage,
+        userId: input.userId,
+        visibleFromSeq,
+      },
+      'error',
+    );
+
+    throw error;
+  };
+  const senderProfiles = unwrapSnapshotSubstep(
+    'sender-profiles',
+    senderProfilesResult,
+  );
+  const reactionsByMessage = unwrapSnapshotSubstep(
+    'reactions',
+    reactionsByMessageResult,
+  );
+  const attachmentsByMessage = unwrapSnapshotSubstep(
+    'attachments',
+    attachmentsByMessageResult,
+  );
+  const e2eeEnvelopeHistory = unwrapSnapshotSubstep(
+    'dm-e2ee-envelopes',
+    e2eeEnvelopeHistoryResult,
+  );
   const messagesById = new Map(messages.map((message) => [message.id, message]));
   const currentUserJoinedAtDate = parseConversationHistoryDate(
     currentUserConversationJoinedAt,
@@ -6078,11 +6151,28 @@ export async function getMessageAttachments(messageIds: string[]) {
   }
 
   let assetRows: MessageAssetAttachmentRow[] = [];
+  const isMissingOptionalMessageAssetProjectionErrorMessage = (
+    message: string,
+  ) =>
+    [
+      'ordinal',
+      'render_as_primary',
+      'storage_bucket',
+      'storage_object_path',
+      'external_url',
+      'file_name',
+      'size_bytes',
+      'duration_ms',
+    ].some((columnName) => isMissingColumnErrorMessage(message, columnName));
+  const canIgnoreMessageAssetProjectionError = (message: string) =>
+    isMissingRelationErrorMessage(message, 'message_asset_links') ||
+    isMissingRelationErrorMessage(message, 'message_assets') ||
+    isMissingOptionalMessageAssetProjectionErrorMessage(message);
   const loadMessageAssetRows = async (client: MessageAssetsWriteClient) =>
     client
       .from('message_asset_links')
       .select(
-        'message_id, created_at, ordinal, render_as_primary, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url, mime_type, file_name, size_bytes, duration_ms, created_at)',
+        'message_id, created_at, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url, mime_type, file_name, size_bytes, duration_ms, created_at)',
       )
       .in('message_id', uniqueMessageIds)
       .order('created_at', { ascending: true });
@@ -6090,10 +6180,7 @@ export async function getMessageAttachments(messageIds: string[]) {
   let assetResponse = await loadMessageAssetRows(supabase);
 
   if (assetResponse.error) {
-    if (
-      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_asset_links') &&
-      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_assets')
-    ) {
+    if (!canIgnoreMessageAssetProjectionError(assetResponse.error.message)) {
       const serviceSupabase = createSupabaseServiceRoleClient();
 
       if (serviceSupabase) {
@@ -6103,12 +6190,24 @@ export async function getMessageAttachments(messageIds: string[]) {
       }
     }
 
+    if (assetResponse.error && !canIgnoreMessageAssetProjectionError(assetResponse.error.message)) {
+      throw new Error(assetResponse.error.message);
+    }
+
     if (
       assetResponse.error &&
-      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_asset_links') &&
-      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_assets')
+      isMissingOptionalMessageAssetProjectionErrorMessage(
+        assetResponse.error.message,
+      )
     ) {
-      throw new Error(assetResponse.error.message);
+      logChatHistoryDiagnostics(
+        'attachments:asset-projection-schema-fallback',
+        {
+          errorMessage: assetResponse.error.message,
+          messageIdsCount: uniqueMessageIds.length,
+        },
+        'warn',
+      );
     }
   }
 
