@@ -439,6 +439,38 @@ function buildHistoryPageUrl(input: {
   return `/api/messaging/conversations/${input.conversationId}/history?${params.toString()}`;
 }
 
+function normalizeThreadHistorySyncRequestState(input: {
+  messageIds?: string[] | null;
+  newerThanLatest?: boolean | null;
+  reason?: string | null;
+}) {
+  const messageIds = Array.from(
+    new Set((input.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
+  );
+  const hasMessageIds = messageIds.length > 0;
+
+  return {
+    messageIds,
+    newerThanLatest: hasMessageIds ? false : Boolean(input.newerThanLatest),
+    reason: input.reason?.trim() || null,
+  } satisfies ThreadHistorySyncRequestState;
+}
+
+function getThreadHistorySyncMode(input: {
+  messageIds: string[];
+  newerThanLatest: boolean;
+}) {
+  if (input.messageIds.length > 0) {
+    return 'by-id' as const;
+  }
+
+  if (input.newerThanLatest) {
+    return 'after-seq' as const;
+  }
+
+  return 'noop' as const;
+}
+
 function buildTimelineItems(input: {
   language: AppLanguage;
   lastReadMessageSeq: number | null;
@@ -1432,25 +1464,41 @@ export function ThreadHistoryViewport({
 
   const mergeSyncRequest = useCallback(
     (nextRequest: ThreadHistorySyncRequestPayload) => {
-      const currentRequest = pendingSyncRequestRef.current;
-
-      pendingSyncRequestRef.current = {
-        messageIds: Array.from(
-          new Set([
-            ...(currentRequest?.messageIds ?? []),
-            ...((nextRequest.messageIds ?? [])
-              .map((messageId) => messageId.trim())
-              .filter(Boolean)),
-          ]),
-        ),
+      const currentRequest = normalizeThreadHistorySyncRequestState(
+        pendingSyncRequestRef.current ?? {},
+      );
+      const normalizedNextRequest = normalizeThreadHistorySyncRequestState(
+        nextRequest,
+      );
+      const mergedRequest = normalizeThreadHistorySyncRequestState({
+        messageIds: [
+          ...currentRequest.messageIds,
+          ...normalizedNextRequest.messageIds,
+        ],
         newerThanLatest:
-          Boolean(currentRequest?.newerThanLatest) ||
-          Boolean(nextRequest.newerThanLatest),
+          currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest,
         reason:
-          nextRequest.reason?.trim() || currentRequest?.reason?.trim() || null,
-      };
+          normalizedNextRequest.reason || currentRequest.reason || null,
+      });
+
+      if (
+        historySyncDiagnosticsEnabled &&
+        mergedRequest.messageIds.length > 0 &&
+        (currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest)
+      ) {
+        console.info('[chat-history]', 'topology-sync:mode-normalized', {
+          conversationId,
+          mergedMessageIds: mergedRequest.messageIds,
+          nextMode: getThreadHistorySyncMode(normalizedNextRequest),
+          normalizedMode: getThreadHistorySyncMode(mergedRequest),
+          previousMode: getThreadHistorySyncMode(currentRequest),
+          reason: mergedRequest.reason,
+        });
+      }
+
+      pendingSyncRequestRef.current = mergedRequest;
     },
-    [],
+    [conversationId, historySyncDiagnosticsEnabled],
   );
 
   const performSyncFetch = useCallback(
@@ -1465,6 +1513,12 @@ export function ThreadHistoryViewport({
       if (historySyncDiagnosticsEnabled) {
         console.info('[chat-history]', 'topology-sync:fetch:start', {
           afterSeq: input.afterSeq ?? null,
+          chosenMode:
+            normalizedMessageIds.length > 0
+              ? 'by-id'
+              : typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq)
+                ? 'after-seq'
+                : 'latest',
           conversationId,
           messageIds: normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
           reason: input.reason ?? null,
@@ -1499,6 +1553,12 @@ export function ThreadHistoryViewport({
       if (historySyncDiagnosticsEnabled) {
         console.info('[chat-history]', 'topology-sync:fetch:done', {
           afterSeq: input.afterSeq ?? null,
+          chosenMode:
+            normalizedMessageIds.length > 0
+              ? 'by-id'
+              : typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq)
+                ? 'after-seq'
+                : 'latest',
           conversationId,
           fetchedCount: snapshot.messages.length,
           messageIds: normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
@@ -1530,6 +1590,16 @@ export function ThreadHistoryViewport({
       isSyncingRef.current = true;
 
       try {
+        if (historySyncDiagnosticsEnabled) {
+          console.info('[chat-history]', 'topology-sync:flush', {
+            afterSeqRequested: request.newerThanLatest,
+            chosenMode: getThreadHistorySyncMode(request),
+            conversationId,
+            messageIds: request.messageIds,
+            reason: request.reason,
+          });
+        }
+
         if (request.messageIds.length > 0) {
           const snapshot = await performSyncFetch({
             messageIds: request.messageIds,
@@ -1649,7 +1719,13 @@ export function ThreadHistoryViewport({
         handleSyncRequest as EventListener,
       );
     };
-  }, [conversationId, mergeSyncRequest, performSyncFetch, router]);
+  }, [
+    conversationId,
+    historySyncDiagnosticsEnabled,
+    mergeSyncRequest,
+    performSyncFetch,
+    router,
+  ]);
 
   useLayoutEffect(() => {
     const pendingRestore = pendingRestoreRef.current;

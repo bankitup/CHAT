@@ -3213,10 +3213,22 @@ export async function publishCurrentUserDmE2eeDevice(
     service_retire_error_status: null,
   });
 
+  const prekeyWriteSupabase = serviceRoleSupabase ?? supabase;
+  const prekeyWriteContext = serviceRoleSupabase
+    ? 'service-role'
+    : 'request-auth';
+
+  logDmE2eeBootstrapDiagnostics('publish:replace-prekeys:start', {
+    current_device_row_id: deviceRecordId,
+    prekey_write_context: prekeyWriteContext,
+    published_prekey_count: input.oneTimePrekeys.length,
+    result_kind: resultKind,
+  });
+
   // A repaired device publish must replace the full server-side prekey batch for
   // this device record. Keeping previously claimed rows around can block
   // re-insert on the unique (device_id, prekey_id) constraint during republish.
-  const deleteExistingPrekeys = await supabase
+  const deleteExistingPrekeys = await prekeyWriteSupabase
     .from('device_one_time_prekeys')
     .delete()
     .eq('device_id', deviceRecordId);
@@ -3224,6 +3236,7 @@ export async function publishCurrentUserDmE2eeDevice(
   if (deleteExistingPrekeys.error) {
     logDmE2eeBootstrapDiagnostics('publish:delete-prekeys-error', {
       message: deleteExistingPrekeys.error.message,
+      prekey_write_context: prekeyWriteContext,
     });
     if (
       isMissingRelationErrorMessage(
@@ -3244,7 +3257,7 @@ export async function publishCurrentUserDmE2eeDevice(
   }
 
   if (input.oneTimePrekeys.length > 0) {
-    const insertedPrekeys = await supabase
+    const insertedPrekeys = await prekeyWriteSupabase
       .from('device_one_time_prekeys')
       .upsert(
         input.oneTimePrekeys.map((prekey) => ({
@@ -3258,8 +3271,23 @@ export async function publishCurrentUserDmE2eeDevice(
       );
 
     if (insertedPrekeys.error) {
+      const errorDiagnostics = getSupabaseErrorDiagnostics(insertedPrekeys.error);
       logDmE2eeBootstrapDiagnostics('publish:insert-prekeys-error', {
+        error_code:
+          typeof errorDiagnostics.error_code === 'string'
+            ? errorDiagnostics.error_code
+            : null,
+        error_details:
+          typeof errorDiagnostics.error_details === 'string'
+            ? errorDiagnostics.error_details
+            : null,
+        error_hint:
+          typeof errorDiagnostics.error_hint === 'string'
+            ? errorDiagnostics.error_hint
+            : null,
         message: insertedPrekeys.error.message,
+        prekey_write_context: prekeyWriteContext,
+        published_prekey_count: input.oneTimePrekeys.length,
       });
       throw createDmE2eeBootstrapPublishError(
         'insert prekeys',
@@ -3267,6 +3295,12 @@ export async function publishCurrentUserDmE2eeDevice(
       );
     }
   }
+
+  logDmE2eeBootstrapDiagnostics('publish:replace-prekeys:ok', {
+    current_device_row_id: deviceRecordId,
+    prekey_write_context: prekeyWriteContext,
+    published_prekey_count: input.oneTimePrekeys.length,
+  });
 
   logDmE2eeBootstrapDiagnostics('publish:done', {
     resultKind,

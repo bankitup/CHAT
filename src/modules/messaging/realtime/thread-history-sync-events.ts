@@ -50,14 +50,26 @@ export function emitThreadHistorySyncRequest(
     return;
   }
 
+  const normalizedMessageIds = normalizeMessageIds(payload.messageIds);
+  const hasMessageIds = normalizedMessageIds.length > 0;
+  const newerThanLatest = hasMessageIds ? false : Boolean(payload.newerThanLatest);
+  const chosenMode = hasMessageIds
+    ? 'by-id'
+    : newerThanLatest
+      ? 'after-seq'
+      : 'noop';
+
   const normalizedPayload = {
     conversationId: payload.conversationId,
-    messageIds: normalizeMessageIds(payload.messageIds),
-    newerThanLatest: Boolean(payload.newerThanLatest),
+    messageIds: normalizedMessageIds,
+    newerThanLatest,
     reason: payload.reason?.trim() || null,
   } satisfies ThreadHistorySyncRequestPayload;
 
-  logThreadHistorySyncDiagnostics('sync-request', normalizedPayload);
+  logThreadHistorySyncDiagnostics('sync-request', {
+    ...normalizedPayload,
+    chosenMode,
+  });
   window.dispatchEvent(
     new CustomEvent<ThreadHistorySyncRequestPayload>(
       LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
