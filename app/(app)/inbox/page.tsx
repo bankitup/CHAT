@@ -19,6 +19,7 @@ import {
   getDirectMessageDisplayName,
   getConversationParticipantIdentities,
   getExistingActiveDmPartnerUserIds,
+  getExistingActiveDmPartnerUserIdsForCandidates,
   getInboxConversations,
   getInboxConversationsStable,
   type InboxConversation,
@@ -289,6 +290,18 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ...availableUser,
     label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
   }));
+  const exactExistingDmPartnerUserIds = await getExistingActiveDmPartnerUserIdsForCandidates(
+    user.id,
+    availableUserEntries.map((availableUser) => availableUser.userId),
+    {
+      spaceId: activeSpaceId,
+    },
+  ).catch((error) => {
+    logDiagnostics('loader:existing-dm-candidate-verify-error', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return [] as string[];
+  });
   const visibleExistingDmPartnerUserIds = new Set(
     allVisibleConversations.flatMap((conversation) => {
       if (conversation.kind !== 'dm') {
@@ -305,6 +318,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   );
   const existingDmPartnerUserIdsSet = new Set([
     ...existingDmPartnerUserIds,
+    ...exactExistingDmPartnerUserIds,
     ...visibleExistingDmPartnerUserIds,
   ]);
   const availableDmUserEntries = availableUserEntries.filter(

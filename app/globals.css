@@ -1131,7 +1131,7 @@ main {
   display: grid;
   align-items: end;
   padding:
-    calc(14px + env(safe-area-inset-top))
+    calc(34px + env(safe-area-inset-top))
     10px
     calc(10px + env(safe-area-inset-bottom));
 }
@@ -1157,7 +1157,7 @@ main {
   gap: 18px;
   width: min(100%, 720px);
   max-height: min(
-    calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 28px),
+    calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 68px),
     920px
   );
   margin: 0 auto;
@@ -1202,7 +1202,7 @@ main {
 @media (max-width: 640px) {
   .inbox-create-overlay {
     padding:
-      calc(18px + env(safe-area-inset-top))
+      calc(42px + env(safe-area-inset-top))
       8px
       calc(8px + env(safe-area-inset-bottom));
   }
@@ -1210,7 +1210,7 @@ main {
   .inbox-create-sheet {
     width: 100%;
     max-height: calc(
-      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 34px
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 84px
     );
     border-radius: 30px;
   }

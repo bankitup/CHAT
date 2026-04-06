@@ -4532,6 +4532,132 @@ export async function getExistingActiveDmPartnerUserIds(
   );
 }
 
+export async function getExistingActiveDmPartnerUserIdsForCandidates(
+  currentUserId: string,
+  candidateUserIds: string[],
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  const uniqueCandidateUserIds = Array.from(
+    new Set(
+      candidateUserIds
+        .map((value) => value.trim())
+        .filter((value) => value && value !== currentUserId),
+    ),
+  );
+
+  if (uniqueCandidateUserIds.length === 0) {
+    return [] as string[];
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const dmConversationKeys = uniqueCandidateUserIds.map((candidateUserId) =>
+    buildDmConversationKey(currentUserId, candidateUserId),
+  );
+  let keyedLookupQuery = supabase
+    .from('conversations')
+    .select(
+      options?.spaceId
+        ? 'id, kind, dm_key, space_id, created_at, last_message_at'
+        : 'id, kind, dm_key, created_at, last_message_at',
+    )
+    .eq('kind', 'dm')
+    .in('dm_key', dmConversationKeys);
+
+  if (options?.spaceId) {
+    keyedLookupQuery = keyedLookupQuery.eq('space_id', options.spaceId);
+  }
+
+  const { data: keyedRows, error: keyedLookupError } = await keyedLookupQuery;
+
+  if (keyedLookupError) {
+    if (
+      isMissingColumnErrorMessage(keyedLookupError.message, 'dm_key') ||
+      isMissingColumnErrorMessage(keyedLookupError.message, 'space_id')
+    ) {
+      const existingPartnerUserIds = await getExistingActiveDmPartnerUserIds(
+        currentUserId,
+        options,
+      );
+
+      return uniqueCandidateUserIds.filter((candidateUserId) =>
+        existingPartnerUserIds.includes(candidateUserId),
+      );
+    }
+
+    throw new Error(keyedLookupError.message);
+  }
+
+  const candidateConversationRows = ((keyedRows ?? []) as unknown as Array<{
+    id: string;
+    kind: string | null;
+    dm_key?: string | null;
+    created_at?: string | null;
+    last_message_at?: string | null;
+  }>).map((row) => ({
+    conversationId: row.id,
+    conversationKey: row.dm_key?.trim() || null,
+    createdAt: row.created_at ?? null,
+    lastMessageAt: row.last_message_at ?? null,
+  }));
+
+  if (candidateConversationRows.length === 0) {
+    return [] as string[];
+  }
+
+  const { data: candidateMembers, error: candidateMembersError } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, user_id')
+    .in(
+      'conversation_id',
+      candidateConversationRows.map((conversation) => conversation.conversationId),
+    )
+    .eq('state', 'active');
+
+  if (candidateMembersError) {
+    throw new Error(candidateMembersError.message);
+  }
+
+  const memberIdsByConversation = new Map<string, Set<string>>();
+
+  for (const row of (candidateMembers ?? []) as Array<{
+    conversation_id: string;
+    user_id: string;
+  }>) {
+    const memberIds =
+      memberIdsByConversation.get(row.conversation_id) ?? new Set<string>();
+    memberIds.add(row.user_id);
+    memberIdsByConversation.set(row.conversation_id, memberIds);
+  }
+
+  const existingPartnerUserIds = new Set<string>();
+
+  for (const candidateUserId of uniqueCandidateUserIds) {
+    const expectedConversationKey = buildDmConversationKey(
+      currentUserId,
+      candidateUserId,
+    );
+    const matchingConversations = candidateConversationRows
+      .filter((conversation) => conversation.conversationKey === expectedConversationKey)
+      .filter((conversation) => {
+        const memberIds = memberIdsByConversation.get(conversation.conversationId);
+
+        if (!memberIds || memberIds.size !== 2) {
+          return false;
+        }
+
+        return memberIds.has(currentUserId) && memberIds.has(candidateUserId);
+      });
+
+    if (matchingConversations.length > 0) {
+      existingPartnerUserIds.add(candidateUserId);
+    }
+  }
+
+  return Array.from(existingPartnerUserIds);
+}
+
 export async function getConversationParticipantIdentities(
   conversationIds: string[],
 ) {
