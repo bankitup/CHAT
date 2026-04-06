@@ -81,7 +81,7 @@ export function ThreadDeleteMessageConfirm({
         <button className="button button-compact" disabled={isPending} type="submit">
           {labels.confirm}
         </button>
-        <Link className="pill message-edit-cancel" href={cancelHref}>
+        <Link className="pill message-edit-cancel" href={cancelHref} prefetch={false}>
           {labels.cancel}
         </Link>
       </div>

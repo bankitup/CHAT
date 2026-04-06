@@ -406,6 +406,7 @@ export default async function ChatSettingsPage({
             aria-label={t.chat.backToChats}
             className="back-arrow-link conversation-settings-back-link"
             href={withSpaceParam(`/chat/${conversationId}`, activeSpaceId)}
+            prefetch={false}
           >
             <span aria-hidden="true">←</span>
           </Link>

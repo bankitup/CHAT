@@ -108,7 +108,7 @@ export function ThreadInlineEditForm({
         <button className="button button-compact" disabled={isPending} type="submit">
           {labels.save}
         </button>
-        <Link className="pill message-edit-cancel" href={cancelHref}>
+        <Link className="pill message-edit-cancel" href={cancelHref} prefetch={false}>
           {labels.cancel}
         </Link>
       </div>

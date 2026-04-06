@@ -1025,6 +1025,7 @@ export default async function ChatPage({
               aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
               className="chat-header-main-link"
               href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
+              prefetch={false}
             >
               <div className="stack chat-header-copy">
                 <h1 className="conversation-screen-title">
@@ -1144,6 +1145,7 @@ export default async function ChatPage({
                   hash: '#message-composer',
                   spaceId: activeSpaceId,
                 })}
+                prefetch={false}
               >
                 <span aria-hidden="true" className="composer-reply-dismiss-glyph">
                   ×
@@ -1214,6 +1216,7 @@ export default async function ChatPage({
               conversationId,
               spaceId: activeSpaceId,
             })}
+            prefetch={false}
           />
 
           <section className="card stack conversation-settings-card conversation-settings-sheet">
@@ -1227,6 +1230,7 @@ export default async function ChatPage({
                   conversationId,
                   spaceId: activeSpaceId,
                 })}
+                prefetch={false}
               >
                 <span aria-hidden="true">←</span>
               </Link>
@@ -1687,6 +1691,7 @@ export default async function ChatPage({
               hash: `#message-${activeActionMessage.id}`,
               spaceId: activeSpaceId,
             })}
+            prefetch={false}
           />
           <section className="message-sheet-card card stack">
             <div className="message-sheet-header">
@@ -1714,6 +1719,7 @@ export default async function ChatPage({
                   hash: `#message-${activeActionMessage.id}`,
                   spaceId: activeSpaceId,
                 })}
+                prefetch={false}
               >
                 <span aria-hidden="true">×</span>
               </Link>
@@ -1740,6 +1746,7 @@ export default async function ChatPage({
                     replyToMessageId: activeActionMessage.id,
                     spaceId: activeSpaceId,
                   })}
+                  prefetch={false}
                 >
                   <span className="message-sheet-action-icon" aria-hidden="true">
                     ↩
@@ -1776,6 +1783,7 @@ export default async function ChatPage({
                         hash: `#message-${activeActionMessage.id}`,
                         spaceId: activeSpaceId,
                       })}
+                      prefetch={false}
                     >
                       <span className="message-sheet-action-icon" aria-hidden="true">
                         🗑
@@ -1795,6 +1803,7 @@ export default async function ChatPage({
                         hash: `#message-${activeActionMessage.id}`,
                         spaceId: activeSpaceId,
                       })}
+                      prefetch={false}
                     >
                       <span className="message-sheet-action-icon" aria-hidden="true">
                         ✎
@@ -1812,6 +1821,7 @@ export default async function ChatPage({
                         hash: `#message-${activeActionMessage.id}`,
                         spaceId: activeSpaceId,
                       })}
+                      prefetch={false}
                     >
                       <span className="message-sheet-action-icon" aria-hidden="true">
                         🗑

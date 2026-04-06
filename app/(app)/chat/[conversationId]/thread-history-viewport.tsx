@@ -901,6 +901,7 @@ function ThreadMessageRow({
                   hash: `#message-${message.id}`,
                   spaceId: activeSpaceId,
                 })}
+                prefetch={false}
               >
                 <span aria-hidden="true">⋯</span>
               </Link>
@@ -998,6 +999,7 @@ function ThreadMessageRow({
                     hash: `#message-${message.id}`,
                     spaceId: activeSpaceId,
                   })}
+                  prefetch={false}
                 >
                   {t.chat.cancel}
                 </Link>
