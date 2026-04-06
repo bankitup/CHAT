@@ -155,6 +155,8 @@ type TimelineItem =
   | { key: string; label: string; type: 'separator' | 'unread' }
   | { key: string; message: ConversationMessageRow; type: 'message' };
 
+type HistoryFetchMode = 'latest' | 'before-seq' | 'after-seq' | 'by-id' | 'noop';
+
 const THREAD_HISTORY_PAGE_SIZE = 26;
 
 function parseSafeDate(value: unknown) {
@@ -451,6 +453,38 @@ function buildHistoryPageUrl(input: {
   return `/api/messaging/conversations/${input.conversationId}/history?${params.toString()}`;
 }
 
+function resolveHistoryFetchMode(input: {
+  afterSeq?: number | null;
+  beforeSeq?: number | null;
+  messageIds?: string[] | null;
+}) {
+  const normalizedMessageIds = Array.from(
+    new Set(
+      (input.messageIds ?? [])
+        .map((value) => value.trim())
+        .filter((value) => value && looksLikeUuid(value)),
+    ),
+  );
+  const hasAfterSeq =
+    typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq);
+  const hasBeforeSeq =
+    typeof input.beforeSeq === 'number' && Number.isFinite(input.beforeSeq);
+
+  if (normalizedMessageIds.length > 0) {
+    return 'by-id' as const;
+  }
+
+  if (hasAfterSeq) {
+    return 'after-seq' as const;
+  }
+
+  if (hasBeforeSeq) {
+    return 'before-seq' as const;
+  }
+
+  return 'noop' as const;
+}
+
 function normalizeThreadHistorySyncRequestState(input: {
   messageIds?: string[] | null;
   newerThanLatest?: boolean | null;
@@ -475,7 +509,7 @@ function normalizeThreadHistorySyncRequestState(input: {
 function getThreadHistorySyncMode(input: {
   messageIds: string[];
   newerThanLatest: boolean;
-}) {
+}): HistoryFetchMode {
   if (input.messageIds.length > 0) {
     return 'by-id' as const;
   }
@@ -1545,15 +1579,26 @@ export function ThreadHistoryViewport({
       const normalizedMessageIds = Array.from(
         new Set((input.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
       );
+      const mode = resolveHistoryFetchMode({
+        afterSeq: input.afterSeq ?? null,
+        messageIds: normalizedMessageIds,
+      });
+
+      if (mode === 'noop') {
+        if (historySyncDiagnosticsEnabled) {
+          console.info('[chat-history]', 'topology-sync:fetch:noop-suppressed', {
+            conversationId,
+            reason: input.reason ?? null,
+          });
+        }
+
+        return null;
+      }
+
       if (historySyncDiagnosticsEnabled) {
         console.info('[chat-history]', 'topology-sync:fetch:start', {
           afterSeq: input.afterSeq ?? null,
-          chosenMode:
-            normalizedMessageIds.length > 0
-              ? 'by-id'
-              : typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq)
-                ? 'after-seq'
-                : 'latest',
+          chosenMode: mode,
           conversationId,
           messageIds: normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
           reason: input.reason ?? null,
@@ -1588,12 +1633,7 @@ export function ThreadHistoryViewport({
       if (historySyncDiagnosticsEnabled) {
         console.info('[chat-history]', 'topology-sync:fetch:done', {
           afterSeq: input.afterSeq ?? null,
-          chosenMode:
-            normalizedMessageIds.length > 0
-              ? 'by-id'
-              : typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq)
-                ? 'after-seq'
-                : 'latest',
+          chosenMode: mode,
           conversationId,
           fetchedCount: snapshot.messages.length,
           messageIds: normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
@@ -1641,7 +1681,7 @@ export function ThreadHistoryViewport({
             reason: request.reason,
           });
 
-          if (isDisposed) {
+          if (isDisposed || !snapshot) {
             return;
           }
 
@@ -1672,7 +1712,7 @@ export function ThreadHistoryViewport({
               reason: request.reason,
             });
 
-            if (isDisposed) {
+            if (isDisposed || !snapshot) {
               return;
             }
 

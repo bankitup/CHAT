@@ -11,6 +11,8 @@ type ConversationHistoryRouteContext = {
   }>;
 };
 
+type HistoryRouteMode = 'latest' | 'before-seq' | 'after-seq' | 'by-id';
+
 function looksLikeUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
@@ -74,6 +76,18 @@ function logHistoryRouteDiagnostics(
   console.info('[chat-history-route]', stage);
 }
 
+function createEmptyHistorySnapshot() {
+  return {
+    attachmentsByMessage: [],
+    dmE2ee: null,
+    hasMoreOlder: false,
+    messages: [],
+    oldestMessageSeq: null,
+    reactionsByMessage: [],
+    senderProfiles: [],
+  };
+}
+
 export async function GET(
   request: Request,
   context: ConversationHistoryRouteContext,
@@ -111,9 +125,7 @@ export async function GET(
   ].filter((value): value is string => Boolean(value));
 
   const messageIds =
-    rawMessageIds.length > 0
-      ? rawMessageIds
-      : [];
+    rawMessageIds.length > 0 ? rawMessageIds : [];
 
   if (droppedInvalidMessageIds.length > 0) {
     logHistoryRouteDiagnostics('validation:invalid-message-ids-dropped', {
@@ -130,6 +142,14 @@ export async function GET(
     rawMessageIds.length === 0 && rawAfterSeqExclusive === null
       ? rawBeforeSeqExclusive
       : null;
+  const mode: HistoryRouteMode =
+    messageIds.length > 0
+      ? 'by-id'
+      : afterSeqExclusive !== null
+        ? 'after-seq'
+        : beforeSeqExclusive !== null
+          ? 'before-seq'
+          : 'latest';
 
   if (requestedModes.length > 1) {
     logHistoryRouteDiagnostics('validation:mode-conflict-normalized', {
@@ -137,14 +157,7 @@ export async function GET(
       beforeSeqExclusive: rawBeforeSeqExclusive,
       conversationId,
       messageIdsCount: rawMessageIds.length,
-      normalizedMode:
-        messageIds.length > 0
-          ? 'by-id'
-          : afterSeqExclusive !== null
-            ? 'after-seq'
-            : beforeSeqExclusive !== null
-              ? 'before-seq'
-              : 'latest',
+      normalizedMode: mode,
       requestedModes,
     });
   }
@@ -161,14 +174,7 @@ export async function GET(
     });
 
     return NextResponse.json(
-      {
-        attachmentsByMessage: [],
-        hasMoreOlder: false,
-        messages: [],
-        oldestMessageSeq: null,
-        reactionsByMessage: [],
-        senderProfiles: [],
-      },
+      createEmptyHistorySnapshot(),
       {
         headers: {
           'Cache-Control': 'private, no-store',
@@ -176,6 +182,15 @@ export async function GET(
       },
     );
   }
+
+  logHistoryRouteDiagnostics('request:normalized', {
+    afterSeqExclusive,
+    beforeSeqExclusive,
+    conversationId,
+    limit: normalizePositiveInteger(searchParams.get('limit'), 26, 104),
+    messageIdsCount: messageIds.length,
+    mode,
+  });
 
   const snapshot = await getConversationHistorySnapshot({
     afterSeqExclusive,
