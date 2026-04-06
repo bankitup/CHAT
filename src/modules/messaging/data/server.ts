@@ -7878,6 +7878,15 @@ async function createMessageRecord(input: {
       throw createSchemaRequirementError('DM E2EE send schema is missing.');
     }
 
+    if (
+      input.kind === 'voice' &&
+      insertError.message.includes('messages_kind_check')
+    ) {
+      throw createSchemaRequirementError(
+        "Voice message send schema is missing `public.messages.kind = 'voice'` support.",
+      );
+    }
+
     if (insertError.message.includes('row-level security policy')) {
       throw new Error(
         `Message sending debug: insert blocked by messages RLS. auth user id=${user.id}, payload sender_id=${input.senderId}, conversation_id=${input.conversationId}. Values match, so the failure is likely database-side RLS state or membership policy rather than payload construction.`,

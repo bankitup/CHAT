@@ -64,6 +64,10 @@ Notes:
 - `deleted_at`
 - `created_at`
 
+Current runtime contract:
+
+- `kind` must allow exactly `text`, `attachment`, and `voice`
+
 ### `public.profiles`
 
 - `user_id`
@@ -108,6 +112,7 @@ Apply these if the fields are not yet present in your Supabase project:
 - [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
 - [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
 - [2026-04-03-messages-shell-e2ee-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-shell-e2ee-v1-align.sql)
+- [2026-04-06-messages-kind-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-messages-kind-runtime-align.sql)
 - [2026-04-03-avatars-storage-policies.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-avatars-storage-policies.sql)
 
 ## Defensive behavior currently in code
