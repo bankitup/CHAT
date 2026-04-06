@@ -12,6 +12,7 @@ type OptimisticThreadMessagesProps = {
     delete: string;
     failed: string;
     justNow: string;
+    remove: string;
     retry: string;
     sending: string;
     sent: string;
@@ -146,6 +147,33 @@ export function OptimisticThreadMessages({
     return null;
   }
 
+  const retryFailedItem = (item: OptimisticThreadMessagePayload) => {
+    setItems((currentItems) =>
+      currentItems.filter(
+        (currentItem) => currentItem.clientId !== item.clientId,
+      ),
+    );
+    emitOptimisticThreadRetry({
+      attachment: item.attachment ?? null,
+      attachmentLabel: item.attachmentLabel ?? null,
+      body: item.body,
+      clientId: item.clientId,
+      conversationId,
+      createdAt: item.createdAt,
+      kind: item.kind,
+      replyToMessageId: item.replyToMessageId ?? null,
+      voiceDurationMs: item.voiceDurationMs ?? null,
+    });
+  };
+
+  const removeFailedItem = (item: OptimisticThreadMessagePayload) => {
+    setItems((currentItems) =>
+      currentItems.filter(
+        (currentItem) => currentItem.clientId !== item.clientId,
+      ),
+    );
+  };
+
   return (
     <>
       {visibleItems.map((item) => {
@@ -205,6 +233,33 @@ export function OptimisticThreadMessages({
                             }}
                           />
                         </div>
+                        {isFailed ? (
+                          <div className="message-voice-failed-row">
+                            <span className="message-voice-failed-text">
+                              {item.errorMessage ?? labels.failed}
+                            </span>
+                            <span className="message-voice-failed-actions">
+                              <button
+                                className="message-voice-failed-action"
+                                onClick={() => {
+                                  retryFailedItem(item);
+                                }}
+                                type="button"
+                              >
+                                {labels.retry}
+                              </button>
+                              <button
+                                className="message-voice-failed-action message-voice-failed-action-muted"
+                                onClick={() => {
+                                  removeFailedItem(item);
+                                }}
+                                type="button"
+                              >
+                                {labels.remove}
+                              </button>
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -219,7 +274,7 @@ export function OptimisticThreadMessages({
                     label={labels.sending}
                     status="pending"
                   />
-                ) : isFailed ? (
+                ) : isFailed && !isVoiceMessage ? (
                   <span className="message-status-failed-stack">
                     <span className="message-status message-status-failed">
                       {item.errorMessage ?? labels.failed}
@@ -228,22 +283,7 @@ export function OptimisticThreadMessages({
                       <button
                         className="message-status-action"
                         onClick={() => {
-                          setItems((currentItems) =>
-                            currentItems.filter(
-                              (currentItem) => currentItem.clientId !== item.clientId,
-                            ),
-                          );
-                          emitOptimisticThreadRetry({
-                            attachment: item.attachment ?? null,
-                            attachmentLabel: item.attachmentLabel ?? null,
-                            body: item.body,
-                            clientId: item.clientId,
-                            conversationId,
-                            createdAt: item.createdAt,
-                            kind: item.kind,
-                            replyToMessageId: item.replyToMessageId ?? null,
-                            voiceDurationMs: item.voiceDurationMs ?? null,
-                          });
+                          retryFailedItem(item);
                         }}
                         type="button"
                       >
@@ -252,11 +292,7 @@ export function OptimisticThreadMessages({
                       <button
                         className="message-status-action message-status-action-muted"
                         onClick={() => {
-                          setItems((currentItems) =>
-                            currentItems.filter(
-                              (currentItem) => currentItem.clientId !== item.clientId,
-                            ),
-                          );
+                          removeFailedItem(item);
                         }}
                         type="button"
                       >
