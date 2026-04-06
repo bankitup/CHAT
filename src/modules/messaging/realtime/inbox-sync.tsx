@@ -14,6 +14,7 @@ import {
   MESSAGE_COMMITTED_BROADCAST_EVENT,
   type MessageCommittedPayload,
 } from './live-refresh';
+import { subscribeToInboxManualRefresh } from './inbox-manual-refresh';
 
 type InboxRealtimeSyncProps = {
   conversationIds: string[];
@@ -45,6 +46,7 @@ export function InboxRealtimeSync({
   );
   const conversationIdsKey = normalizedConversationIds.join(',');
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const lastRefreshAtRef = useRef(0);
   const hiddenAtRef = useRef<number | null>(null);
   const diagnosticsEnabled =
@@ -200,6 +202,40 @@ export function InboxRealtimeSync({
       );
     };
 
+    const performManualRefresh = async () => {
+      if (manualRefreshPromiseRef.current) {
+        return manualRefreshPromiseRef.current;
+      }
+
+      const nextPromise = (async () => {
+        logDiagnostics('manual-refresh:start', {
+          trackedConversationCount: normalizedConversationIds.length,
+        });
+
+        if (normalizedConversationIds.length === 0) {
+          lastRefreshAtRef.current = Date.now();
+          startRefreshTransition(() => {
+            router.refresh();
+          });
+          return;
+        }
+
+        await syncTrackedConversationSummaries('manual-pull');
+        lastRefreshAtRef.current = Date.now();
+        logDiagnostics('manual-refresh:done', {
+          trackedConversationCount: normalizedConversationIds.length,
+        });
+      })();
+
+      manualRefreshPromiseRef.current = nextPromise;
+
+      try {
+        await nextPromise;
+      } finally {
+        manualRefreshPromiseRef.current = null;
+      }
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         hiddenAtRef.current = Date.now();
@@ -252,6 +288,10 @@ export function InboxRealtimeSync({
 
       void syncConversationSummary('message-local', detail.conversationId);
     };
+
+    const unsubscribeManualRefresh = subscribeToInboxManualRefresh(() =>
+      performManualRefresh(),
+    );
 
     const channel = supabase.channel(`inbox-sync:${userId}`);
 
@@ -329,6 +369,8 @@ export function InboxRealtimeSync({
       if (refreshTimeoutRef.current) {
         clearTimeout(refreshTimeoutRef.current);
       }
+
+      unsubscribeManualRefresh();
 
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener(

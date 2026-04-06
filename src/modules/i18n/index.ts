@@ -229,6 +229,9 @@ type LanguageDictionary = {
     metaArchived: string;
     noActivityYet: string;
     newRecency: string;
+    pullToRefresh: string;
+    releaseToRefresh: string;
+    refreshing: string;
     yesterday: string;
     dmPreviewExisting: (label: string) => string;
     dmPreviewNew: (label: string) => string;
@@ -654,6 +657,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       metaArchived: 'Archived',
       noActivityYet: 'No activity yet',
       newRecency: 'New',
+      pullToRefresh: 'Pull to refresh chats',
+      releaseToRefresh: 'Release to refresh',
+      refreshing: 'Refreshing chats...',
       yesterday: 'Yesterday',
       dmPreviewExisting: (label) => `Chat with ${label}`,
       dmPreviewNew: (label) => `Say hi to ${label}`,
@@ -1091,6 +1097,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       metaArchived: 'Архив',
       noActivityYet: 'Пока без активности',
       newRecency: 'Новое',
+      pullToRefresh: 'Потяните вниз, чтобы обновить чаты',
+      releaseToRefresh: 'Отпустите, чтобы обновить',
+      refreshing: 'Обновляем чаты...',
       yesterday: 'Вчера',
       dmPreviewExisting: (label) => `Чат с ${label}`,
       dmPreviewNew: (label) => `Напишите ${label}`,

@@ -1,7 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type TouchEvent,
+} from 'react';
 import {
   getTranslations,
   type AppLanguage,
@@ -16,6 +23,7 @@ import {
   subscribeToInboxSummaryRevision,
   type InboxConversationLiveSummary,
 } from '@/modules/messaging/realtime/inbox-summary-store';
+import { requestInboxManualRefresh } from '@/modules/messaging/realtime/inbox-manual-refresh';
 import {
   resolveInboxInitialFilter,
   type InboxPrimaryFilter,
@@ -133,6 +141,10 @@ type InboxFilterableContentProps = {
   archivedConversationItems: ConversationListItem[];
   archivedSummaries: InboxConversationLiveSummary[];
 };
+
+const INBOX_PULL_REFRESH_MAX_OFFSET = 92;
+const INBOX_PULL_REFRESH_HOLD_OFFSET = 58;
+const INBOX_PULL_REFRESH_THRESHOLD = 72;
 
 function normalizeSearchTerm(value: string) {
   return value.trim().toLowerCase();
@@ -533,6 +545,13 @@ export function InboxFilterableContent({
   const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
   const [activeView, setActiveView] = useState<InboxView>(initialView);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(createOpen);
+  const [pullRefreshOffset, setPullRefreshOffset] = useState(0);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const touchGestureRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    dragging: boolean;
+  } | null>(null);
   const visibleFilters = useMemo(
     () => preferences.visibleFilters,
     [preferences.visibleFilters],
@@ -553,6 +572,103 @@ export function InboxFilterableContent({
   useEffect(() => {
     setIsCreateSheetOpen(createOpen);
   }, [createOpen]);
+
+  const getInboxScrollTop = () => {
+    if (typeof window === 'undefined') {
+      return 0;
+    }
+
+    return Math.max(
+      window.scrollY,
+      document.scrollingElement?.scrollTop ?? 0,
+      document.documentElement?.scrollTop ?? 0,
+      0,
+    );
+  };
+
+  const resetPullRefreshGesture = () => {
+    touchGestureRef.current = null;
+    setPullRefreshOffset(0);
+  };
+
+  const handlePullRefreshStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (
+      isCreateSheetOpen ||
+      isPullRefreshing ||
+      event.touches.length !== 1 ||
+      getInboxScrollTop() > 0
+    ) {
+      touchGestureRef.current = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchGestureRef.current = {
+      dragging: false,
+      pointerX: touch.clientX,
+      pointerY: touch.clientY,
+    };
+  };
+
+  const handlePullRefreshMove = (event: TouchEvent<HTMLDivElement>) => {
+    const gesture = touchGestureRef.current;
+
+    if (!gesture || isCreateSheetOpen || isPullRefreshing || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - gesture.pointerX;
+    const deltaY = touch.clientY - gesture.pointerY;
+
+    if (deltaY <= 0) {
+      if (!gesture.dragging) {
+        touchGestureRef.current = null;
+      }
+      return;
+    }
+
+    if (Math.abs(deltaX) > deltaY * 0.8) {
+      return;
+    }
+
+    if (getInboxScrollTop() > 0) {
+      resetPullRefreshGesture();
+      return;
+    }
+
+    const resistedOffset = Math.min(
+      INBOX_PULL_REFRESH_MAX_OFFSET,
+      Math.round(Math.pow(deltaY, 0.92) * 0.52),
+    );
+
+    gesture.dragging = true;
+    event.preventDefault();
+    setPullRefreshOffset(resistedOffset);
+  };
+
+  const handlePullRefreshEnd = async () => {
+    const shouldRefresh =
+      touchGestureRef.current?.dragging &&
+      pullRefreshOffset >= INBOX_PULL_REFRESH_THRESHOLD;
+
+    touchGestureRef.current = null;
+
+    if (!shouldRefresh || isCreateSheetOpen || isPullRefreshing) {
+      setPullRefreshOffset(0);
+      return;
+    }
+
+    setIsPullRefreshing(true);
+    setPullRefreshOffset(INBOX_PULL_REFRESH_HOLD_OFFSET);
+
+    try {
+      await requestInboxManualRefresh();
+    } finally {
+      setIsPullRefreshing(false);
+      setPullRefreshOffset(0);
+    }
+  };
 
   useEffect(() => {
     const resolvedFilter = resolveInboxInitialFilter(activeFilter, preferences);
@@ -779,9 +895,63 @@ export function InboxFilterableContent({
     searchTerm,
     t,
   ]);
+  const pullRefreshProgress = Math.min(
+    1,
+    pullRefreshOffset / INBOX_PULL_REFRESH_THRESHOLD,
+  );
+  const pullRefreshLabel = isPullRefreshing
+    ? t.inbox.refreshing
+    : pullRefreshOffset >= INBOX_PULL_REFRESH_THRESHOLD
+      ? t.inbox.releaseToRefresh
+      : t.inbox.pullToRefresh;
 
   return (
-    <div className={isPrimaryChatsView ? 'stack inbox-screen-dm' : 'stack'}>
+    <div className="inbox-pull-root">
+      <div className="inbox-pull-refresh-shell" aria-hidden="true">
+        <div
+          className={
+            isPullRefreshing
+              ? 'inbox-pull-refresh-indicator inbox-pull-refresh-indicator-active inbox-pull-refresh-indicator-refreshing'
+              : pullRefreshOffset > 0
+                ? 'inbox-pull-refresh-indicator inbox-pull-refresh-indicator-active'
+                : 'inbox-pull-refresh-indicator'
+          }
+          style={{
+            opacity: isPullRefreshing
+              ? 1
+              : Math.max(0, pullRefreshProgress * 1.1 - 0.08),
+            transform: `translateY(${Math.max(-8, pullRefreshOffset * 0.42 - 18)}px) scale(${0.9 + pullRefreshProgress * 0.1})`,
+          }}
+        >
+          <span className="inbox-pull-refresh-glyph" aria-hidden="true">
+            {isPullRefreshing ? '↻' : '↓'}
+          </span>
+          <span className="inbox-pull-refresh-copy">{pullRefreshLabel}</span>
+        </div>
+      </div>
+
+      <div
+        className={[
+          isPrimaryChatsView ? 'stack inbox-screen-dm' : 'stack',
+          'inbox-pull-surface',
+          pullRefreshOffset > 0 ? 'inbox-pull-surface-active' : null,
+          touchGestureRef.current?.dragging ? 'inbox-pull-surface-dragging' : null,
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onTouchCancel={resetPullRefreshGesture}
+        onTouchEnd={() => {
+          void handlePullRefreshEnd();
+        }}
+        onTouchMove={handlePullRefreshMove}
+        onTouchStart={handlePullRefreshStart}
+        style={{
+          transform:
+            pullRefreshOffset > 0
+              ? `translate3d(0, ${pullRefreshOffset}px, 0)`
+              : undefined,
+        }}
+      >
       <section
         className={
           isPrimaryChatsView
@@ -1091,6 +1261,7 @@ export function InboxFilterableContent({
           ))}
         </section>
       )}
+      </div>
 
       {isCreateSheetOpen ? (
         <section className="inbox-create-overlay" aria-label="Create chat">
