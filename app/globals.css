@@ -4206,6 +4206,8 @@ main {
 
 .message-status-telegram-delivered .message-status-check,
 .message-status-telegram-seen .message-status-check {
+  color: rgba(31, 111, 235, 0.92);
+  -webkit-text-fill-color: rgba(31, 111, 235, 0.92);
   text-shadow: 0 1px 1px rgba(31, 111, 235, 0.12);
 }
 
