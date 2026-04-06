@@ -6230,6 +6230,22 @@ export async function getConversationHistorySnapshot(input: {
         count + attachments.filter((attachment) => attachment.isVoiceMessage).length,
       0,
     ),
+    voicePlayableCount: Array.from(attachmentsByMessage.values()).reduce(
+      (count, attachments) =>
+        count +
+        attachments.filter(
+          (attachment) => attachment.isVoiceMessage && Boolean(attachment.signedUrl),
+        ).length,
+      0,
+    ),
+    voiceUnavailableCount: Array.from(attachmentsByMessage.values()).reduce(
+      (count, attachments) =>
+        count +
+        attachments.filter(
+          (attachment) => attachment.isVoiceMessage && !attachment.signedUrl,
+        ).length,
+      0,
+    ),
   });
   const e2eeEnvelopeHistory = unwrapSnapshotSubstep(
     'dm-e2ee-envelopes',
@@ -6355,6 +6371,86 @@ export async function getMessageSenderProfiles(userIds: string[]) {
   return getProfileIdentities(userIds);
 }
 
+async function createSignedChatAttachmentUrl(input: {
+  attachmentId: string;
+  bucket: string;
+  conversationId?: string | null;
+  isVoiceMessage: boolean;
+  messageId: string;
+  objectPath: string;
+  preferredClient: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  serviceClient: Awaited<ReturnType<typeof createSupabaseServiceRoleClient>> | null;
+  source: 'legacy-attachment' | 'message-asset';
+}) {
+  const createSignedUrl = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  ) =>
+    client.storage.from(input.bucket).createSignedUrl(input.objectPath, 60 * 60);
+
+  const preferredResponse = await createSignedUrl(input.preferredClient);
+
+  if (!preferredResponse.error) {
+    return preferredResponse.data.signedUrl;
+  }
+
+  if (input.serviceClient && input.serviceClient !== input.preferredClient) {
+    const serviceResponse = await createSignedUrl(
+      input.serviceClient as Awaited<ReturnType<typeof createSupabaseServerClient>>,
+    );
+
+    if (!serviceResponse.error) {
+      logChatHistoryDiagnostics('attachments:signed-url-service-fallback', {
+        attachmentId: input.attachmentId,
+        bucket: input.bucket,
+        conversationId: input.conversationId ?? null,
+        initialErrorMessage: preferredResponse.error.message,
+        isVoiceMessage: input.isVoiceMessage,
+        messageId: input.messageId,
+        objectPath: input.objectPath,
+        source: input.source,
+      });
+
+      return serviceResponse.data.signedUrl;
+    }
+
+    logChatHistoryDiagnostics(
+      'attachments:signed-url-failed',
+      {
+        attachmentId: input.attachmentId,
+        bucket: input.bucket,
+        conversationId: input.conversationId ?? null,
+        errorMessage: preferredResponse.error.message,
+        isVoiceMessage: input.isVoiceMessage,
+        messageId: input.messageId,
+        objectPath: input.objectPath,
+        serviceErrorMessage: serviceResponse.error.message,
+        source: input.source,
+      },
+      input.isVoiceMessage ? 'warn' : 'error',
+    );
+
+    return null;
+  }
+
+  logChatHistoryDiagnostics(
+    'attachments:signed-url-failed',
+    {
+      attachmentId: input.attachmentId,
+      bucket: input.bucket,
+      conversationId: input.conversationId ?? null,
+      errorMessage: preferredResponse.error.message,
+      isVoiceMessage: input.isVoiceMessage,
+      messageId: input.messageId,
+      objectPath: input.objectPath,
+      serviceErrorMessage: null,
+      source: input.source,
+    },
+    input.isVoiceMessage ? 'warn' : 'error',
+  );
+
+  return null;
+}
+
 export async function getGroupedReactionsForMessages(
   messageIds: string[],
   currentUserId: string,
@@ -6420,6 +6516,7 @@ export async function getMessageAttachments(messageIds: string[]) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase
     .from('message_attachments')
     .select('id, message_id, bucket, object_path, mime_type, size_bytes, created_at')
@@ -6461,8 +6558,6 @@ export async function getMessageAttachments(messageIds: string[]) {
 
   if (assetResponse.error) {
     if (!canIgnoreMessageAssetProjectionError(assetResponse.error.message)) {
-      const serviceSupabase = createSupabaseServiceRoleClient();
-
       if (serviceSupabase) {
         assetResponse = await loadMessageAssetRows(
           serviceSupabase as MessageAssetsWriteClient,
@@ -6552,27 +6647,18 @@ export async function getMessageAttachments(messageIds: string[]) {
   const attachments = await Promise.all(
     [
       ...((data ?? []) as MessageAttachmentRow[]).map(async (row) => {
-        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-          .from(row.bucket)
-          .createSignedUrl(row.object_path, 60 * 60);
-
-        if (signedUrlError) {
-          return {
-            id: row.id,
-            messageId: row.message_id,
-            bucket: row.bucket,
-            objectPath: row.object_path,
-            mimeType: row.mime_type,
-            sizeBytes: row.size_bytes,
-            durationMs: null,
-            createdAt: row.created_at,
-            fileName: getAttachmentFileName(row.object_path),
-            signedUrl: null,
-            isImage: isImageAttachment(row.mime_type),
-            isAudio: isAudioAttachment(row.mime_type),
-            isVoiceMessage: row.object_path.includes('/voice/'),
-          } satisfies MessageAttachment;
-        }
+        const isVoiceMessage = row.object_path.includes('/voice/');
+        const signedUrl = await createSignedChatAttachmentUrl({
+          attachmentId: row.id,
+          bucket: row.bucket,
+          conversationId: null,
+          isVoiceMessage,
+          messageId: row.message_id,
+          objectPath: row.object_path,
+          preferredClient: supabase,
+          serviceClient: serviceSupabase,
+          source: 'legacy-attachment',
+        });
 
         return {
           id: row.id,
@@ -6584,25 +6670,32 @@ export async function getMessageAttachments(messageIds: string[]) {
           durationMs: null,
           createdAt: row.created_at,
           fileName: getAttachmentFileName(row.object_path),
-          signedUrl: signedUrlData.signedUrl,
+          signedUrl,
           isImage: isImageAttachment(row.mime_type),
           isAudio: isAudioAttachment(row.mime_type),
-          isVoiceMessage: row.object_path.includes('/voice/'),
+          isVoiceMessage,
         } satisfies MessageAttachment;
       }),
       ...assetRows.map(async (row) => {
         let signedUrl: string | null = row.external_url ?? null;
+        const isVoiceMessage = row.kind === 'voice-note';
 
         if (
           row.source === 'supabase-storage' &&
           row.storage_bucket &&
           row.storage_object_path
         ) {
-          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-            .from(row.storage_bucket)
-            .createSignedUrl(row.storage_object_path, 60 * 60);
-
-          signedUrl = signedUrlError ? null : signedUrlData.signedUrl;
+          signedUrl = await createSignedChatAttachmentUrl({
+            attachmentId: row.asset_id,
+            bucket: row.storage_bucket,
+            conversationId: null,
+            isVoiceMessage,
+            messageId: row.message_id,
+            objectPath: row.storage_object_path,
+            preferredClient: supabase,
+            serviceClient: serviceSupabase,
+            source: 'message-asset',
+          });
         }
 
         return {
@@ -6622,7 +6715,7 @@ export async function getMessageAttachments(messageIds: string[]) {
           signedUrl,
           isImage: row.kind === 'image' || isImageAttachment(row.mime_type),
           isAudio: row.kind === 'audio' || row.kind === 'voice-note' || isAudioAttachment(row.mime_type),
-          isVoiceMessage: row.kind === 'voice-note',
+          isVoiceMessage,
         } satisfies MessageAttachment;
       }),
     ],

@@ -178,6 +178,9 @@ const THREAD_HISTORY_PAGE_SIZE = 26;
 const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
   'local-encrypted-send:retry-missing-envelope';
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
+const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
+  'local-voice-send:retry-attachment-resolution';
+const VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS = [180, 700] as const;
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -359,6 +362,63 @@ function resolveVoiceMessageRenderState(input: {
   }
 
   return 'unavailable' satisfies VoiceMessageRenderState;
+}
+
+function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
+  return (
+    reason === 'local-voice-send' ||
+    reason === VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON
+  );
+}
+
+function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
+  return attachments.some(
+    (attachment) =>
+      Boolean(attachment.signedUrl) &&
+      (Boolean(attachment.isVoiceMessage) || attachment.isAudio),
+  );
+}
+
+function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
+  currentUserId: string;
+  requestedMessageIds: string[];
+  snapshot: ThreadHistoryPageSnapshot;
+}) {
+  const requestedMessageIdSet = new Set(input.requestedMessageIds);
+  const attachmentsByMessageId = new Map(
+    input.snapshot.attachmentsByMessage.map((entry) => [
+      entry.messageId,
+      entry.attachments,
+    ] as const),
+  );
+  const ownedVoiceMessageIds = input.snapshot.messages
+    .filter(
+      (message) =>
+        requestedMessageIdSet.has(message.id) &&
+        message.kind === 'voice' &&
+        message.sender_id === input.currentUserId,
+    )
+    .map((message) => message.id);
+  const ownedVoiceMessageIdSet = new Set(ownedVoiceMessageIds);
+  const missingRequestedMessageIds = input.requestedMessageIds.filter(
+    (messageId) => {
+      if (!ownedVoiceMessageIdSet.has(messageId)) {
+        return false;
+      }
+
+      return !hasPlaybackReadyVoiceAttachment(
+        attachmentsByMessageId.get(messageId) ?? [],
+      );
+    },
+  );
+  const presentRequestedMessageIds = ownedVoiceMessageIds.filter(
+    (messageId) => !missingRequestedMessageIds.includes(messageId),
+  );
+
+  return {
+    missingRequestedMessageIds,
+    presentRequestedMessageIds,
+  };
 }
 
 function getVoiceMessageStateLabel(input: {
@@ -1939,6 +1999,10 @@ export function ThreadHistoryViewport({
   const encryptedDmRecoveryTimeoutsRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
+  const voiceAttachmentRecoveryAttemptsRef = useRef(new Map<string, number>());
+  const voiceAttachmentRecoveryTimeoutsRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
   const isSyncingRef = useRef(false);
   const historySyncDiagnosticsEnabled =
     typeof window !== 'undefined' &&
@@ -2388,10 +2452,122 @@ export function ThreadHistoryViewport({
     [conversationId, currentUserId, historySyncDiagnosticsEnabled],
   );
 
+  const scheduleVoiceAttachmentRecovery = useCallback(
+    (input: {
+      reason: string | null;
+      requestedMessageIds: string[];
+      snapshot: ThreadHistoryPageSnapshot;
+    }) => {
+      if (
+        !shouldRetryLocalVoiceAttachmentResolution(input.reason) ||
+        input.requestedMessageIds.length === 0
+      ) {
+        return;
+      }
+
+      const {
+        missingRequestedMessageIds,
+        presentRequestedMessageIds,
+      } = resolveVoiceMessageIdsNeedingAttachmentRecovery({
+        currentUserId,
+        requestedMessageIds: input.requestedMessageIds,
+        snapshot: input.snapshot,
+      });
+      const missingMessageIdSet = new Set(missingRequestedMessageIds);
+
+      for (const messageId of presentRequestedMessageIds) {
+        if (missingMessageIdSet.has(messageId)) {
+          continue;
+        }
+
+        const timeoutId = voiceAttachmentRecoveryTimeoutsRef.current.get(messageId);
+
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          voiceAttachmentRecoveryTimeoutsRef.current.delete(messageId);
+        }
+
+        voiceAttachmentRecoveryAttemptsRef.current.delete(messageId);
+      }
+
+      for (const messageId of missingRequestedMessageIds) {
+        if (voiceAttachmentRecoveryTimeoutsRef.current.has(messageId)) {
+          continue;
+        }
+
+        const attemptIndex =
+          voiceAttachmentRecoveryAttemptsRef.current.get(messageId) ?? 0;
+        const retryDelayMs =
+          VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS[attemptIndex];
+
+        if (retryDelayMs === undefined) {
+          if (historySyncDiagnosticsEnabled) {
+            console.info(
+              '[chat-history]',
+              'topology-sync:voice-attachment-retry-exhausted',
+              {
+                attemptCount: attemptIndex,
+                conversationId,
+                messageId,
+                reason: input.reason,
+              },
+            );
+          }
+          continue;
+        }
+
+        voiceAttachmentRecoveryAttemptsRef.current.set(messageId, attemptIndex + 1);
+
+        if (historySyncDiagnosticsEnabled) {
+          console.info(
+            '[chat-history]',
+            'topology-sync:voice-attachment-retry-scheduled',
+            {
+              attemptNumber: attemptIndex + 1,
+              conversationId,
+              messageId,
+              reason: input.reason,
+              retryDelayMs,
+            },
+          );
+        }
+
+        const timeoutId = setTimeout(() => {
+          voiceAttachmentRecoveryTimeoutsRef.current.delete(messageId);
+
+          if (historySyncDiagnosticsEnabled) {
+            console.info(
+              '[chat-history]',
+              'topology-sync:voice-attachment-retry-dispatched',
+              {
+                conversationId,
+                messageId,
+                reason: VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON,
+              },
+            );
+          }
+
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: [messageId],
+            reason: VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON,
+          });
+        }, retryDelayMs);
+
+        voiceAttachmentRecoveryTimeoutsRef.current.set(messageId, timeoutId);
+      }
+    },
+    [conversationId, currentUserId, historySyncDiagnosticsEnabled],
+  );
+
   useEffect(() => {
     let isDisposed = false;
     const encryptedDmRecoveryAttempts = encryptedDmRecoveryAttemptsRef.current;
     const encryptedDmRecoveryTimeouts = encryptedDmRecoveryTimeoutsRef.current;
+    const voiceAttachmentRecoveryAttempts =
+      voiceAttachmentRecoveryAttemptsRef.current;
+    const voiceAttachmentRecoveryTimeouts =
+      voiceAttachmentRecoveryTimeoutsRef.current;
 
     const flushPendingSyncRequest = async () => {
       if (isDisposed || isSyncingRef.current) {
@@ -2449,6 +2625,11 @@ export function ThreadHistoryViewport({
           }
 
           scheduleMissingEncryptedDmEnvelopeRecovery({
+            reason: request.reason,
+            requestedMessageIds: request.messageIds,
+            snapshot,
+          });
+          scheduleVoiceAttachmentRecovery({
             reason: request.reason,
             requestedMessageIds: request.messageIds,
             snapshot,
@@ -2570,10 +2751,15 @@ export function ThreadHistoryViewport({
       for (const timeoutId of encryptedDmRecoveryTimeouts.values()) {
         clearTimeout(timeoutId);
       }
+      for (const timeoutId of voiceAttachmentRecoveryTimeouts.values()) {
+        clearTimeout(timeoutId);
+      }
       pendingByIdSyncRequestRef.current = null;
       pendingAfterSeqSyncRequestRef.current = null;
       encryptedDmRecoveryAttempts.clear();
       encryptedDmRecoveryTimeouts.clear();
+      voiceAttachmentRecoveryAttempts.clear();
+      voiceAttachmentRecoveryTimeouts.clear();
 
       window.removeEventListener(
         LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
@@ -2586,6 +2772,7 @@ export function ThreadHistoryViewport({
     mergeSyncRequest,
     performSyncFetch,
     scheduleMissingEncryptedDmEnvelopeRecovery,
+    scheduleVoiceAttachmentRecovery,
   ]);
 
   useLayoutEffect(() => {
