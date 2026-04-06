@@ -6247,6 +6247,44 @@ export async function getConversationHistorySnapshot(input: {
       0,
     ),
   });
+  if (shouldLogChatHistoryDiagnostics()) {
+    for (const message of messages) {
+      if (message.kind !== 'voice') {
+        continue;
+      }
+
+      const attachments = attachmentsByMessage.get(message.id) ?? [];
+      const voiceAttachments = attachments.filter(
+        (attachment) => attachment.isVoiceMessage || attachment.isAudio,
+      );
+
+      logChatHistoryDiagnostics('voice-row-resolution', {
+        attachmentCount: attachments.length,
+        conversationId: input.conversationId,
+        debugRequestId: input.debugRequestId ?? null,
+        hasPlaybackReadyVoiceAttachment: voiceAttachments.some((attachment) =>
+          Boolean(attachment.signedUrl),
+        ),
+        messageId: message.id,
+        mode:
+          (input.messageIds?.length ?? 0) > 0
+            ? 'by-id'
+            : input.afterSeqExclusive !== null
+              ? 'after-seq'
+              : input.beforeSeqExclusive !== null
+                ? 'before-seq'
+                : 'latest',
+        signedUrlReadyCount: voiceAttachments.filter((attachment) =>
+          Boolean(attachment.signedUrl),
+        ).length,
+        storageLocatorCount: voiceAttachments.filter(
+          (attachment) =>
+            Boolean(attachment.bucket) && Boolean(attachment.objectPath),
+        ).length,
+        voiceAttachmentCount: voiceAttachments.length,
+      });
+    }
+  }
   const e2eeEnvelopeHistory = unwrapSnapshotSubstep(
     'dm-e2ee-envelopes',
     e2eeEnvelopeHistoryResult,
@@ -6765,6 +6803,12 @@ export async function resolveConversationAttachmentSignedUrl(input: {
   }
 
   if (!messageLookup.data) {
+    logChatHistoryDiagnostics('attachment-signed-url:message-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      userId: input.userId,
+    });
     return null;
   }
 
@@ -6829,10 +6873,23 @@ export async function resolveConversationAttachmentSignedUrl(input: {
   const asset = normalizeJoinedRecord(assetLookup.data?.message_assets ?? null);
 
   if (!asset) {
+    logChatHistoryDiagnostics('attachment-signed-url:asset-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      userId: input.userId,
+    });
     return null;
   }
 
   if (asset.source === 'external-url') {
+    logChatHistoryDiagnostics('attachment-signed-url:external-url', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      source: asset.source,
+      userId: input.userId,
+    });
     return {
       signedUrl:
         typeof asset.external_url === 'string' && asset.external_url.trim()
@@ -6843,6 +6900,13 @@ export async function resolveConversationAttachmentSignedUrl(input: {
   }
 
   if (!asset.storage_bucket || !asset.storage_object_path) {
+    logChatHistoryDiagnostics('attachment-signed-url:storage-locator-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      source: asset.source,
+      userId: input.userId,
+    });
     return null;
   }
 
@@ -6856,6 +6920,17 @@ export async function resolveConversationAttachmentSignedUrl(input: {
     preferredClient: supabase,
     serviceClient: serviceSupabase,
     source: 'message-asset',
+  });
+
+  logChatHistoryDiagnostics('attachment-signed-url:resolved', {
+    attachmentId: normalizedAttachmentId,
+    conversationId: normalizedConversationId,
+    hasSignedUrl: Boolean(signedUrl),
+    messageId: normalizedMessageId,
+    source: asset.source,
+    storageBucket: asset.storage_bucket,
+    storageObjectPath: asset.storage_object_path,
+    userId: input.userId,
   });
 
   return {
