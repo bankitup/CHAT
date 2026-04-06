@@ -20,7 +20,12 @@
   --radius-control: 15px;
   --safe-area-bottom-pad: max(8px, env(safe-area-inset-bottom));
   --app-bottom-nav-reserve: calc(84px + env(safe-area-inset-bottom));
-  --chat-composer-bottom-offset: calc(max(4px, calc(env(safe-area-inset-bottom) - 4px)) + var(--chat-keyboard-offset));
+  --chat-composer-resting-bottom-offset: max(4px, calc(env(safe-area-inset-bottom) - 4px));
+  --chat-composer-keyboard-gap-trim: max(10px, calc(env(safe-area-inset-bottom) + 2px));
+  --chat-composer-bottom-offset: calc(
+    var(--chat-composer-resting-bottom-offset) +
+      max(0px, calc(var(--chat-keyboard-offset) - var(--chat-composer-keyboard-gap-trim)))
+  );
   --chat-thread-bottom-reserve: calc(18px + var(--safe-area-bottom-pad));
   --chat-thread-scroll-reserve: calc(28px + var(--safe-area-bottom-pad));
 }
@@ -5808,6 +5813,10 @@ main {
     linear-gradient(180deg, rgba(244, 247, 251, 0), rgba(244, 247, 251, 0.84) 28%, rgba(244, 247, 251, 0.96) 100%);
   backdrop-filter: none;
   box-shadow: none;
+}
+
+:root[data-chat-keyboard-open='true'] .composer-card {
+  padding-top: 12px;
 }
 
 .chat-typing-indicator {
