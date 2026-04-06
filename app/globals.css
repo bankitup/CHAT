@@ -4509,17 +4509,13 @@ main {
   border-top: 0;
 }
 
-.conversation-group-identity-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.conversation-group-identity-photo-actions {
-  padding-top: 2px;
-}
-
 .conversation-group-identity-cancel {
+  min-height: 30px;
+  padding-inline: 10px;
+}
+
+.conversation-group-identity-remove {
+  width: fit-content;
   min-height: 30px;
   padding-inline: 10px;
 }

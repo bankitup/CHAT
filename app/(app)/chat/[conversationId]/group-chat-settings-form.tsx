@@ -582,16 +582,18 @@ export function GroupChatSettingsForm({
     ? labels.avatarEditorHint
     : pendingAvatarDraft
       ? labels.avatarDraftReady
-    : isAvatarRemovalDraft
+      : isAvatarRemovalDraft
       ? labels.avatarRemovedDraft
-      : selectedFileName
-        ? selectedFileName
-        : labels.subtitle;
+      : selectedFileName ?? labels.tapPhotoToChange;
   const editorMetrics = avatarEditorDraft
     ? getAvatarRenderMetrics(avatarEditorDraft)
     : null;
   const isBusy = isSaving || isPreparingAvatar;
   const normalizedDraftTitle = draftTitle.trim();
+  const hasPersistedAvatarWithoutDraft =
+    Boolean(defaultAvatarPath) &&
+    !pendingAvatarDraft &&
+    !isAvatarRemovalDraft;
   const hasUnsavedChanges =
     normalizedDraftTitle !== defaultTitle.trim() ||
     draftJoinPolicy !== defaultJoinPolicy ||
@@ -613,7 +615,17 @@ export function GroupChatSettingsForm({
       {localError ? <p className="notice notice-error">{localError}</p> : null}
 
       <div className="conversation-group-identity-shell">
+        <input
+          ref={fileInputRef}
+          accept={PROFILE_AVATAR_ACCEPT}
+          className="sr-only"
+          disabled={isBusy}
+          onChange={handleAvatarChange}
+          type="file"
+        />
+
         <button
+          aria-label={labels.tapPhotoToChange}
           className="conversation-group-avatar-button"
           disabled={isBusy}
           onClick={() => {
@@ -700,32 +712,19 @@ export function GroupChatSettingsForm({
               </label>
             </div>
           </section>
+        </div>
+      </div>
 
-          <div className="conversation-group-identity-actions conversation-group-identity-photo-actions">
-            <input
-              ref={fileInputRef}
-              accept={PROFILE_AVATAR_ACCEPT}
-              className="sr-only"
-              disabled={isBusy}
-              onChange={handleAvatarChange}
-              type="file"
-            />
+      <div className="conversation-group-identity-savebar">
+        <div className="conversation-group-identity-savebar-shell">
+          <p className="muted conversation-settings-note conversation-group-identity-savebar-note">
+            {helperNote}
+          </p>
 
-            <button
-              className="button button-secondary button-compact"
-              disabled={isBusy}
-              onClick={() => {
-                clearStatusQueryParams();
-                fileInputRef.current?.click();
-              }}
-              type="button"
-            >
-              {labels.changePhoto}
-            </button>
-
-            {(defaultAvatarPath || pendingAvatarDraft) && !isAvatarRemovalDraft ? (
+          <div className="conversation-group-identity-savebar-actions">
+            {hasPersistedAvatarWithoutDraft ? (
               <button
-                className="button button-secondary button-compact"
+                className="button button-secondary button-compact conversation-group-identity-remove"
                 disabled={isBusy}
                 onClick={() => {
                   clearStatusQueryParams();
@@ -733,7 +732,6 @@ export function GroupChatSettingsForm({
                     fileInputRef.current.value = '';
                   }
                   revokeObjectUrl(avatarEditorDraft?.sourceUrl ?? null);
-                  revokeObjectUrl(pendingAvatarDraft?.previewUrl ?? null);
                   setAvatarEditorDraft(null);
                   setPendingAvatarDraft(null);
                   setSelectedFileName(null);
@@ -745,17 +743,7 @@ export function GroupChatSettingsForm({
                 {labels.removePhoto}
               </button>
             ) : null}
-          </div>
-        </div>
-      </div>
 
-      <div className="conversation-group-identity-savebar">
-        <div className="conversation-group-identity-savebar-shell">
-          <p className="muted conversation-settings-note conversation-group-identity-savebar-note">
-            {helperNote}
-          </p>
-
-          <div className="conversation-group-identity-savebar-actions">
             <button
               className="pill conversation-group-identity-cancel"
               disabled={isBusy || !hasUnsavedChanges}
