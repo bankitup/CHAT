@@ -10,6 +10,7 @@ import {
 } from '@/modules/i18n';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
+import type { MessagingVoicePlaybackState } from '@/modules/messaging/media';
 import {
   emitThreadHistoryVisibleMessageIds,
   LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
@@ -165,6 +166,45 @@ type VoiceMessageRenderState =
   | 'unavailable';
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
+
+const activeThreadVoicePlayback: {
+  audio: HTMLAudioElement | null;
+  messageId: string | null;
+} = {
+  audio: null,
+  messageId: null,
+};
+
+function claimActiveThreadVoicePlayback(
+  messageId: string,
+  audio: HTMLAudioElement,
+) {
+  const previousAudio = activeThreadVoicePlayback.audio;
+
+  if (previousAudio && previousAudio !== audio) {
+    previousAudio.pause();
+  }
+
+  activeThreadVoicePlayback.audio = audio;
+  activeThreadVoicePlayback.messageId = messageId;
+}
+
+function releaseActiveThreadVoicePlayback(
+  messageId: string,
+  audio: HTMLAudioElement | null,
+) {
+  if (!audio) {
+    return;
+  }
+
+  if (
+    activeThreadVoicePlayback.audio === audio &&
+    activeThreadVoicePlayback.messageId === messageId
+  ) {
+    activeThreadVoicePlayback.audio = null;
+    activeThreadVoicePlayback.messageId = null;
+  }
+}
 
 function parseSafeDate(value: unknown) {
   if (typeof value !== 'string') {
@@ -470,17 +510,20 @@ function ThreadVoiceMessageBubble({
   attachment,
   isOwnMessage,
   language,
+  messageId,
   stageHint = null,
 }: {
   attachment: MessageAttachment | null;
   isOwnMessage: boolean;
   language: AppLanguage;
+  messageId: string;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
   const t = getTranslations(language);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
+  const [playbackState, setPlaybackState] =
+    useState<MessagingVoicePlaybackState>('idle');
+  const [progressMs, setProgressMs] = useState(0);
   const [resolvedDurationMs, setResolvedDurationMs] = useState<number | null>(
     attachment?.durationMs ?? null,
   );
@@ -491,72 +534,48 @@ function ThreadVoiceMessageBubble({
     playbackFailed,
     stageHint,
   });
-  const stateLabel = getVoiceMessageStateLabel({ state: voiceState, t });
-  const totalDurationSeconds =
-    resolvedDurationMs && resolvedDurationMs > 0 ? resolvedDurationMs / 1000 : 0;
+  const totalDurationMs = resolvedDurationMs && resolvedDurationMs > 0
+    ? resolvedDurationMs
+    : 0;
   const progressRatio =
-    totalDurationSeconds > 0
-      ? Math.min(1, Math.max(0, currentTimeSeconds / totalDurationSeconds))
+    totalDurationMs > 0
+      ? Math.min(1, Math.max(0, progressMs / totalDurationMs))
       : 0;
-  const metaParts =
+  const isPlaying = playbackState === 'playing';
+  const isBuffering = playbackState === 'buffering';
+  const readyStateLabel =
+    playbackState === 'buffering'
+      ? t.chat.voiceMessageLoading
+      : t.chat.voiceMessage;
+  const stateLabel =
     voiceState === 'ready'
-      ? [
-          formatVoiceDuration(resolvedDurationMs),
-          formatAttachmentSize(attachment?.sizeBytes ?? null),
-        ].filter(Boolean)
-      : [stateLabel];
+      ? readyStateLabel
+      : getVoiceMessageStateLabel({ state: voiceState, t });
+  const sizeLabel = formatAttachmentSize(attachment?.sizeBytes ?? null);
+  const durationLabel =
+    voiceState === 'ready'
+      ? playbackState === 'playing' ||
+        playbackState === 'paused' ||
+        playbackState === 'buffering'
+        ? `${formatVoiceDuration(progressMs)} / ${formatVoiceDuration(
+            resolvedDurationMs,
+          )}`
+        : formatVoiceDuration(resolvedDurationMs)
+      : '--:--';
 
   useEffect(() => {
-    if (voiceState !== 'ready') {
-      return;
-    }
-
     const audio = audioRef.current;
 
-    if (!audio) {
-      return;
-    }
-
-    const handleLoadedMetadata = () => {
-      if (Number.isFinite(audio.duration) && audio.duration > 0) {
-        setResolvedDurationMs(audio.duration * 1000);
-      }
-    };
-    const handleTimeUpdate = () => {
-      setCurrentTimeSeconds(audio.currentTime);
-    };
-    const handlePlay = () => {
-      setIsPlaying(true);
-      setPlaybackFailed(false);
-    };
-    const handlePause = () => {
-      setIsPlaying(false);
-    };
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentTimeSeconds(0);
-    };
-    const handleError = () => {
-      setIsPlaying(false);
-      setPlaybackFailed(true);
-    };
-
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('pause', handlePause);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
-
     return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('pause', handlePause);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
+      if (!audio) {
+        return;
+      }
+
+      audio.pause();
+      releaseActiveThreadVoicePlayback(messageId, audio);
+      audio.src = '';
     };
-  }, [voiceState]);
+  }, [messageId]);
 
   const togglePlayback = async () => {
     const audio = audioRef.current;
@@ -566,11 +585,20 @@ function ThreadVoiceMessageBubble({
     }
 
     if (audio.paused) {
+      setPlaybackFailed(false);
+      setPlaybackState('buffering');
+      claimActiveThreadVoicePlayback(messageId, audio);
+
+      if (audio.readyState === 0) {
+        audio.load();
+      }
+
       try {
         await audio.play();
       } catch {
+        releaseActiveThreadVoicePlayback(messageId, audio);
         setPlaybackFailed(true);
-        setIsPlaying(false);
+        setPlaybackState('failed');
       }
       return;
     }
@@ -581,7 +609,9 @@ function ThreadVoiceMessageBubble({
   const playButtonLabel =
     voiceState !== 'ready'
       ? stateLabel
-      : isPlaying
+      : isBuffering
+        ? t.chat.voiceMessageLoading
+        : isPlaying
         ? t.chat.voiceMessagePause
         : t.chat.voiceMessagePlay;
 
@@ -592,6 +622,7 @@ function ThreadVoiceMessageBubble({
           ? 'message-voice-card message-voice-card-own'
           : 'message-voice-card'
       }
+      data-playback-state={voiceState === 'ready' ? playbackState : voiceState}
       data-voice-state={voiceState}
     >
       <button
@@ -604,31 +635,41 @@ function ThreadVoiceMessageBubble({
         type="button"
       >
         <span aria-hidden="true" className="message-voice-play-icon">
-          {voiceState !== 'ready' ? '...' : isPlaying ? '||' : '>'}
+          {voiceState !== 'ready'
+            ? voiceState === 'failed' || voiceState === 'unavailable'
+              ? '!'
+              : '...'
+            : isBuffering
+              ? '...'
+              : isPlaying
+                ? '||'
+                : '>'}
         </span>
       </button>
       <div className="message-voice-copy">
         <div className="message-voice-head">
           <span className="message-voice-title">{t.chat.voiceMessage}</span>
-          <span className="message-voice-duration">
-            {voiceState === 'ready'
-              ? formatVoiceDuration(resolvedDurationMs)
-              : '--:--'}
-          </span>
+          <span className="message-voice-duration">{durationLabel}</span>
         </div>
         <div className="message-voice-progress" aria-hidden="true">
           <span
-            className="message-voice-progress-bar"
-            style={{ transform: `scaleX(${progressRatio})` }}
+            className={
+              isBuffering
+                ? 'message-voice-progress-bar message-voice-progress-bar-loading'
+                : 'message-voice-progress-bar'
+            }
+            style={
+              isBuffering ? undefined : { transform: `scaleX(${progressRatio})` }
+            }
           />
         </div>
         <div className="message-voice-meta">
           <span className="message-voice-state">{stateLabel}</span>
-          {voiceState === 'ready' && metaParts.length > 1 ? (
+          {voiceState === 'ready' && sizeLabel ? (
             <span className="message-voice-meta-separator">·</span>
           ) : null}
-          {voiceState === 'ready' && metaParts.length > 1 ? (
-            <span>{metaParts[1]}</span>
+          {voiceState === 'ready' && sizeLabel ? (
+            <span>{sizeLabel}</span>
           ) : null}
         </div>
       </div>
@@ -636,7 +677,54 @@ function ThreadVoiceMessageBubble({
         <audio
           ref={audioRef}
           className="message-voice-audio"
-          preload="metadata"
+          onEnded={(event) => {
+            releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            event.currentTarget.currentTime = 0;
+            setProgressMs(0);
+            setPlaybackState('ended');
+          }}
+          onError={(event) => {
+            releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            setPlaybackFailed(true);
+            setPlaybackState('failed');
+          }}
+          onLoadedMetadata={(event) => {
+            const nextDurationMs =
+              Number.isFinite(event.currentTarget.duration) &&
+              event.currentTarget.duration > 0
+                ? event.currentTarget.duration * 1000
+                : null;
+
+            if (nextDurationMs !== null) {
+              setResolvedDurationMs(nextDurationMs);
+            }
+          }}
+          onLoadStart={() => {
+            setPlaybackState((current) =>
+              current === 'playing' ? current : 'buffering',
+            );
+          }}
+          onPause={(event) => {
+            releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+
+            if (event.currentTarget.ended) {
+              return;
+            }
+
+            setPlaybackState(event.currentTarget.currentTime > 0 ? 'paused' : 'idle');
+          }}
+          onPlaying={(event) => {
+            claimActiveThreadVoicePlayback(messageId, event.currentTarget);
+            setPlaybackFailed(false);
+            setPlaybackState('playing');
+          }}
+          onTimeUpdate={(event) => {
+            setProgressMs(event.currentTarget.currentTime * 1000);
+          }}
+          onWaiting={() => {
+            setPlaybackState('buffering');
+          }}
+          preload="none"
           src={attachment.signedUrl}
         />
       ) : null}
@@ -1402,8 +1490,9 @@ function ThreadMessageRow({
               <ThreadVoiceMessageBubble
                 attachment={primaryVoiceAttachment}
                 isOwnMessage={isOwnMessage}
-                key={primaryVoiceAttachment?.id ?? message.id}
+                key={`${primaryVoiceAttachment?.id ?? message.id}:${primaryVoiceAttachment?.signedUrl ?? 'none'}`}
                 language={language}
+                messageId={message.id}
               />
               {normalizedMessageBody ? (
                 <p className="message-body">{normalizedMessageBody}</p>
