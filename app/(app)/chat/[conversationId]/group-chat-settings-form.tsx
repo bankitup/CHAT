@@ -3,12 +3,15 @@
 import NextImage from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { GroupConversationJoinPolicy } from '@/modules/messaging/group-policy';
 import { GroupIdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   PROFILE_AVATAR_ACCEPT,
+  PROFILE_AVATAR_BUCKET,
   PROFILE_AVATAR_MAX_SIZE_BYTES,
   isSupportedProfileAvatarType,
+  sanitizeProfileFileName,
 } from '@/modules/messaging/profile-avatar';
 import { updateConversationIdentityAction } from './actions';
 
@@ -20,6 +23,7 @@ const AVATAR_EDITOR_ZOOM_STEP = 0.01;
 
 type GroupChatSettingsFormProps = {
   conversationId: string;
+  currentUserId: string;
   defaultAvatarPath?: string | null;
   defaultJoinPolicy: GroupConversationJoinPolicy;
   defaultTitle: string;
@@ -39,6 +43,7 @@ type GroupChatSettingsFormProps = {
     avatarTooLarge: string;
     avatarInvalidType: string;
     avatarUploadFailed: string;
+    avatarSchemaRequired: string;
     avatarStorageUnavailable: string;
     tapPhotoToChange: string;
     avatarEditorHint: string;
@@ -73,6 +78,10 @@ type PendingAvatarDraft = {
   file: File;
   previewUrl: string;
 };
+
+function isBucketNotFoundStorageErrorMessage(message: string) {
+  return message.toLowerCase().includes('bucket not found');
+}
 
 function revokeObjectUrl(value: string | null) {
   if (value) {
@@ -200,6 +209,7 @@ async function renderAvatarCropBlob(draft: AvatarEditorDraft) {
 
 export function GroupChatSettingsForm({
   conversationId,
+  currentUserId,
   defaultAvatarPath,
   defaultJoinPolicy,
   defaultTitle,
@@ -511,6 +521,33 @@ export function GroupChatSettingsForm({
     setIsSaving(true);
     setLocalError(null);
 
+    let uploadedAvatarObjectPath: string | null = null;
+
+    if (pendingAvatarDraft) {
+      const supabase = createSupabaseBrowserClient();
+      const objectPath = `${currentUserId}/conversation-avatars/${conversationId}/${crypto.randomUUID()}-${sanitizeProfileFileName(
+        pendingAvatarDraft.file.name.replace(/\.[a-z0-9]+$/i, '') || 'avatar',
+      )}.png`;
+      const { error } = await supabase.storage
+        .from(PROFILE_AVATAR_BUCKET)
+        .upload(objectPath, pendingAvatarDraft.file, {
+          upsert: false,
+          contentType: pendingAvatarDraft.file.type || 'image/png',
+        });
+
+      if (error) {
+        setLocalError(
+          isBucketNotFoundStorageErrorMessage(error.message)
+            ? labels.avatarStorageUnavailable
+            : labels.avatarUploadFailed,
+        );
+        setIsSaving(false);
+        return;
+      }
+
+      uploadedAvatarObjectPath = objectPath;
+    }
+
     const formData = new FormData();
     formData.set('conversationId', conversationId);
     formData.set('joinPolicy', draftJoinPolicy);
@@ -524,11 +561,11 @@ export function GroupChatSettingsForm({
       formData.set('returnTo', 'settings-screen');
     }
 
-    if (pendingAvatarDraft) {
-      formData.set('avatar', pendingAvatarDraft.file);
+    if (uploadedAvatarObjectPath) {
+      formData.set('avatarObjectPath', uploadedAvatarObjectPath);
     }
 
-    if (isAvatarRemovalDraft && !pendingAvatarDraft) {
+    if (isAvatarRemovalDraft && !uploadedAvatarObjectPath) {
       formData.set('removeAvatar', '1');
     }
 

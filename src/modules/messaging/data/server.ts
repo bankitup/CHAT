@@ -2361,7 +2361,37 @@ function isManagedConversationAvatarObjectPath(
     return false;
   }
 
-  return normalizedValue.startsWith(`conversations/${conversationId}/`);
+  if (normalizedValue.startsWith(`conversations/${conversationId}/`)) {
+    return true;
+  }
+
+  const pathSegments = normalizedValue.split('/').filter(Boolean);
+
+  return (
+    pathSegments.length >= 4 &&
+    pathSegments[1] === 'conversation-avatars' &&
+    pathSegments[2] === conversationId
+  );
+}
+
+function isManagedConversationAvatarUploadPathForUser(
+  userId: string,
+  conversationId: string,
+  value: string | null | undefined,
+) {
+  const normalizedValue = value?.trim() || null;
+
+  if (!normalizedValue || isAbsoluteAvatarUrl(normalizedValue)) {
+    return false;
+  }
+
+  if (normalizedValue.startsWith(`conversations/${conversationId}/`)) {
+    return true;
+  }
+
+  return normalizedValue.startsWith(
+    `${userId}/conversation-avatars/${conversationId}/`,
+  );
 }
 
 function isBucketNotFoundStorageErrorMessage(message: string) {
@@ -7655,6 +7685,7 @@ export async function updateConversationIdentity(input: {
   conversationId: string;
   userId: string;
   title: string;
+  avatarObjectPath?: string | null;
   avatarFile?: File | null;
   joinPolicy?: 'closed' | 'open' | null;
   removeAvatar?: boolean;
@@ -7761,12 +7792,29 @@ export async function updateConversationIdentity(input: {
   }
 
   const existingAvatarPath = existingConversation.avatar_path?.trim() || null;
+  const requestedAvatarObjectPath = input.avatarObjectPath?.trim() || null;
   const avatarFile = input.avatarFile && input.avatarFile.size > 0 ? input.avatarFile : null;
-  const shouldRemoveAvatar = Boolean(input.removeAvatar) && !avatarFile;
+  const shouldRemoveAvatar =
+    Boolean(input.removeAvatar) &&
+    !requestedAvatarObjectPath &&
+    !avatarFile;
   let nextAvatarPath: string | null | undefined;
   let uploadedAvatarObjectPath: string | null = null;
 
-  if (avatarFile) {
+  if (requestedAvatarObjectPath) {
+    if (
+      !isManagedConversationAvatarUploadPathForUser(
+        input.userId,
+        input.conversationId,
+        requestedAvatarObjectPath,
+      )
+    ) {
+      throw new Error('Avatar upload path is invalid for this chat.');
+    }
+
+    uploadedAvatarObjectPath = requestedAvatarObjectPath;
+    nextAvatarPath = requestedAvatarObjectPath;
+  } else if (avatarFile) {
     if (avatarFile.size > PROFILE_AVATAR_MAX_SIZE_BYTES) {
       throw new Error('Avatar images can be up to 5 MB.');
     }
@@ -7818,8 +7866,8 @@ export async function updateConversationIdentity(input: {
 
   if (error) {
     if (uploadedAvatarObjectPath) {
-      await createSupabaseServiceRoleClient()
-        ?.storage.from(PROFILE_AVATAR_BUCKET)
+      await (createSupabaseServiceRoleClient() ?? supabase)
+        .storage.from(PROFILE_AVATAR_BUCKET)
         .remove([uploadedAvatarObjectPath]);
     }
 
@@ -7850,8 +7898,8 @@ export async function updateConversationIdentity(input: {
     existingAvatarPath !== uploadedAvatarObjectPath &&
     (uploadedAvatarObjectPath || shouldRemoveAvatar)
   ) {
-    await createSupabaseServiceRoleClient()
-      ?.storage.from(PROFILE_AVATAR_BUCKET)
+    await (createSupabaseServiceRoleClient() ?? supabase)
+      .storage.from(PROFILE_AVATAR_BUCKET)
       .remove([existingAvatarPath]);
   }
 }

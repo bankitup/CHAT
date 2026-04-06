@@ -6,6 +6,8 @@ import {
   getRequestSupabaseServerClient,
   getRequestViewer,
 } from '@/lib/request-context/server';
+import { getTranslations } from '@/modules/i18n';
+import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   addParticipantsToGroupConversation,
   assertConversationExists,
@@ -140,6 +142,44 @@ function getFriendlyChatActionErrorMessage(
     language: 'en',
     rawMessage,
   });
+}
+
+function getConversationIdentityErrorMessage(
+  error: unknown,
+  messages: {
+    avatarSaveFailed: string;
+    avatarSchemaRequired: string;
+    avatarStorageUnavailable: string;
+    fallback: string;
+  },
+) {
+  const rawMessage = error instanceof Error ? error.message : '';
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (normalizedMessage.includes('avatar uploads are not available right now')) {
+    return messages.avatarStorageUnavailable;
+  }
+
+  if (
+    normalizedMessage.includes(
+      'editable group avatars require public.conversations.avatar_path',
+    )
+  ) {
+    return messages.avatarSchemaRequired;
+  }
+
+  if (
+    normalizedMessage.includes('avatar upload path is invalid') ||
+    normalizedMessage.includes('conversation settings debug: identity update blocked')
+  ) {
+    return messages.avatarSaveFailed;
+  }
+
+  return getFriendlyChatActionErrorMessage(
+    error,
+    messages.fallback,
+    'chat:update-identity',
+  );
 }
 
 function redirectWithError(
@@ -1145,12 +1185,16 @@ export async function updateConversationIdentityAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
   const settingsReturnTarget = readSettingsReturnTarget(formData);
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
   const title = String(formData.get('title') ?? '').trim();
   const joinPolicyEntry = String(formData.get('joinPolicy') ?? '').trim();
   const joinPolicy =
     joinPolicyEntry === 'open' || joinPolicyEntry === 'closed'
       ? joinPolicyEntry
       : null;
+  const avatarObjectPath =
+    String(formData.get('avatarObjectPath') ?? '').trim() || null;
   const removeAvatar = String(formData.get('removeAvatar') ?? '').trim() === '1';
   const avatarEntry = formData.get('avatar');
   const avatarFile =
@@ -1200,15 +1244,23 @@ export async function updateConversationIdentityAction(formData: FormData) {
       conversationId,
       userId: user.id,
       title,
+      avatarObjectPath,
       avatarFile,
       joinPolicy,
       removeAvatar,
     });
   } catch (error) {
-    const message = getFriendlyChatActionErrorMessage(
+    const message = getConversationIdentityErrorMessage(
       error,
-      'Unable to update chat settings right now.',
-      'chat:update-identity',
+      {
+        avatarSaveFailed: t.chat.avatarUploadFailed,
+        avatarSchemaRequired: t.chat.avatarSchemaRequired,
+        avatarStorageUnavailable: t.chat.avatarStorageUnavailable,
+        fallback:
+          language === 'ru'
+            ? 'Не удалось обновить настройки чата. Попробуйте еще раз.'
+            : 'Unable to update chat settings right now. Please try again.',
+      },
     );
 
     redirectWithSettingsError(

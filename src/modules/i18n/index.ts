@@ -326,6 +326,7 @@ type LanguageDictionary = {
     avatarInvalidType: string;
     avatarUploading: string;
     avatarUploadFailed: string;
+    avatarSchemaRequired: string;
     avatarStorageUnavailable: string;
     chatAvatarDraftReady: string;
     chatAvatarRemovedDraft: string;
@@ -795,6 +796,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarInvalidType: 'Avatar must be a JPG, PNG, WEBP, or GIF image.',
       avatarUploading: 'Saving…',
       avatarUploadFailed: 'Unable to update chat photo right now.',
+      avatarSchemaRequired: 'Chat photo updates need the latest chat schema update.',
       avatarStorageUnavailable: 'Chat photo uploads are not available right now.',
       chatAvatarDraftReady: 'Photo will update when you save.',
       chatAvatarRemovedDraft: 'Photo will be removed when you save.',
@@ -1279,6 +1281,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       avatarInvalidType: 'Аватар должен быть в формате JPG, PNG, WEBP или GIF.',
       avatarUploading: 'Сохранение…',
       avatarUploadFailed: 'Сейчас не удалось обновить фото чата.',
+      avatarSchemaRequired: 'Для обновления фото чата нужна последняя схема чатов.',
       avatarStorageUnavailable: 'Загрузка фото чата сейчас недоступна.',
       chatAvatarDraftReady: 'Фото обновится после сохранения.',
       chatAvatarRemovedDraft: 'Фото будет удалено после сохранения.',

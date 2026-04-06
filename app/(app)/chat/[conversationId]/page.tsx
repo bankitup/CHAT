@@ -1426,6 +1426,7 @@ export default async function ChatPage({
                   {canEditGroupIdentity ? (
                     <GroupChatSettingsForm
                       conversationId={conversationId}
+                      currentUserId={user.id}
                       defaultAvatarPath={conversation.avatarPath}
                       defaultJoinPolicy={groupJoinPolicy ?? 'closed'}
                       defaultTitle={conversation.title?.trim() || ''}
@@ -1445,6 +1446,7 @@ export default async function ChatPage({
                         avatarTooLarge: t.chat.avatarTooLarge,
                         avatarInvalidType: t.chat.avatarInvalidType,
                         avatarUploadFailed: t.chat.avatarUploadFailed,
+                        avatarSchemaRequired: t.chat.avatarSchemaRequired,
                         avatarStorageUnavailable: t.chat.avatarStorageUnavailable,
                         tapPhotoToChange: t.settings.tapPhotoToChange,
                         avatarEditorHint: t.settings.avatarEditorHint,

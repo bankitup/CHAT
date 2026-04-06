@@ -599,6 +599,7 @@ export default async function ChatSettingsPage({
                 <GroupChatSettingsForm
                   key={`group-settings-${conversation.title ?? ''}-${conversation.avatarPath ?? ''}-${groupJoinPolicy ?? 'closed'}-${hasSettingsSavedState ? 'saved' : 'idle'}`}
                   conversationId={conversationId}
+                  currentUserId={user.id}
                   defaultAvatarPath={conversation.avatarPath}
                   defaultJoinPolicy={groupJoinPolicy ?? 'closed'}
                   defaultTitle={conversation.title?.trim() || ''}
@@ -618,6 +619,7 @@ export default async function ChatSettingsPage({
                     avatarTooLarge: t.chat.avatarTooLarge,
                     avatarInvalidType: t.chat.avatarInvalidType,
                     avatarUploadFailed: t.chat.avatarUploadFailed,
+                    avatarSchemaRequired: t.chat.avatarSchemaRequired,
                     avatarStorageUnavailable: t.chat.avatarStorageUnavailable,
                     tapPhotoToChange: t.settings.tapPhotoToChange,
                     avatarEditorHint: t.settings.avatarEditorHint,
