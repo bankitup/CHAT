@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   formatPersonFallbackLabel,
@@ -10,10 +11,14 @@ import {
 } from '@/modules/i18n';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
+import {
+  emitThreadHistoryVisibleMessageIds,
+  LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
+  type ThreadHistorySyncRequestPayload,
+} from '@/modules/messaging/realtime/thread-history-sync-events';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { useThreadMessagePatchedBody } from '@/modules/messaging/realtime/thread-message-patch-store';
-import { deleteMessageAction } from './actions';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import {
   DmThreadClientSubtree,
@@ -26,6 +31,7 @@ import { MarkConversationRead } from './mark-conversation-read';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
 import { ProgressiveHistoryLoader } from './progressive-history-loader';
+import { ThreadDeleteMessageConfirm } from './thread-delete-message-confirm';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
 import { ThreadInlineEditForm } from './thread-inline-edit-form';
 import { ThreadReactionGroups } from './thread-reaction-groups';
@@ -122,6 +128,12 @@ type ThreadHistoryViewportProps = {
 type PendingScrollRestore = {
   previousScrollHeight: number;
   previousScrollTop: number;
+};
+
+type ThreadHistorySyncRequestState = {
+  messageIds: string[];
+  newerThanLatest: boolean;
+  reason: string | null;
 };
 
 type ThreadHistoryState = {
@@ -390,14 +402,29 @@ function getOutgoingMessageStatus(input: {
 }
 
 function buildHistoryPageUrl(input: {
-  beforeSeq: number;
   conversationId: string;
+  afterSeq?: number | null;
+  beforeSeq?: number | null;
   debugRequestId?: string | null;
   limit: number;
+  messageIds?: string[] | null;
 }) {
   const params = new URLSearchParams();
-  params.set('beforeSeq', String(input.beforeSeq));
   params.set('limit', String(input.limit));
+
+  if (typeof input.beforeSeq === 'number' && Number.isFinite(input.beforeSeq)) {
+    params.set('beforeSeq', String(input.beforeSeq));
+  }
+
+  if (typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq)) {
+    params.set('afterSeq', String(input.afterSeq));
+  }
+
+  for (const messageId of Array.from(
+    new Set((input.messageIds ?? []).map((value) => value.trim()).filter(Boolean)),
+  )) {
+    params.append('messageId', messageId);
+  }
 
   if (input.debugRequestId) {
     params.set('debugRequestId', input.debugRequestId);
@@ -471,6 +498,15 @@ function resolveOldestLoadedSeq(
   return normalizeComparableMessageSeq(messages[0]?.seq ?? fallback);
 }
 
+function resolveLatestLoadedSeq(
+  messages: ConversationMessageRow[],
+  fallback: number | null = null,
+) {
+  return normalizeComparableMessageSeq(
+    messages[messages.length - 1]?.seq ?? fallback,
+  );
+}
+
 function createThreadHistoryState(
   snapshot: ThreadHistoryPageSnapshot,
 ): ThreadHistoryState {
@@ -516,7 +552,7 @@ function createThreadHistoryState(
 }
 
 function mergeThreadHistoryState(input: {
-  mode: 'prepend-older' | 'refresh-base';
+  mode: 'prepend-older' | 'refresh-base' | 'sync-topology';
   snapshot: ThreadHistoryPageSnapshot;
   state: ThreadHistoryState;
 }) {
@@ -537,12 +573,24 @@ function mergeThreadHistoryState(input: {
   const prependedMessages: ConversationMessageRow[] = [];
   const appendedMessages: ConversationMessageRow[] = [];
   let insertedMessageCount = 0;
+  const currentLatestSeq = resolveLatestLoadedSeq(input.state.messages, null);
 
   for (const message of input.snapshot.messages) {
     const existingIndex = nextMessageIndexes.get(message.id);
     nextMessagesById.set(message.id, message);
 
     if (existingIndex === undefined) {
+      const nextMessageSeq = normalizeComparableMessageSeq(message.seq);
+      const shouldInsertUnseenMessage =
+        input.mode !== 'sync-topology' ||
+        currentLatestSeq === null ||
+        (nextMessageSeq !== null && nextMessageSeq > currentLatestSeq);
+
+      if (!shouldInsertUnseenMessage) {
+        nextMessagesById.delete(message.id);
+        continue;
+      }
+
       insertedMessageCount += 1;
 
       if (input.mode === 'prepend-older') {
@@ -569,18 +617,50 @@ function mergeThreadHistoryState(input: {
   }
 
   for (const entry of input.snapshot.reactionsByMessage) {
+    if (
+      input.mode === 'sync-topology' &&
+      !nextMessagesById.has(entry.messageId) &&
+      !input.state.messagesById.has(entry.messageId)
+    ) {
+      continue;
+    }
+
     nextReactionsByMessage.set(entry.messageId, entry.reactions);
   }
 
   for (const entry of input.snapshot.attachmentsByMessage) {
+    if (
+      input.mode === 'sync-topology' &&
+      !nextMessagesById.has(entry.messageId) &&
+      !input.state.messagesById.has(entry.messageId)
+    ) {
+      continue;
+    }
+
     nextAttachmentsByMessage.set(entry.messageId, entry.attachments);
   }
 
   for (const entry of input.snapshot.dmE2ee?.envelopesByMessage ?? []) {
+    if (
+      input.mode === 'sync-topology' &&
+      !nextMessagesById.has(entry.messageId) &&
+      !input.state.messagesById.has(entry.messageId)
+    ) {
+      continue;
+    }
+
     nextEncryptedEnvelopesByMessage.set(entry.messageId, entry.envelope);
   }
 
   for (const entry of input.snapshot.dmE2ee?.historyHintsByMessage ?? []) {
+    if (
+      input.mode === 'sync-topology' &&
+      !nextMessagesById.has(entry.messageId) &&
+      !input.state.messagesById.has(entry.messageId)
+    ) {
+      continue;
+    }
+
     nextEncryptedHistoryHintsByMessage.set(entry.messageId, entry.hint);
   }
 
@@ -1058,27 +1138,20 @@ function ThreadMessageRow({
           />
         ) : null}
         {isMessageInDeleteMode ? (
-          <form action={deleteMessageAction} className="message-delete-confirm">
-            <input name="conversationId" type="hidden" value={conversationId} />
-            <input name="messageId" type="hidden" value={message.id} />
-            <input name="confirmDelete" type="hidden" value="true" />
-            <span className="message-delete-copy">{t.chat.deleteConfirm}</span>
-            <div className="message-delete-actions">
-              <button className="button button-compact" type="submit">
-                {t.chat.delete}
-              </button>
-              <Link
-                className="pill message-edit-cancel"
-                href={buildChatHref({
-                  conversationId,
-                  hash: `#message-${message.id}`,
-                  spaceId: activeSpaceId,
-                })}
-              >
-                {t.chat.cancel}
-              </Link>
-            </div>
-          </form>
+          <ThreadDeleteMessageConfirm
+            cancelHref={buildChatHref({
+              conversationId,
+              hash: `#message-${message.id}`,
+              spaceId: activeSpaceId,
+            })}
+            conversationId={conversationId}
+            labels={{
+              cancel: t.chat.cancel,
+              confirm: t.chat.delete,
+              prompt: t.chat.deleteConfirm,
+            }}
+            messageId={message.id}
+          />
         ) : null}
       </div>
     </article>
@@ -1102,24 +1175,36 @@ export function ThreadHistoryViewport({
   otherParticipantUserId,
   threadClientDiagnostics,
 }: ThreadHistoryViewportProps) {
+  const router = useRouter();
   const t = getTranslations(language);
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
     createThreadHistoryState(initialSnapshot),
   );
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const historyStateRef = useRef(historyState);
   const lastConversationIdRef = useRef(conversationId);
   const lastInitialSnapshotKeyRef = useRef(getSnapshotRevisionKey(initialSnapshot));
   const pendingRestoreRef = useRef<PendingScrollRestore | null>(null);
+  const pendingSyncRequestRef = useRef<ThreadHistorySyncRequestState | null>(null);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSyncingRef = useRef(false);
+
+  useEffect(() => {
+    historyStateRef.current = historyState;
+  }, [historyState]);
 
   useEffect(() => {
     const nextSnapshotKey = getSnapshotRevisionKey(initialSnapshot);
 
     if (lastConversationIdRef.current !== conversationId) {
+      const resetState = createThreadHistoryState(initialSnapshot);
       lastConversationIdRef.current = conversationId;
       lastInitialSnapshotKeyRef.current = nextSnapshotKey;
-      setHistoryState(createThreadHistoryState(initialSnapshot));
+      historyStateRef.current = resetState;
+      setHistoryState(resetState);
       setIsLoadingOlder(false);
       pendingRestoreRef.current = null;
+      pendingSyncRequestRef.current = null;
       return;
     }
 
@@ -1128,13 +1213,15 @@ export function ThreadHistoryViewport({
     }
 
     lastInitialSnapshotKeyRef.current = nextSnapshotKey;
-    setHistoryState((currentState) =>
-      mergeThreadHistoryState({
+    setHistoryState((currentState) => {
+      const nextState = mergeThreadHistoryState({
         mode: 'refresh-base',
         snapshot: initialSnapshot,
         state: currentState,
-      }).nextState,
-    );
+      }).nextState;
+      historyStateRef.current = nextState;
+      return nextState;
+    });
   }, [conversationId, initialSnapshot]);
 
   const senderNames = useMemo(
@@ -1162,6 +1249,28 @@ export function ThreadHistoryViewport({
   );
   const oldestLoadedSeq = historyState.oldestLoadedSeq;
   const hasMoreOlder = historyState.hasMoreOlder;
+  const latestCommittedMessageSeq = useMemo(
+    () => resolveLatestLoadedSeq(historyState.messages, latestVisibleMessageSeq),
+    [historyState.messages, latestVisibleMessageSeq],
+  );
+  const resolvedConfirmedClientIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [
+            ...confirmedClientIds,
+            ...historyState.messages
+              .map((message) => message.client_id?.trim() || '')
+              .filter(Boolean),
+          ].filter(Boolean),
+        ),
+      ),
+    [confirmedClientIds, historyState.messages],
+  );
+  const historyMessageIds = useMemo(
+    () => historyState.messages.map((message) => message.id),
+    [historyState.messages],
+  );
 
   const loadOlderMessages = useCallback(async () => {
     if (isLoadingOlder || !hasMoreOlder || oldestLoadedSeq === null) {
@@ -1212,6 +1321,7 @@ export function ThreadHistoryViewport({
           snapshot: nextSnapshot,
           state: currentState,
         });
+        historyStateRef.current = nextState;
 
         if (
           insertedMessageCount > 0 ||
@@ -1228,10 +1338,12 @@ export function ThreadHistoryViewport({
           oldestMessageSeq: nextSnapshot.oldestMessageSeq,
         });
 
-        return {
+        const stalledState = {
           ...currentState,
           hasMoreOlder: false,
         };
+        historyStateRef.current = stalledState;
+        return stalledState;
       });
     } catch (error) {
       console.error('[chat-history]', 'older-page-fetch-failed', {
@@ -1243,6 +1355,209 @@ export function ThreadHistoryViewport({
       setIsLoadingOlder(false);
     }
   }, [conversationId, hasMoreOlder, isLoadingOlder, oldestLoadedSeq]);
+
+  useEffect(() => {
+    emitThreadHistoryVisibleMessageIds({
+      conversationId,
+      messageIds: historyMessageIds,
+    });
+  }, [conversationId, historyMessageIds]);
+
+  const mergeSyncRequest = useCallback(
+    (nextRequest: ThreadHistorySyncRequestPayload) => {
+      const currentRequest = pendingSyncRequestRef.current;
+
+      pendingSyncRequestRef.current = {
+        messageIds: Array.from(
+          new Set([
+            ...(currentRequest?.messageIds ?? []),
+            ...((nextRequest.messageIds ?? [])
+              .map((messageId) => messageId.trim())
+              .filter(Boolean)),
+          ]),
+        ),
+        newerThanLatest:
+          Boolean(currentRequest?.newerThanLatest) ||
+          Boolean(nextRequest.newerThanLatest),
+        reason:
+          nextRequest.reason?.trim() || currentRequest?.reason?.trim() || null,
+      };
+    },
+    [],
+  );
+
+  const performSyncFetch = useCallback(
+    async (input: {
+      afterSeq?: number | null;
+      messageIds?: string[] | null;
+      reason: string | null;
+    }) => {
+      const response = await fetch(
+        buildHistoryPageUrl({
+          afterSeq: input.afterSeq ?? null,
+          conversationId,
+          debugRequestId:
+            process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+              ? crypto.randomUUID()
+              : null,
+          limit: THREAD_HISTORY_PAGE_SIZE,
+          messageIds: input.messageIds ?? null,
+        }),
+        {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Thread sync fetch failed with status ${response.status} (${input.reason ?? 'unknown'})`,
+        );
+      }
+
+      return (await response.json()) as ThreadHistoryPageSnapshot;
+    },
+    [conversationId],
+  );
+
+  useEffect(() => {
+    let isDisposed = false;
+
+    const flushPendingSyncRequest = async () => {
+      if (isDisposed || isSyncingRef.current) {
+        return;
+      }
+
+      const request = pendingSyncRequestRef.current;
+
+      if (!request) {
+        return;
+      }
+
+      pendingSyncRequestRef.current = null;
+      isSyncingRef.current = true;
+
+      try {
+        if (request.messageIds.length > 0) {
+          const snapshot = await performSyncFetch({
+            messageIds: request.messageIds,
+            reason: request.reason,
+          });
+
+          if (isDisposed) {
+            return;
+          }
+
+          setHistoryState((currentState) => {
+            const nextState = mergeThreadHistoryState({
+              mode: 'sync-topology',
+              snapshot,
+              state: currentState,
+            }).nextState;
+            historyStateRef.current = nextState;
+            return nextState;
+          });
+        }
+
+        if (request.newerThanLatest) {
+          while (true) {
+            const latestLoadedSeq = resolveLatestLoadedSeq(
+              historyStateRef.current.messages,
+              null,
+            );
+
+            if (latestLoadedSeq === null) {
+              break;
+            }
+
+            const snapshot = await performSyncFetch({
+              afterSeq: latestLoadedSeq,
+              reason: request.reason,
+            });
+
+            if (isDisposed) {
+              return;
+            }
+
+            setHistoryState((currentState) => {
+              const nextState = mergeThreadHistoryState({
+                mode: 'sync-topology',
+                snapshot,
+                state: currentState,
+              }).nextState;
+              historyStateRef.current = nextState;
+              return nextState;
+            });
+
+            if (snapshot.messages.length < THREAD_HISTORY_PAGE_SIZE) {
+              break;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[chat-history]', 'topology-sync-failed', {
+          conversationId,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          messageIds: request.messageIds,
+          newerThanLatest: request.newerThanLatest,
+          reason: request.reason,
+        });
+        if (!isDisposed) {
+          router.refresh();
+        }
+      } finally {
+        isSyncingRef.current = false;
+
+        if (!isDisposed && pendingSyncRequestRef.current) {
+          syncTimeoutRef.current = setTimeout(() => {
+            syncTimeoutRef.current = null;
+            void flushPendingSyncRequest();
+          }, 0);
+        }
+      }
+    };
+
+    const schedulePendingSyncRequest = () => {
+      if (syncTimeoutRef.current) {
+        return;
+      }
+
+      syncTimeoutRef.current = setTimeout(() => {
+        syncTimeoutRef.current = null;
+        void flushPendingSyncRequest();
+      }, 70);
+    };
+
+    const handleSyncRequest = (event: Event) => {
+      const detail = (event as CustomEvent<ThreadHistorySyncRequestPayload>).detail;
+
+      if (!detail || detail.conversationId !== conversationId) {
+        return;
+      }
+
+      mergeSyncRequest(detail);
+      schedulePendingSyncRequest();
+    };
+
+    window.addEventListener(
+      LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
+      handleSyncRequest as EventListener,
+    );
+
+    return () => {
+      isDisposed = true;
+
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = null;
+      }
+
+      window.removeEventListener(
+        LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
+        handleSyncRequest as EventListener,
+      );
+    };
+  }, [conversationId, mergeSyncRequest, performSyncFetch, router]);
 
   useLayoutEffect(() => {
     const pendingRestore = pendingRestoreRef.current;
@@ -1315,7 +1630,7 @@ export function ThreadHistoryViewport({
           <AutoScrollToLatest
             bottomSentinelId="message-thread-bottom-sentinel"
             conversationId={conversationId}
-            latestVisibleMessageSeq={latestVisibleMessageSeq}
+            latestVisibleMessageSeq={latestCommittedMessageSeq}
             targetId="message-thread-scroll"
           />
         </DmThreadClientSubtree>
@@ -1323,7 +1638,7 @@ export function ThreadHistoryViewport({
         <AutoScrollToLatest
           bottomSentinelId="message-thread-bottom-sentinel"
           conversationId={conversationId}
-          latestVisibleMessageSeq={latestVisibleMessageSeq}
+          latestVisibleMessageSeq={latestCommittedMessageSeq}
           targetId="message-thread-scroll"
         />
       )}
@@ -1372,7 +1687,7 @@ export function ThreadHistoryViewport({
                 encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
                 encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
                 language={language}
-                latestVisibleMessageSeq={latestVisibleMessageSeq}
+                latestVisibleMessageSeq={latestCommittedMessageSeq}
                 message={item.message}
                 messagesById={historyState.messagesById}
                 otherParticipantReadSeq={otherParticipantReadSeq}
@@ -1394,7 +1709,7 @@ export function ThreadHistoryViewport({
           surface="optimistic-thread-messages"
         >
           <OptimisticThreadMessages
-            confirmedClientIds={confirmedClientIds}
+            confirmedClientIds={resolvedConfirmedClientIds}
             conversationId={conversationId}
             labels={{
               failed: t.chat.sendFailed,
@@ -1407,7 +1722,7 @@ export function ThreadHistoryViewport({
         </DmThreadClientSubtree>
       ) : (
         <OptimisticThreadMessages
-          confirmedClientIds={confirmedClientIds}
+          confirmedClientIds={resolvedConfirmedClientIds}
           conversationId={conversationId}
           labels={{
             failed: t.chat.sendFailed,
@@ -1428,11 +1743,11 @@ export function ThreadHistoryViewport({
             bottomSentinelId="message-thread-bottom-sentinel"
             conversationId={conversationId}
             currentReadMessageSeq={currentReadMessageSeq}
-            key={`mark-read-${conversationId}-${currentReadMessageSeq ?? 'none'}-${latestVisibleMessageSeq ?? 'none'}`}
+            key={`mark-read-${conversationId}-${currentReadMessageSeq ?? 'none'}-${latestCommittedMessageSeq ?? 'none'}`}
             latestVisibleMessageSeq={
-              latestVisibleMessageSeq !== null &&
-              Number.isFinite(latestVisibleMessageSeq)
-                ? latestVisibleMessageSeq
+              latestCommittedMessageSeq !== null &&
+              Number.isFinite(latestCommittedMessageSeq)
+                ? latestCommittedMessageSeq
                 : null
             }
           />
@@ -1442,11 +1757,11 @@ export function ThreadHistoryViewport({
           bottomSentinelId="message-thread-bottom-sentinel"
           conversationId={conversationId}
           currentReadMessageSeq={currentReadMessageSeq}
-          key={`mark-read-${conversationId}-${currentReadMessageSeq ?? 'none'}-${latestVisibleMessageSeq ?? 'none'}`}
+          key={`mark-read-${conversationId}-${currentReadMessageSeq ?? 'none'}-${latestCommittedMessageSeq ?? 'none'}`}
           latestVisibleMessageSeq={
-            latestVisibleMessageSeq !== null &&
-            Number.isFinite(latestVisibleMessageSeq)
-              ? latestVisibleMessageSeq
+            latestCommittedMessageSeq !== null &&
+            Number.isFinite(latestCommittedMessageSeq)
+              ? latestCommittedMessageSeq
               : null
           }
         />

@@ -5,6 +5,11 @@ import {
   applyThreadReactionRealtimeEvent,
   patchThreadConversationReadState,
 } from '@/modules/messaging/realtime/thread-live-state-store';
+import {
+  emitThreadHistorySyncRequest,
+  LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
+  type ThreadHistoryVisibleMessageIdsPayload,
+} from '@/modules/messaging/realtime/thread-history-sync-events';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useTransition } from 'react';
 import {
@@ -41,13 +46,14 @@ export function ActiveChatRealtimeSync({
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRefreshAtRef = useRef(0);
   const hiddenAtRef = useRef<number | null>(null);
+  const trackedMessageIdsRef = useRef(new Set(normalizedMessageIds));
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
-    const trackedMessageIds = new Set(normalizedMessageIds);
+    trackedMessageIdsRef.current = new Set(normalizedMessageIds);
 
     const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
       if (!diagnosticsEnabled) {
@@ -93,6 +99,25 @@ export function ActiveChatRealtimeSync({
       }, THREAD_REFRESH_DEBOUNCE_MS);
     };
 
+    const requestTopologySync = (input: {
+      messageIds?: string[] | null;
+      newerThanLatest?: boolean;
+      reason: string;
+    }) => {
+      emitThreadHistorySyncRequest({
+        conversationId,
+        messageIds: input.messageIds ?? null,
+        newerThanLatest: input.newerThanLatest,
+        reason: input.reason,
+      });
+      logDiagnostics('topology-sync:requested', {
+        conversationId,
+        messageIds: input.messageIds ?? null,
+        newerThanLatest: Boolean(input.newerThanLatest),
+        reason: input.reason,
+      });
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         hiddenAtRef.current = Date.now();
@@ -106,7 +131,10 @@ export function ActiveChatRealtimeSync({
         hiddenAt !== null &&
         Date.now() - hiddenAt >= THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS
       ) {
-        scheduleRefresh('visibility-visible', { force: true });
+        requestTopologySync({
+          newerThanLatest: true,
+          reason: 'visibility-visible',
+        });
       }
     };
 
@@ -117,7 +145,7 @@ export function ActiveChatRealtimeSync({
     }) => {
       const messageId = payload.new?.message_id ?? payload.old?.message_id ?? null;
 
-      if (!messageId || !trackedMessageIds.has(messageId)) {
+      if (!messageId || !trackedMessageIdsRef.current.has(messageId)) {
         return;
       }
 
@@ -139,9 +167,10 @@ export function ActiveChatRealtimeSync({
         return;
       }
 
-      logDiagnostics('message-broadcast:ignored-route-refresh', {
-        conversationId,
-        messageId: payload.messageId ?? null,
+      requestTopologySync({
+        messageIds: payload.messageId ? [payload.messageId] : null,
+        newerThanLatest: !payload.messageId,
+        reason: 'message-broadcast',
       });
     };
 
@@ -152,11 +181,21 @@ export function ActiveChatRealtimeSync({
         return;
       }
 
-      logDiagnostics('message-local:ignored-route-refresh', {
-        clientId: detail.clientId ?? null,
-        conversationId,
-        messageId: detail.messageId ?? null,
+      requestTopologySync({
+        messageIds: detail.messageId ? [detail.messageId] : null,
+        newerThanLatest: !detail.messageId,
+        reason: 'message-local-committed',
       });
+    };
+
+    const handleVisibleMessageIds = (event: Event) => {
+      const detail = (event as CustomEvent<ThreadHistoryVisibleMessageIdsPayload>).detail;
+
+      if (!detail || detail.conversationId !== conversationId) {
+        return;
+      }
+
+      trackedMessageIdsRef.current = new Set(detail.messageIds);
     };
 
     const channel = supabase
@@ -166,7 +205,28 @@ export function ActiveChatRealtimeSync({
         schema: 'public',
         table: 'messages',
         filter: `conversation_id=eq.${conversationId}`,
-      }, () => scheduleRefresh('message-postgres'))
+      }, (payload) => {
+        const nextRow =
+          payload.new && typeof payload.new === 'object'
+            ? (payload.new as Record<string, unknown>)
+            : null;
+        const previousRow =
+          payload.old && typeof payload.old === 'object'
+            ? (payload.old as Record<string, unknown>)
+            : null;
+        const messageId =
+          typeof nextRow?.id === 'string'
+            ? nextRow.id
+            : typeof previousRow?.id === 'string'
+              ? previousRow.id
+              : null;
+
+        requestTopologySync({
+          messageIds: messageId ? [messageId] : null,
+          newerThanLatest: !messageId || payload.eventType === 'INSERT',
+          reason: `message-postgres:${payload.eventType.toLowerCase()}`,
+        });
+      })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
@@ -227,6 +287,10 @@ export function ActiveChatRealtimeSync({
       LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
       handleLocalMessageCommitted as EventListener,
     );
+    window.addEventListener(
+      LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
+      handleVisibleMessageIds as EventListener,
+    );
 
     return () => {
       if (refreshTimeoutRef.current) {
@@ -237,6 +301,10 @@ export function ActiveChatRealtimeSync({
       window.removeEventListener(
         LOCAL_MESSAGE_COMMITTED_WINDOW_EVENT,
         handleLocalMessageCommitted as EventListener,
+      );
+      window.removeEventListener(
+        LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
+        handleVisibleMessageIds as EventListener,
       );
       void supabase.removeChannel(channel);
     };

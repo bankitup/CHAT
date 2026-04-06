@@ -4761,9 +4761,11 @@ export async function updateCurrentUserLanguagePreference(input: {
 export async function getConversationMessages(
   conversationId: string,
   options?: {
+    afterSeqExclusive?: number | null;
     beforeSeqExclusive?: number | null;
     debugRequestId?: string | null;
     limitLatest?: number | null;
+    messageIds?: string[] | null;
   },
 ) {
   const supabase = await createSupabaseServerClient();
@@ -4773,20 +4775,52 @@ export async function getConversationMessages(
     options.limitLatest > 0
       ? Math.floor(options.limitLatest)
       : null;
+  const afterSeqExclusive =
+    typeof options?.afterSeqExclusive === 'number' &&
+    Number.isFinite(options.afterSeqExclusive)
+      ? Math.floor(options.afterSeqExclusive)
+      : null;
   const beforeSeqExclusive =
     typeof options?.beforeSeqExclusive === 'number' &&
     Number.isFinite(options.beforeSeqExclusive)
       ? Math.floor(options.beforeSeqExclusive)
       : null;
-  const queryLimit = normalizedLimit !== null ? normalizedLimit + 1 : null;
+  const normalizedMessageIds = Array.from(
+    new Set((options?.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
+  );
+  const queryMode =
+    normalizedMessageIds.length > 0
+      ? 'by-id'
+      : afterSeqExclusive !== null
+        ? 'after-seq'
+        : 'latest';
+  const queryLimit =
+    queryMode === 'latest'
+      ? normalizedLimit !== null
+        ? normalizedLimit + 1
+        : null
+      : queryMode === 'after-seq'
+        ? normalizedLimit
+        : null;
   const buildMessagesQuery = (selectClause: string) => {
     let query = supabase
       .from('messages')
       .select(selectClause)
-      .eq('conversation_id', conversationId)
-      .order('seq', { ascending: false });
+      .eq('conversation_id', conversationId);
 
-    if (beforeSeqExclusive !== null) {
+    if (normalizedMessageIds.length > 0) {
+      query = query
+        .in('id', normalizedMessageIds)
+        .order('seq', { ascending: true });
+    } else if (afterSeqExclusive !== null) {
+      query = query
+        .gt('seq', afterSeqExclusive)
+        .order('seq', { ascending: true });
+    } else {
+      query = query.order('seq', { ascending: false });
+    }
+
+    if (queryMode === 'latest' && beforeSeqExclusive !== null) {
       query = query.lt('seq', beforeSeqExclusive);
     }
 
@@ -4798,16 +4832,19 @@ export async function getConversationMessages(
 
   const normalizeMessages = (data: ConversationMessage[]) => {
     const hasMoreOlder =
-      normalizedLimit !== null && data.length > normalizedLimit;
+      queryMode === 'latest' &&
+      normalizedLimit !== null &&
+      data.length > normalizedLimit;
     const pagedRows =
-      normalizedLimit !== null && hasMoreOlder
+      queryMode === 'latest' && normalizedLimit !== null && hasMoreOlder
         ? data.slice(0, normalizedLimit)
         : data;
-
-    const normalizedMessages = [...pagedRows].reverse();
+    const normalizedMessages =
+      queryMode === 'latest' ? [...pagedRows].reverse() : [...pagedRows];
 
     if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
       console.info('[chat-history-load]', 'messages:loaded', {
+        afterSeqExclusive,
         conversationId,
         count: normalizedMessages.length,
         debugRequestId: options?.debugRequestId ?? null,
@@ -4819,6 +4856,9 @@ export async function getConversationMessages(
         lastMessageId:
           normalizedMessages[normalizedMessages.length - 1]?.id ?? null,
         limitLatest: normalizedLimit,
+        messageIds:
+          normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
+        mode: queryMode,
         queryLimit,
         vercelUrl: process.env.VERCEL_URL ?? null,
       });
@@ -4926,10 +4966,12 @@ export async function getConversationHistoryWindowSizeForMessageTargets(input: {
 }
 
 export async function getConversationHistorySnapshot(input: {
+  afterSeqExclusive?: number | null;
   beforeSeqExclusive?: number | null;
   conversationId: string;
   debugRequestId?: string | null;
   limit: number;
+  messageIds?: string[] | null;
   userId: string;
 }): Promise<ConversationHistoryPageSnapshot> {
   const normalizedLimit =
@@ -4939,9 +4981,11 @@ export async function getConversationHistorySnapshot(input: {
   const [{ messages, hasMoreOlder }, currentUserConversationJoinedAt] =
     await Promise.all([
       getConversationMessages(input.conversationId, {
+        afterSeqExclusive: input.afterSeqExclusive ?? null,
         beforeSeqExclusive: input.beforeSeqExclusive ?? null,
         debugRequestId: input.debugRequestId ?? null,
         limitLatest: normalizedLimit,
+        messageIds: input.messageIds ?? null,
       }),
       getConversationMemberJoinedAt(input.conversationId, input.userId),
     ]);

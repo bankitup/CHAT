@@ -31,6 +31,7 @@ import {
   LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
   type OptimisticThreadRetryPayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
+import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 
@@ -695,6 +696,13 @@ export function EncryptedDmComposerForm({
                 messageId: sendResult.messageId ?? null,
                 source: 'encrypted-dm-send',
               });
+              if (sendResult.messageId) {
+                emitThreadHistorySyncRequest({
+                  conversationId,
+                  messageIds: [sendResult.messageId],
+                  reason: 'local-encrypted-send',
+                });
+              }
               emitOptimisticThreadMessage({
                 body,
                 clientId,

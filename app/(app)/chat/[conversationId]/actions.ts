@@ -230,6 +230,12 @@ export type MarkConversationReadMutationPayload = {
   summary: ChatConversationSummaryMutationPayload | null;
 };
 
+export type DeleteMessageMutationPayload = {
+  conversationId: string;
+  messageId: string;
+  summary: ChatConversationSummaryMutationPayload | null;
+};
+
 function mutationOk<T>(data: T): ChatMutationSuccess<T> {
   return {
     data,
@@ -638,6 +644,76 @@ export async function markConversationReadMutationAction(input: {
       'Unable to update read state right now.',
       error instanceof Error ? error.message : 'Unable to update read state right now.',
       'chat:mark-read-mutation',
+    );
+  }
+}
+
+export async function deleteMessageMutationAction(
+  formData: FormData,
+): Promise<ChatMutationResult<DeleteMessageMutationPayload>> {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const messageId = String(formData.get('messageId') ?? '').trim();
+  const confirmed = String(formData.get('confirmDelete') ?? '').trim();
+
+  if (!conversationId || !messageId) {
+    return {
+      error: 'Choose a message to delete.',
+      ok: false,
+    };
+  }
+
+  if (confirmed !== 'true') {
+    return {
+      error: 'Confirm deletion before removing a message.',
+      ok: false,
+    };
+  }
+
+  const user = await getRequestViewer();
+
+  if (!user?.id) {
+    return {
+      error: 'Please log in and try again.',
+      ok: false,
+    };
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    return {
+      error: 'This chat is no longer available.',
+      ok: false,
+    };
+  }
+
+  const isOwner = await assertMessageOwnedByUser(messageId, conversationId, user.id);
+
+  if (!isOwner) {
+    return {
+      error: 'Only the sender can delete this message.',
+      ok: false,
+    };
+  }
+
+  try {
+    await softDeleteMessage({
+      messageId,
+      conversationId,
+      senderId: user.id,
+    });
+    const summary = await getConversationSummaryForUser(conversationId, user.id);
+
+    return mutationOk({
+      conversationId,
+      messageId,
+      summary,
+    });
+  } catch (error) {
+    return mutationError(
+      'Unable to delete that message right now.',
+      error instanceof Error ? error.message : 'Unable to delete that message right now.',
+      'chat:delete-message-mutation',
     );
   }
 }

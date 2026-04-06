@@ -35,6 +35,16 @@ function normalizeBeforeSeq(value: string | null) {
   return Math.floor(parsed);
 }
 
+function normalizeAfterSeq(value: string | null) {
+  const parsed = Number(value ?? '');
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+
+  return Math.floor(parsed);
+}
+
 export async function GET(
   request: Request,
   context: ConversationHistoryRouteContext,
@@ -56,11 +66,31 @@ export async function GET(
   }
 
   const { searchParams } = new URL(request.url);
+  const beforeSeqExclusive = normalizeBeforeSeq(searchParams.get('beforeSeq'));
+  const afterSeqExclusive = normalizeAfterSeq(searchParams.get('afterSeq'));
+  const messageIds = Array.from(
+    new Set(searchParams.getAll('messageId').map((messageId) => messageId.trim()).filter(Boolean)),
+  );
+
+  if (
+    Number(beforeSeqExclusive !== null) +
+      Number(afterSeqExclusive !== null) +
+      Number(messageIds.length > 0) >
+    1
+  ) {
+    return NextResponse.json(
+      { error: 'Choose only one history cursor mode per request.' },
+      { status: 400 },
+    );
+  }
+
   const snapshot = await getConversationHistorySnapshot({
-    beforeSeqExclusive: normalizeBeforeSeq(searchParams.get('beforeSeq')),
+    afterSeqExclusive,
+    beforeSeqExclusive,
     conversationId,
     debugRequestId: searchParams.get('debugRequestId'),
     limit: normalizePositiveInteger(searchParams.get('limit'), 26, 104),
+    messageIds,
     userId: user.id,
   });
 

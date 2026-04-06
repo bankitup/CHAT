@@ -7,6 +7,7 @@ import {
   emitOptimisticThreadMessage,
   type OptimisticThreadMessagePayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
+import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
@@ -152,6 +153,11 @@ export function PlaintextChatComposerForm({
             conversationId,
             isCurrentUser: true,
             lastReadMessageSeq: result.data.lastReadMessageSeq,
+          });
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: [result.data.messageId],
+            reason: 'local-send-mutation',
           });
 
           if (canUseOptimisticTextOnly) {
