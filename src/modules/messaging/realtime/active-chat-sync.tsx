@@ -45,6 +45,11 @@ const THREAD_VISIBLE_MESSAGE_PATCH_ONLY_KEYS = new Set([
   'deleted_at',
   'edited_at',
 ]);
+const MEMBERSHIP_ROUTE_REFRESH_CRITICAL_STATES = new Set([
+  'left',
+  'removed',
+  'blocked',
+]);
 
 function getChangedRealtimeRecordKeys(
   nextRow: Record<string, unknown> | null,
@@ -85,6 +90,34 @@ function getNullableRealtimeString(
   const previousValue = previousRow?.[key];
 
   if (typeof previousValue === 'string') {
+    return previousValue;
+  }
+
+  if (previousValue === null) {
+    return null;
+  }
+
+  return undefined;
+}
+
+function getNullableRealtimeNumber(
+  nextRow: Record<string, unknown> | null,
+  previousRow: Record<string, unknown> | null,
+  key: string,
+) {
+  const nextValue = nextRow?.[key];
+
+  if (typeof nextValue === 'number' && Number.isFinite(nextValue)) {
+    return nextValue;
+  }
+
+  if (nextValue === null) {
+    return null;
+  }
+
+  const previousValue = previousRow?.[key];
+
+  if (typeof previousValue === 'number' && Number.isFinite(previousValue)) {
     return previousValue;
   }
 
@@ -391,12 +424,6 @@ export function ActiveChatRealtimeSync({
             : typeof payload.old?.user_id === 'string'
               ? payload.old.user_id
               : null;
-        const lastReadMessageSeq =
-          typeof payload.new?.last_read_message_seq === 'number'
-            ? payload.new.last_read_message_seq
-            : typeof payload.old?.last_read_message_seq === 'number'
-              ? payload.old.last_read_message_seq
-              : null;
         const nextRow =
           payload.new && typeof payload.new === 'object'
             ? (payload.new as Record<string, unknown>)
@@ -407,17 +434,55 @@ export function ActiveChatRealtimeSync({
             : null;
         const changedKeys = getChangedRealtimeRecordKeys(nextRow, previousRow);
         const stateChanged = changedKeys.includes('state');
+        const lastReadChanged = changedKeys.includes('last_read_message_seq');
+        const nextMembershipState = getNullableRealtimeString(
+          nextRow,
+          previousRow,
+          'state',
+        );
+        const lastReadMessageSeq = getNullableRealtimeNumber(
+          nextRow,
+          previousRow,
+          'last_read_message_seq',
+        );
 
         if (!userId) {
-          if (stateChanged) {
-            scheduleRefresh('membership-postgres:state-fallback');
-            return;
-          }
-
-          logDiagnostics('membership-postgres:fallback-suppressed', {
+          logDiagnostics('membership-postgres:missing-user-suppressed', {
             changedKeys,
             conversationId,
             lastReadMessageSeq,
+            nextMembershipState,
+          });
+          return;
+        }
+
+        if (stateChanged) {
+          if (
+            userId === currentUserId &&
+            nextMembershipState &&
+            MEMBERSHIP_ROUTE_REFRESH_CRITICAL_STATES.has(nextMembershipState)
+          ) {
+            scheduleRefresh('membership-postgres:self-state-critical');
+            return;
+          }
+
+          logDiagnostics('membership-postgres:state-suppressed', {
+            changedKeys,
+            conversationId,
+            nextMembershipState,
+            userId,
+          });
+        }
+
+        if (!lastReadChanged) {
+          return;
+        }
+
+        if (lastReadMessageSeq === undefined) {
+          logDiagnostics('membership-postgres:last-read-undefined-suppressed', {
+            changedKeys,
+            conversationId,
+            userId,
           });
           return;
         }

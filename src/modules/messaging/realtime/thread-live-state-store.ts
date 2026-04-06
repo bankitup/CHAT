@@ -157,6 +157,13 @@ export function patchThreadConversationReadState(input: {
       : input.lastReadMessageSeq,
   };
 
+  if (
+    nextState.currentUserReadSeq === currentState.currentUserReadSeq &&
+    nextState.otherParticipantReadSeq === currentState.otherParticipantReadSeq
+  ) {
+    return;
+  }
+
   threadLiveStateStore.set(normalizedConversationId, nextState);
   emitThreadLiveStateChange(normalizedConversationId);
 }

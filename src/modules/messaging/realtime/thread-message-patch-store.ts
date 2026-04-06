@@ -75,12 +75,22 @@ export function patchThreadMessageContent(input: {
   const conversationPatches = new Map(
     getThreadMessagePatchMap(normalizedConversationId),
   );
-
-  conversationPatches.set(normalizedMessageId, {
+  const existingPatch = conversationPatches.get(normalizedMessageId);
+  const nextPatch = {
     ...(input.body !== undefined ? { body: input.body } : null),
     ...(input.deletedAt !== undefined ? { deletedAt: input.deletedAt } : null),
     ...(input.editedAt !== undefined ? { editedAt: input.editedAt } : null),
-  });
+  } satisfies ThreadMessagePatch;
+
+  if (
+    existingPatch?.body === nextPatch.body &&
+    existingPatch?.deletedAt === nextPatch.deletedAt &&
+    existingPatch?.editedAt === nextPatch.editedAt
+  ) {
+    return;
+  }
+
+  conversationPatches.set(normalizedMessageId, nextPatch);
   threadMessagePatchStore.set(normalizedConversationId, conversationPatches);
   emitThreadMessagePatchChange(normalizedConversationId);
 }
