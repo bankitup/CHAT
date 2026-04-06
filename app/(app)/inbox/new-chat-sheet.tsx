@@ -74,59 +74,70 @@ export function NewChatSheet({
       className="card stack inbox-create-sheet"
       role="dialog"
     >
-      <div className="inbox-create-header">
-        <div className="stack inbox-create-copy">
-          <h2 className="section-title">{t.inbox.create.title}</h2>
-          <p className="muted">{t.inbox.create.subtitle}</p>
-        </div>
-        <button
-          aria-label={t.inbox.create.closeAria}
-          className="pill inbox-create-close"
-          onClick={onClose}
-          type="button"
-        >
-          {t.inbox.create.close}
-        </button>
-      </div>
+      <div aria-hidden="true" className="inbox-create-sheet-handle" />
 
-      <div
-        className="inbox-create-mode-switch"
-        role="tablist"
-        aria-label={t.inbox.create.modeAria}
-      >
-        <button
-          aria-selected={mode === 'dm'}
-          className={
-            mode === 'dm'
-              ? 'inbox-create-mode-button inbox-create-mode-button-active'
-              : 'inbox-create-mode-button'
-          }
-          onClick={() => handleModeChange('dm')}
-          role="tab"
-          type="button"
+      <div className="inbox-create-hero">
+        <div className="inbox-create-header">
+          <div className="stack inbox-create-copy">
+            <h2 className="section-title">{t.inbox.create.title}</h2>
+            <p className="muted">{t.inbox.create.subtitle}</p>
+          </div>
+          <button
+            aria-label={t.inbox.create.closeAria}
+            className="pill inbox-create-close"
+            onClick={onClose}
+            type="button"
+          >
+            {t.inbox.create.close}
+          </button>
+        </div>
+
+        <div
+          className="inbox-create-mode-switch"
+          role="tablist"
+          aria-label={t.inbox.create.modeAria}
         >
-          {t.inbox.create.direct}
-        </button>
-        <button
-          aria-selected={mode === 'group'}
-          className={
-            mode === 'group'
-              ? 'inbox-create-mode-button inbox-create-mode-button-active'
-              : 'inbox-create-mode-button'
-          }
-          onClick={() => handleModeChange('group')}
-          role="tab"
-          type="button"
-        >
-          {t.inbox.create.group}
-        </button>
+          <button
+            aria-selected={mode === 'dm'}
+            className={
+              mode === 'dm'
+                ? 'inbox-create-mode-button inbox-create-mode-button-active'
+                : 'inbox-create-mode-button'
+            }
+            onClick={() => handleModeChange('dm')}
+            role="tab"
+            type="button"
+          >
+            {t.inbox.create.direct}
+          </button>
+          <button
+            aria-selected={mode === 'group'}
+            className={
+              mode === 'group'
+                ? 'inbox-create-mode-button inbox-create-mode-button-active'
+                : 'inbox-create-mode-button'
+            }
+            onClick={() => handleModeChange('group')}
+            role="tab"
+            type="button"
+          >
+            {t.inbox.create.group}
+          </button>
+        </div>
       </div>
 
       {mode === 'dm' ? (
-        <section className="stack inbox-create-section">
-          <div className="stack inbox-create-copy">
-            <h3 className="card-title">{t.inbox.create.peopleTitle}</h3>
-            <p className="muted">{t.inbox.create.peopleSubtitle}</p>
+        <section className="stack inbox-create-panel inbox-create-section">
+          <div className="inbox-create-section-head">
+            <div className="stack inbox-create-copy">
+              <h3 className="card-title">{t.inbox.create.peopleTitle}</h3>
+              <p className="muted">{t.inbox.create.peopleSubtitle}</p>
+            </div>
+            {hasAnyDmUsers ? (
+              <span className="summary-pill summary-pill-muted inbox-create-count-pill">
+                {availableDmUsers.length}
+              </span>
+            ) : null}
           </div>
 
           {!hasAnyUsers ? (
@@ -142,7 +153,8 @@ export function NewChatSheet({
               {t.inbox.create.noMatches}
             </p>
           ) : (
-            <div className="inbox-compose-user-list inbox-create-user-list">
+            <div className="inbox-create-list-frame">
+              <div className="inbox-compose-user-list inbox-create-user-list">
               {availableDmUsers.map((availableUser) => {
                 const isSelected = availableUser.userId === selectedDmUserId;
 
@@ -158,27 +170,40 @@ export function NewChatSheet({
                     onClick={() => setSelectedDmUserId(availableUser.userId)}
                     type="button"
                   >
-                    <div className="user-row">
-                      <IdentityAvatar
-                        diagnosticsSurface="inbox:new-chat-dm"
-                        identity={availableUser}
-                        label={availableUser.label}
-                        size="sm"
-                      />
-                      <div className="stack user-copy">
-                        <span className="user-label">{availableUser.label}</span>
-                        <IdentityStatusInline
-                          className="user-status-inline"
+                    <div className="inbox-create-option-main">
+                      <div className="user-row">
+                        <IdentityAvatar
+                          diagnosticsSurface="inbox:new-chat-dm"
                           identity={availableUser}
+                          label={availableUser.label}
+                          size="sm"
                         />
+                        <div className="stack user-copy">
+                          <span className="user-label">{availableUser.label}</span>
+                          <IdentityStatusInline
+                            className="user-status-inline"
+                            identity={availableUser}
+                          />
+                        </div>
                       </div>
                     </div>
-                    <span className="inbox-create-option-state">
-                      {isSelected ? t.inbox.create.selected : t.inbox.create.choose}
-                    </span>
+                    <div className="inbox-create-option-meta">
+                      <span
+                        aria-hidden="true"
+                        className={
+                          isSelected
+                            ? 'inbox-create-option-indicator inbox-create-option-indicator-selected'
+                            : 'inbox-create-option-indicator'
+                        }
+                      />
+                      <span className="inbox-create-option-state">
+                        {isSelected ? t.inbox.create.selected : t.inbox.create.choose}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
+              </div>
             </div>
           )}
 
@@ -197,7 +222,7 @@ export function NewChatSheet({
                 {t.inbox.create.messageSelection(selectedDmUser.label)}
               </p>
               <PendingSubmitButton
-                className="button"
+                className="button inbox-create-submit"
                 pendingLabel={t.inbox.create.createDm}
                 type="submit"
               >
@@ -207,21 +232,28 @@ export function NewChatSheet({
           ) : null}
         </section>
       ) : (
-        <section className="stack inbox-create-section">
-          <div className="stack inbox-create-copy">
-            <h3 className="card-title">{t.inbox.create.groupTitle}</h3>
-            <p className="muted">{t.inbox.create.groupSubtitle}</p>
+        <section className="stack inbox-create-panel inbox-create-section">
+          <div className="inbox-create-section-head">
+            <div className="stack inbox-create-copy">
+              <h3 className="card-title">{t.inbox.create.groupTitle}</h3>
+              <p className="muted">{t.inbox.create.groupSubtitle}</p>
+            </div>
+            {hasAnyUsers ? (
+              <span className="summary-pill summary-pill-muted inbox-create-count-pill">
+                {availableGroupUsers.length}
+              </span>
+            ) : null}
           </div>
 
           <GuardedServerActionForm
             action={createGroupAction}
-            className="stack compact-form"
+            className="stack compact-form inbox-create-form-stack"
           >
             <input name="spaceId" type="hidden" value={spaceId} />
-            <label className="field">
+            <label className="field inbox-create-field-shell">
               <span className="sr-only">{t.inbox.create.groupTitle}</span>
               <input
-                className="input"
+                className="input inbox-create-title-input"
                 name="title"
                 onChange={(event) => setGroupTitle(event.target.value)}
                 placeholder={t.inbox.create.groupNamePlaceholder}
@@ -234,12 +266,13 @@ export function NewChatSheet({
               <p className="muted inbox-compose-empty">
                 {t.inbox.create.noUsers}
               </p>
-            ) : availableGroupUsers.length === 0 ? (
-              <p className="muted inbox-compose-empty">
-                {t.inbox.create.noMatches}
-              </p>
-            ) : (
-              <div className="inbox-compose-user-list inbox-create-user-list">
+          ) : availableGroupUsers.length === 0 ? (
+            <p className="muted inbox-compose-empty">
+              {t.inbox.create.noMatches}
+            </p>
+          ) : (
+              <div className="inbox-create-list-frame">
+                <div className="inbox-compose-user-list inbox-create-user-list">
                 {availableGroupUsers.map((availableUser) => {
                   const isSelected = selectedGroupUserIds.includes(
                     availableUser.userId,
@@ -257,27 +290,40 @@ export function NewChatSheet({
                       onClick={() => toggleGroupUser(availableUser.userId)}
                       type="button"
                     >
-                      <div className="user-row">
-                        <IdentityAvatar
-                          diagnosticsSurface="inbox:new-chat-group"
-                          identity={availableUser}
-                          label={availableUser.label}
-                          size="sm"
-                        />
-                        <div className="stack user-copy">
-                          <span className="user-label">{availableUser.label}</span>
-                          <IdentityStatusInline
-                            className="user-status-inline"
+                      <div className="inbox-create-option-main">
+                        <div className="user-row">
+                          <IdentityAvatar
+                            diagnosticsSurface="inbox:new-chat-group"
                             identity={availableUser}
+                            label={availableUser.label}
+                            size="sm"
                           />
+                          <div className="stack user-copy">
+                            <span className="user-label">{availableUser.label}</span>
+                            <IdentityStatusInline
+                              className="user-status-inline"
+                              identity={availableUser}
+                            />
+                          </div>
                         </div>
                       </div>
-                      <span className="inbox-create-option-state">
-                        {isSelected ? t.inbox.create.selected : t.inbox.create.add}
-                      </span>
+                      <div className="inbox-create-option-meta">
+                        <span
+                          aria-hidden="true"
+                          className={
+                            isSelected
+                              ? 'inbox-create-option-indicator inbox-create-option-indicator-selected'
+                              : 'inbox-create-option-indicator'
+                          }
+                        />
+                        <span className="inbox-create-option-state">
+                          {isSelected ? t.inbox.create.selected : t.inbox.create.add}
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
+                </div>
               </div>
             )}
 
@@ -297,7 +343,7 @@ export function NewChatSheet({
                   : t.inbox.create.groupSelectionEmpty}
               </p>
               <PendingSubmitButton
-                className="button"
+                className="button inbox-create-submit"
                 disabled={!isGroupReady}
                 pendingLabel={t.inbox.create.createGroup}
                 type="submit"
