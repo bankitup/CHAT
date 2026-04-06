@@ -64,7 +64,6 @@ type EncryptedDmDebugFailureDetails = {
   DmE2eeSendDebugState;
 
 type EncryptedDmComposerFormProps = {
-  action: (formData: FormData) => void | Promise<void>;
   accept: string;
   attachmentHelpText: string;
   attachmentMaxSizeBytes: number;
@@ -520,7 +519,6 @@ function clearReplyTargetFromCurrentUrl() {
 }
 
 export function EncryptedDmComposerForm({
-  action,
   accept,
   attachmentHelpText,
   attachmentMaxSizeBytes,
@@ -807,9 +805,10 @@ export function EncryptedDmComposerForm({
   return (
     <form
       ref={formRef}
-      action={action}
       className="stack composer-form"
       onSubmit={async (event) => {
+        event.preventDefault();
+
         const form = event.currentTarget;
         const formData = new FormData(form);
         const body = String(formData.get('body') ?? '').trim();
@@ -820,7 +819,6 @@ export function EncryptedDmComposerForm({
             : null;
 
         if (body && !encryptedDmEnabled) {
-          event.preventDefault();
           setErrorMessage(t.chat.encryptionRolloutUnavailable);
           setErrorCode('dm_e2ee_rollout_disabled');
           setErrorDebugDetails(null);
@@ -829,7 +827,6 @@ export function EncryptedDmComposerForm({
 
         if (!body || attachment) {
           if (body && attachment) {
-            event.preventDefault();
             setErrorMessage(t.chat.encryptedAttachmentsUnsupported);
             setErrorCode(null);
             setErrorDebugDetails(null);
@@ -842,7 +839,6 @@ export function EncryptedDmComposerForm({
           return;
         }
 
-        event.preventDefault();
         setErrorMessage(null);
         setErrorCode(null);
         setErrorDebugDetails(null);

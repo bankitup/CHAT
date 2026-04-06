@@ -57,7 +57,6 @@ import {
   hideConversationAction,
   leaveGroupAction,
   removeGroupParticipantAction,
-  sendMessageAction,
   updateConversationNotificationLevelAction,
 } from './actions';
 import { ConversationPresenceStatus } from './conversation-presence-status';
@@ -1168,7 +1167,6 @@ export default async function ChatPage({
               surface="encrypted-dm-composer-form"
             >
               <EncryptedDmComposerForm
-                action={sendMessageAction}
                 accept={CHAT_ATTACHMENT_ACCEPT}
                 attachmentHelpText={attachmentHelpText}
                 attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
