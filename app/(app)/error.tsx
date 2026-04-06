@@ -41,11 +41,11 @@ export default function AppRouteErrorBoundary({
           <Link
             className="button button-secondary"
             href={withSpaceParam('/inbox', spaceId)}
-            prefetch
+            prefetch={false}
           >
             Chats
           </Link>
-          <Link className="pill" href="/settings" prefetch>
+          <Link className="pill" href="/settings" prefetch={false}>
             Home
           </Link>
         </div>

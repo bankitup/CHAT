@@ -47,7 +47,7 @@ export default function ChatRouteErrorBoundary({
           <Link
             className="button button-secondary"
             href={withSpaceParam('/inbox', spaceId)}
-            prefetch
+            prefetch={false}
           >
             Back to Chats
           </Link>

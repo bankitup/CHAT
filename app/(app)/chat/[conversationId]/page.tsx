@@ -998,7 +998,7 @@ export default async function ChatPage({
             aria-label={t.chat.backToChats}
             className="back-arrow-link conversation-back chat-header-back"
             href={withSpaceParam('/inbox', activeSpaceId)}
-            prefetch
+            prefetch={false}
           >
             <span aria-hidden="true">←</span>
           </Link>

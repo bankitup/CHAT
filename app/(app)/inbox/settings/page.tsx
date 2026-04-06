@@ -90,6 +90,7 @@ export default async function InboxSettingsPage({
             aria-label={t.inboxSettings.backToInbox}
             className="back-arrow-link conversation-settings-back-link"
             href={withSpaceParam('/inbox', activeSpaceId)}
+            prefetch={false}
           >
             <span aria-hidden="true">←</span>
           </Link>
