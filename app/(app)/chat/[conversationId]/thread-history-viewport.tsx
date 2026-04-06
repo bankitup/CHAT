@@ -1928,6 +1928,27 @@ export function ThreadHistoryViewport({
       isSyncingRef.current = true;
 
       try {
+        const shouldDeferAfterSeqFetch =
+          request.messageIds.length > 0 && request.newerThanLatest;
+
+        if (shouldDeferAfterSeqFetch) {
+          mergeSyncRequest({
+            conversationId,
+            newerThanLatest: true,
+            reason: request.reason,
+          });
+
+          if (historySyncDiagnosticsEnabled) {
+            console.info('[chat-history]', 'topology-sync:after-seq-deferred', {
+              conversationId,
+              deferredMode: 'after-seq',
+              initialMode: 'by-id',
+              messageIds: request.messageIds,
+              reason: request.reason,
+            });
+          }
+        }
+
         if (historySyncDiagnosticsEnabled) {
           console.info('[chat-history]', 'topology-sync:flush', {
             afterSeqRequested: request.newerThanLatest,
@@ -1959,7 +1980,7 @@ export function ThreadHistoryViewport({
           });
         }
 
-        if (request.newerThanLatest) {
+        if (request.newerThanLatest && !shouldDeferAfterSeqFetch) {
           while (true) {
             const latestLoadedSeq = resolveLatestLoadedSeq(
               historyStateRef.current.messages,
