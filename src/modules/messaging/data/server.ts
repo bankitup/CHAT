@@ -6732,6 +6732,138 @@ export async function getMessageAttachments(messageIds: string[]) {
   return grouped;
 }
 
+export async function resolveConversationAttachmentSignedUrl(input: {
+  attachmentId: string;
+  conversationId: string;
+  messageId: string;
+  userId: string;
+}) {
+  const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const normalizedAttachmentId = input.attachmentId.trim();
+  const normalizedConversationId = input.conversationId.trim();
+  const normalizedMessageId = input.messageId.trim();
+
+  if (
+    !normalizedAttachmentId ||
+    !normalizedConversationId ||
+    !normalizedMessageId ||
+    !input.userId.trim()
+  ) {
+    return null;
+  }
+
+  const messageLookup = await supabase
+    .from('messages')
+    .select('id, sender_id, created_at, kind')
+    .eq('id', normalizedMessageId)
+    .eq('conversation_id', normalizedConversationId)
+    .maybeSingle();
+
+  if (messageLookup.error) {
+    throw new Error(messageLookup.error.message);
+  }
+
+  if (!messageLookup.data) {
+    return null;
+  }
+
+  const legacyAttachmentLookup = await supabase
+    .from('message_attachments')
+    .select('id, message_id, bucket, object_path')
+    .eq('id', normalizedAttachmentId)
+    .eq('message_id', normalizedMessageId)
+    .maybeSingle();
+
+  if (legacyAttachmentLookup.error) {
+    if (!isMissingRelationErrorMessage(legacyAttachmentLookup.error.message, 'message_attachments')) {
+      throw new Error(legacyAttachmentLookup.error.message);
+    }
+  } else if (legacyAttachmentLookup.data) {
+    const signedUrl = await createSignedChatAttachmentUrl({
+      attachmentId: String(legacyAttachmentLookup.data.id),
+      bucket: String(legacyAttachmentLookup.data.bucket),
+      conversationId: normalizedConversationId,
+      isVoiceMessage: String(legacyAttachmentLookup.data.object_path).includes('/voice/'),
+      messageId: normalizedMessageId,
+      objectPath: String(legacyAttachmentLookup.data.object_path),
+      preferredClient: supabase,
+      serviceClient: serviceSupabase,
+      source: 'legacy-attachment',
+    });
+
+    return {
+      signedUrl,
+      source: 'legacy-attachment' as const,
+    };
+  }
+
+  const loadAssetLinkRow = async (client: MessageAssetsWriteClient) =>
+    client
+      .from('message_asset_links')
+      .select(
+        'message_id, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url)',
+      )
+      .eq('message_id', normalizedMessageId)
+      .eq('asset_id', normalizedAttachmentId)
+      .maybeSingle();
+
+  let assetLookup = await loadAssetLinkRow(supabase);
+
+  if (assetLookup.error) {
+    const shouldRetryWithServiceRole =
+      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_asset_links') &&
+      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_assets');
+
+    if (shouldRetryWithServiceRole && serviceSupabase) {
+      assetLookup = await loadAssetLinkRow(
+        serviceSupabase as MessageAssetsWriteClient,
+      );
+    }
+
+    if (assetLookup.error) {
+      throw new Error(assetLookup.error.message);
+    }
+  }
+
+  const asset = normalizeJoinedRecord(assetLookup.data?.message_assets ?? null);
+
+  if (!asset) {
+    return null;
+  }
+
+  if (asset.source === 'external-url') {
+    return {
+      signedUrl:
+        typeof asset.external_url === 'string' && asset.external_url.trim()
+          ? asset.external_url
+          : null,
+      source: 'message-asset-external' as const,
+    };
+  }
+
+  if (!asset.storage_bucket || !asset.storage_object_path) {
+    return null;
+  }
+
+  const signedUrl = await createSignedChatAttachmentUrl({
+    attachmentId: String(asset.id),
+    bucket: String(asset.storage_bucket),
+    conversationId: normalizedConversationId,
+    isVoiceMessage: asset.kind === 'voice-note',
+    messageId: normalizedMessageId,
+    objectPath: String(asset.storage_object_path),
+    preferredClient: supabase,
+    serviceClient: serviceSupabase,
+    source: 'message-asset',
+  });
+
+  return {
+    signedUrl,
+    source: 'message-asset' as const,
+  };
+}
+
 async function getInboxAttachmentPreviewKindsByMessageId(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   messageIds: string[],

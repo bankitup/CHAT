@@ -57,12 +57,16 @@ type ConversationMessageRow = {
 };
 
 type MessageAttachment = {
+  bucket?: string;
+  createdAt?: string | null;
   durationMs?: number | null;
   fileName: string;
   id: string;
   isAudio: boolean;
   isImage: boolean;
   isVoiceMessage?: boolean;
+  messageId?: string;
+  objectPath?: string;
   signedUrl: string | null;
   sizeBytes: number | null;
 };
@@ -705,12 +709,14 @@ function getOutgoingMessageStatus(input: {
 
 function ThreadVoiceMessageBubble({
   attachment,
+  conversationId,
   isOwnMessage,
   language,
   messageId,
   stageHint = null,
 }: {
   attachment: MessageAttachment | null;
+  conversationId: string;
   isOwnMessage: boolean;
   language: AppLanguage;
   messageId: string;
@@ -725,11 +731,36 @@ function ThreadVoiceMessageBubble({
     attachment?.durationMs ?? null,
   );
   const [playbackFailed, setPlaybackFailed] = useState(false);
+  const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
+    attachment?.signedUrl ?? null,
+  );
+  const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
+  const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
+
+  const effectiveSignedUrl =
+    resolvedSignedUrl?.trim() || attachment?.signedUrl?.trim() || null;
+  const canResolveSignedUrl =
+    Boolean(
+      conversationId &&
+        attachment?.id &&
+        attachment?.messageId &&
+        attachment?.bucket &&
+        attachment?.objectPath,
+    ) && !effectiveSignedUrl;
+  const effectiveStageHint =
+    stageHint ??
+    (isResolvingSignedUrl && !effectiveSignedUrl ? 'processing' : null);
 
   const voiceState = resolveVoiceMessageRenderState({
-    attachment,
+    attachment:
+      attachment === null
+        ? null
+        : {
+            ...attachment,
+            signedUrl: effectiveSignedUrl,
+          },
     playbackFailed,
-    stageHint,
+    stageHint: effectiveStageHint,
   });
   const totalDurationMs = resolvedDurationMs && resolvedDurationMs > 0
     ? resolvedDurationMs
@@ -774,10 +805,142 @@ function ThreadVoiceMessageBubble({
     };
   }, [messageId]);
 
+  useEffect(() => {
+    setResolvedDurationMs(attachment?.durationMs ?? null);
+    setResolvedSignedUrl(attachment?.signedUrl ?? null);
+  }, [attachment?.durationMs, attachment?.id, attachment?.signedUrl]);
+
+  const resolveSignedUrl = useCallback(async () => {
+    const attachmentId = attachment?.id ?? null;
+    const attachmentMessageId = attachment?.messageId ?? null;
+
+    if (!canResolveSignedUrl || !attachmentId || !attachmentMessageId) {
+      return effectiveSignedUrl;
+    }
+
+    if (resolveSignedUrlPromiseRef.current) {
+      return resolveSignedUrlPromiseRef.current;
+    }
+
+    const promise = (async () => {
+      setIsResolvingSignedUrl(true);
+
+      try {
+        const response = await fetch(
+          buildAttachmentSignedUrlResolveUrl({
+            attachmentId,
+            conversationId,
+            messageId: attachmentMessageId,
+          }),
+          {
+            cache: 'no-store',
+            credentials: 'same-origin',
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Voice attachment URL resolve failed with status ${response.status}`,
+          );
+        }
+
+        const payload = (await response.json()) as { signedUrl?: string | null };
+        const nextSignedUrl =
+          typeof payload.signedUrl === 'string' && payload.signedUrl.trim()
+            ? payload.signedUrl
+            : null;
+
+        if (nextSignedUrl) {
+          setResolvedSignedUrl(nextSignedUrl);
+        }
+
+        if (
+          process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+          typeof window !== 'undefined'
+        ) {
+          console.info('[voice-thread]', 'attachment-url-resolved', {
+            attachmentId,
+            conversationId,
+            messageId: attachmentMessageId,
+            resolved: Boolean(nextSignedUrl),
+          });
+        }
+
+        return nextSignedUrl;
+      } catch (error) {
+        if (
+          process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+          typeof window !== 'undefined'
+        ) {
+          console.info('[voice-thread]', 'attachment-url-resolve-failed', {
+            attachmentId,
+            conversationId,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            messageId: attachmentMessageId,
+          });
+        }
+
+        return null;
+      } finally {
+        setIsResolvingSignedUrl(false);
+        resolveSignedUrlPromiseRef.current = null;
+      }
+    })();
+
+    resolveSignedUrlPromiseRef.current = promise;
+    return promise;
+  }, [
+    attachment?.id,
+    attachment?.messageId,
+    canResolveSignedUrl,
+    conversationId,
+    effectiveSignedUrl,
+  ]);
+
+  useEffect(() => {
+    if (!canResolveSignedUrl || voiceState !== 'unavailable') {
+      return;
+    }
+
+    void resolveSignedUrl();
+  }, [canResolveSignedUrl, resolveSignedUrl, voiceState]);
+
+  useEffect(() => {
+    if (
+      process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE !== '1' ||
+      typeof window === 'undefined'
+    ) {
+      return;
+    }
+
+    console.info('[voice-thread]', 'render-state', {
+      attachmentId: attachment?.id ?? null,
+      conversationId,
+      hasSignedUrl: Boolean(effectiveSignedUrl),
+      isOwnMessage,
+      messageId,
+      renderState: voiceState,
+    });
+  }, [
+    attachment?.id,
+    conversationId,
+    effectiveSignedUrl,
+    isOwnMessage,
+    messageId,
+    voiceState,
+  ]);
+
   const togglePlayback = async () => {
+    if (voiceState !== 'ready') {
+      if (canResolveSignedUrl) {
+        await resolveSignedUrl();
+      }
+      return;
+    }
+
     const audio = audioRef.current;
 
-    if (!audio || voiceState !== 'ready') {
+    if (!audio) {
       return;
     }
 
@@ -870,7 +1033,7 @@ function ThreadVoiceMessageBubble({
           ) : null}
         </div>
       </div>
-      {voiceState === 'ready' && attachment?.signedUrl ? (
+      {voiceState === 'ready' && effectiveSignedUrl ? (
         <audio
           ref={audioRef}
           className="message-voice-audio"
@@ -922,7 +1085,7 @@ function ThreadVoiceMessageBubble({
             setPlaybackState('buffering');
           }}
           preload="none"
-          src={attachment.signedUrl}
+          src={effectiveSignedUrl}
         />
       ) : null}
     </div>
@@ -975,6 +1138,14 @@ function buildHistoryPageUrl(input: {
   }
 
   return `/api/messaging/conversations/${input.conversationId}/history?${params.toString()}`;
+}
+
+function buildAttachmentSignedUrlResolveUrl(input: {
+  attachmentId: string;
+  conversationId: string;
+  messageId: string;
+}) {
+  return `/api/messaging/conversations/${input.conversationId}/messages/${input.messageId}/attachments/${input.attachmentId}/signed-url`;
 }
 
 function resolveHistoryFetchMode(input: {
@@ -1772,6 +1943,7 @@ function ThreadMessageRow({
             <div className="message-voice-stack">
               <ThreadVoiceMessageBubble
                 attachment={primaryVoiceAttachment}
+                conversationId={conversationId}
                 isOwnMessage={isOwnMessage}
                 key={`${primaryVoiceAttachment?.id ?? message.id}:${primaryVoiceAttachment?.signedUrl ?? 'none'}`}
                 language={language}
