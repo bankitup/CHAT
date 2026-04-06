@@ -81,6 +81,7 @@ export function ComposerVoiceDraftPanel({
               ? t.chat.voiceRecorderUnavailable
               : t.chat.voiceRecorderFailed
           : t.chat.voiceRecorderDraftReady;
+  const metaLabel = [statusLabel, durationLabel].filter(Boolean).join(' · ');
 
   return (
     <div
@@ -103,8 +104,8 @@ export function ComposerVoiceDraftPanel({
           }
         />
         <div className="composer-voice-panel-copy">
-          <span className="composer-voice-panel-title">{statusLabel}</span>
-          <span className="composer-voice-panel-meta">{durationLabel}</span>
+          <span className="composer-voice-panel-title">{t.chat.voiceMessage}</span>
+          <span className="composer-voice-panel-meta">{metaLabel}</span>
         </div>
       </div>
 

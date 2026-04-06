@@ -23,6 +23,32 @@ export type EncryptedDmPreviewCacheEntry = {
   updatedAt: string;
 };
 
+function getGenericConversationPreviewByKind(
+  conversation: {
+    latestMessageAttachmentKind?: InboxAttachmentPreviewKind | null;
+    latestMessageKind: string | null;
+  },
+  labels: Pick<InboxPreviewLabels, 'audio' | 'attachment' | 'file' | 'image' | 'voiceMessage'>,
+) {
+  if (conversation.latestMessageKind === 'voice') {
+    return labels.voiceMessage;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'image') {
+    return labels.image;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'audio') {
+    return labels.audio;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'file') {
+    return labels.file;
+  }
+
+  return labels.attachment;
+}
+
 export function getInboxPreviewText(
   conversation: {
     lastMessageAt: string | null;
@@ -43,10 +69,6 @@ export function getInboxPreviewText(
     return labels.deletedMessage;
   }
 
-  if (conversation.latestMessageKind === 'voice') {
-    return labels.voiceMessage;
-  }
-
   if (conversation.latestMessageContentMode === 'dm_e2ee_v1') {
     return (conversation.unreadCount ?? 0) > 0
       ? labels.newEncryptedMessage
@@ -59,19 +81,7 @@ export function getInboxPreviewText(
     return body;
   }
 
-  if (conversation.latestMessageAttachmentKind === 'image') {
-    return labels.image;
-  }
-
-  if (conversation.latestMessageAttachmentKind === 'audio') {
-    return labels.audio;
-  }
-
-  if (conversation.latestMessageAttachmentKind === 'file') {
-    return labels.file;
-  }
-
-  return labels.attachment;
+  return getGenericConversationPreviewByKind(conversation, labels);
 }
 
 export function getMaskedInboxPreviewText(
@@ -94,33 +104,17 @@ export function getMaskedInboxPreviewText(
     return labels.deletedMessage;
   }
 
-  if (conversation.latestMessageKind === 'voice') {
-    return labels.voiceMessage;
-  }
-
   if (conversation.latestMessageContentMode === 'dm_e2ee_v1') {
     return (conversation.unreadCount ?? 0) > 0
       ? labels.newEncryptedMessage
       : labels.encryptedMessage;
   }
 
-  if (conversation.latestMessageAttachmentKind === 'image') {
-    return labels.image;
-  }
-
-  if (conversation.latestMessageAttachmentKind === 'audio') {
-    return labels.audio;
-  }
-
-  if (conversation.latestMessageAttachmentKind === 'file') {
-    return labels.file;
-  }
-
   if (conversation.latestMessageBody?.trim()) {
     return labels.newMessage;
   }
 
-  return labels.attachment;
+  return getGenericConversationPreviewByKind(conversation, labels);
 }
 
 export function getInboxDisplayPreviewText(
