@@ -15,6 +15,16 @@ import {
   isAbsoluteAvatarUrl,
 } from '@/modules/messaging/avatar-delivery';
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
+import {
+  canAddParticipantsToGroupConversation,
+  canEditGroupConversationIdentity,
+  canRemoveParticipantFromGroupConversation,
+  normalizeGroupConversationJoinPolicy,
+} from '@/modules/messaging/group-policy';
+import {
+  isSupportedProfileAvatarType,
+  sanitizeProfileFileName,
+} from '@/modules/messaging/profile-avatar';
 import { DM_E2EE_CURRENT_DEVICE_COOKIE } from '@/modules/messaging/e2ee/current-device-cookie';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import {
@@ -223,6 +233,7 @@ type ConversationRecord = {
   kind: string | null;
   title?: string | null;
   avatar_path?: string | null;
+  join_policy?: string | null;
   space_id?: string | null;
   created_by?: string | null;
   last_message_at?: string | null;
@@ -507,13 +518,6 @@ const SUPPORTED_VOICE_ATTACHMENT_TYPES = new Set([
   'audio/wav',
   'audio/x-wav',
 ]);
-const SUPPORTED_PROFILE_AVATAR_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-]);
-
 export function isSupportedChatAttachmentType(mimeType: string) {
   return SUPPORTED_ATTACHMENT_TYPES.has(mimeType);
 }
@@ -609,6 +613,7 @@ function normalizeConversationLatestMessageSeq(value: number | string | null | u
 
 function getConversationSummarySelect(input?: {
   includeAvatarPath?: boolean;
+  includeGroupJoinPolicy?: boolean;
   includeSpaceId?: boolean;
   includeSummaryProjection?: boolean;
 }) {
@@ -620,6 +625,7 @@ function getConversationSummarySelect(input?: {
     'kind',
     'title',
     ...(input?.includeAvatarPath === false ? [] : ['avatar_path']),
+    ...(input?.includeGroupJoinPolicy ? ['join_policy'] : []),
     ...(input?.includeSpaceId === false ? [] : ['space_id']),
     'created_by',
     'last_message_at',
@@ -1094,6 +1100,7 @@ async function attachConversationsToMembershipRows(
   rows: ConversationMemberRow[],
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   options?: {
+    includeGroupJoinPolicy?: boolean;
     spaceId?: string | null;
   },
 ) {
@@ -1113,6 +1120,7 @@ async function attachConversationsToMembershipRows(
     .select(
       getConversationSummarySelect({
         includeAvatarPath: true,
+        includeGroupJoinPolicy: options?.includeGroupJoinPolicy,
         includeSpaceId: true,
         includeSummaryProjection: true,
       }),
@@ -1124,6 +1132,7 @@ async function attachConversationsToMembershipRows(
   if (error) {
     const missingSpaceId = isMissingColumnErrorMessage(error.message, 'space_id');
     const missingAvatarPath = isMissingColumnErrorMessage(error.message, 'avatar_path');
+    const missingJoinPolicy = isMissingColumnErrorMessage(error.message, 'join_policy');
     const missingSummaryProjection =
       isMissingConversationSummaryProjectionErrorMessage(error.message);
 
@@ -1131,10 +1140,12 @@ async function attachConversationsToMembershipRows(
       markConversationSummaryProjectionAvailability('missing', error.message);
     }
 
-    if (missingSpaceId || missingAvatarPath || missingSummaryProjection) {
+    if (missingSpaceId || missingAvatarPath || missingJoinPolicy || missingSummaryProjection) {
       logConversationSchemaDiagnostics('attachConversationsToMembershipRows:select-error', {
         actualFailingColumn: missingAvatarPath
           ? 'avatar_path'
+          : missingJoinPolicy
+            ? 'join_policy'
           : missingSummaryProjection
             ? 'conversation-summary-projection'
           : missingSpaceId
@@ -1144,6 +1155,7 @@ async function attachConversationsToMembershipRows(
         message: error.message,
         requestedSpaceId: options?.spaceId ?? null,
         schemaCheckAvatarPathMissing: missingAvatarPath,
+        schemaCheckJoinPolicyMissing: missingJoinPolicy,
         schemaCheckSpaceIdMissing: missingSpaceId,
         schemaCheckSummaryProjectionMissing: missingSummaryProjection,
       });
@@ -1152,6 +1164,8 @@ async function attachConversationsToMembershipRows(
         logConversationSchemaDiagnostics('attachConversationsToMembershipRows:throw-space-id-required', {
           actualFailingColumn: missingAvatarPath
             ? 'avatar_path'
+            : missingJoinPolicy
+              ? 'join_policy'
             : missingSummaryProjection
               ? 'conversation-summary-projection'
             : missingSpaceId
@@ -1161,6 +1175,7 @@ async function attachConversationsToMembershipRows(
           message: error.message,
           requestedSpaceId: options.spaceId,
           schemaCheckAvatarPathMissing: missingAvatarPath,
+          schemaCheckJoinPolicyMissing: missingJoinPolicy,
           schemaCheckSpaceIdMissing: missingSpaceId,
           schemaCheckSummaryProjectionMissing: missingSummaryProjection,
         });
@@ -1174,6 +1189,8 @@ async function attachConversationsToMembershipRows(
         .select(
           getConversationSummarySelect({
             includeAvatarPath: !missingAvatarPath,
+            includeGroupJoinPolicy:
+              Boolean(options?.includeGroupJoinPolicy) && !missingJoinPolicy,
             includeSpaceId: !missingSpaceId,
             includeSummaryProjection: !missingSummaryProjection,
           }),
@@ -1185,6 +1202,8 @@ async function attachConversationsToMembershipRows(
           actualFailingColumn:
             isMissingColumnErrorMessage(fallback.error.message, 'avatar_path')
               ? 'avatar_path'
+              : isMissingColumnErrorMessage(fallback.error.message, 'join_policy')
+                ? 'join_policy'
               : isMissingConversationSummaryProjectionErrorMessage(
                     fallback.error.message,
                   )
@@ -1198,6 +1217,10 @@ async function attachConversationsToMembershipRows(
           schemaCheckAvatarPathMissing: isMissingColumnErrorMessage(
             fallback.error.message,
             'avatar_path',
+          ),
+          schemaCheckJoinPolicyMissing: isMissingColumnErrorMessage(
+            fallback.error.message,
+            'join_policy',
           ),
           schemaCheckSpaceIdMissing: isMissingColumnErrorMessage(
             fallback.error.message,
@@ -1525,7 +1548,10 @@ export async function getConversationForUser(
           } satisfies ConversationMemberRow,
         ],
         supabase,
-        options,
+        {
+          ...options,
+          includeGroupJoinPolicy: true,
+        },
       );
 
       const fallbackConversation = normalizeConversation(scopedRow?.conversations ?? null);
@@ -1538,6 +1564,12 @@ export async function getConversationForUser(
         conversationId: scopedRow.conversation_id,
         spaceId: fallbackConversation.space_id ?? null,
         kind: fallbackConversation.kind,
+        joinPolicy:
+          fallbackConversation.kind === 'group'
+            ? normalizeGroupConversationJoinPolicy(
+                fallbackConversation.join_policy ?? null,
+              )
+            : null,
         title: fallbackConversation.title,
         avatarPath: await resolveStoredAvatarPath(
           supabase,
@@ -1567,7 +1599,10 @@ export async function getConversationForUser(
       } satisfies ConversationMemberRow,
     ],
     supabase,
-    options,
+    {
+      ...options,
+      includeGroupJoinPolicy: true,
+    },
   );
   const conversation = normalizeConversation(scopedRow?.conversations ?? null);
 
@@ -1579,6 +1614,10 @@ export async function getConversationForUser(
     conversationId: scopedRow.conversation_id,
     spaceId: conversation.space_id ?? null,
     kind: conversation.kind,
+    joinPolicy:
+      conversation.kind === 'group'
+        ? normalizeGroupConversationJoinPolicy(conversation.join_policy ?? null)
+        : null,
     title: conversation.title,
     avatarPath: await resolveStoredAvatarPath(
       supabase,
@@ -1953,26 +1992,69 @@ async function getActiveGroupMembership(
   userId: string,
 ) {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from('conversation_members')
-    .select('user_id, role, state, conversations!inner(id, kind)')
-    .eq('conversation_id', conversationId)
-    .eq('user_id', userId)
-    .eq('state', 'active')
-    .eq('conversations.kind', 'group')
-    .maybeSingle();
+  const buildQuery = (select: string) =>
+    supabase
+      .from('conversation_members')
+      .select(select)
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .eq('state', 'active')
+      .eq('conversations.kind', 'group')
+      .maybeSingle();
+  let data: unknown = null;
+  let error: { message: string } | null = null;
+
+  const responseWithJoinPolicy = await buildQuery(
+    'user_id, role, state, conversations!inner(id, kind, join_policy)',
+  );
+
+  if (
+    responseWithJoinPolicy.error &&
+    isMissingColumnErrorMessage(responseWithJoinPolicy.error.message, 'join_policy')
+  ) {
+    const fallbackResponse = await buildQuery(
+      'user_id, role, state, conversations!inner(id, kind)',
+    );
+    data = fallbackResponse.data;
+    error = fallbackResponse.error;
+  } else {
+    data = responseWithJoinPolicy.data;
+    error = responseWithJoinPolicy.error;
+  }
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data as
+  const membership = data as
     | {
         user_id: string;
         role: string | null;
         state: string | null;
+        conversations?:
+          | {
+              join_policy?: string | null;
+            }
+          | Array<{
+              join_policy?: string | null;
+            }>
+          | null;
       }
     | null;
+  const conversation = normalizeJoinedRecord(membership?.conversations ?? null);
+
+  if (!membership) {
+    return null;
+  }
+
+  return {
+    role: membership.role ?? null,
+    state: membership.state ?? null,
+    user_id: membership.user_id,
+    joinPolicy: normalizeGroupConversationJoinPolicy(
+      conversation?.join_policy ?? null,
+    ),
+  };
 }
 
 async function assertGroupConversationTarget(input: {
@@ -2001,6 +2083,12 @@ async function assertGroupConversationTarget(input: {
   }
 }
 
+function getGroupManagementWriteClient(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+) {
+  return createSupabaseServiceRoleClient() ?? supabase;
+}
+
 function dedupeParticipantIds(ids: string[]) {
   return Array.from(new Set(ids.map((value) => value.trim()).filter(Boolean)));
 }
@@ -2010,20 +2098,6 @@ function sanitizeAttachmentFileName(value: string) {
 
   if (!trimmed) {
     return 'attachment';
-  }
-
-  return trimmed
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
-}
-
-function sanitizeProfileFileName(value: string) {
-  const trimmed = value.trim();
-
-  if (!trimmed) {
-    return 'avatar';
   }
 
   return trimmed
@@ -4505,7 +4579,7 @@ export async function updateCurrentUserProfile(input: {
       throw new Error('Avatar images can be up to 5 MB.');
     }
 
-    if (!SUPPORTED_PROFILE_AVATAR_TYPES.has(input.avatarFile.type)) {
+    if (!isSupportedProfileAvatarType(input.avatarFile.type)) {
       throw new Error('Avatar must be a JPG, PNG, WEBP, or GIF image.');
     }
 
@@ -6620,6 +6694,7 @@ export async function updateConversationTitle(input: {
   title: string;
 }) {
   const supabase = await getRequestSupabaseServerClient();
+  const writeSupabase = getGroupManagementWriteClient(supabase);
 
   if (!input.userId) {
     throw new Error('Authenticated user is required to edit a group title.');
@@ -6637,12 +6712,24 @@ export async function updateConversationTitle(input: {
     );
   }
 
-  const { error } = await supabase
+  const actingMembership = await getActiveGroupMembership(
+    input.conversationId,
+    input.userId,
+  );
+
+  if (!actingMembership) {
+    throw new Error('You are no longer an active member of this group.');
+  }
+
+  if (!canEditGroupConversationIdentity(actingMembership.role)) {
+    throw new Error('Only group admins can edit chat identity.');
+  }
+
+  const { error } = await writeSupabase
     .from('conversations')
     .update({ title: input.title.trim() })
     .eq('id', input.conversationId)
-    .eq('kind', 'group')
-    .eq('created_by', input.userId);
+    .eq('kind', 'group');
 
   if (error) {
     if (error.message.includes('row-level security policy')) {
@@ -6660,9 +6747,11 @@ export async function updateConversationIdentity(input: {
   userId: string;
   title: string;
   avatarFile?: File | null;
+  joinPolicy?: 'closed' | 'open' | null;
   removeAvatar?: boolean;
 }) {
   const supabase = await getRequestSupabaseServerClient();
+  const writeSupabase = getGroupManagementWriteClient(supabase);
 
   if (!input.userId) {
     throw new Error('Authenticated user is required to edit group settings.');
@@ -6690,25 +6779,46 @@ export async function updateConversationIdentity(input: {
     throw new Error('Group title can be up to 80 characters.');
   }
 
+  const actingMembership = await getActiveGroupMembership(
+    input.conversationId,
+    input.userId,
+  );
+
+  if (!actingMembership) {
+    throw new Error('You are no longer an active member of this group.');
+  }
+
+  if (!canEditGroupConversationIdentity(actingMembership.role)) {
+    throw new Error('Only group admins can edit chat identity.');
+  }
+
+  const nextJoinPolicy =
+    input.joinPolicy == null
+      ? actingMembership.joinPolicy
+      : normalizeGroupConversationJoinPolicy(input.joinPolicy);
+
   const existingConversationResponse = await supabase
     .from('conversations')
-    .select('kind, created_by, avatar_path')
+    .select('kind, avatar_path, join_policy')
     .eq('id', input.conversationId)
     .maybeSingle();
 
   let existingConversation = existingConversationResponse.data as
     | {
         kind?: string | null;
-        created_by?: string | null;
         avatar_path?: string | null;
+        join_policy?: string | null;
       }
     | null;
 
   if (existingConversationResponse.error) {
-    if (isMissingColumnErrorMessage(existingConversationResponse.error.message, 'avatar_path')) {
+    if (
+      isMissingColumnErrorMessage(existingConversationResponse.error.message, 'avatar_path') ||
+      isMissingColumnErrorMessage(existingConversationResponse.error.message, 'join_policy')
+    ) {
       const fallbackConversationResponse = await supabase
         .from('conversations')
-        .select('kind, created_by')
+        .select('kind')
         .eq('id', input.conversationId)
         .maybeSingle();
 
@@ -6719,7 +6829,6 @@ export async function updateConversationIdentity(input: {
       existingConversation = (fallbackConversationResponse.data as
         | {
             kind?: string | null;
-            created_by?: string | null;
           }
         | null) ?? null;
     } else {
@@ -6731,8 +6840,15 @@ export async function updateConversationIdentity(input: {
     throw new Error('Only group chats support editable chat identity.');
   }
 
-  if ((existingConversation.created_by ?? null) !== input.userId) {
-    throw new Error('Only the group owner can edit chat identity.');
+  const conversationSupportsJoinPolicy = Object.prototype.hasOwnProperty.call(
+    existingConversation,
+    'join_policy',
+  );
+
+  if (!conversationSupportsJoinPolicy && nextJoinPolicy !== 'closed') {
+    throw createSchemaRequirementError(
+      'Group privacy settings require public.conversations.join_policy.',
+    );
   }
 
   const existingAvatarPath = existingConversation.avatar_path?.trim() || null;
@@ -6746,7 +6862,7 @@ export async function updateConversationIdentity(input: {
       throw new Error('Avatar images can be up to 5 MB.');
     }
 
-    if (!SUPPORTED_PROFILE_AVATAR_TYPES.has(avatarFile.type)) {
+    if (!isSupportedProfileAvatarType(avatarFile.type)) {
       throw new Error('Avatar must be a JPG, PNG, WEBP, or GIF image.');
     }
 
@@ -6781,15 +6897,15 @@ export async function updateConversationIdentity(input: {
 
   const updatePayload = {
     title: nextTitle,
+    ...(conversationSupportsJoinPolicy ? { join_policy: nextJoinPolicy } : {}),
     ...(nextAvatarPath !== undefined ? { avatar_path: nextAvatarPath } : {}),
   };
 
-  const { error } = await supabase
+  const { error } = await writeSupabase
     .from('conversations')
     .update(updatePayload)
     .eq('id', input.conversationId)
-    .eq('kind', 'group')
-    .eq('created_by', input.userId);
+    .eq('kind', 'group');
 
   if (error) {
     if (uploadedAvatarObjectPath) {
@@ -6801,6 +6917,12 @@ export async function updateConversationIdentity(input: {
     if (isMissingColumnErrorMessage(error.message, 'avatar_path')) {
       throw createSchemaRequirementError(
         'Editable group avatars require public.conversations.avatar_path.',
+      );
+    }
+
+    if (isMissingColumnErrorMessage(error.message, 'join_policy')) {
+      throw createSchemaRequirementError(
+        'Group privacy settings require public.conversations.join_policy.',
       );
     }
 
@@ -6827,10 +6949,11 @@ export async function updateConversationIdentity(input: {
 
 export async function addParticipantsToGroupConversation(input: {
   conversationId: string;
-  ownerUserId: string;
+  actingUserId: string;
   participantUserIds: string[];
 }) {
   const supabase = await getRequestSupabaseServerClient();
+  const writeSupabase = getGroupManagementWriteClient(supabase);
 
   await assertGroupConversationTarget({
     conversationId: input.conversationId,
@@ -6838,8 +6961,8 @@ export async function addParticipantsToGroupConversation(input: {
     supabase,
   });
 
-  if (!input.ownerUserId) {
-    throw new Error('Group management debug: authenticated owner is required.');
+  if (!input.actingUserId) {
+    throw new Error('Group management debug: authenticated member is required.');
   }
 
   const user = await requireRequestViewer('Group management debug');
@@ -6848,36 +6971,43 @@ export async function addParticipantsToGroupConversation(input: {
     throw new Error('Group management debug: no authenticated user found.');
   }
 
-  if (user.id !== input.ownerUserId) {
+  if (user.id !== input.actingUserId) {
     throw new Error(
-      `Group management debug: owner mismatch. auth user id=${user.id}, payload owner id=${input.ownerUserId}.`,
+      `Group management debug: user mismatch. auth user id=${user.id}, payload user id=${input.actingUserId}.`,
     );
   }
 
   const actingMembership = await getActiveGroupMembership(
     input.conversationId,
-    input.ownerUserId,
+    input.actingUserId,
   );
 
   if (!actingMembership) {
+    throw new Error('You are no longer an active member of this group.');
+  }
+
+  if (
+    !canAddParticipantsToGroupConversation(
+      actingMembership.joinPolicy,
+      actingMembership.role,
+    )
+  ) {
     throw new Error(
-      'Only an active group owner can add participants in this first version.',
+      actingMembership.joinPolicy === 'open'
+        ? 'Only active group members can add people here.'
+        : 'Only group admins can add people to a closed group.',
     );
   }
 
-  if (actingMembership.role !== 'owner') {
-    throw new Error('Only the group owner can add participants.');
-  }
-
   const participantUserIds = dedupeParticipantIds(input.participantUserIds).filter(
-    (participantUserId) => participantUserId !== input.ownerUserId,
+    (participantUserId) => participantUserId !== input.actingUserId,
   );
 
   if (participantUserIds.length === 0) {
     throw new Error('Choose at least one participant to add.');
   }
 
-  const { data: existingMemberships, error: membershipLookupError } = await supabase
+  const { data: existingMemberships, error: membershipLookupError } = await writeSupabase
     .from('conversation_members')
     .select('user_id, state')
     .eq('conversation_id', input.conversationId)
@@ -6902,7 +7032,7 @@ export async function addParticipantsToGroupConversation(input: {
   );
 
   if (usersToReactivate.length > 0) {
-    const { error: reactivateError } = await supabase
+    const { error: reactivateError } = await writeSupabase
       .from('conversation_members')
       .update({
         state: 'active',
@@ -6919,7 +7049,7 @@ export async function addParticipantsToGroupConversation(input: {
   }
 
   if (usersToInsert.length > 0) {
-    const { error: insertError } = await supabase
+    const { error: insertError } = await writeSupabase
       .from('conversation_members')
       .insert(
         usersToInsert.map((participantUserId) => ({
@@ -6938,10 +7068,11 @@ export async function addParticipantsToGroupConversation(input: {
 
 export async function removeParticipantFromGroupConversation(input: {
   conversationId: string;
-  ownerUserId: string;
+  actingUserId: string;
   targetUserId: string;
 }) {
   const supabase = await getRequestSupabaseServerClient();
+  const writeSupabase = getGroupManagementWriteClient(supabase);
 
   await assertGroupConversationTarget({
     conversationId: input.conversationId,
@@ -6949,8 +7080,8 @@ export async function removeParticipantFromGroupConversation(input: {
     supabase,
   });
 
-  if (!input.ownerUserId) {
-    throw new Error('Group management debug: authenticated owner is required.');
+  if (!input.actingUserId) {
+    throw new Error('Group management debug: authenticated member is required.');
   }
 
   const user = await requireRequestViewer('Group management debug');
@@ -6959,26 +7090,26 @@ export async function removeParticipantFromGroupConversation(input: {
     throw new Error('Group management debug: no authenticated user found.');
   }
 
-  if (user.id !== input.ownerUserId) {
+  if (user.id !== input.actingUserId) {
     throw new Error(
-      `Group management debug: owner mismatch. auth user id=${user.id}, payload owner id=${input.ownerUserId}.`,
+      `Group management debug: user mismatch. auth user id=${user.id}, payload user id=${input.actingUserId}.`,
     );
   }
 
   const actingMembership = await getActiveGroupMembership(
     input.conversationId,
-    input.ownerUserId,
+    input.actingUserId,
   );
 
-  if (!actingMembership || actingMembership.role !== 'owner') {
-    throw new Error('Only the group owner can remove participants.');
+  if (!actingMembership) {
+    throw new Error('You are no longer an active member of this group.');
   }
 
   if (!input.targetUserId) {
     throw new Error('Choose a participant to remove.');
   }
 
-  if (input.targetUserId === input.ownerUserId) {
+  if (input.targetUserId === input.actingUserId) {
     throw new Error('Use leave group to remove yourself from the conversation.');
   }
 
@@ -6991,11 +7122,20 @@ export async function removeParticipantFromGroupConversation(input: {
     throw new Error('That participant is no longer active in this group.');
   }
 
-  if (targetMembership.role === 'owner') {
-    throw new Error('The current group owner cannot be removed here.');
+  if (
+    !canRemoveParticipantFromGroupConversation(
+      actingMembership.role,
+      targetMembership.role,
+    )
+  ) {
+    throw new Error(
+      targetMembership.role === 'owner'
+        ? 'The current group owner cannot be removed here.'
+        : 'Only group admins can remove that participant.',
+    );
   }
 
-  const { error: removeError } = await supabase
+  const { error: removeError } = await writeSupabase
     .from('conversation_members')
     .update({ state: 'removed' })
     .eq('conversation_id', input.conversationId)
@@ -7012,6 +7152,7 @@ export async function leaveGroupConversation(input: {
   userId: string;
 }) {
   const supabase = await getRequestSupabaseServerClient();
+  const writeSupabase = getGroupManagementWriteClient(supabase);
 
   await assertGroupConversationTarget({
     conversationId: input.conversationId,
@@ -7045,23 +7186,35 @@ export async function leaveGroupConversation(input: {
   }
 
   if (actingMembership.role === 'owner') {
-    const { data: nextOwnerRows, error: nextOwnerError } = await supabase
+    const { data: nextOwnerRows, error: nextOwnerError } = await writeSupabase
       .from('conversation_members')
-      .select('user_id')
+      .select('user_id, role')
       .eq('conversation_id', input.conversationId)
       .eq('state', 'active')
       .neq('user_id', input.userId)
-      .order('user_id', { ascending: true })
-      .limit(1);
+      .order('user_id', { ascending: true });
 
     if (nextOwnerError) {
       throw new Error(nextOwnerError.message);
     }
 
-    const nextOwnerUserId = nextOwnerRows?.[0]?.user_id as string | undefined;
+    const nextOwnerUserId = ((nextOwnerRows ?? []) as Array<{
+      role?: string | null;
+      user_id: string;
+    }>)
+      .sort((left, right) => {
+        const leftPriority = left.role === 'admin' ? 0 : 1;
+        const rightPriority = right.role === 'admin' ? 0 : 1;
+
+        if (leftPriority !== rightPriority) {
+          return leftPriority - rightPriority;
+        }
+
+        return left.user_id.localeCompare(right.user_id);
+      })[0]?.user_id;
 
     if (nextOwnerUserId) {
-      const { error: promoteError } = await supabase
+      const { error: promoteError } = await writeSupabase
         .from('conversation_members')
         .update({ role: 'owner' })
         .eq('conversation_id', input.conversationId)
@@ -7074,7 +7227,7 @@ export async function leaveGroupConversation(input: {
     }
   }
 
-  const { error: leaveError } = await supabase
+  const { error: leaveError } = await writeSupabase
     .from('conversation_members')
     .update({ state: 'left' })
     .eq('conversation_id', input.conversationId)

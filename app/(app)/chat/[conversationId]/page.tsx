@@ -23,6 +23,12 @@ import {
   getMessageSenderProfiles,
   STARTER_REACTIONS,
 } from '@/modules/messaging/data/server';
+import {
+  canAddParticipantsToGroupConversation,
+  canEditGroupConversationIdentity,
+  canRemoveParticipantFromGroupConversation,
+  normalizeGroupConversationJoinPolicy,
+} from '@/modules/messaging/group-policy';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
 import {
@@ -733,12 +739,23 @@ export default async function ChatPage({
     activeActionMessageId && !activeEditMessageId && !activeDeleteMessageId
       ? messagesById.get(activeActionMessageId) ?? null
       : null;
-  const canEditGroupTitle =
-    conversation.kind === 'group' && conversation.createdBy === user.id;
+  const currentUserGroupRole =
+    conversation.kind === 'group'
+      ? participants.find((participant) => participant.userId === user.id)?.role ?? 'member'
+      : null;
+  const groupJoinPolicy =
+    conversation.kind === 'group'
+      ? normalizeGroupConversationJoinPolicy(conversation.joinPolicy)
+      : null;
+  const canEditGroupIdentity =
+    conversation.kind === 'group' &&
+    canEditGroupConversationIdentity(currentUserGroupRole);
   const canManageGroupParticipants =
     conversation.kind === 'group' &&
-    participants.some(
-      (participant) => participant.userId === user.id && participant.role === 'owner',
+    groupJoinPolicy !== null &&
+    canAddParticipantsToGroupConversation(
+      groupJoinPolicy,
+      currentUserGroupRole,
     );
   const canDeleteDirectConversation =
     conversation.kind === 'dm' &&
@@ -1283,6 +1300,16 @@ export default async function ChatPage({
                   </dd>
                 </div>
               ) : null}
+              {conversation.kind === 'group' ? (
+                <div className="conversation-info-row">
+                  <dt className="conversation-info-label">{t.chat.groupPrivacy}</dt>
+                  <dd className="conversation-info-value">
+                    {groupJoinPolicy === 'open'
+                      ? t.chat.groupPrivacyOpen
+                      : t.chat.groupPrivacyClosed}
+                  </dd>
+                </div>
+              ) : null}
               <div className="conversation-info-row">
                 <dt className="conversation-info-label">{t.chat.started}</dt>
                 <dd className="conversation-info-value">
@@ -1337,7 +1364,10 @@ export default async function ChatPage({
                     {conversation.kind === 'group' &&
                     canManageGroupParticipants &&
                     !participant.isCurrentUser &&
-                    participant.role !== 'owner' ? (
+                    canRemoveParticipantFromGroupConversation(
+                      currentUserGroupRole,
+                      participant.role,
+                    ) ? (
                       <GuardedServerActionForm action={removeGroupParticipantAction}>
                         <input
                           name="conversationId"
@@ -1372,10 +1402,11 @@ export default async function ChatPage({
                 </div>
 
                 <div className="conversation-group-actions">
-                  {canEditGroupTitle ? (
+                  {canEditGroupIdentity ? (
                     <GroupChatSettingsForm
                       conversationId={conversationId}
                       defaultAvatarPath={conversation.avatarPath}
+                      defaultJoinPolicy={groupJoinPolicy ?? 'closed'}
                       defaultTitle={conversation.title?.trim() || ''}
                       labels={{
                         title: t.chat.chatIdentity,
@@ -1394,6 +1425,12 @@ export default async function ChatPage({
                         avatarInvalidType: t.chat.avatarInvalidType,
                         avatarUploadFailed: t.chat.avatarUploadFailed,
                         avatarStorageUnavailable: t.chat.avatarStorageUnavailable,
+                        privacyTitle: t.chat.groupPrivacy,
+                        privacyNote: t.chat.groupPrivacyNote,
+                        privacyOpen: t.chat.groupPrivacyOpen,
+                        privacyOpenNote: t.chat.groupPrivacyOpenNote,
+                        privacyClosed: t.chat.groupPrivacyClosed,
+                        privacyClosedNote: t.chat.groupPrivacyClosedNote,
                       }}
                       spaceId={activeSpaceId}
                     />
@@ -1412,7 +1449,7 @@ export default async function ChatPage({
                               {directConversationDisplayTitle}
                             </p>
                             <p className="muted conversation-settings-note">
-                              {t.chat.ownerOnly}
+                              {t.chat.adminOnly}
                             </p>
                           </div>
                         </div>
@@ -1423,11 +1460,11 @@ export default async function ChatPage({
                   <section className="stack conversation-settings-subsection conversation-participant-manager">
                     <div className="stack conversation-settings-panel-copy">
                       <h4 className="conversation-settings-subtitle">{t.chat.addPeople}</h4>
-                      {!canManageGroupParticipants ? (
-                        <p className="muted conversation-settings-note">
-                          {t.chat.ownerOnly}
-                        </p>
-                      ) : null}
+                      <p className="muted conversation-settings-note">
+                        {groupJoinPolicy === 'open'
+                          ? t.chat.groupOpenMembersCanAdd
+                          : t.chat.groupClosedAdminsOnly}
+                      </p>
                     </div>
 
                     {canManageGroupParticipants ? (

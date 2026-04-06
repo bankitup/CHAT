@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import type { GroupConversationJoinPolicy } from '@/modules/messaging/group-policy';
 import { GroupIdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   PROFILE_AVATAR_ACCEPT,
@@ -13,6 +14,7 @@ import { updateConversationIdentityAction } from './actions';
 type GroupChatSettingsFormProps = {
   conversationId: string;
   defaultAvatarPath?: string | null;
+  defaultJoinPolicy: GroupConversationJoinPolicy;
   defaultTitle: string;
   labels: {
     title: string;
@@ -31,6 +33,12 @@ type GroupChatSettingsFormProps = {
     avatarInvalidType: string;
     avatarUploadFailed: string;
     avatarStorageUnavailable: string;
+    privacyTitle: string;
+    privacyNote: string;
+    privacyOpen: string;
+    privacyOpenNote: string;
+    privacyClosed: string;
+    privacyClosedNote: string;
   };
   spaceId?: string | null;
   returnTo?: 'settings-screen' | null;
@@ -45,6 +53,7 @@ function revokeObjectUrl(value: string | null) {
 export function GroupChatSettingsForm({
   conversationId,
   defaultAvatarPath,
+  defaultJoinPolicy,
   defaultTitle,
   labels,
   spaceId,
@@ -56,6 +65,8 @@ export function GroupChatSettingsForm({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const latestPreviewUrlRef = useRef<string | null>(null);
   const [draftTitle, setDraftTitle] = useState(defaultTitle);
+  const [draftJoinPolicy, setDraftJoinPolicy] =
+    useState<GroupConversationJoinPolicy>(defaultJoinPolicy);
   const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [pendingAvatarPreviewUrl, setPendingAvatarPreviewUrl] = useState<string | null>(null);
   const [isAvatarRemovalDraft, setIsAvatarRemovalDraft] = useState(false);
@@ -86,6 +97,7 @@ export function GroupChatSettingsForm({
 
   function resetDraftState() {
     setDraftTitle(defaultTitle);
+    setDraftJoinPolicy(defaultJoinPolicy);
     setPendingAvatarFile(null);
     revokeObjectUrl(pendingAvatarPreviewUrl);
     setPendingAvatarPreviewUrl(null);
@@ -140,9 +152,10 @@ export function GroupChatSettingsForm({
     const normalizedDraftTitle = draftTitle.trim();
     const normalizedDefaultTitle = defaultTitle.trim();
     const hasTitleChange = normalizedDraftTitle !== normalizedDefaultTitle;
+    const hasJoinPolicyChange = draftJoinPolicy !== defaultJoinPolicy;
     const hasAvatarChange = Boolean(pendingAvatarFile) || isAvatarRemovalDraft;
 
-    if (!hasTitleChange && !hasAvatarChange) {
+    if (!hasTitleChange && !hasJoinPolicyChange && !hasAvatarChange) {
       return;
     }
 
@@ -156,6 +169,7 @@ export function GroupChatSettingsForm({
 
     const formData = new FormData();
     formData.set('conversationId', conversationId);
+    formData.set('joinPolicy', draftJoinPolicy);
     formData.set('title', normalizedDraftTitle);
 
     if (spaceId?.trim()) {
@@ -236,6 +250,57 @@ export function GroupChatSettingsForm({
           </label>
 
           <p className="muted conversation-settings-note">{draftNote}</p>
+
+          <section className="stack conversation-settings-subsection conversation-group-privacy-subsection">
+            <div className="stack conversation-settings-panel-copy">
+              <h4 className="conversation-settings-subtitle">{labels.privacyTitle}</h4>
+              <p className="muted conversation-settings-note">{labels.privacyNote}</p>
+            </div>
+
+            <div className="checkbox-list inbox-settings-option-list conversation-group-privacy-list">
+              <label className="checkbox-row inbox-settings-option-row">
+                <input
+                  checked={draftJoinPolicy === 'closed'}
+                  className="inbox-settings-option-input"
+                  disabled={isBusy}
+                  name="group-join-policy"
+                  onChange={() => {
+                    clearStatusQueryParams();
+                    setDraftJoinPolicy('closed');
+                  }}
+                  type="radio"
+                />
+                <span aria-hidden="true" className="inbox-settings-option-mark" />
+                <span className="stack checkbox-copy inbox-settings-option-copy">
+                  <span className="inbox-settings-option-title">{labels.privacyClosed}</span>
+                  <span className="inbox-settings-option-note">
+                    {labels.privacyClosedNote}
+                  </span>
+                </span>
+              </label>
+
+              <label className="checkbox-row inbox-settings-option-row">
+                <input
+                  checked={draftJoinPolicy === 'open'}
+                  className="inbox-settings-option-input"
+                  disabled={isBusy}
+                  name="group-join-policy"
+                  onChange={() => {
+                    clearStatusQueryParams();
+                    setDraftJoinPolicy('open');
+                  }}
+                  type="radio"
+                />
+                <span aria-hidden="true" className="inbox-settings-option-mark" />
+                <span className="stack checkbox-copy inbox-settings-option-copy">
+                  <span className="inbox-settings-option-title">{labels.privacyOpen}</span>
+                  <span className="inbox-settings-option-note">
+                    {labels.privacyOpenNote}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </section>
 
           <div className="conversation-group-identity-actions">
             <input

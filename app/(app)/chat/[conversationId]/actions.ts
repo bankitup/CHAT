@@ -1123,6 +1123,11 @@ export async function updateConversationIdentityAction(formData: FormData) {
   const spaceId = readSpaceId(formData);
   const settingsReturnTarget = readSettingsReturnTarget(formData);
   const title = String(formData.get('title') ?? '').trim();
+  const joinPolicyEntry = String(formData.get('joinPolicy') ?? '').trim();
+  const joinPolicy =
+    joinPolicyEntry === 'open' || joinPolicyEntry === 'closed'
+      ? joinPolicyEntry
+      : null;
   const removeAvatar = String(formData.get('removeAvatar') ?? '').trim() === '1';
   const avatarEntry = formData.get('avatar');
   const avatarFile =
@@ -1136,6 +1141,15 @@ export async function updateConversationIdentityAction(formData: FormData) {
     redirectWithSettingsError(
       conversationId,
       'Group title cannot be empty.',
+      spaceId,
+      settingsReturnTarget,
+    );
+  }
+
+  if (!joinPolicy) {
+    redirectWithSettingsError(
+      conversationId,
+      'Choose a valid group privacy setting.',
       spaceId,
       settingsReturnTarget,
     );
@@ -1164,6 +1178,7 @@ export async function updateConversationIdentityAction(formData: FormData) {
       userId: user.id,
       title,
       avatarFile,
+      joinPolicy,
       removeAvatar,
     });
   } catch (error) {
@@ -1469,7 +1484,7 @@ export async function addGroupParticipantsAction(formData: FormData) {
   try {
     await addParticipantsToGroupConversation({
       conversationId,
-      ownerUserId: user.id,
+      actingUserId: user.id,
       participantUserIds,
     });
   } catch (error) {
@@ -1535,7 +1550,7 @@ export async function removeGroupParticipantAction(formData: FormData) {
   try {
     await removeParticipantFromGroupConversation({
       conversationId,
-      ownerUserId: user.id,
+      actingUserId: user.id,
       targetUserId,
     });
   } catch (error) {

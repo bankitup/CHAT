@@ -81,6 +81,7 @@ Optional / hardening support:
 
 - `dm_key`
 - `avatar_path`
+- `join_policy`
 
 Assumptions:
 
@@ -92,8 +93,10 @@ Assumptions:
 - the `last_message_*` projection columns are now the canonical list-surface summary for inbox and activity; list rendering no longer depends on scanning `public.messages` across visible conversations to discover the latest message.
 - `dm_key`, when present, is the canonical unordered DM pair key (`sorted(user_a,user_b).join(':')`) used to make direct-message creation race-safe and reuse exactly one DM for the same pair.
 - `avatar_path`, when present, stores group chat avatar identity in the private avatars bucket; inbox/chat loading tolerates it being absent, but editable group avatars require it.
+- `join_policy`, when present, stores group privacy as `open` or `closed`; the runtime currently falls back to `closed` when the column is absent, but editable group privacy requires it.
 - `space_id` makes each conversation belong to exactly one space.
 - direct-message uniqueness must now be enforced per space via `space_id` plus `dm_key`; the runtime no longer treats DMs as global.
+- there is currently no separate global messenger-admin role in the app; closed-group member management is enforced through actual group membership roles (`owner` / `admin`) only.
 
 ## `public.conversation_members`
 

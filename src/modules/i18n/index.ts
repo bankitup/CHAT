@@ -282,6 +282,15 @@ type LanguageDictionary = {
     chatIdentityNote: string;
     name: string;
     ownerOnly: string;
+    adminOnly: string;
+    groupPrivacy: string;
+    groupPrivacyNote: string;
+    groupPrivacyOpen: string;
+    groupPrivacyOpenNote: string;
+    groupPrivacyClosed: string;
+    groupPrivacyClosedNote: string;
+    groupOpenMembersCanAdd: string;
+    groupClosedAdminsOnly: string;
     groupNamePlaceholder: string;
     groupNameRequired: string;
     saveName: string;
@@ -695,6 +704,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       chatIdentityNote: 'Name and photo for this group.',
       name: 'Name',
       ownerOnly: 'Owner only.',
+      adminOnly: 'Admins only.',
+      groupPrivacy: 'Group privacy',
+      groupPrivacyNote: 'Choose who can add people to this group.',
+      groupPrivacyOpen: 'Open group',
+      groupPrivacyOpenNote: 'Any current member can add people.',
+      groupPrivacyClosed: 'Closed group',
+      groupPrivacyClosedNote: 'Only group admins can add people.',
+      groupOpenMembersCanAdd: 'Any current member can add people.',
+      groupClosedAdminsOnly: 'Only group admins can add people.',
       groupNamePlaceholder: 'Enter a group name',
       groupNameRequired: 'Group title cannot be empty.',
       saveName: 'Save name',
@@ -1120,6 +1138,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       chatIdentityNote: 'Название и фото для этой группы.',
       name: 'Название',
       ownerOnly: 'Только владелец.',
+      adminOnly: 'Только админы.',
+      groupPrivacy: 'Приватность группы',
+      groupPrivacyNote: 'Выберите, кто может добавлять людей в группу.',
+      groupPrivacyOpen: 'Открытая группа',
+      groupPrivacyOpenNote: 'Любой текущий участник может добавлять людей.',
+      groupPrivacyClosed: 'Закрытая группа',
+      groupPrivacyClosedNote: 'Добавлять людей могут только админы группы.',
+      groupOpenMembersCanAdd: 'Любой текущий участник может добавлять людей.',
+      groupClosedAdminsOnly: 'Добавлять людей могут только админы группы.',
       groupNamePlaceholder: 'Введите название группы',
       groupNameRequired: 'Название группы не может быть пустым.',
       saveName: 'Сохранить',
