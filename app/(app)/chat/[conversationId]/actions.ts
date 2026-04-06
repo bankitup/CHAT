@@ -1373,6 +1373,23 @@ export async function addGroupParticipantsAction(formData: FormData) {
     redirectToInbox(spaceId);
   }
 
+  const conversation = await getConversationForUser(conversationId, user.id, {
+    spaceId,
+  });
+
+  if (!conversation) {
+    redirectToInbox(spaceId);
+  }
+
+  if (conversation.kind !== 'group') {
+    redirectWithSettingsError(
+      conversationId,
+      'Direct messages are private and cannot add participants.',
+      spaceId,
+      settingsReturnTarget,
+    );
+  }
+
   try {
     await addParticipantsToGroupConversation({
       conversationId,
@@ -1422,6 +1439,23 @@ export async function removeGroupParticipantAction(formData: FormData) {
     redirectToInbox(spaceId);
   }
 
+  const conversation = await getConversationForUser(conversationId, user.id, {
+    spaceId,
+  });
+
+  if (!conversation) {
+    redirectToInbox(spaceId);
+  }
+
+  if (conversation.kind !== 'group') {
+    redirectWithSettingsError(
+      conversationId,
+      'Only group chats can remove participants.',
+      spaceId,
+      settingsReturnTarget,
+    );
+  }
+
   try {
     await removeParticipantFromGroupConversation({
       conversationId,
@@ -1468,6 +1502,23 @@ export async function leaveGroupAction(formData: FormData) {
 
   if (!isMember) {
     redirectToInbox(spaceId);
+  }
+
+  const conversation = await getConversationForUser(conversationId, user.id, {
+    spaceId,
+  });
+
+  if (!conversation) {
+    redirectToInbox(spaceId);
+  }
+
+  if (conversation.kind !== 'group') {
+    redirectWithSettingsError(
+      conversationId,
+      'Only group chats can use leave group.',
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   try {

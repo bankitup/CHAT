@@ -1972,6 +1972,32 @@ async function getActiveGroupMembership(
     | null;
 }
 
+async function assertGroupConversationTarget(input: {
+  conversationId: string;
+  failureMessage: string;
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+}) {
+  const { data, error } = await input.supabase
+    .from('conversations')
+    .select('kind')
+    .eq('id', input.conversationId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error('This chat is no longer available.');
+  }
+
+  const kind = ((data as { kind?: string | null } | null)?.kind ?? null)?.trim() ?? null;
+
+  if (kind !== 'group') {
+    throw new Error(input.failureMessage);
+  }
+}
+
 function dedupeParticipantIds(ids: string[]) {
   return Array.from(new Set(ids.map((value) => value.trim()).filter(Boolean)));
 }
@@ -6651,6 +6677,12 @@ export async function addParticipantsToGroupConversation(input: {
 }) {
   const supabase = await getRequestSupabaseServerClient();
 
+  await assertGroupConversationTarget({
+    conversationId: input.conversationId,
+    failureMessage: 'Direct messages are private and cannot add participants.',
+    supabase,
+  });
+
   if (!input.ownerUserId) {
     throw new Error('Group management debug: authenticated owner is required.');
   }
@@ -6756,6 +6788,12 @@ export async function removeParticipantFromGroupConversation(input: {
 }) {
   const supabase = await getRequestSupabaseServerClient();
 
+  await assertGroupConversationTarget({
+    conversationId: input.conversationId,
+    failureMessage: 'Only group chats can remove participants.',
+    supabase,
+  });
+
   if (!input.ownerUserId) {
     throw new Error('Group management debug: authenticated owner is required.');
   }
@@ -6819,6 +6857,12 @@ export async function leaveGroupConversation(input: {
   userId: string;
 }) {
   const supabase = await getRequestSupabaseServerClient();
+
+  await assertGroupConversationTarget({
+    conversationId: input.conversationId,
+    failureMessage: 'Only group chats can use leave group.',
+    supabase,
+  });
 
   if (!input.userId) {
     throw new Error('Group leave debug: authenticated user is required.');
