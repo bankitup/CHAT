@@ -21,6 +21,12 @@ const diagnosticsEnabled =
   typeof window !== 'undefined' &&
   process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
 
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 function logThreadHistorySyncDiagnostics(
   stage: string,
   details?: Record<string, unknown>,
@@ -39,7 +45,11 @@ function logThreadHistorySyncDiagnostics(
 
 function normalizeMessageIds(messageIds?: string[] | null) {
   return Array.from(
-    new Set((messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
+    new Set(
+      (messageIds ?? [])
+        .map((messageId) => messageId.trim())
+        .filter((messageId) => messageId && looksLikeUuid(messageId)),
+    ),
   );
 }
 
@@ -50,7 +60,13 @@ export function emitThreadHistorySyncRequest(
     return;
   }
 
+  const requestedMessageIds = Array.from(
+    new Set((payload.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
+  );
   const normalizedMessageIds = normalizeMessageIds(payload.messageIds);
+  const droppedInvalidMessageIds = requestedMessageIds.filter(
+    (messageId) => !looksLikeUuid(messageId),
+  );
   const hasMessageIds = normalizedMessageIds.length > 0;
   const newerThanLatest = hasMessageIds ? false : Boolean(payload.newerThanLatest);
   const chosenMode = hasMessageIds
@@ -65,6 +81,15 @@ export function emitThreadHistorySyncRequest(
     newerThanLatest,
     reason: payload.reason?.trim() || null,
   } satisfies ThreadHistorySyncRequestPayload;
+
+  if (droppedInvalidMessageIds.length > 0) {
+    logThreadHistorySyncDiagnostics('sync-request:invalid-message-ids-dropped', {
+      conversationId: payload.conversationId,
+      droppedInvalidMessageIds,
+      preservedMessageIds: normalizedMessageIds,
+      reason: normalizedPayload.reason,
+    });
+  }
 
   logThreadHistorySyncDiagnostics('sync-request', {
     ...normalizedPayload,

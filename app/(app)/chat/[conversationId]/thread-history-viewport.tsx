@@ -400,6 +400,12 @@ function getOutgoingMessageStatus(input: {
   return 'sent' as const;
 }
 
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 function buildHistoryPageUrl(input: {
   conversationId: string;
   afterSeq?: number | null;
@@ -411,7 +417,11 @@ function buildHistoryPageUrl(input: {
   const params = new URLSearchParams();
   params.set('limit', String(input.limit));
   const normalizedMessageIds = Array.from(
-    new Set((input.messageIds ?? []).map((value) => value.trim()).filter(Boolean)),
+    new Set(
+      (input.messageIds ?? [])
+        .map((value) => value.trim())
+        .filter((value) => value && looksLikeUuid(value)),
+    ),
   );
   const hasMessageIds = normalizedMessageIds.length > 0;
   const hasAfterSeq =
@@ -444,7 +454,11 @@ function normalizeThreadHistorySyncRequestState(input: {
   reason?: string | null;
 }) {
   const messageIds = Array.from(
-    new Set((input.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
+    new Set(
+      (input.messageIds ?? [])
+        .map((messageId) => messageId.trim())
+        .filter((messageId) => messageId && looksLikeUuid(messageId)),
+    ),
   );
   const hasMessageIds = messageIds.length > 0;
 
