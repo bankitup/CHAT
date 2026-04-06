@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   ChatHeaderAvatarVisual,
   type ChatHeaderParticipantIdentity,
@@ -17,7 +17,18 @@ type ChatHeaderAvatarPreviewTriggerProps = {
   title: string;
 };
 
-export function ChatHeaderAvatarPreviewTrigger({
+function areChatHeaderParticipantsEqual(
+  previous: ChatHeaderParticipantIdentity,
+  next: ChatHeaderParticipantIdentity,
+) {
+  return (
+    previous?.userId === next?.userId &&
+    previous?.displayName === next?.displayName &&
+    previous?.avatarPath === next?.avatarPath
+  );
+}
+
+export const ChatHeaderAvatarPreviewTrigger = memo(function ChatHeaderAvatarPreviewTrigger({
   closeLabel,
   conversationKind,
   groupAvatarPath,
@@ -150,4 +161,13 @@ export function ChatHeaderAvatarPreviewTrigger({
       ) : null}
     </>
   );
-}
+}, (previous, next) => {
+  return (
+    previous.closeLabel === next.closeLabel &&
+    previous.conversationKind === next.conversationKind &&
+    previous.groupAvatarPath === next.groupAvatarPath &&
+    previous.openLabel === next.openLabel &&
+    previous.title === next.title &&
+    areChatHeaderParticipantsEqual(previous.participant, next.participant)
+  );
+});

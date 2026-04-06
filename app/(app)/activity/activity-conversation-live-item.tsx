@@ -1,11 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { memo, useEffect, useSyncExternalStore } from 'react';
+import { memo, useSyncExternalStore } from 'react';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getInboxConversationSummarySnapshot,
-  hydrateInboxConversationSummaries,
   subscribeToInboxConversationSummary,
   type InboxConversationLiveSummary,
 } from '@/modules/messaging/realtime/inbox-summary-store';
@@ -203,10 +202,6 @@ export function ActivityConversationLiveItem({
   language,
   labels,
 }: ActivityConversationLiveItemProps) {
-  useEffect(() => {
-    hydrateInboxConversationSummaries([initialSummary]);
-  }, [initialSummary]);
-
   const liveSummary = useSyncExternalStore(
     (listener) =>
       subscribeToInboxConversationSummary(item.conversationId, listener),

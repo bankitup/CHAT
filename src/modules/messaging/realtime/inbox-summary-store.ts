@@ -19,6 +19,7 @@ export type InboxConversationLiveSummary = {
 };
 
 const inboxSummaryStore = new Map<string, InboxConversationLiveSummary>();
+const inboxSummaryFallbackStore = new Map<string, InboxConversationLiveSummary>();
 const inboxSummaryListeners = new Map<string, Set<() => void>>();
 const inboxSummaryRevisionListeners = new Set<() => void>();
 let inboxSummaryRevision = 0;
@@ -122,7 +123,31 @@ export function getInboxConversationSummarySnapshot(
   conversationId: string,
   fallback: InboxConversationLiveSummary,
 ) {
-  return inboxSummaryStore.get(conversationId.trim()) ?? fallback;
+  const normalizedConversationId = conversationId.trim();
+
+  if (!normalizedConversationId) {
+    return fallback;
+  }
+
+  const liveSummary = inboxSummaryStore.get(normalizedConversationId);
+
+  if (liveSummary) {
+    return liveSummary;
+  }
+
+  const normalizedFallback = {
+    ...fallback,
+    conversationId: normalizedConversationId,
+  };
+  const existingFallback =
+    inboxSummaryFallbackStore.get(normalizedConversationId) ?? null;
+
+  if (areInboxConversationSummariesEqual(existingFallback, normalizedFallback)) {
+    return existingFallback ?? normalizedFallback;
+  }
+
+  inboxSummaryFallbackStore.set(normalizedConversationId, normalizedFallback);
+  return normalizedFallback;
 }
 
 export function hydrateInboxConversationSummaries(
@@ -151,6 +176,7 @@ export function hydrateInboxConversationSummaries(
       continue;
     }
 
+    inboxSummaryFallbackStore.delete(normalizedConversationId);
     inboxSummaryStore.set(normalizedConversationId, nextValue ?? normalizedSummary);
     emitInboxConversationSummaryChange(normalizedConversationId);
   }
@@ -175,6 +201,7 @@ export function patchInboxConversationSummary(
     return;
   }
 
+  inboxSummaryFallbackStore.delete(normalizedConversationId);
   inboxSummaryStore.set(normalizedConversationId, nextValue);
   emitInboxConversationSummaryChange(normalizedConversationId);
 }
@@ -201,6 +228,7 @@ export function updateInboxConversationSummary(
     return;
   }
 
+  inboxSummaryFallbackStore.delete(normalizedConversationId);
   inboxSummaryStore.set(normalizedConversationId, nextValue);
   emitInboxConversationSummaryChange(normalizedConversationId);
 }
@@ -215,11 +243,13 @@ export function markInboxConversationRemoved(conversationId: string) {
   const existing = inboxSummaryStore.get(normalizedConversationId);
 
   if (existing) {
+    inboxSummaryFallbackStore.delete(normalizedConversationId);
     inboxSummaryStore.set(normalizedConversationId, {
       ...existing,
       removed: true,
     });
   } else {
+    inboxSummaryFallbackStore.delete(normalizedConversationId);
     inboxSummaryStore.set(normalizedConversationId, {
       conversationId: normalizedConversationId,
       createdAt: null,
