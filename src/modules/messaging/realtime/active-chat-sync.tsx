@@ -128,6 +128,25 @@ function getNullableRealtimeNumber(
   return undefined;
 }
 
+function didRealtimeFieldActuallyChange(
+  nextRow: Record<string, unknown> | null,
+  previousRow: Record<string, unknown> | null,
+  key: string,
+) {
+  if (!nextRow || !previousRow) {
+    return false;
+  }
+
+  if (
+    !Object.prototype.hasOwnProperty.call(nextRow, key) ||
+    !Object.prototype.hasOwnProperty.call(previousRow, key)
+  ) {
+    return false;
+  }
+
+  return nextRow[key] !== previousRow[key];
+}
+
 export function ActiveChatRealtimeSync({
   conversationId,
   currentUserId,
@@ -398,8 +417,10 @@ export function ActiveChatRealtimeSync({
           return;
         }
 
-        const refreshCriticalKeys = changedKeys.filter((key) =>
-          CONVERSATION_ROUTE_REFRESH_CRITICAL_KEYS.has(key),
+        const refreshCriticalKeys = Array.from(
+          CONVERSATION_ROUTE_REFRESH_CRITICAL_KEYS,
+        ).filter((key) =>
+          didRealtimeFieldActuallyChange(nextRow, previousRow, key),
         );
 
         if (refreshCriticalKeys.length === 0) {
