@@ -386,6 +386,7 @@ export type CurrentUserProfile = {
   userId: string;
   email: string | null;
   displayName: string | null;
+  username: string | null;
   avatarPath: string | null;
   preferredLanguage: AppLanguage | null;
   statusEmoji: string | null;
@@ -2427,6 +2428,7 @@ export async function getCurrentUserProfile(userId: string, email?: string | nul
     userId,
     email: email?.trim() || null,
     displayName: identity?.displayName ?? null,
+    username: identity?.username ?? null,
     avatarPath: identity?.avatarPath ?? null,
     preferredLanguage,
     statusEmoji,

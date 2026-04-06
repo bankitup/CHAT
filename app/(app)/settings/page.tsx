@@ -7,7 +7,6 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
-import { IdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
@@ -26,22 +25,6 @@ type SettingsPageProps = {
   }>;
 };
 
-function getProfileLabel(
-  email: string | null,
-  displayName: string | null,
-  fallbackLabel: string,
-) {
-  if (displayName?.trim()) {
-    return displayName.trim();
-  }
-
-  if (email?.trim()) {
-    return email.trim().split('@')[0] || fallbackLabel;
-  }
-
-  return fallbackLabel;
-}
-
 export default async function SettingsPage({ searchParams }: SettingsPageProps) {
   const params = await searchParams;
   const supabase = await createSupabaseServerClient();
@@ -56,7 +39,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   const profile = await getCurrentUserProfile(user.id, user.email ?? null);
   const language = await getRequestLanguage(profile.preferredLanguage);
   const t = getTranslations(language);
-  const profileLabel = getProfileLabel(profile.email, profile.displayName, t.settings.heroEyebrow);
   const currentLanguage = (profile.preferredLanguage ?? language) as AppLanguage;
   const hasAvatar = Boolean(profile.avatarPath);
   let activeSpaceId = params.space?.trim() || null;
@@ -128,33 +110,6 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               </form>
             </div>
           </div>
-
-          <div className="profile-settings-summary settings-hero-summary">
-            <IdentityAvatar
-              diagnosticsSurface="settings:profile-summary"
-              identity={{
-                userId: profile.userId,
-                displayName: profile.displayName,
-                avatarPath: profile.avatarPath,
-              }}
-              label={profileLabel}
-              size="lg"
-            />
-
-            <div className="stack profile-settings-copy settings-hero-copy">
-              <h1 className="settings-hero-title">{profileLabel}</h1>
-              <p className="muted profile-settings-email">
-                {profile.email ?? t.settings.profileFallback}
-              </p>
-            </div>
-          </div>
-          <div className="cluster settings-hero-pills">
-            {profile.email ? (
-              <span className="summary-pill settings-hero-pill settings-hero-pill-subtle">
-                {profile.email}
-              </span>
-            ) : null}
-          </div>
         </section>
 
         {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
@@ -168,11 +123,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         ) : null}
 
         <section className="stack settings-hub">
-          <section className="card stack settings-surface settings-home-card">
+          <section className="card stack settings-surface settings-home-card settings-home-card-profile">
             <ProfileSettingsForm
               avatarPath={profile.avatarPath}
+              defaultEmail={profile.email ?? ''}
               userId={profile.userId}
               defaultDisplayName={profile.displayName ?? ''}
+              defaultUsername={profile.username ?? ''}
               hasAvatar={hasAvatar}
               labels={{
                 profileTitle: t.settings.profileTitle,

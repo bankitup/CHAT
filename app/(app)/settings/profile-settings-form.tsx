@@ -22,8 +22,10 @@ const AVATAR_EDITOR_ZOOM_STEP = 0.01;
 
 type ProfileSettingsFormProps = {
   avatarPath?: string | null;
+  defaultEmail: string;
   userId: string;
   defaultDisplayName: string;
+  defaultUsername: string;
   hasAvatar: boolean;
   labels: {
     profileTitle: string;
@@ -217,8 +219,10 @@ async function renderAvatarCropBlob(draft: AvatarEditorDraft) {
 
 export function ProfileSettingsForm({
   avatarPath,
+  defaultEmail,
   userId,
   defaultDisplayName,
+  defaultUsername,
   hasAvatar,
   labels,
 }: ProfileSettingsFormProps) {
@@ -537,6 +541,9 @@ export function ProfileSettingsForm({
   const visibleAvatarPath =
     pendingAvatarDraft?.previewUrl ?? (isAvatarRemovalDraft ? null : avatarPath ?? null);
   const visibleDisplayName = draftDisplayName.trim() || defaultDisplayName.trim();
+  const visibleEmail = defaultEmail.trim() || null;
+  const visibleUsername = defaultUsername.trim().replace(/^@+/, '') || null;
+  const visibleHandle = visibleUsername ? `@${visibleUsername}` : null;
   const avatarDraftNote = avatarEditorDraft
     ? labels.avatarEditorHint
     : pendingAvatarDraft
@@ -630,8 +637,33 @@ export function ProfileSettingsForm({
                     <p className="profile-inline-name">
                       {visibleDisplayName || labels.displayNamePlaceholder}
                     </p>
+                    {visibleEmail || visibleHandle ? (
+                      <div className="profile-inline-meta">
+                        {visibleEmail ? (
+                          <p className="muted profile-inline-email">{visibleEmail}</p>
+                        ) : null}
+                        {visibleHandle ? (
+                          <span className="summary-pill summary-pill-muted profile-inline-handle">
+                            {visibleHandle}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 )}
+
+                {isEditing && (visibleEmail || visibleHandle) ? (
+                  <div className="profile-inline-meta profile-inline-meta-editing">
+                    {visibleEmail ? (
+                      <p className="muted profile-inline-email">{visibleEmail}</p>
+                    ) : null}
+                    {visibleHandle ? (
+                      <span className="summary-pill summary-pill-muted profile-inline-handle">
+                        {visibleHandle}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <p className="muted profile-field-note">{avatarDraftNote}</p>
               </div>
