@@ -541,10 +541,53 @@ export const CHAT_ATTACHMENT_HELP_TEXT =
 export const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 
-const CHAT_ATTACHMENT_BUCKET =
-  process.env.SUPABASE_ATTACHMENTS_BUCKET?.trim() ||
-  process.env.NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET?.trim() ||
-  'message-media';
+const CANONICAL_CHAT_ATTACHMENT_BUCKET = 'message-media';
+
+function normalizeChatAttachmentBucketName(value: string | null | undefined) {
+  const normalizedValue = value?.trim() || null;
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  if (normalizedValue === 'message-attachments') {
+    return CANONICAL_CHAT_ATTACHMENT_BUCKET;
+  }
+
+  return normalizedValue;
+}
+
+function resolveChatAttachmentBucketConfig() {
+  const serverBucket = process.env.SUPABASE_ATTACHMENTS_BUCKET?.trim() || null;
+
+  if (serverBucket) {
+    return {
+      bucket: normalizeChatAttachmentBucketName(serverBucket) ?? CANONICAL_CHAT_ATTACHMENT_BUCKET,
+      rawBucket: serverBucket,
+      source: 'SUPABASE_ATTACHMENTS_BUCKET',
+    } as const;
+  }
+
+  const publicBucket =
+    process.env.NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET?.trim() || null;
+
+  if (publicBucket) {
+    return {
+      bucket: normalizeChatAttachmentBucketName(publicBucket) ?? CANONICAL_CHAT_ATTACHMENT_BUCKET,
+      rawBucket: publicBucket,
+      source: 'NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET',
+    } as const;
+  }
+
+  return {
+    bucket: CANONICAL_CHAT_ATTACHMENT_BUCKET,
+    rawBucket: null,
+    source: 'default',
+  } as const;
+}
+
+const CHAT_ATTACHMENT_BUCKET_CONFIG = resolveChatAttachmentBucketConfig();
+const CHAT_ATTACHMENT_BUCKET = CHAT_ATTACHMENT_BUCKET_CONFIG.bucket;
 const PROFILE_AVATAR_BUCKET =
   process.env.SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
 const SUPPORTED_ATTACHMENT_TYPES = new Set([
@@ -2535,6 +2578,8 @@ function getChatAttachmentBucketRequirementErrorMessage() {
   console.error('[message-attachment-storage]', {
     issue: 'bucket-not-found',
     bucket: CHAT_ATTACHMENT_BUCKET,
+    bucket_raw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
+    bucket_source: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
     setupSql: 'docs/sql/2026-04-06-message-attachments-storage-policies.sql',
   });
 
@@ -8794,6 +8839,8 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('send:start', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
+      bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
       conversationId: input.conversationId,
       fileName: sanitizeAttachmentFileName(input.file.name),
       mimeType: input.file.type,
@@ -8892,6 +8939,8 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:started', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
+      bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
       conversationId: input.conversationId,
       messageId: messageResult.messageId,
       objectPath,
@@ -8912,6 +8961,8 @@ export async function sendMessageWithAttachment(input: {
         'upload:failed',
         {
           bucket: CHAT_ATTACHMENT_BUCKET,
+          bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
+          bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
           clientId: messageResult.clientId,
           conversationId: input.conversationId,
           errorMessage: uploadError.message,
@@ -8936,6 +8987,8 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:completed', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
+      bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
       conversationId: input.conversationId,
       messageId: messageResult.messageId,
       objectPath,
