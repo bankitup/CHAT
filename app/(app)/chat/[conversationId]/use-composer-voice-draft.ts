@@ -37,6 +37,24 @@ const SUPPORTED_MIME_TYPES = [
   'audio/mp4',
   'audio/ogg;codecs=opus',
 ] as const;
+const voiceComposerDiagnosticsEnabled =
+  process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1';
+
+function logVoiceComposerDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (!voiceComposerDiagnosticsEnabled || typeof window === 'undefined') {
+    return;
+  }
+
+  if (details) {
+    console.info('[voice-composer]', stage, details);
+    return;
+  }
+
+  console.info('[voice-composer]', stage);
+}
 
 function createLocalDraftId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -244,7 +262,32 @@ export function useComposerVoiceDraft({
   }, [draft]);
 
   const startRecording = useCallback(async () => {
+    logVoiceComposerDiagnostics('entry:attempt', {
+      captureState,
+      conversationId,
+      hasGetUserMedia: Boolean(
+        navigator.mediaDevices &&
+          typeof navigator.mediaDevices.getUserMedia === 'function',
+      ),
+      hasMediaRecorder:
+        typeof window !== 'undefined' &&
+        typeof window.MediaRecorder !== 'undefined',
+      isSupported,
+      replyToMessageId,
+    });
+
     if (!isSupported || typeof window === 'undefined') {
+      logVoiceComposerDiagnostics('entry:unsupported', {
+        captureState,
+        conversationId,
+        hasGetUserMedia: Boolean(
+          navigator.mediaDevices &&
+            typeof navigator.mediaDevices.getUserMedia === 'function',
+        ),
+        hasMediaRecorder:
+          typeof window !== 'undefined' &&
+          typeof window.MediaRecorder !== 'undefined',
+      });
       setErrorCode('unsupported');
       setCaptureState('failed');
       return;
@@ -256,8 +299,14 @@ export function useComposerVoiceDraft({
     shouldDiscardOnStopRef.current = false;
 
     try {
+      logVoiceComposerDiagnostics('permission:request:start', {
+        conversationId,
+      });
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
+      });
+      logVoiceComposerDiagnostics('permission:request:granted', {
+        conversationId,
       });
       const mimeType = resolveSupportedMimeType();
       const mediaRecorder = mimeType
@@ -280,6 +329,10 @@ export function useComposerVoiceDraft({
       mediaRecorder.start();
       setElapsedMs(0);
       setCaptureState('recording');
+      logVoiceComposerDiagnostics('entry:recording', {
+        conversationId,
+        mimeType: mimeType ?? mediaRecorder.mimeType ?? null,
+      });
 
       timerRef.current = setInterval(() => {
         if (!startedAtRef.current) {
@@ -297,10 +350,25 @@ export function useComposerVoiceDraft({
           ? 'permission-denied'
           : 'capture-failed';
 
+      logVoiceComposerDiagnostics('permission:request:failed', {
+        conversationId,
+        errorCode: nextErrorCode,
+        errorName: error instanceof DOMException ? error.name : null,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
       setErrorCode(nextErrorCode);
       setCaptureState('failed');
     }
-  }, [clearDraft, finalizeDraft, isSupported, stopActiveStream, stopActiveTimer]);
+  }, [
+    captureState,
+    clearDraft,
+    conversationId,
+    finalizeDraft,
+    isSupported,
+    replyToMessageId,
+    stopActiveStream,
+    stopActiveTimer,
+  ]);
 
   useEffect(() => {
     return () => {

@@ -549,6 +549,14 @@ export function EncryptedDmComposerForm({
     conversationId,
     replyToMessageId: replyToMessageId ?? null,
   });
+  const voiceEntryDisabledReason =
+    voiceDraft.captureState === 'requesting-permission'
+      ? 'requesting-permission'
+      : voiceDraft.captureState === 'recording'
+        ? 'recording'
+        : voiceDraft.draft
+          ? 'draft-ready'
+          : null;
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
   const [isResettingSetup, setIsResettingSetup] = useState(false);
   const showDevResetAction =
@@ -931,12 +939,11 @@ export function EncryptedDmComposerForm({
           <button
             aria-label={t.chat.microphone}
             className="button button-secondary composer-button composer-button-mic"
-            disabled={
-              !voiceDraft.isSupported ||
-              voiceDraft.captureState === 'requesting-permission' ||
-              voiceDraft.captureState === 'recording' ||
-              Boolean(voiceDraft.draft)
+            data-voice-entry-state={
+              voiceEntryDisabledReason ??
+              (voiceDraft.isSupported ? 'ready' : 'unsupported')
             }
+            disabled={Boolean(voiceEntryDisabledReason)}
             title={
               voiceDraft.isSupported
                 ? t.chat.microphone
@@ -944,6 +951,17 @@ export function EncryptedDmComposerForm({
             }
             type="button"
             onClick={() => {
+              if (
+                process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+                typeof window !== 'undefined'
+              ) {
+                console.info('[voice-composer-button]', 'mic:tapped', {
+                  captureState: voiceDraft.captureState,
+                  conversationId,
+                  disabledReason: voiceEntryDisabledReason,
+                  isSupported: voiceDraft.isSupported,
+                });
+              }
               void voiceDraft.startRecording();
             }}
           >
