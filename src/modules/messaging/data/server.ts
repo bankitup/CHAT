@@ -384,6 +384,21 @@ type MessageAttachmentRow = {
   created_at: string | null;
 };
 
+type MessageAssetAttachmentRow = {
+  asset_id: string;
+  created_at: string | null;
+  duration_ms: number | null;
+  external_url: string | null;
+  file_name: string | null;
+  kind: 'image' | 'file' | 'audio' | 'voice-note';
+  message_id: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  source: 'supabase-storage' | 'external-url';
+  storage_bucket: string | null;
+  storage_object_path: string | null;
+};
+
 type MessageAttachmentPreviewRow = {
   created_at: string | null;
   message_id: string;
@@ -405,6 +420,9 @@ export type MessageAttachment = {
   isAudio: boolean;
   isVoiceMessage: boolean;
 };
+
+type MessageAssetsWriteClient =
+  Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 export type MessageSenderProfile = {
   userId: string;
@@ -2414,6 +2432,15 @@ export function isAudioAttachment(mimeType: string | null) {
 
 export function isSupportedVoiceAttachmentType(mimeType: string | null) {
   return Boolean(mimeType && SUPPORTED_VOICE_ATTACHMENT_TYPES.has(mimeType));
+}
+
+function normalizeVoiceDurationMs(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+
+  const normalized = Math.max(0, Math.round(value));
+  return normalized >= 0 ? normalized : null;
 }
 
 function getAttachmentMessageKind(mimeType: string | null) {
@@ -5933,14 +5960,124 @@ export async function getMessageAttachments(messageIds: string[]) {
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []) as MessageAttachmentRow[];
-  const attachments = await Promise.all(
-    rows.map(async (row) => {
-      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-        .from(row.bucket)
-        .createSignedUrl(row.object_path, 60 * 60);
+  let assetRows: MessageAssetAttachmentRow[] = [];
+  const loadMessageAssetRows = async (client: MessageAssetsWriteClient) =>
+    client
+      .from('message_asset_links')
+      .select(
+        'message_id, created_at, ordinal, render_as_primary, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url, mime_type, file_name, size_bytes, duration_ms, created_at)',
+      )
+      .in('message_id', uniqueMessageIds)
+      .order('created_at', { ascending: true });
 
-      if (signedUrlError) {
+  let assetResponse = await loadMessageAssetRows(supabase);
+
+  if (assetResponse.error) {
+    if (
+      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_asset_links') &&
+      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_assets')
+    ) {
+      const serviceSupabase = createSupabaseServiceRoleClient();
+
+      if (serviceSupabase) {
+        assetResponse = await loadMessageAssetRows(
+          serviceSupabase as MessageAssetsWriteClient,
+        );
+      }
+    }
+
+    if (
+      assetResponse.error &&
+      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_asset_links') &&
+      !isMissingRelationErrorMessage(assetResponse.error.message, 'message_assets')
+    ) {
+      throw new Error(assetResponse.error.message);
+    }
+  }
+
+  if (!assetResponse.error) {
+    assetRows = ((assetResponse.data ?? []) as Array<{
+      created_at: string | null;
+      message_assets:
+        | {
+            created_at?: string | null;
+            duration_ms?: number | null;
+            external_url?: string | null;
+            file_name?: string | null;
+            id: string;
+            kind: 'image' | 'file' | 'audio' | 'voice-note';
+            mime_type?: string | null;
+            size_bytes?: number | null;
+            source: 'supabase-storage' | 'external-url';
+            storage_bucket?: string | null;
+            storage_object_path?: string | null;
+          }
+        | Array<{
+            created_at?: string | null;
+            duration_ms?: number | null;
+            external_url?: string | null;
+            file_name?: string | null;
+            id: string;
+            kind: 'image' | 'file' | 'audio' | 'voice-note';
+            mime_type?: string | null;
+            size_bytes?: number | null;
+            source: 'supabase-storage' | 'external-url';
+            storage_bucket?: string | null;
+            storage_object_path?: string | null;
+          }>
+        | null;
+      message_id: string;
+    }>)
+      .map((row) => {
+        const asset = normalizeJoinedRecord(row.message_assets);
+
+        if (!asset) {
+          return null;
+        }
+
+        return {
+          asset_id: asset.id,
+          created_at: row.created_at ?? asset.created_at ?? null,
+          duration_ms: asset.duration_ms ?? null,
+          external_url: asset.external_url ?? null,
+          file_name: asset.file_name ?? null,
+          kind: asset.kind,
+          message_id: row.message_id,
+          mime_type: asset.mime_type ?? null,
+          size_bytes: asset.size_bytes ?? null,
+          source: asset.source,
+          storage_bucket: asset.storage_bucket ?? null,
+          storage_object_path: asset.storage_object_path ?? null,
+        } satisfies MessageAssetAttachmentRow;
+      })
+      .filter((row): row is MessageAssetAttachmentRow => Boolean(row));
+  }
+
+  const attachments = await Promise.all(
+    [
+      ...((data ?? []) as MessageAttachmentRow[]).map(async (row) => {
+        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+          .from(row.bucket)
+          .createSignedUrl(row.object_path, 60 * 60);
+
+        if (signedUrlError) {
+          return {
+            id: row.id,
+            messageId: row.message_id,
+            bucket: row.bucket,
+            objectPath: row.object_path,
+            mimeType: row.mime_type,
+            sizeBytes: row.size_bytes,
+            durationMs: null,
+            createdAt: row.created_at,
+            fileName: getAttachmentFileName(row.object_path),
+            signedUrl: null,
+            isImage: isImageAttachment(row.mime_type),
+            isAudio: isAudioAttachment(row.mime_type),
+            isVoiceMessage: row.object_path.includes('/voice/'),
+          } satisfies MessageAttachment;
+        }
+
         return {
           id: row.id,
           messageId: row.message_id,
@@ -5951,29 +6088,48 @@ export async function getMessageAttachments(messageIds: string[]) {
           durationMs: null,
           createdAt: row.created_at,
           fileName: getAttachmentFileName(row.object_path),
-          signedUrl: null,
+          signedUrl: signedUrlData.signedUrl,
           isImage: isImageAttachment(row.mime_type),
           isAudio: isAudioAttachment(row.mime_type),
           isVoiceMessage: row.object_path.includes('/voice/'),
         } satisfies MessageAttachment;
-      }
+      }),
+      ...assetRows.map(async (row) => {
+        let signedUrl: string | null = row.external_url ?? null;
 
-      return {
-        id: row.id,
-        messageId: row.message_id,
-        bucket: row.bucket,
-        objectPath: row.object_path,
-        mimeType: row.mime_type,
-        sizeBytes: row.size_bytes,
-        durationMs: null,
-        createdAt: row.created_at,
-        fileName: getAttachmentFileName(row.object_path),
-        signedUrl: signedUrlData.signedUrl,
-        isImage: isImageAttachment(row.mime_type),
-        isAudio: isAudioAttachment(row.mime_type),
-        isVoiceMessage: row.object_path.includes('/voice/'),
-      } satisfies MessageAttachment;
-    }),
+        if (
+          row.source === 'supabase-storage' &&
+          row.storage_bucket &&
+          row.storage_object_path
+        ) {
+          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from(row.storage_bucket)
+            .createSignedUrl(row.storage_object_path, 60 * 60);
+
+          signedUrl = signedUrlError ? null : signedUrlData.signedUrl;
+        }
+
+        return {
+          id: row.asset_id,
+          messageId: row.message_id,
+          bucket: row.storage_bucket ?? CHAT_ATTACHMENT_BUCKET,
+          objectPath: row.storage_object_path ?? '',
+          mimeType: row.mime_type,
+          sizeBytes: row.size_bytes,
+          durationMs: row.duration_ms,
+          createdAt: row.created_at,
+          fileName:
+            row.file_name?.trim() ||
+            (row.storage_object_path
+              ? getAttachmentFileName(row.storage_object_path)
+              : 'attachment'),
+          signedUrl,
+          isImage: row.kind === 'image' || isImageAttachment(row.mime_type),
+          isAudio: row.kind === 'audio' || row.kind === 'voice-note' || isAudioAttachment(row.mime_type),
+          isVoiceMessage: row.kind === 'voice-note',
+        } satisfies MessageAttachment;
+      }),
+    ],
   );
 
   const grouped = new Map<string, MessageAttachment[]>();
@@ -7992,6 +8148,76 @@ export async function leaveGroupConversation(input: {
   }
 }
 
+async function insertCommittedVoiceAssetAndLink(input: {
+  client: MessageAssetsWriteClient;
+  conversationId: string;
+  durationMs: number | null;
+  file: File;
+  messageId: string;
+  objectPath: string;
+  senderId: string;
+}) {
+  const normalizedDurationMs = normalizeVoiceDurationMs(input.durationMs);
+  const { data: assetRow, error: assetError } = await input.client
+    .from('message_assets')
+    .insert({
+      conversation_id: input.conversationId,
+      created_by: input.senderId,
+      duration_ms: normalizedDurationMs,
+      file_name: sanitizeAttachmentFileName(input.file.name),
+      kind: 'voice-note',
+      mime_type: input.file.type,
+      size_bytes: input.file.size,
+      source: 'supabase-storage',
+      storage_bucket: CHAT_ATTACHMENT_BUCKET,
+      storage_object_path: input.objectPath,
+    })
+    .select('id')
+    .single();
+
+  if (assetError) {
+    if (
+      isMissingRelationErrorMessage(assetError.message, 'message_assets') ||
+      isMissingColumnErrorMessage(assetError.message, 'duration_ms') ||
+      isMissingColumnErrorMessage(assetError.message, 'storage_bucket') ||
+      isMissingColumnErrorMessage(assetError.message, 'storage_object_path')
+    ) {
+      throw createSchemaRequirementError(
+        'Voice message media schema is missing.',
+      );
+    }
+
+    throw new Error(assetError.message);
+  }
+
+  const assetId = String(assetRow?.id ?? '').trim();
+
+  if (!assetId) {
+    throw new Error('Voice message asset insert did not return an asset id.');
+  }
+
+  const { error: linkError } = await input.client.from('message_asset_links').insert({
+    asset_id: assetId,
+    message_id: input.messageId,
+    ordinal: 0,
+    render_as_primary: true,
+  });
+
+  if (linkError) {
+    if (
+      isMissingRelationErrorMessage(linkError.message, 'message_asset_links') ||
+      isMissingColumnErrorMessage(linkError.message, 'render_as_primary')
+    ) {
+      throw createSchemaRequirementError(
+        'Voice message media schema is missing.',
+      );
+    }
+
+    await input.client.from('message_assets').delete().eq('id', assetId);
+    throw new Error(linkError.message);
+  }
+}
+
 export async function sendMessageWithAttachment(input: {
   conversationId: string;
   senderId: string;
@@ -7999,6 +8225,7 @@ export async function sendMessageWithAttachment(input: {
   replyToMessageId?: string | null;
   clientId?: string;
   file: File;
+  voiceDurationMs?: number | null;
 }) {
   if (!input.file || input.file.size === 0) {
     throw new Error('Choose a file before sending.');
@@ -8041,20 +8268,42 @@ export async function sendMessageWithAttachment(input: {
     throw new Error(uploadError.message);
   }
 
-  const { error: attachmentError } = await supabase
-    .from('message_attachments')
-    .insert({
-      message_id: messageResult.messageId,
-      bucket: CHAT_ATTACHMENT_BUCKET,
-      object_path: objectPath,
-      mime_type: input.file.type,
-      size_bytes: input.file.size,
-    });
+  const attachmentError =
+    attachmentMessageKind === 'voice'
+      ? await (async () => {
+          try {
+            await insertCommittedVoiceAssetAndLink({
+              client: supabase,
+              conversationId: input.conversationId,
+              durationMs: input.voiceDurationMs ?? null,
+              file: input.file,
+              messageId: messageResult.messageId,
+              objectPath,
+              senderId: input.senderId,
+            });
+            return null;
+          } catch (error) {
+            return error instanceof Error ? error : new Error('Unknown voice asset error');
+          }
+        })()
+      : await (async () => {
+          const { error } = await supabase
+            .from('message_attachments')
+            .insert({
+              message_id: messageResult.messageId,
+              bucket: CHAT_ATTACHMENT_BUCKET,
+              object_path: objectPath,
+              mime_type: input.file.type,
+              size_bytes: input.file.size,
+            });
+
+          return error ? new Error(error.message) : null;
+        })();
 
   if (attachmentError) {
     await supabase.storage.from(CHAT_ATTACHMENT_BUCKET).remove([objectPath]);
     await supabase.from('messages').delete().eq('id', messageResult.messageId);
-    throw new Error(attachmentError.message);
+    throw attachmentError;
   }
 
   await syncConversationSummaryProjectionByMessageId(

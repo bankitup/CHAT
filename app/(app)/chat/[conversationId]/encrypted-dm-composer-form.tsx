@@ -34,6 +34,7 @@ import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/threa
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
+import { sendMessageMutationAction } from './actions';
 import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
@@ -41,6 +42,18 @@ type MentionParticipant = {
   userId: string;
   label: string;
 };
+
+type EncryptedComposerOutgoingPayload =
+  | {
+      attachment: null;
+      kind: 'text';
+      voiceDurationMs: null;
+    }
+  | {
+      attachment: File;
+      kind: 'voice';
+      voiceDurationMs: number | null;
+    };
 
 type EncryptedDmDebugFailureDetails = {
   exact400ReasonCode: DmE2eeBootstrap400ReasonCode | null;
@@ -605,6 +618,49 @@ export function EncryptedDmComposerForm({
       setErrorDebugDetails(null);
     },
     processItem: async (item) => {
+      const payload = item.payload as EncryptedComposerOutgoingPayload;
+
+      if (payload.kind === 'voice') {
+        const nextFormData = new FormData();
+        nextFormData.set('conversationId', conversationId);
+        nextFormData.set('clientId', item.clientId);
+        nextFormData.set('attachment', payload.attachment);
+
+        if (item.replyToMessageId) {
+          nextFormData.set('replyToMessageId', item.replyToMessageId);
+        }
+
+        nextFormData.set(
+          'voiceDurationMs',
+          payload.voiceDurationMs !== null
+            ? String(payload.voiceDurationMs)
+            : '',
+        );
+
+        const result = await sendMessageMutationAction(nextFormData);
+
+        if (!result.ok) {
+          throw new Error(result.error);
+        }
+
+        await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+          clientId: result.data.clientId,
+          conversationId,
+          messageId: result.data.messageId,
+          source: 'plaintext-chat-send',
+        });
+
+        if (result.data.messageId) {
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: [result.data.messageId],
+            reason: 'local-voice-send',
+          });
+        }
+
+        return;
+      }
+
       let retriedAfterRepublish = false;
       let retriedAfterBundleRefresh = false;
 
@@ -708,8 +764,22 @@ export function EncryptedDmComposerForm({
         body: detail.body,
         clientId: detail.clientId,
         createdAt: detail.createdAt,
-        payload: null,
+        kind: detail.kind === 'voice' ? 'voice' : 'text',
+        payload:
+          detail.kind === 'voice' && detail.attachment
+            ? {
+                attachment: detail.attachment,
+                kind: 'voice',
+                voiceDurationMs: detail.voiceDurationMs ?? null,
+              }
+            : {
+                attachment: null,
+                kind: 'text',
+                voiceDurationMs: null,
+              },
         replyToMessageId: detail.replyToMessageId ?? null,
+        voiceDurationMs:
+          detail.kind === 'voice' ? detail.voiceDurationMs ?? null : null,
       });
     };
 
@@ -781,7 +851,12 @@ export function EncryptedDmComposerForm({
         });
         enqueue({
           body,
-          payload: null,
+          kind: 'text',
+          payload: {
+            attachment: null,
+            kind: 'text',
+            voiceDurationMs: null,
+          },
           replyToMessageId: replyToMessageId ?? null,
         });
         clearReplyTargetFromCurrentUrl();
@@ -799,6 +874,32 @@ export function EncryptedDmComposerForm({
         language={language}
         onCancel={voiceDraft.cancelRecording}
         onRetry={voiceDraft.startRecording}
+        onSend={() => {
+          const draftFile = voiceDraft.buildDraftFile();
+
+          if (!draftFile || !voiceDraft.draft) {
+            return;
+          }
+
+          setErrorMessage(null);
+          setErrorCode(null);
+          setErrorDebugDetails(null);
+          enqueue({
+            attachment: draftFile,
+            attachmentLabel: t.chat.voiceMessage,
+            body: '',
+            kind: 'voice',
+            payload: {
+              attachment: draftFile,
+              kind: 'voice',
+              voiceDurationMs: voiceDraft.draft.durationMs ?? null,
+            },
+            replyToMessageId: replyToMessageId ?? null,
+            voiceDurationMs: voiceDraft.draft.durationMs ?? null,
+          });
+          voiceDraft.clearDraft();
+          clearReplyTargetFromCurrentUrl();
+        }}
         onStop={voiceDraft.stopRecording}
       />
       <div className="composer-input-shell">

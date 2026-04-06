@@ -13,6 +13,7 @@ type ComposerVoiceDraftPanelProps = {
   language: AppLanguage;
   onCancel: () => void;
   onRetry: () => Promise<void>;
+  onSend: () => void;
   onStop: () => void;
 };
 
@@ -44,6 +45,7 @@ export function ComposerVoiceDraftPanel({
   language,
   onCancel,
   onRetry,
+  onSend,
   onStop,
 }: ComposerVoiceDraftPanelProps) {
   const t = getTranslations(language);
@@ -155,11 +157,9 @@ export function ComposerVoiceDraftPanel({
             <button
               className="composer-voice-panel-action composer-voice-panel-action-primary"
               type="button"
-              onClick={() => {
-                void onRetry();
-              }}
+              onClick={onSend}
             >
-              {t.chat.voiceRecorderRecordAgain}
+              {t.chat.sendMessage}
             </button>
           </>
         )}

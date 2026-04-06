@@ -22,6 +22,18 @@ type MentionParticipant = {
   label: string;
 };
 
+type PlaintextOutgoingPayload =
+  | {
+      attachment: File | null;
+      kind: 'text' | 'attachment';
+      voiceDurationMs: null;
+    }
+  | {
+      attachment: File;
+      kind: 'voice';
+      voiceDurationMs: number | null;
+    };
+
 type PlaintextChatComposerFormProps = {
   accept: string;
   attachmentHelpText: string;
@@ -80,6 +92,8 @@ export function PlaintextChatComposerForm({
       const nextFormData = new FormData();
       nextFormData.set('conversationId', conversationId);
       nextFormData.set('clientId', item.clientId);
+      const payload = item.payload as PlaintextOutgoingPayload;
+      const attachment = payload.attachment ?? item.attachment ?? null;
 
       if (item.body.trim()) {
         nextFormData.set('body', item.body);
@@ -89,8 +103,17 @@ export function PlaintextChatComposerForm({
         nextFormData.set('replyToMessageId', item.replyToMessageId);
       }
 
-      if (item.attachment) {
-        nextFormData.set('attachment', item.attachment);
+      if (attachment) {
+        nextFormData.set('attachment', attachment);
+      }
+
+      if (payload.kind === 'voice') {
+        nextFormData.set(
+          'voiceDurationMs',
+          payload.voiceDurationMs !== null
+            ? String(payload.voiceDurationMs)
+            : '',
+        );
       }
 
       const result = await sendMessageMutationAction(nextFormData);
@@ -141,10 +164,26 @@ export function PlaintextChatComposerForm({
         body: detail.body,
         clientId: detail.clientId,
         createdAt: detail.createdAt,
+        kind:
+          detail.kind === 'voice'
+            ? 'voice'
+            : detail.attachment
+              ? 'attachment'
+              : 'text',
         payload: {
           attachment: detail.attachment ?? null,
+          kind:
+            detail.kind === 'voice'
+              ? 'voice'
+              : detail.attachment
+                ? 'attachment'
+                : 'text',
+          voiceDurationMs:
+            detail.kind === 'voice' ? detail.voiceDurationMs ?? null : null,
         },
         replyToMessageId: detail.replyToMessageId ?? null,
+        voiceDurationMs:
+          detail.kind === 'voice' ? detail.voiceDurationMs ?? null : null,
       });
     };
 
@@ -186,8 +225,11 @@ export function PlaintextChatComposerForm({
           attachment,
           attachmentLabel: attachment?.name ?? (attachment ? t.chat.attachment : null),
           body,
+          kind: attachment ? 'attachment' : 'text',
           payload: {
             attachment,
+            kind: attachment ? 'attachment' : 'text',
+            voiceDurationMs: null,
           },
           replyToMessageId: replyToMessageId ?? null,
         });
@@ -221,6 +263,30 @@ export function PlaintextChatComposerForm({
         language={language}
         onCancel={voiceDraft.cancelRecording}
         onRetry={voiceDraft.startRecording}
+        onSend={() => {
+          const draftFile = voiceDraft.buildDraftFile();
+
+          if (!draftFile || !voiceDraft.draft) {
+            return;
+          }
+
+          setErrorMessage(null);
+          enqueue({
+            attachment: draftFile,
+            attachmentLabel: t.chat.voiceMessage,
+            body: '',
+            kind: 'voice',
+            payload: {
+              attachment: draftFile,
+              kind: 'voice',
+              voiceDurationMs: voiceDraft.draft.durationMs ?? null,
+            },
+            replyToMessageId: replyToMessageId ?? null,
+            voiceDurationMs: voiceDraft.draft.durationMs ?? null,
+          });
+          voiceDraft.clearDraft();
+          clearReplyTargetFromCurrentUrl();
+        }}
         onStop={voiceDraft.stopRecording}
       />
       <div className="composer-input-shell">

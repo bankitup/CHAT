@@ -17,8 +17,10 @@ export type OptimisticThreadMessagePayload = {
   conversationId: string;
   createdAt: string;
   errorMessage?: string | null;
+  kind?: 'text' | 'attachment' | 'voice';
   replyToMessageId?: string | null;
   status: OptimisticThreadMessageStatus;
+  voiceDurationMs?: number | null;
 };
 
 export function emitOptimisticThreadMessage(
@@ -45,7 +47,9 @@ export type OptimisticThreadRetryPayload = {
   clientId: string;
   conversationId: string;
   createdAt: string;
+  kind?: 'text' | 'attachment' | 'voice';
   replyToMessageId?: string | null;
+  voiceDurationMs?: number | null;
 };
 
 export function emitOptimisticThreadRetry(

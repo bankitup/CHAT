@@ -31,6 +31,18 @@ function formatOptimisticTimestamp(createdAt: string, fallbackLabel: string) {
   }).format(timestamp);
 }
 
+function formatVoiceDuration(durationMs: number | null) {
+  if (durationMs === null || durationMs < 0) {
+    return '--:--';
+  }
+
+  const totalSeconds = Math.max(Math.floor(durationMs / 1000), 0);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 export function OptimisticThreadMessages({
   confirmedClientIds,
   conversationId,
@@ -142,6 +154,7 @@ export function OptimisticThreadMessages({
         const isFailed = item.status === 'failed';
         const messagePreview =
           item.body.trim() || item.attachmentLabel?.trim() || labels.attachment;
+        const isVoiceMessage = item.kind === 'voice';
 
         return (
           <article
@@ -162,7 +175,42 @@ export function OptimisticThreadMessages({
                     : 'message-bubble message-bubble-own message-bubble-optimistic'
                 }
               >
-                <p className="message-body">{messagePreview}</p>
+                {isVoiceMessage ? (
+                  <div className="message-voice-stack">
+                    <div
+                      className="message-voice-card message-voice-card-own"
+                      data-voice-state={isFailed ? 'failed' : isPending ? 'uploading' : 'ready'}
+                    >
+                      <button
+                        className="message-voice-play"
+                        disabled
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="message-voice-play-icon">
+                          {isFailed ? '!' : isPending ? '...' : '>'}
+                        </span>
+                      </button>
+                      <div className="message-voice-copy">
+                        <div className="message-voice-head">
+                          <span className="message-voice-title">{messagePreview}</span>
+                          <span className="message-voice-duration">
+                            {formatVoiceDuration(item.voiceDurationMs ?? null)}
+                          </span>
+                        </div>
+                        <div className="message-voice-progress" aria-hidden="true">
+                          <span
+                            className="message-voice-progress-bar"
+                            style={{
+                              transform: `scaleX(${isFailed ? 0.28 : isPending ? 0.52 : 1})`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="message-body">{messagePreview}</p>
+                )}
               </div>
               <div className="message-meta message-meta-own message-meta-optimistic">
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
@@ -192,7 +240,9 @@ export function OptimisticThreadMessages({
                             clientId: item.clientId,
                             conversationId,
                             createdAt: item.createdAt,
+                            kind: item.kind,
                             replyToMessageId: item.replyToMessageId ?? null,
+                            voiceDurationMs: item.voiceDurationMs ?? null,
                           });
                         }}
                         type="button"

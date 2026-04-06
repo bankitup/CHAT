@@ -18,6 +18,7 @@ type UseComposerVoiceDraftOptions = {
 };
 
 type UseComposerVoiceDraftResult = {
+  buildDraftFile: () => File | null;
   cancelRecording: () => void;
   captureState: MessagingVoiceCaptureState;
   clearDraft: () => void;
@@ -95,6 +96,7 @@ export function useComposerVoiceDraft({
   const startedAtRef = useRef<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const draftUrlRef = useRef<string | null>(null);
+  const draftBlobRef = useRef<Blob | null>(null);
   const isSupported = useMemo(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -129,6 +131,7 @@ export function useComposerVoiceDraft({
     setDraft(null);
     setErrorCode(null);
     setElapsedMs(0);
+    draftBlobRef.current = null;
 
     if (captureState !== 'recording' && captureState !== 'requesting-permission') {
       setCaptureState('idle');
@@ -177,6 +180,7 @@ export function useComposerVoiceDraft({
     }
 
     draftUrlRef.current = blobUrl;
+    draftBlobRef.current = blob;
     stopActiveTimer();
     stopActiveStream();
     setElapsedMs(durationMs);
@@ -227,6 +231,17 @@ export function useComposerVoiceDraft({
     clearDraft();
     setCaptureState('idle');
   }, [clearDraft, stopActiveTimer]);
+
+  const buildDraftFile = useCallback(() => {
+    if (!draft || !draftBlobRef.current) {
+      return null;
+    }
+
+    return new File([draftBlobRef.current], draft.fileName ?? 'voice.webm', {
+      type: draft.mimeType ?? draftBlobRef.current.type ?? 'audio/webm',
+      lastModified: Date.now(),
+    });
+  }, [draft]);
 
   const startRecording = useCallback(async () => {
     if (!isSupported || typeof window === 'undefined') {
@@ -301,6 +316,8 @@ export function useComposerVoiceDraft({
       if (draftUrlRef.current) {
         URL.revokeObjectURL(draftUrlRef.current);
       }
+
+      draftBlobRef.current = null;
     };
   }, [stopActiveStream, stopActiveTimer]);
 
@@ -319,6 +336,7 @@ export function useComposerVoiceDraft({
   }, [captureState, draft]);
 
   return {
+    buildDraftFile,
     cancelRecording,
     captureState,
     clearDraft,

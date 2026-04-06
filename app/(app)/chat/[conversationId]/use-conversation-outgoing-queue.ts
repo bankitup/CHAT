@@ -19,7 +19,9 @@ export type OutgoingQueueDisplayDraft = Pick<
   | 'body'
   | 'clientId'
   | 'createdAt'
+  | 'kind'
   | 'replyToMessageId'
+  | 'voiceDurationMs'
 >;
 
 export type OutgoingQueueItem<TPayload> = {
@@ -29,8 +31,10 @@ export type OutgoingQueueItem<TPayload> = {
   clientId: string;
   conversationId: string;
   createdAt: string;
+  kind: 'text' | 'attachment' | 'voice';
   payload: TPayload;
   replyToMessageId: string | null;
+  voiceDurationMs: number | null;
 };
 
 type UseConversationOutgoingQueueOptions<TPayload> = {
@@ -51,8 +55,10 @@ type EnqueueOutgoingQueueItemInput<TPayload> = {
   body: string;
   clientId?: string | null;
   createdAt?: string | null;
+  kind?: 'text' | 'attachment' | 'voice';
   payload: TPayload;
   replyToMessageId?: string | null;
+  voiceDurationMs?: number | null;
 };
 
 function emitLifecycleUpdate(
@@ -64,7 +70,9 @@ function emitLifecycleUpdate(
     | 'clientId'
     | 'conversationId'
     | 'createdAt'
+    | 'kind'
     | 'replyToMessageId'
+    | 'voiceDurationMs'
   >,
   status: OutgoingMessageLifecycleState,
   errorMessage?: string | null,
@@ -148,8 +156,12 @@ export function useConversationOutgoingQueue<TPayload>({
         clientId: input.clientId?.trim() || crypto.randomUUID(),
         conversationId,
         createdAt: input.createdAt?.trim() || new Date().toISOString(),
+        kind:
+          input.kind ??
+          (input.attachment ? 'attachment' : 'text'),
         payload: input.payload,
         replyToMessageId: input.replyToMessageId?.trim() || null,
+        voiceDurationMs: input.voiceDurationMs ?? null,
       };
 
       queueRef.current = [...queueRef.current, queuedItem];

@@ -50,6 +50,22 @@ function readSettingsReturnTarget(formData: FormData) {
     : 'settings-overlay';
 }
 
+function readVoiceDurationMs(formData: FormData) {
+  const rawValue = String(formData.get('voiceDurationMs') ?? '').trim();
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsedValue = Number(rawValue);
+
+  if (!Number.isFinite(parsedValue)) {
+    return null;
+  }
+
+  return Math.max(0, Math.round(parsedValue));
+}
+
 function redirectToInbox(spaceId?: string | null): never {
   redirect(withSpaceParam('/inbox', spaceId));
 }
@@ -277,6 +293,7 @@ export async function sendMessageMutationAction(
   const body = String(formData.get('body') ?? '').trim();
   const clientId = String(formData.get('clientId') ?? '').trim() || undefined;
   const replyToMessageId = String(formData.get('replyToMessageId') ?? '').trim();
+  const voiceDurationMs = readVoiceDurationMs(formData);
   const attachmentEntry = formData.get('attachment');
   const attachment =
     attachmentEntry instanceof File && attachmentEntry.size > 0
@@ -388,6 +405,7 @@ export async function sendMessageMutationAction(
           file: attachment,
           replyToMessageId: replyToMessageId || null,
           senderId: user.id,
+          voiceDurationMs,
         })
       : await sendTextMessage({
           body,
@@ -726,6 +744,7 @@ export async function sendMessageAction(formData: FormData) {
   const spaceId = readSpaceId(formData);
   const body = String(formData.get('body') ?? '').trim();
   const replyToMessageId = String(formData.get('replyToMessageId') ?? '').trim();
+  const voiceDurationMs = readVoiceDurationMs(formData);
   const attachmentEntry = formData.get('attachment');
   const attachment =
     attachmentEntry instanceof File && attachmentEntry.size > 0
@@ -827,6 +846,7 @@ export async function sendMessageAction(formData: FormData) {
         senderId: userId,
         replyToMessageId: replyToMessageId || null,
         file: attachment,
+        voiceDurationMs,
       });
     } else {
       await sendTextMessage({
