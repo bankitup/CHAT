@@ -1097,43 +1097,50 @@ export default async function ChatPage({
           )}
           {activeReplyTarget ? (
             <div className="composer-reply-preview">
-              <div className="stack composer-reply-copy">
-                <span className="composer-reply-label">{t.chat.replyingTo}</span>
-                <span className="composer-reply-sender">
-                  {activeReplyTarget.deleted_at
-                    ? t.chat.deletedMessage
-                    : senderNames.get(activeReplyTarget.sender_id ?? '') ||
-                      t.chat.unknownUser}
-                </span>
-                <DmReplyTargetSnippet
-                  body={activeReplyTarget.body}
-                  conversationId={conversationId}
-                  currentUserId={user.id}
-                  debugRequestId={threadRenderRequestId}
-                  deletedFallbackLabel={t.chat.thisMessageWasDeleted}
-                  emptyFallbackLabel={t.chat.emptyMessage}
-                  encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
-                  encryptedReferenceNote={t.chat.encryptedReplyInfo}
-                  loadedFallbackLabel={t.chat.earlierMessage}
-                  messageId={activeReplyTarget.id}
-                  surface="composer-reply-preview"
-                  targetDeleted={Boolean(activeReplyTarget.deleted_at)}
-                  targetIsEncrypted={isEncryptedDmTextMessage(activeReplyTarget)}
-                  targetIsLoaded
-                  targetKind={activeReplyTarget.kind}
-                  targetMessageId={activeReplyTarget.id}
-                  voiceFallbackLabel={t.chat.voiceMessage}
-                />
+              <span aria-hidden="true" className="composer-reply-accent" />
+              <div className="stack composer-reply-main">
+                <div className="stack composer-reply-copy">
+                  <span className="composer-reply-label">{t.chat.replyingTo}</span>
+                  <span className="composer-reply-sender">
+                    {activeReplyTarget.deleted_at
+                      ? t.chat.deletedMessage
+                      : senderNames.get(activeReplyTarget.sender_id ?? '') ||
+                        t.chat.unknownUser}
+                  </span>
+                  <DmReplyTargetSnippet
+                    body={activeReplyTarget.body}
+                    conversationId={conversationId}
+                    currentUserId={user.id}
+                    debugRequestId={threadRenderRequestId}
+                    deletedFallbackLabel={t.chat.thisMessageWasDeleted}
+                    emptyFallbackLabel={t.chat.emptyMessage}
+                    encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                    encryptedReferenceNote={t.chat.encryptedReplyInfo}
+                    loadedFallbackLabel={t.chat.earlierMessage}
+                    messageId={activeReplyTarget.id}
+                    surface="composer-reply-preview"
+                    targetDeleted={Boolean(activeReplyTarget.deleted_at)}
+                    targetIsEncrypted={isEncryptedDmTextMessage(activeReplyTarget)}
+                    targetIsLoaded
+                    targetKind={activeReplyTarget.kind}
+                    targetMessageId={activeReplyTarget.id}
+                    voiceFallbackLabel={t.chat.voiceMessage}
+                  />
+                </div>
               </div>
               <Link
-                className="pill composer-reply-cancel"
+                aria-label={t.chat.cancel}
+                className="composer-reply-dismiss"
                 href={buildChatHref({
                   conversationId,
                   hash: '#message-composer',
                   spaceId: activeSpaceId,
                 })}
               >
-                {t.chat.cancel}
+                <span aria-hidden="true" className="composer-reply-dismiss-glyph">
+                  ×
+                </span>
+                <span className="sr-only">{t.chat.cancel}</span>
               </Link>
             </div>
           ) : null}

@@ -896,42 +896,55 @@ function ThreadMessageRow({
         ) : null}
         <div
           className={
-            isOwnMessage
-              ? 'message-bubble message-bubble-own'
-              : 'message-bubble'
+            message.reply_to_message_id && !isDeletedMessage
+              ? isOwnMessage
+                ? 'message-bubble message-bubble-own message-bubble-with-reply'
+                : 'message-bubble message-bubble-with-reply'
+              : isOwnMessage
+                ? 'message-bubble message-bubble-own'
+                : 'message-bubble'
           }
         >
           {message.reply_to_message_id && !isDeletedMessage ? (
-            <div className="message-reply-reference">
-              <span className="message-reply-sender">
-                {!repliedMessage
-                  ? t.chat.earlierMessage
-                  : repliedMessage.deleted_at
-                    ? t.chat.deletedMessage
-                    : senderNames.get(repliedMessage.sender_id ?? '') ||
-                      t.chat.unknownUser}
-              </span>
-              <DmReplyTargetSnippet
-                body={repliedMessage?.body ?? null}
-                conversationId={conversationId}
-                currentUserId={currentUserId}
-                debugRequestId={threadClientDiagnostics.debugRequestId}
-                deletedFallbackLabel={t.chat.messageDeleted}
-                emptyFallbackLabel={t.chat.emptyMessage}
-                encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
-                encryptedReferenceNote={null}
-                loadedFallbackLabel={t.chat.earlierMessage}
-                messageId={message.id}
-                surface="message-reply-reference"
-                targetDeleted={Boolean(repliedMessage?.deleted_at)}
-                targetIsEncrypted={Boolean(
-                  repliedMessage && isEncryptedDmTextMessage(repliedMessage),
-                )}
-                targetIsLoaded={Boolean(repliedMessage)}
-                targetKind={repliedMessage?.kind ?? null}
-                targetMessageId={message.reply_to_message_id}
-                voiceFallbackLabel={t.chat.voiceMessage}
-              />
+            <div
+              className={
+                isOwnMessage
+                  ? 'message-reply-reference message-reply-reference-own'
+                  : 'message-reply-reference'
+              }
+            >
+              <span aria-hidden="true" className="message-reply-accent" />
+              <div className="message-reply-copy">
+                <span className="message-reply-sender">
+                  {!repliedMessage
+                    ? t.chat.earlierMessage
+                    : repliedMessage.deleted_at
+                      ? t.chat.deletedMessage
+                      : senderNames.get(repliedMessage.sender_id ?? '') ||
+                        t.chat.unknownUser}
+                </span>
+                <DmReplyTargetSnippet
+                  body={repliedMessage?.body ?? null}
+                  conversationId={conversationId}
+                  currentUserId={currentUserId}
+                  debugRequestId={threadClientDiagnostics.debugRequestId}
+                  deletedFallbackLabel={t.chat.messageDeleted}
+                  emptyFallbackLabel={t.chat.emptyMessage}
+                  encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                  encryptedReferenceNote={null}
+                  loadedFallbackLabel={t.chat.earlierMessage}
+                  messageId={message.id}
+                  surface="message-reply-reference"
+                  targetDeleted={Boolean(repliedMessage?.deleted_at)}
+                  targetIsEncrypted={Boolean(
+                    repliedMessage && isEncryptedDmTextMessage(repliedMessage),
+                  )}
+                  targetIsLoaded={Boolean(repliedMessage)}
+                  targetKind={repliedMessage?.kind ?? null}
+                  targetMessageId={message.reply_to_message_id}
+                  voiceFallbackLabel={t.chat.voiceMessage}
+                />
+              </div>
             </div>
           ) : null}
           {isDeletedMessage ? (

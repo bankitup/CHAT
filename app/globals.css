@@ -4455,6 +4455,10 @@ main {
   box-shadow: 0 10px 22px rgba(31, 111, 235, 0.055);
 }
 
+.message-bubble-with-reply {
+  padding-top: 10px;
+}
+
 .message-bubble-optimistic {
   border-style: dashed;
   border-color: rgba(31, 111, 235, 0.22);
@@ -4470,25 +4474,77 @@ main {
 
 .message-reply-reference {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 9px;
+  margin-bottom: 11px;
+  padding: 9px 10px 9px 9px;
+  border: 1px solid rgba(221, 228, 238, 0.82);
+  border-radius: 15px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(244, 247, 252, 0.84));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 1px 1px rgba(17, 24, 39, 0.018);
+  min-width: 0;
+}
+
+.message-reply-reference-own {
+  border-color: rgba(31, 111, 235, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(226, 238, 255, 0.64));
+}
+
+.message-reply-accent {
+  display: block;
+  width: 3px;
+  min-height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(31, 111, 235, 0.94), rgba(31, 111, 235, 0.42));
+  box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.08);
+}
+
+.message-reply-copy {
+  display: grid;
   gap: 2px;
-  margin-bottom: 7px;
-  padding: 7px 9px;
-  border-left: 3px solid rgba(31, 111, 235, 0.28);
-  border-radius: 12px;
-  background: rgba(17, 24, 39, 0.035);
+  min-width: 0;
 }
 
 .message-reply-sender {
-  color: var(--accent);
-  font-size: 0.81rem;
+  color: rgba(19, 96, 213, 0.94);
+  font-size: 0.77rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.14;
+  letter-spacing: 0.012em;
 }
 
 .message-reply-snippet {
-  color: rgba(91, 100, 112, 0.9);
-  font-size: 0.8rem;
-  line-height: 1.34;
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(72, 82, 95, 0.88);
+  font-size: 0.79rem;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+}
+
+.message-reply-reference-own .message-reply-snippet {
+  color: rgba(73, 86, 106, 0.88);
+}
+
+.message-reply-snippet[data-reply-target-diagnostic='target-deleted'],
+.message-reply-snippet[data-reply-target-diagnostic='target-not-loaded'],
+.message-reply-snippet[data-reply-target-diagnostic='temporary-loading'] {
+  color: rgba(91, 100, 112, 0.78);
+}
+
+.message-reply-snippet[data-reply-target-diagnostic='target-deleted'] {
+  font-style: italic;
+}
+
+.message-reply-reference .reply-target-debug-label {
+  margin-top: 1px;
 }
 
 .reply-target-debug-label {
@@ -5550,53 +5606,92 @@ main {
 }
 
 .composer-reply-preview {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 16px;
-  background: rgba(31, 111, 235, 0.045);
-  border: 1px solid rgba(31, 111, 235, 0.08);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 10px;
+  margin-bottom: 2px;
+  padding: 8px 9px 8px 8px;
+  border: 1px solid rgba(31, 111, 235, 0.085);
+  border-radius: 17px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 18px rgba(17, 24, 39, 0.035);
+}
+
+.composer-reply-accent {
+  display: block;
+  width: 3px;
+  min-height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(31, 111, 235, 0.96), rgba(31, 111, 235, 0.44));
+  box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.08);
+}
+
+.composer-reply-main {
+  min-width: 0;
 }
 
 .composer-reply-copy {
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
 .composer-reply-label {
   color: rgba(91, 100, 112, 0.88);
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
   text-transform: uppercase;
 }
 
 .composer-reply-sender {
-  color: var(--foreground);
-  font-size: 0.9rem;
+  color: rgba(24, 34, 48, 0.96);
+  font-size: 0.84rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.18;
 }
 
 .composer-reply-snippet {
-  color: rgba(91, 100, 112, 0.92);
-  font-size: 0.84rem;
-  line-height: 1.35;
+  display: -webkit-box;
+  overflow: hidden;
+  color: rgba(91, 100, 112, 0.9);
+  font-size: 0.79rem;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
 }
 
 .composer-reply-note {
-  color: rgba(91, 100, 112, 0.84);
-  font-size: 0.74rem;
-  line-height: 1.35;
+  margin-top: 1px;
+  color: rgba(91, 100, 112, 0.8);
+  font-size: 0.72rem;
+  line-height: 1.32;
 }
 
-.composer-reply-cancel {
-  min-height: 34px;
-  padding: 6px 10px;
-  font-size: 0.82rem;
-  white-space: nowrap;
+.composer-reply-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(219, 227, 238, 0.92);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: rgba(73, 84, 98, 0.86);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.025);
+  backdrop-filter: blur(12px);
+}
+
+.composer-reply-dismiss-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .composer-form .field {
