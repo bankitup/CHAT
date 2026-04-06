@@ -141,6 +141,15 @@ type ThreadHistorySyncRequestState = {
   reason: string | null;
 };
 
+type PendingByIdThreadHistorySyncRequest = {
+  messageIds: string[];
+  reason: string | null;
+};
+
+type PendingAfterSeqThreadHistorySyncRequest = {
+  reason: string | null;
+};
+
 type ThreadHistoryState = {
   attachmentsByMessage: Map<string, MessageAttachment[]>;
   encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
@@ -158,7 +167,6 @@ type TimelineItem =
   | { key: string; label: string; type: 'separator' | 'unread' }
   | { key: string; message: ConversationMessageRow; type: 'message' };
 
-type HistoryFetchMode = 'latest' | 'before-seq' | 'after-seq' | 'by-id' | 'noop';
 type VoiceMessageRenderState =
   | 'ready'
   | 'uploading'
@@ -835,21 +843,6 @@ function normalizeThreadHistorySyncRequestState(input: {
     newerThanLatest: hasMessageIds ? false : Boolean(input.newerThanLatest),
     reason: input.reason?.trim() || null,
   } satisfies ThreadHistorySyncRequestState;
-}
-
-function getThreadHistorySyncMode(input: {
-  messageIds: string[];
-  newerThanLatest: boolean;
-}): HistoryFetchMode {
-  if (input.messageIds.length > 0) {
-    return 'by-id' as const;
-  }
-
-  if (input.newerThanLatest) {
-    return 'after-seq' as const;
-  }
-
-  return 'noop' as const;
 }
 
 function shouldRetryLocalEncryptedDmMissingEnvelope(reason: string | null) {
@@ -1764,10 +1757,10 @@ export function ThreadHistoryViewport({
   const lastConversationIdRef = useRef(conversationId);
   const lastInitialSnapshotKeyRef = useRef(getSnapshotRevisionKey(initialSnapshot));
   const pendingRestoreRef = useRef<PendingScrollRestore | null>(null);
-  const pendingSyncRequestRef = useRef<ThreadHistorySyncRequestState | null>(null);
-  const pendingAfterSeqFollowupRef = useRef<{
-    reason: string | null;
-  } | null>(null);
+  const pendingByIdSyncRequestRef =
+    useRef<PendingByIdThreadHistorySyncRequest | null>(null);
+  const pendingAfterSeqSyncRequestRef =
+    useRef<PendingAfterSeqThreadHistorySyncRequest | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const encryptedDmRecoveryAttemptsRef = useRef(new Map<string, number>());
   const encryptedDmRecoveryTimeoutsRef = useRef(
@@ -1793,8 +1786,8 @@ export function ThreadHistoryViewport({
       setHistoryState(resetState);
       setIsLoadingOlder(false);
       pendingRestoreRef.current = null;
-      pendingSyncRequestRef.current = null;
-      pendingAfterSeqFollowupRef.current = null;
+      pendingByIdSyncRequestRef.current = null;
+      pendingAfterSeqSyncRequestRef.current = null;
       return;
     }
 
@@ -1955,54 +1948,60 @@ export function ThreadHistoryViewport({
 
   const mergeSyncRequest = useCallback(
     (nextRequest: ThreadHistorySyncRequestPayload) => {
-      const currentRequest = normalizeThreadHistorySyncRequestState(
-        pendingSyncRequestRef.current ?? {},
-      );
       const normalizedNextRequest = normalizeThreadHistorySyncRequestState(
         nextRequest,
       );
-      const mergedMessageIds = Array.from(
-        new Set([
-          ...currentRequest.messageIds,
-          ...normalizedNextRequest.messageIds,
-        ]),
-      );
-      const hasMergedMessageIds = mergedMessageIds.length > 0;
-      const shouldQueueAfterSeqFollowup =
-        hasMergedMessageIds &&
-        (currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest);
-      const mergedReason =
-        normalizedNextRequest.reason || currentRequest.reason || null;
-      const mergedRequest = {
-        messageIds: mergedMessageIds,
-        newerThanLatest: hasMergedMessageIds
-          ? false
-          : currentRequest.newerThanLatest || normalizedNextRequest.newerThanLatest,
-        reason: mergedReason,
-      } satisfies ThreadHistorySyncRequestState;
+      const currentByIdRequest = pendingByIdSyncRequestRef.current;
+      const currentAfterSeqRequest = pendingAfterSeqSyncRequestRef.current;
 
-      if (shouldQueueAfterSeqFollowup) {
-        pendingAfterSeqFollowupRef.current = {
+      if (normalizedNextRequest.messageIds.length > 0) {
+        const mergedMessageIds = Array.from(
+          new Set([
+            ...(currentByIdRequest?.messageIds ?? []),
+            ...normalizedNextRequest.messageIds,
+          ]),
+        );
+        const mergedReason =
+          normalizedNextRequest.reason || currentByIdRequest?.reason || null;
+
+        pendingByIdSyncRequestRef.current = {
+          messageIds: mergedMessageIds,
           reason: mergedReason,
         };
+
+        if (historySyncDiagnosticsEnabled && currentAfterSeqRequest) {
+          console.info('[chat-history]', 'topology-sync:mode-separated', {
+            conversationId,
+            currentQueuedAfterSeqReason: currentAfterSeqRequest.reason,
+            nextMode: 'by-id',
+            queuedModes: ['by-id', 'after-seq'],
+            requestedMessageIds: mergedMessageIds,
+            reason: mergedReason,
+          });
+        }
+
+        return;
       }
 
-      if (
-        historySyncDiagnosticsEnabled &&
-        shouldQueueAfterSeqFollowup
-      ) {
+      if (!normalizedNextRequest.newerThanLatest) {
+        return;
+      }
+
+      pendingAfterSeqSyncRequestRef.current = {
+        reason:
+          normalizedNextRequest.reason || currentAfterSeqRequest?.reason || null,
+      };
+
+      if (historySyncDiagnosticsEnabled && currentByIdRequest) {
         console.info('[chat-history]', 'topology-sync:mode-separated', {
           conversationId,
-          mergedMessageIds: mergedRequest.messageIds,
-          nextMode: getThreadHistorySyncMode(normalizedNextRequest),
-          queuedFollowupMode: 'after-seq',
-          selectedMode: getThreadHistorySyncMode(mergedRequest),
-          previousMode: getThreadHistorySyncMode(currentRequest),
-          reason: mergedRequest.reason,
+          currentQueuedByIdMessageIds: currentByIdRequest.messageIds,
+          nextMode: 'after-seq',
+          queuedModes: ['by-id', 'after-seq'],
+          reason:
+            normalizedNextRequest.reason || currentAfterSeqRequest?.reason || null,
         });
       }
-
-      pendingSyncRequestRef.current = mergedRequest;
     },
     [conversationId, historySyncDiagnosticsEnabled],
   );
@@ -2202,27 +2201,47 @@ export function ThreadHistoryViewport({
         return;
       }
 
-      const request = pendingSyncRequestRef.current;
+      const pendingByIdRequest = pendingByIdSyncRequestRef.current;
+      const pendingAfterSeqRequest = pendingAfterSeqSyncRequestRef.current;
 
-      if (!request) {
+      if (!pendingByIdRequest && !pendingAfterSeqRequest) {
         return;
       }
 
-      pendingSyncRequestRef.current = null;
+      const request = pendingByIdRequest
+        ? {
+            messageIds: pendingByIdRequest.messageIds,
+            mode: 'by-id' as const,
+            newerThanLatest: false,
+            reason: pendingByIdRequest.reason,
+          }
+        : {
+            messageIds: [] as string[],
+            mode: 'after-seq' as const,
+            newerThanLatest: true,
+            reason: pendingAfterSeqRequest?.reason ?? null,
+          };
+
+      if (request.mode === 'by-id') {
+        pendingByIdSyncRequestRef.current = null;
+      } else {
+        pendingAfterSeqSyncRequestRef.current = null;
+      }
+
       isSyncingRef.current = true;
 
       try {
         if (historySyncDiagnosticsEnabled) {
           console.info('[chat-history]', 'topology-sync:flush', {
-            afterSeqRequested: request.newerThanLatest,
-            chosenMode: getThreadHistorySyncMode(request),
+            afterSeqRequested: request.mode === 'after-seq',
+            chosenMode: request.mode,
             conversationId,
             messageIds: request.messageIds,
             reason: request.reason,
           });
         }
 
-        if (request.messageIds.length > 0) {
+        if (request.mode === 'by-id') {
           const snapshot = await performSyncFetch({
             messageIds: request.messageIds,
             reason: request.reason,
@@ -2247,35 +2266,9 @@ export function ThreadHistoryViewport({
             historyStateRef.current = nextState;
             return nextState;
           });
-
-          const pendingAfterSeqFollowup = pendingAfterSeqFollowupRef.current;
-
-          if (pendingAfterSeqFollowup) {
-            pendingAfterSeqFollowupRef.current = null;
-            mergeSyncRequest({
-              conversationId,
-              newerThanLatest: true,
-              reason: pendingAfterSeqFollowup.reason ?? request.reason,
-            });
-
-            if (historySyncDiagnosticsEnabled) {
-              console.info(
-                '[chat-history]',
-                'topology-sync:after-seq-followup-queued',
-                {
-                  conversationId,
-                  followupMode: 'after-seq',
-                  initialMode: 'by-id',
-                  messageIds: request.messageIds,
-                  reason:
-                    pendingAfterSeqFollowup.reason ?? request.reason,
-                },
-              );
-            }
-          }
         }
 
-        if (request.newerThanLatest) {
+        if (request.mode === 'after-seq') {
           while (true) {
             const latestLoadedSeq = resolveLatestLoadedSeq(
               historyStateRef.current.messages,
@@ -2330,7 +2323,10 @@ export function ThreadHistoryViewport({
       } finally {
         isSyncingRef.current = false;
 
-        if (!isDisposed && pendingSyncRequestRef.current) {
+        if (
+          !isDisposed &&
+          (pendingByIdSyncRequestRef.current || pendingAfterSeqSyncRequestRef.current)
+        ) {
           syncTimeoutRef.current = setTimeout(() => {
             syncTimeoutRef.current = null;
             void flushPendingSyncRequest();
@@ -2377,7 +2373,8 @@ export function ThreadHistoryViewport({
       for (const timeoutId of encryptedDmRecoveryTimeouts.values()) {
         clearTimeout(timeoutId);
       }
-      pendingAfterSeqFollowupRef.current = null;
+      pendingByIdSyncRequestRef.current = null;
+      pendingAfterSeqSyncRequestRef.current = null;
       encryptedDmRecoveryAttempts.clear();
       encryptedDmRecoveryTimeouts.clear();
 
