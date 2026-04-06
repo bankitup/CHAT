@@ -132,15 +132,15 @@ export const ChatHeaderAvatarPreviewTrigger = memo(function ChatHeaderAvatarPrev
           aria-modal="true"
           className="chat-header-avatar-preview-overlay"
           data-state={isVisible ? 'open' : 'closed'}
+          onClick={closePreview}
           role="dialog"
         >
-          <button
-            aria-label={closeLabel}
-            className="chat-header-avatar-preview-backdrop"
-            onClick={closePreview}
-            type="button"
-          />
-          <div className="chat-header-avatar-preview-shell">
+          <div
+            className="chat-header-avatar-preview-shell"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
             <button
               aria-label={closeLabel}
               className="chat-header-avatar-preview-close"
