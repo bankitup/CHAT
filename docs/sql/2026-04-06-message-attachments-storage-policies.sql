@@ -1,11 +1,11 @@
--- Chat attachment storage setup for the `message-attachments` bucket.
+-- Chat attachment storage setup for the `message-media` bucket.
 -- Current app path format: <conversation_id>/<message_id>/(voice|files)/<stamp>-<sanitized-file-name>
 -- If production intentionally uses a different bucket name, keep code and SQL aligned.
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
-  'message-attachments',
-  'message-attachments',
+  'message-media',
+  'message-media',
   false,
   10485760,
   array[
@@ -40,7 +40,7 @@ on storage.objects
 for select
 to authenticated
 using (
-  bucket_id = 'message-attachments'
+  bucket_id = 'message-media'
   and exists (
     select 1
     from public.conversation_members cm
@@ -56,7 +56,7 @@ on storage.objects
 for insert
 to authenticated
 with check (
-  bucket_id = 'message-attachments'
+  bucket_id = 'message-media'
   and exists (
     select 1
     from public.conversation_members cm
@@ -72,7 +72,7 @@ on storage.objects
 for update
 to authenticated
 using (
-  bucket_id = 'message-attachments'
+  bucket_id = 'message-media'
   and exists (
     select 1
     from public.conversation_members cm
@@ -82,7 +82,7 @@ using (
   )
 )
 with check (
-  bucket_id = 'message-attachments'
+  bucket_id = 'message-media'
   and exists (
     select 1
     from public.conversation_members cm
@@ -98,7 +98,7 @@ on storage.objects
 for delete
 to authenticated
 using (
-  bucket_id = 'message-attachments'
+  bucket_id = 'message-media'
   and exists (
     select 1
     from public.conversation_members cm

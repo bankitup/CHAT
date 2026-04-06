@@ -542,7 +542,9 @@ export const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 
 const CHAT_ATTACHMENT_BUCKET =
-  process.env.NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET ?? 'message-attachments';
+  process.env.SUPABASE_ATTACHMENTS_BUCKET?.trim() ||
+  process.env.NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET?.trim() ||
+  'message-media';
 const PROFILE_AVATAR_BUCKET =
   process.env.SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
 const SUPPORTED_ATTACHMENT_TYPES = new Set([

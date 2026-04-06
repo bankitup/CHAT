@@ -92,12 +92,14 @@ Operational note:
 Required current buckets:
 
 - `avatars`
-- `message-attachments`
+- `message-media`
 
 Current attachment runtime note:
 
-- chat attachments and voice notes default to the `message-attachments` bucket
-- current default bucket is `message-attachments` (override with `NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET` only if code and SQL stay aligned)
+- chat attachments and voice notes default to the `message-media` bucket
+- current default bucket is `message-media`
+- server runtime may override with `SUPABASE_ATTACHMENTS_BUCKET`
+- client-exposed fallback may override with `NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET`, but code and SQL must stay aligned
 
 ### `public.message_reactions`
 
