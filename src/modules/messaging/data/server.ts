@@ -385,6 +385,7 @@ export type MessageAttachment = {
   objectPath: string;
   mimeType: string | null;
   sizeBytes: number | null;
+  durationMs?: number | null;
   createdAt: string | null;
   fileName: string;
   signedUrl: string | null;
@@ -5796,6 +5797,7 @@ export async function getMessageAttachments(messageIds: string[]) {
           objectPath: row.object_path,
           mimeType: row.mime_type,
           sizeBytes: row.size_bytes,
+          durationMs: null,
           createdAt: row.created_at,
           fileName: getAttachmentFileName(row.object_path),
           signedUrl: null,
@@ -5812,6 +5814,7 @@ export async function getMessageAttachments(messageIds: string[]) {
         objectPath: row.object_path,
         mimeType: row.mime_type,
         sizeBytes: row.size_bytes,
+        durationMs: null,
         createdAt: row.created_at,
         fileName: getAttachmentFileName(row.object_path),
         signedUrl: signedUrlData.signedUrl,

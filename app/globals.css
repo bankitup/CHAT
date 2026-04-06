@@ -5225,6 +5225,147 @@ main {
   overflow-wrap: anywhere;
 }
 
+.message-voice-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.message-voice-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-height: 66px;
+  padding: 10px 11px;
+  border: 1px solid rgba(221, 228, 238, 0.82);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(244, 247, 252, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 1px 2px rgba(17, 24, 39, 0.03);
+}
+
+.message-voice-card-own {
+  border-color: rgba(31, 111, 235, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(225, 237, 255, 0.86));
+}
+
+.message-voice-card[data-voice-state='uploading'],
+.message-voice-card[data-voice-state='processing'] {
+  opacity: 0.94;
+}
+
+.message-voice-card[data-voice-state='failed'],
+.message-voice-card[data-voice-state='unavailable'] {
+  opacity: 0.88;
+}
+
+.message-voice-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(31, 111, 235, 0.96), rgba(31, 111, 235, 0.78));
+  color: white;
+  box-shadow: 0 8px 18px rgba(31, 111, 235, 0.16);
+  cursor: pointer;
+}
+
+.message-voice-play:disabled {
+  background: rgba(160, 170, 184, 0.56);
+  box-shadow: none;
+  cursor: default;
+}
+
+.message-voice-play-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 12px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+  transform: translateX(1px);
+}
+
+.message-voice-copy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.message-voice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.message-voice-title,
+.message-voice-duration {
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.message-voice-title {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.message-voice-duration {
+  color: rgba(91, 100, 112, 0.8);
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.message-voice-progress {
+  position: relative;
+  overflow: hidden;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(176, 188, 202, 0.26);
+}
+
+.message-voice-progress-bar {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: linear-gradient(90deg, rgba(31, 111, 235, 0.92), rgba(31, 111, 235, 0.56));
+}
+
+.message-voice-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: rgba(91, 100, 112, 0.84);
+  font-size: 0.73rem;
+  line-height: 1.25;
+}
+
+.message-voice-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-voice-meta-separator {
+  color: rgba(91, 100, 112, 0.52);
+}
+
+.message-voice-audio {
+  display: none;
+}
+
 .message-attachments {
   display: grid;
   gap: 6px;

@@ -359,6 +359,12 @@ type LanguageDictionary = {
     image: string;
     audio: string;
     voiceMessage: string;
+    voiceMessagePlay: string;
+    voiceMessagePause: string;
+    voiceMessageUploading: string;
+    voiceMessageProcessing: string;
+    voiceMessageFailed: string;
+    voiceMessageUnavailable: string;
     encryptedMessage: string;
     olderEncryptedMessage: string;
     newEncryptedMessage: string;
@@ -797,6 +803,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       image: 'Image',
       audio: 'Audio',
       voiceMessage: 'Voice message',
+      voiceMessagePlay: 'Play voice message',
+      voiceMessagePause: 'Pause voice message',
+      voiceMessageUploading: 'Uploading voice message',
+      voiceMessageProcessing: 'Preparing voice message',
+      voiceMessageFailed: 'Voice message is not available right now.',
+      voiceMessageUnavailable: 'Voice message is unavailable on this device.',
       encryptedMessage: 'Encrypted message',
       olderEncryptedMessage: 'Older encrypted message',
       newEncryptedMessage: 'New encrypted message',
@@ -1245,6 +1257,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       image: 'Изображение',
       audio: 'Аудио',
       voiceMessage: 'Голосовое сообщение',
+      voiceMessagePlay: 'Воспроизвести голосовое сообщение',
+      voiceMessagePause: 'Поставить голосовое сообщение на паузу',
+      voiceMessageUploading: 'Голосовое сообщение загружается',
+      voiceMessageProcessing: 'Голосовое сообщение подготавливается',
+      voiceMessageFailed: 'Голосовое сообщение сейчас недоступно.',
+      voiceMessageUnavailable: 'Голосовое сообщение недоступно на этом устройстве.',
       encryptedMessage: 'Зашифрованное сообщение',
       olderEncryptedMessage: 'Раннее зашифрованное сообщение',
       newEncryptedMessage: 'Новое зашифрованное сообщение',

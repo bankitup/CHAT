@@ -55,6 +55,7 @@ type ConversationMessageRow = {
 };
 
 type MessageAttachment = {
+  durationMs?: number | null;
   fileName: string;
   id: string;
   isAudio: boolean;
@@ -156,6 +157,12 @@ type TimelineItem =
   | { key: string; message: ConversationMessageRow; type: 'message' };
 
 type HistoryFetchMode = 'latest' | 'before-seq' | 'after-seq' | 'by-id' | 'noop';
+type VoiceMessageRenderState =
+  | 'ready'
+  | 'uploading'
+  | 'processing'
+  | 'failed'
+  | 'unavailable';
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
 
@@ -264,6 +271,60 @@ function formatAttachmentSize(value: number | null) {
   }
 
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatVoiceDuration(valueMs: number | null | undefined) {
+  if (!valueMs || Number.isNaN(valueMs) || valueMs < 0) {
+    return '--:--';
+  }
+
+  const totalSeconds = Math.max(0, Math.round(valueMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function resolveVoiceMessageRenderState(input: {
+  attachment: MessageAttachment | null;
+  playbackFailed: boolean;
+  stageHint?: 'uploading' | 'processing' | 'failed' | null;
+}) {
+  if (input.stageHint === 'uploading') {
+    return 'uploading' satisfies VoiceMessageRenderState;
+  }
+
+  if (input.stageHint === 'processing') {
+    return 'processing' satisfies VoiceMessageRenderState;
+  }
+
+  if (input.stageHint === 'failed' || input.playbackFailed) {
+    return 'failed' satisfies VoiceMessageRenderState;
+  }
+
+  if (input.attachment?.signedUrl) {
+    return 'ready' satisfies VoiceMessageRenderState;
+  }
+
+  return 'unavailable' satisfies VoiceMessageRenderState;
+}
+
+function getVoiceMessageStateLabel(input: {
+  state: VoiceMessageRenderState;
+  t: ReturnType<typeof getTranslations>;
+}) {
+  switch (input.state) {
+    case 'uploading':
+      return input.t.chat.voiceMessageUploading;
+    case 'processing':
+      return input.t.chat.voiceMessageProcessing;
+    case 'failed':
+      return input.t.chat.voiceMessageFailed;
+    case 'unavailable':
+      return input.t.chat.voiceMessageUnavailable;
+    default:
+      return input.t.chat.voiceMessage;
+  }
 }
 
 function getMessageSeq(value: number | string) {
@@ -403,6 +464,184 @@ function getOutgoingMessageStatus(input: {
   }
 
   return 'sent' as const;
+}
+
+function ThreadVoiceMessageBubble({
+  attachment,
+  isOwnMessage,
+  language,
+  stageHint = null,
+}: {
+  attachment: MessageAttachment | null;
+  isOwnMessage: boolean;
+  language: AppLanguage;
+  stageHint?: 'uploading' | 'processing' | 'failed' | null;
+}) {
+  const t = getTranslations(language);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
+  const [resolvedDurationMs, setResolvedDurationMs] = useState<number | null>(
+    attachment?.durationMs ?? null,
+  );
+  const [playbackFailed, setPlaybackFailed] = useState(false);
+
+  const voiceState = resolveVoiceMessageRenderState({
+    attachment,
+    playbackFailed,
+    stageHint,
+  });
+  const stateLabel = getVoiceMessageStateLabel({ state: voiceState, t });
+  const totalDurationSeconds =
+    resolvedDurationMs && resolvedDurationMs > 0 ? resolvedDurationMs / 1000 : 0;
+  const progressRatio =
+    totalDurationSeconds > 0
+      ? Math.min(1, Math.max(0, currentTimeSeconds / totalDurationSeconds))
+      : 0;
+  const metaParts =
+    voiceState === 'ready'
+      ? [
+          formatVoiceDuration(resolvedDurationMs),
+          formatAttachmentSize(attachment?.sizeBytes ?? null),
+        ].filter(Boolean)
+      : [stateLabel];
+
+  useEffect(() => {
+    if (voiceState !== 'ready') {
+      return;
+    }
+
+    const audio = audioRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    const handleLoadedMetadata = () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        setResolvedDurationMs(audio.duration * 1000);
+      }
+    };
+    const handleTimeUpdate = () => {
+      setCurrentTimeSeconds(audio.currentTime);
+    };
+    const handlePlay = () => {
+      setIsPlaying(true);
+      setPlaybackFailed(false);
+    };
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTimeSeconds(0);
+    };
+    const handleError = () => {
+      setIsPlaying(false);
+      setPlaybackFailed(true);
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+    };
+  }, [voiceState]);
+
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+
+    if (!audio || voiceState !== 'ready') {
+      return;
+    }
+
+    if (audio.paused) {
+      try {
+        await audio.play();
+      } catch {
+        setPlaybackFailed(true);
+        setIsPlaying(false);
+      }
+      return;
+    }
+
+    audio.pause();
+  };
+
+  const playButtonLabel =
+    voiceState !== 'ready'
+      ? stateLabel
+      : isPlaying
+        ? t.chat.voiceMessagePause
+        : t.chat.voiceMessagePlay;
+
+  return (
+    <div
+      className={
+        isOwnMessage
+          ? 'message-voice-card message-voice-card-own'
+          : 'message-voice-card'
+      }
+      data-voice-state={voiceState}
+    >
+      <button
+        aria-label={playButtonLabel}
+        className="message-voice-play"
+        disabled={voiceState !== 'ready'}
+        onClick={() => {
+          void togglePlayback();
+        }}
+        type="button"
+      >
+        <span aria-hidden="true" className="message-voice-play-icon">
+          {voiceState !== 'ready' ? '...' : isPlaying ? '||' : '>'}
+        </span>
+      </button>
+      <div className="message-voice-copy">
+        <div className="message-voice-head">
+          <span className="message-voice-title">{t.chat.voiceMessage}</span>
+          <span className="message-voice-duration">
+            {voiceState === 'ready'
+              ? formatVoiceDuration(resolvedDurationMs)
+              : '--:--'}
+          </span>
+        </div>
+        <div className="message-voice-progress" aria-hidden="true">
+          <span
+            className="message-voice-progress-bar"
+            style={{ transform: `scaleX(${progressRatio})` }}
+          />
+        </div>
+        <div className="message-voice-meta">
+          <span className="message-voice-state">{stateLabel}</span>
+          {voiceState === 'ready' && metaParts.length > 1 ? (
+            <span className="message-voice-meta-separator">·</span>
+          ) : null}
+          {voiceState === 'ready' && metaParts.length > 1 ? (
+            <span>{metaParts[1]}</span>
+          ) : null}
+        </div>
+      </div>
+      {voiceState === 'ready' && attachment?.signedUrl ? (
+        <audio
+          ref={audioRef}
+          className="message-voice-audio"
+          preload="metadata"
+          src={attachment.signedUrl}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 function looksLikeUuid(value: string) {
@@ -849,6 +1088,18 @@ function ThreadMessageRow({
   const isMessageInDeleteMode =
     activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
   const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
+  const primaryVoiceAttachment =
+    message.kind === 'voice'
+      ? messageAttachments.find((attachment) => attachment.isVoiceMessage) ??
+        messageAttachments.find((attachment) => attachment.isAudio) ??
+        null
+      : null;
+  const nonVoiceAttachments =
+    primaryVoiceAttachment === null
+      ? messageAttachments
+      : messageAttachments.filter(
+          (attachment) => attachment.id !== primaryVoiceAttachment.id,
+        );
   const encryptedEnvelope =
     encryptedEnvelopesByMessage.get(message.id) ?? null;
   const encryptedHistoryHint =
@@ -1146,14 +1397,26 @@ function ThreadMessageRow({
                 ) : null}
               </div>
             )
+          ) : message.kind === 'voice' ? (
+            <div className="message-voice-stack">
+              <ThreadVoiceMessageBubble
+                attachment={primaryVoiceAttachment}
+                isOwnMessage={isOwnMessage}
+                key={primaryVoiceAttachment?.id ?? message.id}
+                language={language}
+              />
+              {normalizedMessageBody ? (
+                <p className="message-body">{normalizedMessageBody}</p>
+              ) : null}
+            </div>
           ) : normalizedMessageBody ? (
             <p className="message-body">{normalizedMessageBody}</p>
           ) : !messageAttachments.length ? (
             <p className="message-body">{t.chat.emptyMessage}</p>
           ) : null}
-          {messageAttachments.length && !isDeletedMessage ? (
+          {nonVoiceAttachments.length && !isDeletedMessage ? (
             <div className="message-attachments">
-              {messageAttachments.map((attachment) => {
+              {nonVoiceAttachments.map((attachment) => {
                 const attachmentContent = (
                   <>
                     {attachment.isImage && attachment.signedUrl ? (
