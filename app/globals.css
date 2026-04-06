@@ -495,6 +495,22 @@ main {
   padding-bottom: 0;
 }
 
+.page.app-shell-chat-route.app-shell-chat-settings-route {
+  height: auto;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.app-shell-chat-settings-route .app-shell-content {
+  display: block;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: visible;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
 .app-bottom-nav {
   position: fixed;
   left: 50%;
@@ -3752,7 +3768,7 @@ main {
 }
 
 .conversation-settings-route-screen {
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--app-bottom-nav-reserve) + 28px);
 }
 
 .conversation-settings-route-hero {
@@ -3765,7 +3781,7 @@ main {
 
 .conversation-settings-route-surface {
   gap: 14px;
-  padding: 14px 14px 18px;
+  padding: 14px 14px calc(28px + env(safe-area-inset-bottom));
 }
 
 .conversation-settings-header {

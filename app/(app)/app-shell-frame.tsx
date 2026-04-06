@@ -24,6 +24,8 @@ export function AppShellFrame({
   const searchParams = useSearchParams();
   const t = getTranslations(language);
   const isChatRoute = pathname.startsWith('/chat/');
+  const isChatSettingsRoute =
+    pathname.startsWith('/chat/') && pathname.endsWith('/settings');
   const isSpacesRoute = pathname.startsWith('/spaces');
   const isActivityRoute = pathname.startsWith('/activity');
   const isSettingsRoute = pathname.startsWith('/settings');
@@ -47,6 +49,7 @@ export function AppShellFrame({
         'app-shell',
         showBottomNav ? 'app-shell-with-nav' : null,
         isChatRoute ? 'app-shell-chat-route' : null,
+        isChatSettingsRoute ? 'app-shell-chat-settings-route' : null,
       ]
         .filter(Boolean)
         .join(' ')}
