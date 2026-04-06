@@ -135,6 +135,7 @@ export async function reinitializeLocalDmE2eeStateForUser(userId: string) {
   await clearLocalDmE2eeStateForUser(userId);
   const result = await ensureDmE2eeDeviceRegistered(userId, {
     forcePublish: true,
+    triggerReason: 'reinitialize',
   });
   logDmE2eeLifecycleDiagnostics('reinitialize:done', {
     status: result.status,
@@ -155,6 +156,7 @@ export async function hardResetDmE2eeStateForCurrentDevice(userId: string) {
   const result = await ensureDmE2eeDeviceRegistered(userId, {
     forcePublish: true,
     publishAttempt: 'manual-refresh',
+    triggerReason: 'hard-reset',
   });
   logDmE2eeLifecycleDiagnostics('hard-reset:done', {
     status: result.status,

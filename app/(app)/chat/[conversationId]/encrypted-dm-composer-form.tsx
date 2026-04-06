@@ -204,6 +204,7 @@ async function resolveLocalRecordForEncryptedDm(
 ) {
   const bootstrap = await ensureDmE2eeDeviceRegistered(userId, {
     forcePublish,
+    triggerReason: 'composer-send',
   });
 
   if (bootstrap.status === 'unsupported') {

@@ -169,6 +169,14 @@ function getBootstrapAttemptBranch(
   return fallback;
 }
 
+function getDmE2eeTriggerReasonHeader(
+  request: Request,
+  headerName: 'X-Chat-Dm-E2ee-Trigger-Reason' | 'X-Chat-Dm-E2ee-Inspect-Reason',
+) {
+  const value = request.headers.get(headerName)?.trim();
+  return value ? value.toLowerCase() : null;
+}
+
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -219,6 +227,10 @@ export async function POST(request: Request) {
   try {
     logDmE2eeDeviceRouteDiagnostics('publish:start', {
       oneTimePrekeyCount: input.oneTimePrekeys.length,
+      triggerReason: getDmE2eeTriggerReasonHeader(
+        request,
+        'X-Chat-Dm-E2ee-Trigger-Reason',
+      ),
     });
     const result = await publishCurrentUserDmE2eeDevice({
       userId: user.id,
@@ -229,6 +241,10 @@ export async function POST(request: Request) {
       deviceRecordId: result.deviceRecordId,
       publishedPrekeyCount: result.publishedPrekeyCount,
       resultKind: result.resultKind ?? 'refresh_existing_device',
+      triggerReason: getDmE2eeTriggerReasonHeader(
+        request,
+        'X-Chat-Dm-E2ee-Trigger-Reason',
+      ),
     });
     return NextResponse.json(result);
   } catch (error) {
@@ -362,7 +378,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -465,6 +481,10 @@ export async function GET() {
     activeDeviceRowCount: activeDeviceRowIds.length,
     availableOneTimePrekeyCount,
     hasSignedPrekey,
+    inspectReason: getDmE2eeTriggerReasonHeader(
+      request,
+      'X-Chat-Dm-E2ee-Inspect-Reason',
+    ),
   });
 
   return NextResponse.json({

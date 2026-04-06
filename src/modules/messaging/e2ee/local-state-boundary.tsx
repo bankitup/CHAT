@@ -6,14 +6,8 @@ import {
   clearLocalDmE2eePublicSessionArtifacts,
   clearAllLocalDmE2eeState,
   keepOnlyLocalDmE2eeStateForUser,
-  reinitializeLocalDmE2eeStateForUser,
 } from './lifecycle';
-import { getLocalDmE2eeDeviceRecord } from './device-store';
-import {
-  ensureDmE2eeDeviceRegistered,
-  inspectCurrentUserDmE2eeDeviceState,
-  isCurrentDmE2eeDeviceInspectionReady,
-} from './device-registration';
+import { ensureDmE2eeDeviceRegistered } from './device-registration';
 
 function shouldLogDmE2eeBoundaryDiagnostics() {
   return (
@@ -47,7 +41,6 @@ export function DmE2eeAuthenticatedBoundary({
 }) {
   const previousUserIdRef = useRef<string | null>(null);
   const retryTimeoutRef = useRef<number | null>(null);
-  const recoveryAttemptedForUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,79 +74,30 @@ export function DmE2eeAuthenticatedBoundary({
       try {
         const bootstrap = await ensureDmE2eeDeviceRegistered(userId, {
           forcePublish: false,
+          triggerReason:
+            reason === 'initial'
+              ? 'boundary-initial'
+              : reason === 'focus'
+                ? 'boundary-focus'
+                : reason === 'visibility'
+                  ? 'boundary-visibility'
+                  : 'boundary-delayed-retry',
         });
 
         if (bootstrap.status === 'registered') {
-          const localRecord = await getLocalDmE2eeDeviceRecord(userId);
-          const inspection = await inspectCurrentUserDmE2eeDeviceState();
-          const isReady = isCurrentDmE2eeDeviceInspectionReady({
-            inspection,
-            serverDeviceRecordId: localRecord?.serverDeviceRecordId ?? null,
-          });
-
-          logDmE2eeBoundaryDiagnostics('inspect:post-bootstrap', {
-            activeDeviceRowCount:
-              inspection.status === 'ok'
-                ? inspection.state.activeDeviceRowCount
-                : null,
-            availableOneTimePrekeyCount:
-              inspection.status === 'ok'
-                ? inspection.state.availableOneTimePrekeyCount
-                : null,
-            hasSignedPrekey:
-              inspection.status === 'ok' ? inspection.state.hasSignedPrekey : null,
-            isReady,
+          logDmE2eeBoundaryDiagnostics('bootstrap:ok', {
+            publishedPrekeyCount: bootstrap.result?.publishedPrekeyCount ?? null,
             reason,
-            serverDeviceRecordId: localRecord?.serverDeviceRecordId ?? null,
+            resultKind: bootstrap.result?.resultKind ?? null,
+            serverDeviceRecordId: bootstrap.result?.deviceRecordId ?? null,
             userId,
           });
-
-          if (
-            !isReady &&
-            recoveryAttemptedForUserRef.current !== userId &&
-            inspection.status === 'ok'
-          ) {
-            recoveryAttemptedForUserRef.current = userId;
-            logDmE2eeBoundaryDiagnostics('recover:start', {
-              activeDeviceRowCount: inspection.state.activeDeviceRowCount,
-              availableOneTimePrekeyCount:
-                inspection.state.availableOneTimePrekeyCount,
-              hasSignedPrekey: inspection.state.hasSignedPrekey,
-              reason,
-              userId,
-            });
-
-            const recovery = await reinitializeLocalDmE2eeStateForUser(userId);
-            const recoveredLocalRecord =
-              await getLocalDmE2eeDeviceRecord(userId);
-            const recoveredInspection =
-              await inspectCurrentUserDmE2eeDeviceState();
-            const recoveredReady = isCurrentDmE2eeDeviceInspectionReady({
-              inspection: recoveredInspection,
-              serverDeviceRecordId:
-                recoveredLocalRecord?.serverDeviceRecordId ?? null,
-            });
-
-            logDmE2eeBoundaryDiagnostics('recover:done', {
-              activeDeviceRowCount:
-                recoveredInspection.status === 'ok'
-                  ? recoveredInspection.state.activeDeviceRowCount
-                  : null,
-              availableOneTimePrekeyCount:
-                recoveredInspection.status === 'ok'
-                  ? recoveredInspection.state.availableOneTimePrekeyCount
-                  : null,
-              hasSignedPrekey:
-                recoveredInspection.status === 'ok'
-                  ? recoveredInspection.state.hasSignedPrekey
-                  : null,
-              recoveredReady,
-              recoveryStatus: recovery.status,
-              serverDeviceRecordId:
-                recoveredLocalRecord?.serverDeviceRecordId ?? null,
-              userId,
-            });
-          }
+        } else {
+          logDmE2eeBoundaryDiagnostics('bootstrap:non-registered', {
+            reason,
+            status: bootstrap.status,
+            userId,
+          });
         }
 
         clearRetryTimeout();
@@ -195,7 +139,6 @@ export function DmE2eeAuthenticatedBoundary({
         }
 
         previousUserIdRef.current = userId;
-        recoveryAttemptedForUserRef.current = null;
         await keepOnlyLocalDmE2eeStateForUser(userId);
 
         if (!enabled) {

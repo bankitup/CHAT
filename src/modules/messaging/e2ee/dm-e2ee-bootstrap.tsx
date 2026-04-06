@@ -18,7 +18,9 @@ export function DmE2eeBootstrap({ enabled, userId }: DmE2eeBootstrapProps) {
       };
     }
 
-    void ensureDmE2eeDeviceRegistered(userId).catch((error: unknown) => {
+    void ensureDmE2eeDeviceRegistered(userId, {
+      triggerReason: 'bootstrap-component',
+    }).catch((error: unknown) => {
       if (cancelled) {
         return;
       }

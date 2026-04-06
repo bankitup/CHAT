@@ -26,6 +26,16 @@ type EnsureDmE2eeDeviceRegisteredOptions = {
   forcePublish?: boolean;
   allowRepair?: boolean;
   publishAttempt?: 'initial' | 'manual-refresh' | 'repair-republish';
+  triggerReason?:
+    | 'boundary-initial'
+    | 'boundary-focus'
+    | 'boundary-visibility'
+    | 'boundary-delayed-retry'
+    | 'composer-send'
+    | 'reinitialize'
+    | 'hard-reset'
+    | 'bootstrap-component'
+    | 'unknown';
 };
 
 type DmE2eeServerDeviceState = {
@@ -55,6 +65,17 @@ const ensureDmE2eeDeviceRegistrationInflight = new Map<
   string,
   Promise<EnsureDmE2eeDeviceRegisteredResult>
 >();
+const ROUTINE_READY_INSPECTION_CACHE_MS = 20_000;
+const recentReadyDmE2eeInspectionByUser = new Map<
+  string,
+  {
+    checkedAt: number;
+    serverDeviceRecordId: string;
+    activeDeviceRowCount: number;
+    availableOneTimePrekeyCount: number;
+    hasSignedPrekey: boolean;
+  }
+>();
 
 function shouldLogDmE2eeBootstrapClientDiagnostics() {
   return (
@@ -77,6 +98,62 @@ function logDmE2eeBootstrapClientDiagnostics(
   }
 
   console.info('[dm-e2ee-bootstrap-client]', stage);
+}
+
+function isRoutineBootstrapTriggerReason(
+  triggerReason: EnsureDmE2eeDeviceRegisteredOptions['triggerReason'],
+) {
+  return (
+    triggerReason === 'boundary-focus' || triggerReason === 'boundary-visibility'
+  );
+}
+
+function rememberRecentReadyDmE2eeInspection(input: {
+  userId: string;
+  serverDeviceRecordId: string;
+  serverState: DmE2eeServerDeviceState;
+}) {
+  recentReadyDmE2eeInspectionByUser.set(input.userId, {
+    checkedAt: Date.now(),
+    serverDeviceRecordId: input.serverDeviceRecordId,
+    activeDeviceRowCount: input.serverState.activeDeviceRowCount,
+    availableOneTimePrekeyCount: input.serverState.availableOneTimePrekeyCount,
+    hasSignedPrekey: input.serverState.hasSignedPrekey,
+  });
+}
+
+function clearRecentReadyDmE2eeInspection(userId: string) {
+  recentReadyDmE2eeInspectionByUser.delete(userId);
+}
+
+function getReusableRecentReadyDmE2eeInspection(input: {
+  userId: string;
+  triggerReason: EnsureDmE2eeDeviceRegisteredOptions['triggerReason'];
+  serverDeviceRecordId: string | null;
+}) {
+  if (
+    !input.serverDeviceRecordId ||
+    !isRoutineBootstrapTriggerReason(input.triggerReason)
+  ) {
+    return null;
+  }
+
+  const recent = recentReadyDmE2eeInspectionByUser.get(input.userId);
+
+  if (!recent) {
+    return null;
+  }
+
+  if (recent.serverDeviceRecordId !== input.serverDeviceRecordId) {
+    return null;
+  }
+
+  if (Date.now() - recent.checkedAt > ROUTINE_READY_INSPECTION_CACHE_MS) {
+    recentReadyDmE2eeInspectionByUser.delete(input.userId);
+    return null;
+  }
+
+  return recent;
 }
 
 function createLocalDmE2eeError(
@@ -306,11 +383,18 @@ export function isCurrentDmE2eeDeviceInspectionReady(input: {
   );
 }
 
-export async function inspectCurrentUserDmE2eeDeviceState(): Promise<CurrentDmE2eeDeviceInspection> {
+export async function inspectCurrentUserDmE2eeDeviceState(input?: {
+  reason?: string;
+}): Promise<CurrentDmE2eeDeviceInspection> {
   const response = await fetch('/api/messaging/dm-e2ee/device', {
     method: 'GET',
     headers: {
       Accept: 'application/json',
+      ...(input?.reason
+        ? {
+            'X-Chat-Dm-E2ee-Inspect-Reason': input.reason,
+          }
+        : {}),
     },
   });
 
@@ -367,6 +451,7 @@ export async function ensureDmE2eeDeviceRegistered(
       publishAttempt:
         options.publishAttempt ??
         (options.forcePublish ? 'manual-refresh' : 'initial'),
+      triggerReason: options.triggerReason ?? 'unknown',
       userIdPresent: Boolean(userId),
     });
     return inflight;
@@ -377,10 +462,12 @@ export async function ensureDmE2eeDeviceRegistered(
     const publishAttempt =
       options.publishAttempt ??
       (options.forcePublish ? 'manual-refresh' : 'initial');
+    const triggerReason = options.triggerReason ?? 'unknown';
     logDmE2eeBootstrapClientDiagnostics('ensure:start', {
       allowRepair,
       forcePublish: Boolean(options.forcePublish),
       publishAttempt,
+      triggerReason,
       userIdPresent: Boolean(userId),
     });
 
@@ -409,6 +496,7 @@ export async function ensureDmE2eeDeviceRegistered(
       serverDeviceRecordId: localRecord.serverDeviceRecordId,
       hasServerDeviceRecordId: Boolean(localRecord.serverDeviceRecordId),
       oneTimePrekeyCount: localRecord.oneTimePrekeys.length,
+      triggerReason,
       usable: isLocalDmE2eeDeviceRecordUsable(localRecord),
     });
 
@@ -445,68 +533,109 @@ export async function ensureDmE2eeDeviceRegistered(
     }
 
     if (localRecord.serverDeviceRecordId && !options.forcePublish) {
-      const serverState = await inspectCurrentUserDmE2eeDeviceState();
-
-    if (serverState.status === 'schema-missing') {
-      return {
-        status: 'schema-missing',
-        result: null,
-      } satisfies {
-        status: DmE2eeBootstrapStatus;
-        result: null;
-      };
-    }
-
-    const serverStillMatches = isServerDmE2eeDeviceStateReady(
-      serverState.state,
-      localRecord.serverDeviceRecordId,
-    );
-
-    if (!serverStillMatches) {
-      logDmE2eeBootstrapClientDiagnostics('publish:stale-server-state', {
-        activeDeviceRowCount: serverState.state.activeDeviceRowCount,
-        availableOneTimePrekeyCount:
-          serverState.state.availableOneTimePrekeyCount,
-        currentUserId: userId,
-        hasSignedPrekey: serverState.state.hasSignedPrekey,
-        localServerDeviceRecordId: localRecord.serverDeviceRecordId,
-        activeDeviceRowIds: serverState.state.activeDeviceRowIds,
-        hasActiveDevice: serverState.state.hasActiveDevice,
+      const recentReadyInspection = getReusableRecentReadyDmE2eeInspection({
+        userId,
+        triggerReason,
+        serverDeviceRecordId: localRecord.serverDeviceRecordId,
       });
-    } else {
-      logDmE2eeBootstrapClientDiagnostics('publish:skip-already-registered', {
-        activeDeviceRowCount: serverState.state.activeDeviceRowCount,
-        availableOneTimePrekeyCount:
-          serverState.state.availableOneTimePrekeyCount,
-        currentUserId: userId,
-        hasSignedPrekey: serverState.state.hasSignedPrekey,
-        resultKind: 'already_initialized_same_device',
-        reusedExistingServerDeviceRecordId: localRecord.serverDeviceRecordId,
-        serverDeviceRecordIdPresent: true,
+
+      if (recentReadyInspection) {
+        logDmE2eeBootstrapClientDiagnostics('inspect:skip-recent-ready', {
+          activeDeviceRowCount: recentReadyInspection.activeDeviceRowCount,
+          availableOneTimePrekeyCount:
+            recentReadyInspection.availableOneTimePrekeyCount,
+          currentUserId: userId,
+          hasSignedPrekey: recentReadyInspection.hasSignedPrekey,
+          localServerDeviceRecordId: localRecord.serverDeviceRecordId,
+          triggerReason,
+        });
+        persistCurrentDmE2eeDeviceCookie(localRecord.serverDeviceRecordId);
+        return {
+          status: 'registered',
+          result: {
+            deviceRecordId: localRecord.serverDeviceRecordId,
+            publishedPrekeyCount: 0,
+            resultKind: 'already_initialized_same_device',
+          },
+        } satisfies {
+          status: DmE2eeBootstrapStatus;
+          result: PublishDmE2eeDeviceResult;
+        };
+      }
+
+      const serverState = await inspectCurrentUserDmE2eeDeviceState({
+        reason: triggerReason,
       });
-      persistCurrentDmE2eeDeviceCookie(localRecord.serverDeviceRecordId);
-      return {
-        status: 'registered',
-        result: {
-          deviceRecordId: localRecord.serverDeviceRecordId,
-          publishedPrekeyCount: 0,
+
+      if (serverState.status === 'schema-missing') {
+        return {
+          status: 'schema-missing',
+          result: null,
+        } satisfies {
+          status: DmE2eeBootstrapStatus;
+          result: null;
+        };
+      }
+
+      const serverStillMatches = isServerDmE2eeDeviceStateReady(
+        serverState.state,
+        localRecord.serverDeviceRecordId,
+      );
+
+      if (!serverStillMatches) {
+        clearRecentReadyDmE2eeInspection(userId);
+        logDmE2eeBootstrapClientDiagnostics('publish:stale-server-state', {
+          activeDeviceRowCount: serverState.state.activeDeviceRowCount,
+          availableOneTimePrekeyCount:
+            serverState.state.availableOneTimePrekeyCount,
+          currentUserId: userId,
+          hasSignedPrekey: serverState.state.hasSignedPrekey,
+          localServerDeviceRecordId: localRecord.serverDeviceRecordId,
+          activeDeviceRowIds: serverState.state.activeDeviceRowIds,
+          hasActiveDevice: serverState.state.hasActiveDevice,
+          triggerReason,
+        });
+      } else {
+        rememberRecentReadyDmE2eeInspection({
+          userId,
+          serverDeviceRecordId: localRecord.serverDeviceRecordId,
+          serverState: serverState.state,
+        });
+        logDmE2eeBootstrapClientDiagnostics('publish:skip-already-registered', {
+          activeDeviceRowCount: serverState.state.activeDeviceRowCount,
+          availableOneTimePrekeyCount:
+            serverState.state.availableOneTimePrekeyCount,
+          currentUserId: userId,
+          hasSignedPrekey: serverState.state.hasSignedPrekey,
           resultKind: 'already_initialized_same_device',
-        },
-      } satisfies {
-        status: DmE2eeBootstrapStatus;
-        result: PublishDmE2eeDeviceResult;
-      };
-    }
+          reusedExistingServerDeviceRecordId: localRecord.serverDeviceRecordId,
+          serverDeviceRecordIdPresent: true,
+          triggerReason,
+        });
+        persistCurrentDmE2eeDeviceCookie(localRecord.serverDeviceRecordId);
+        return {
+          status: 'registered',
+          result: {
+            deviceRecordId: localRecord.serverDeviceRecordId,
+            publishedPrekeyCount: 0,
+            resultKind: 'already_initialized_same_device',
+          },
+        } satisfies {
+          status: DmE2eeBootstrapStatus;
+          result: PublishDmE2eeDeviceResult;
+        };
+      }
     }
 
     const response = await fetch('/api/messaging/dm-e2ee/device', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Chat-Dm-E2ee-Bootstrap-Attempt': publishAttempt,
-    },
-    body: JSON.stringify(buildPublishRequest(localRecord)),
-  });
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Chat-Dm-E2ee-Bootstrap-Attempt': publishAttempt,
+        'X-Chat-Dm-E2ee-Trigger-Reason': triggerReason,
+      },
+      body: JSON.stringify(buildPublishRequest(localRecord)),
+    });
 
     if (response.ok) {
       const result = (await response.json()) as PublishDmE2eeDeviceResult;
@@ -519,6 +648,7 @@ export async function ensureDmE2eeDeviceRegistered(
         deviceRecordIdPresent: Boolean(result.deviceRecordId),
         serverDeviceRecordId: result.deviceRecordId,
         publishedPrekeyCount: result.publishedPrekeyCount,
+        triggerReason,
       });
       await saveLocalDmE2eeDeviceRecord({
         ...localRecord,
@@ -527,7 +657,9 @@ export async function ensureDmE2eeDeviceRegistered(
       });
       persistCurrentDmE2eeDeviceCookie(result.deviceRecordId);
 
-      const verifiedServerState = await inspectCurrentUserDmE2eeDeviceState();
+      const verifiedServerState = await inspectCurrentUserDmE2eeDeviceState({
+        reason: `${triggerReason}:verify`,
+      });
 
       if (verifiedServerState.status === 'schema-missing') {
         return {
@@ -540,16 +672,17 @@ export async function ensureDmE2eeDeviceRegistered(
       }
 
       logDmE2eeBootstrapClientDiagnostics('publish:verified', {
-      activeDeviceRowCount: verifiedServerState.state.activeDeviceRowCount,
-      availableOneTimePrekeyCount:
-        verifiedServerState.state.availableOneTimePrekeyCount,
-      currentUserId: userId,
-      hasSignedPrekey: verifiedServerState.state.hasSignedPrekey,
-      hasVerifiedDeviceRow: verifiedServerState.state.activeDeviceRowIds.includes(
-        result.deviceRecordId,
-      ),
-      serverDeviceRecordId: result.deviceRecordId,
-    });
+        activeDeviceRowCount: verifiedServerState.state.activeDeviceRowCount,
+        availableOneTimePrekeyCount:
+          verifiedServerState.state.availableOneTimePrekeyCount,
+        currentUserId: userId,
+        hasSignedPrekey: verifiedServerState.state.hasSignedPrekey,
+        hasVerifiedDeviceRow: verifiedServerState.state.activeDeviceRowIds.includes(
+          result.deviceRecordId,
+        ),
+        serverDeviceRecordId: result.deviceRecordId,
+        triggerReason,
+      });
 
       if (
         allowRepair &&
@@ -559,20 +692,38 @@ export async function ensureDmE2eeDeviceRegistered(
           result.deviceRecordId,
         )
       ) {
-      logDmE2eeBootstrapClientDiagnostics('publish:verify-repair:retry', {
-        activeDeviceRowCount: verifiedServerState.state.activeDeviceRowCount,
-        availableOneTimePrekeyCount:
-          verifiedServerState.state.availableOneTimePrekeyCount,
-        currentUserId: userId,
-        hasSignedPrekey: verifiedServerState.state.hasSignedPrekey,
-        publishAttempt: 'repair-republish',
-        serverDeviceRecordId: result.deviceRecordId,
-      });
+        clearRecentReadyDmE2eeInspection(userId);
+        logDmE2eeBootstrapClientDiagnostics('publish:verify-repair:retry', {
+          activeDeviceRowCount: verifiedServerState.state.activeDeviceRowCount,
+          availableOneTimePrekeyCount:
+            verifiedServerState.state.availableOneTimePrekeyCount,
+          currentUserId: userId,
+          hasSignedPrekey: verifiedServerState.state.hasSignedPrekey,
+          publishAttempt: 'repair-republish',
+          serverDeviceRecordId: result.deviceRecordId,
+          triggerReason,
+        });
         return ensureDmE2eeDeviceRegistered(userId, {
           allowRepair: false,
           forcePublish: true,
           publishAttempt: 'repair-republish',
+          triggerReason,
         });
+      }
+
+      if (
+        isServerDmE2eeDeviceStateReady(
+          verifiedServerState.state,
+          result.deviceRecordId,
+        )
+      ) {
+        rememberRecentReadyDmE2eeInspection({
+          userId,
+          serverDeviceRecordId: result.deviceRecordId,
+          serverState: verifiedServerState.state,
+        });
+      } else {
+        clearRecentReadyDmE2eeInspection(userId);
       }
 
       return {
@@ -660,26 +811,28 @@ export async function ensureDmE2eeDeviceRegistered(
     retireTargetIds = null;
   }
     logDmE2eeBootstrapClientDiagnostics('publish:error', {
-    errorCode,
-    errorMessage,
-    exact400ReasonCode,
-    failedValidationBranch,
-    exactFailurePoint,
-    authRetireAttempted,
-    authRetireFailed,
-    serviceRetireAvailable,
-    serviceRetireSkipReason,
-    serviceRetireAttempted,
-    serviceRetireSucceeded,
-    serviceRetireFailed,
-    serviceRetireErrorMessage,
-    serviceRetireErrorCode,
-    serviceRetireErrorStatus,
-    currentDeviceRowId,
-    retireTargetIds,
-    publishAttempt,
-    status: response.status,
-  });
+      errorCode,
+      errorMessage,
+      exact400ReasonCode,
+      failedValidationBranch,
+      exactFailurePoint,
+      authRetireAttempted,
+      authRetireFailed,
+      serviceRetireAvailable,
+      serviceRetireSkipReason,
+      serviceRetireAttempted,
+      serviceRetireSucceeded,
+      serviceRetireFailed,
+      serviceRetireErrorMessage,
+      serviceRetireErrorCode,
+      serviceRetireErrorStatus,
+      currentDeviceRowId,
+      retireTargetIds,
+      publishAttempt,
+      status: response.status,
+      triggerReason,
+    });
+    clearRecentReadyDmE2eeInspection(userId);
 
     if (errorCode === 'dm_e2ee_schema_missing') {
       return {
@@ -712,6 +865,7 @@ export async function ensureDmE2eeDeviceRegistered(
           forcePublish: true,
           allowRepair: false,
           publishAttempt: 'repair-republish',
+          triggerReason,
         });
       }
 
@@ -756,6 +910,7 @@ export async function ensureDmE2eeDeviceRegistered(
 }
 
 export async function markLocalDmE2eeDeviceRegistrationStale(userId: string) {
+  clearRecentReadyDmE2eeInspection(userId);
   await updateLocalDmE2eeDeviceRecord(userId, (record) => {
     if (!record) {
       return null;
