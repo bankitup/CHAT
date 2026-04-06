@@ -3585,104 +3585,72 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     );
   }
 
-  const lookupRecipientParticipant = async (
-    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  ) =>
-    client
-      .from('conversation_members')
-      .select('user_id, role, state')
-      .eq('conversation_id', input.conversationId)
-      .eq('state', 'active')
-      .eq('user_id', requestedRecipientUserId ?? '__dm-e2ee-bundle-no-recipient__')
-      .order('user_id', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+  let activeConversationParticipants: ConversationParticipant[] = [];
 
-  const lookupAnyOtherRecipientParticipant = async (
-    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  ) =>
-    client
-      .from('conversation_members')
-      .select('user_id, role, state')
-      .eq('conversation_id', input.conversationId)
-      .eq('state', 'active')
-      .neq('user_id', input.userId)
-      .order('user_id', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-  let recipientParticipantLookup = requestedRecipientUserId
-    ? await lookupRecipientParticipant(supabase)
-    : await lookupAnyOtherRecipientParticipant(supabase);
-
-  const shouldRetryParticipantLookupPrivileged =
-    serviceRoleSupabase &&
-    ((!recipientParticipantLookup.error && !recipientParticipantLookup.data) ||
-      isSupabasePermissionDeniedError(recipientParticipantLookup.error));
-
-  if (shouldRetryParticipantLookupPrivileged) {
-    recipientDebugState.recipientBundleQueryStage = 'participants:service-query';
-    if (recipientParticipantLookup.error) {
-      logDmE2eeRecipientBundleDiagnostics('participants:auth-error-fallback', {
-        conversationId: input.conversationId,
-        recipientRequestedUserId: requestedRecipientUserId,
-        userId: input.userId,
-        message: recipientParticipantLookup.error.message,
-      });
-    }
-    const privilegedLookup = requestedRecipientUserId
-      ? await lookupRecipientParticipant(serviceRoleSupabase)
-      : await lookupAnyOtherRecipientParticipant(serviceRoleSupabase);
-
-    if (!privilegedLookup.error) {
-      recipientParticipantLookup = privilegedLookup;
-    }
-  }
-
-  if (recipientParticipantLookup.error) {
-    const errorDiagnostics = getSupabaseErrorDiagnostics(
-      recipientParticipantLookup.error,
+  try {
+    activeConversationParticipants = await getConversationParticipants(
+      input.conversationId,
     );
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unable to resolve direct-message participants.';
     recipientDebugState.recipientBundleQueryStage = 'participants:error';
-    recipientDebugState.recipientBundleQueryErrorMessage =
-      recipientParticipantLookup.error.message;
-    recipientDebugState.recipientBundleQueryErrorCode =
-      typeof errorDiagnostics.error_code === 'string'
-        ? errorDiagnostics.error_code
-        : null;
-    recipientDebugState.recipientBundleQueryErrorDetails =
-      typeof errorDiagnostics.error_details === 'string'
-        ? errorDiagnostics.error_details
-        : null;
+    recipientDebugState.recipientBundleQueryErrorMessage = message;
     recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: lookup query failed';
-    throw createDmE2eeRecipientLookupError(
-      recipientParticipantLookup.error.message,
-      recipientDebugState,
-    );
+      'recipient readiness: participant list query failed';
+    throw createDmE2eeRecipientLookupError(message, recipientDebugState);
   }
 
-  const recipientParticipant = recipientParticipantLookup.data
-    ? {
-        userId: recipientParticipantLookup.data.user_id,
-        role: recipientParticipantLookup.data.role ?? null,
-        state: recipientParticipantLookup.data.state ?? null,
-      }
-    : null;
+  const activeOtherParticipants = activeConversationParticipants.filter(
+    (participant) => participant.userId !== input.userId,
+  );
+  let recipientParticipant =
+    requestedRecipientUserId
+      ? activeOtherParticipants.find(
+          (participant) => participant.userId === requestedRecipientUserId,
+        ) ?? null
+      : null;
+
+  if (!recipientParticipant && activeOtherParticipants.length === 1) {
+    recipientParticipant = activeOtherParticipants[0] ?? null;
+
+    if (
+      requestedRecipientUserId &&
+      recipientParticipant &&
+      recipientParticipant.userId !== requestedRecipientUserId
+    ) {
+      logDmE2eeRecipientBundleDiagnostics(
+        'participants:requested-recipient-recovered',
+        {
+          conversationId: input.conversationId,
+          recipientRecoveredUserId: recipientParticipant.userId,
+          recipientRequestedUserId: requestedRecipientUserId,
+          userId: input.userId,
+        },
+      );
+    }
+  }
+
   recipientDebugState.recipientBundleQueryStage = 'participants:selected';
   recipientDebugState.recipientUserIdChecked = recipientParticipant?.userId ?? null;
 
   if (!recipientParticipant?.userId) {
     recipientDebugState.recipientBundleQueryStage =
-      'participants:selected-recipient-missing';
+      activeOtherParticipants.length > 1
+        ? 'participants:selected-ambiguous'
+        : 'participants:selected-recipient-missing';
     recipientDebugState.recipientReadinessFailedReason =
-      requestedRecipientUserId
-        ? 'recipient readiness: requested recipient participant missing'
-        : 'recipient readiness: recipient participant missing';
+      activeOtherParticipants.length > 1
+        ? 'recipient readiness: multiple active DM recipients found'
+        : requestedRecipientUserId
+          ? 'recipient readiness: requested recipient participant missing'
+          : 'recipient readiness: recipient participant missing';
     recipientDebugState.recipientMismatchLeft =
       requestedRecipientUserId ?? input.userId;
     recipientDebugState.recipientMismatchRight =
-      recipientParticipantLookup.data?.user_id ?? null;
+      activeOtherParticipants[0]?.userId ?? null;
     throw createDmE2eeRecipientReadinessError(
       'dm_e2ee_recipient_unavailable',
       'Direct-message recipient is not available.',
@@ -3695,16 +3663,9 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     recipientParticipant.userId !== requestedRecipientUserId
   ) {
     recipientDebugState.recipientBundleQueryStage =
-      'participants:selected-recipient-mismatch';
-    recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: selected participant mismatched requested recipient';
+      'participants:selected-recipient-mismatch-recovered';
     recipientDebugState.recipientMismatchLeft = requestedRecipientUserId;
     recipientDebugState.recipientMismatchRight = recipientParticipant.userId;
-    throw createDmE2eeRecipientReadinessError(
-      'dm_e2ee_recipient_unavailable',
-      'Direct-message recipient is not available.',
-      recipientDebugState,
-    );
   }
   const lookupRecipientDevices = async (
     client: Awaited<ReturnType<typeof createSupabaseServerClient>>,

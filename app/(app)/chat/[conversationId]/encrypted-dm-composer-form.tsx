@@ -76,6 +76,16 @@ async function fetchRecipientBundle(
     params.set('recipientUserId', recipientUserId.trim());
   }
 
+  if (
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+    typeof window !== 'undefined'
+  ) {
+    console.info('[dm-e2ee-bundle-client]', 'request:start', {
+      conversationId,
+      recipientUserId: recipientUserId?.trim() || null,
+    });
+  }
+
   const response = await fetch(
     `/api/messaging/dm-e2ee/bundle?${params.toString()}`,
     {
@@ -91,6 +101,20 @@ async function fetchRecipientBundle(
 
   if (!response.ok || !('recipient' in payload)) {
     const errorPayload = payload as DmE2eeApiErrorResponse;
+    if (
+      process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+      typeof window !== 'undefined'
+    ) {
+      console.info('[dm-e2ee-bundle-client]', 'request:error', {
+        code: errorPayload.code ?? null,
+        conversationId,
+        recipientBundleQueryStage:
+          errorPayload.recipientBundleQueryStage ?? null,
+        recipientRequestedUserId:
+          errorPayload.recipientRequestedUserId ?? recipientUserId?.trim() ?? null,
+        recipientUserIdChecked: errorPayload.recipientUserIdChecked ?? null,
+      });
+    }
     const error = new Error(
       errorPayload.error || 'Unable to load DM encryption material.',
     ) as Error &
@@ -150,6 +174,17 @@ async function fetchRecipientBundle(
     error.recipientReadinessFailedReason =
       errorPayload.recipientReadinessFailedReason ?? null;
     throw error;
+  }
+
+  if (
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+    typeof window !== 'undefined'
+  ) {
+    console.info('[dm-e2ee-bundle-client]', 'request:resolved', {
+      conversationId,
+      recipientDeviceRecordId: payload.recipient.deviceRecordId,
+      recipientUserId: payload.recipient.userId,
+    });
   }
 
   return payload;
