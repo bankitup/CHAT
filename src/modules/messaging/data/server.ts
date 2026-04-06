@@ -77,6 +77,10 @@ function applyRecipientReadinessDebugState(
 ) {
   const target = error as Error & DmE2eeRecipientReadinessDebugState;
   target.recipientBundleQueryStage = details?.recipientBundleQueryStage ?? null;
+  target.recipientConversationIdChecked =
+    details?.recipientConversationIdChecked ?? null;
+  target.recipientRequestedUserId =
+    details?.recipientRequestedUserId ?? null;
   target.recipientUserIdChecked = details?.recipientUserIdChecked ?? null;
   target.recipientDeviceRowsFound = details?.recipientDeviceRowsFound ?? null;
   target.recipientActiveDeviceRowsFound =
@@ -203,6 +207,25 @@ function logDmE2eeBootstrapDiagnostics(
   }
 
   console.info('[dm-e2ee-bootstrap]', stage);
+}
+
+function isSupabasePermissionDeniedError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  const diagnostics = getSupabaseErrorDiagnostics(error);
+  const errorCode =
+    typeof diagnostics.error_code === 'string'
+      ? diagnostics.error_code.toLowerCase()
+      : null;
+
+  return (
+    errorCode === '42501' ||
+    message.includes('row-level security') ||
+    message.includes('permission denied')
+  );
 }
 
 function logConversationSchemaDiagnostics(
@@ -3402,12 +3425,21 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     ? await lookupRecipientParticipant(supabase)
     : await lookupAnyOtherRecipientParticipant(supabase);
 
-  if (
-    !recipientParticipantLookup.error &&
-    !recipientParticipantLookup.data &&
-    serviceRoleSupabase
-  ) {
+  const shouldRetryParticipantLookupPrivileged =
+    serviceRoleSupabase &&
+    ((!recipientParticipantLookup.error && !recipientParticipantLookup.data) ||
+      isSupabasePermissionDeniedError(recipientParticipantLookup.error));
+
+  if (shouldRetryParticipantLookupPrivileged) {
     recipientDebugState.recipientBundleQueryStage = 'participants:service-query';
+    if (recipientParticipantLookup.error) {
+      logDmE2eeRecipientBundleDiagnostics('participants:auth-error-fallback', {
+        conversationId: input.conversationId,
+        recipientRequestedUserId: requestedRecipientUserId,
+        userId: input.userId,
+        message: recipientParticipantLookup.error.message,
+      });
+    }
     const privilegedLookup = requestedRecipientUserId
       ? await lookupRecipientParticipant(serviceRoleSupabase)
       : await lookupAnyOtherRecipientParticipant(serviceRoleSupabase);
@@ -3513,16 +3545,23 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
   let deviceLookup = await lookupRecipientDevices(supabase);
   let usedPrivilegedDeviceLookup = false;
 
-  if (
-    !deviceLookup.error &&
-    (!deviceLookup.data || deviceLookup.data.length === 0) &&
-    serviceRoleSupabase
-  ) {
+  const shouldRetryDeviceLookupPrivileged =
+    serviceRoleSupabase &&
+    ((!deviceLookup.error && (!deviceLookup.data || deviceLookup.data.length === 0)) ||
+      isSupabasePermissionDeniedError(deviceLookup.error));
+
+  if (shouldRetryDeviceLookupPrivileged) {
     recipientDebugState.recipientBundleQueryStage = 'device-query:service';
-    logDmE2eeRecipientBundleDiagnostics('device-lookup:auth-empty', {
-      conversationId: input.conversationId,
-      recipientUserId: recipientParticipant.userId,
-    });
+    logDmE2eeRecipientBundleDiagnostics(
+      deviceLookup.error
+        ? 'device-lookup:auth-error-fallback'
+        : 'device-lookup:auth-empty',
+      {
+        conversationId: input.conversationId,
+        recipientUserId: recipientParticipant.userId,
+        message: deviceLookup.error?.message ?? null,
+      },
+    );
     const privilegedLookup = await lookupRecipientDevices(serviceRoleSupabase);
 
     if (!privilegedLookup.error) {
@@ -3697,19 +3736,27 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
   let oneTimePrekeyLookup = await lookupAvailableOneTimePrekey(supabase);
   let usedPrivilegedPrekeyLookup = false;
 
-  if (
-    !oneTimePrekeyLookup.error &&
-    (!oneTimePrekeyLookup.data || oneTimePrekeyLookup.data.length === 0) &&
-    serviceRoleSupabase
-  ) {
+  const shouldRetryPrekeyLookupPrivileged =
+    serviceRoleSupabase &&
+    ((!oneTimePrekeyLookup.error &&
+      (!oneTimePrekeyLookup.data || oneTimePrekeyLookup.data.length === 0)) ||
+      isSupabasePermissionDeniedError(oneTimePrekeyLookup.error));
+
+  if (shouldRetryPrekeyLookupPrivileged) {
     recipientDebugState.recipientBundleQueryStage = 'prekey-query:service';
-    logDmE2eeRecipientBundleDiagnostics('prekey-lookup:auth-empty', {
-      conversationId: input.conversationId,
-      recipientUserId: recipientParticipant.userId,
-      recipientDeviceRecordId: selectedRecipientDeviceRowId,
-      recipientLogicalDeviceId: selectedRecipientLogicalDeviceId,
-      usedPrivilegedDeviceLookup,
-    });
+    logDmE2eeRecipientBundleDiagnostics(
+      oneTimePrekeyLookup.error
+        ? 'prekey-lookup:auth-error-fallback'
+        : 'prekey-lookup:auth-empty',
+      {
+        conversationId: input.conversationId,
+        recipientUserId: recipientParticipant.userId,
+        recipientDeviceRecordId: selectedRecipientDeviceRowId,
+        recipientLogicalDeviceId: selectedRecipientLogicalDeviceId,
+        usedPrivilegedDeviceLookup,
+        message: oneTimePrekeyLookup.error?.message ?? null,
+      },
+    );
     const privilegedLookup =
       await lookupAvailableOneTimePrekey(serviceRoleSupabase);
 
