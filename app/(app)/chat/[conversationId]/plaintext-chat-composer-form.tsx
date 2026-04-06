@@ -102,6 +102,7 @@ export function PlaintextChatComposerForm({
       nextFormData.set('conversationId', conversationId);
       nextFormData.set('clientId', item.clientId);
       const payload = item.payload as PlaintextOutgoingPayload;
+      const isVoiceMessage = payload.kind === 'voice';
       const attachment = payload.attachment ?? item.attachment ?? null;
 
       if (item.body.trim()) {
@@ -143,14 +144,14 @@ export function PlaintextChatComposerForm({
       emitThreadHistorySyncRequest({
         conversationId,
         messageIds: [result.data.messageId],
-        reason: 'local-send-mutation',
+        reason: isVoiceMessage ? 'local-voice-send' : 'local-send-mutation',
       });
 
       await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
         clientId: result.data.clientId,
         conversationId,
         messageId: result.data.messageId,
-        source: 'plaintext-chat-send',
+        source: isVoiceMessage ? 'voice-message-send' : 'plaintext-chat-send',
       });
     },
     resolveErrorMessage: (error) =>

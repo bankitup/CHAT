@@ -25,12 +25,14 @@ import {
 } from '@/modules/messaging/e2ee/lifecycle';
 import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encrypt';
 import { getEncryptedDmComposerErrorMessage } from '@/modules/messaging/e2ee/ui-policy';
+import { patchInboxConversationSummary } from '@/modules/messaging/realtime/inbox-summary-store';
 import { broadcastMessageCommitted } from '@/modules/messaging/realtime/live-refresh';
 import {
   LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
   type OptimisticThreadRetryPayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
+import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
@@ -650,20 +652,28 @@ export function EncryptedDmComposerForm({
           throw new Error(result.error);
         }
 
+        if (result.data.summary) {
+          patchInboxConversationSummary(result.data.summary);
+        }
+
+        patchThreadConversationReadState({
+          conversationId,
+          isCurrentUser: true,
+          lastReadMessageSeq: result.data.lastReadMessageSeq,
+        });
+
+        emitThreadHistorySyncRequest({
+          conversationId,
+          messageIds: [result.data.messageId],
+          reason: 'local-voice-send',
+        });
+
         await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
           clientId: result.data.clientId,
           conversationId,
           messageId: result.data.messageId,
-          source: 'plaintext-chat-send',
+          source: 'voice-message-send',
         });
-
-        if (result.data.messageId) {
-          emitThreadHistorySyncRequest({
-            conversationId,
-            messageIds: [result.data.messageId],
-            reason: 'local-voice-send',
-          });
-        }
 
         return;
       }

@@ -845,6 +845,32 @@ function logChatHistoryDiagnostics(
   console[level]('[chat-history-load]', stage);
 }
 
+function shouldLogVoiceSendDiagnostics() {
+  return (
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' ||
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+  );
+}
+
+function logVoiceSendDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+  level: 'info' | 'warn' | 'error' = 'info',
+) {
+  const shouldLog = level === 'error' || shouldLogVoiceSendDiagnostics();
+
+  if (!shouldLog) {
+    return;
+  }
+
+  if (details) {
+    console[level]('[voice-send]', stage, details);
+    return;
+  }
+
+  console[level]('[voice-send]', stage);
+}
+
 function logChatThreadSnapshotCheckpoint(
   stage: string,
   details?: Record<string, unknown>,
@@ -8567,6 +8593,15 @@ async function insertCommittedVoiceAssetAndLink(input: {
   senderId: string;
 }) {
   const normalizedDurationMs = normalizeVoiceDurationMs(input.durationMs);
+  logVoiceSendDiagnostics('message-assets-insert:started', {
+    conversationId: input.conversationId,
+    durationMs: normalizedDurationMs,
+    fileName: sanitizeAttachmentFileName(input.file.name),
+    messageId: input.messageId,
+    mimeType: input.file.type,
+    objectPath: input.objectPath,
+    sizeBytes: input.file.size,
+  });
   const { data: assetRow, error: assetError } = await input.client
     .from('message_assets')
     .insert({
@@ -8585,6 +8620,16 @@ async function insertCommittedVoiceAssetAndLink(input: {
     .single();
 
   if (assetError) {
+    logVoiceSendDiagnostics(
+      'message-assets-insert:failed',
+      {
+        conversationId: input.conversationId,
+        errorMessage: assetError.message,
+        messageId: input.messageId,
+        objectPath: input.objectPath,
+      },
+      'error',
+    );
     if (
       isMissingRelationErrorMessage(assetError.message, 'message_assets') ||
       isMissingColumnErrorMessage(assetError.message, 'duration_ms') ||
@@ -8605,6 +8650,16 @@ async function insertCommittedVoiceAssetAndLink(input: {
     throw new Error('Voice message asset insert did not return an asset id.');
   }
 
+  logVoiceSendDiagnostics('message-assets-insert:completed', {
+    assetId,
+    conversationId: input.conversationId,
+    messageId: input.messageId,
+  });
+  logVoiceSendDiagnostics('message-asset-links-insert:started', {
+    assetId,
+    conversationId: input.conversationId,
+    messageId: input.messageId,
+  });
   const { error: linkError } = await input.client.from('message_asset_links').insert({
     asset_id: assetId,
     message_id: input.messageId,
@@ -8613,6 +8668,16 @@ async function insertCommittedVoiceAssetAndLink(input: {
   });
 
   if (linkError) {
+    logVoiceSendDiagnostics(
+      'message-asset-links-insert:failed',
+      {
+        assetId,
+        conversationId: input.conversationId,
+        errorMessage: linkError.message,
+        messageId: input.messageId,
+      },
+      'error',
+    );
     if (
       isMissingRelationErrorMessage(linkError.message, 'message_asset_links') ||
       isMissingColumnErrorMessage(linkError.message, 'render_as_primary')
@@ -8625,6 +8690,12 @@ async function insertCommittedVoiceAssetAndLink(input: {
     await input.client.from('message_assets').delete().eq('id', assetId);
     throw new Error(linkError.message);
   }
+
+  logVoiceSendDiagnostics('message-asset-links-insert:completed', {
+    assetId,
+    conversationId: input.conversationId,
+    messageId: input.messageId,
+  });
 }
 
 export async function sendMessageWithAttachment(input: {
@@ -8650,7 +8721,21 @@ export async function sendMessageWithAttachment(input: {
 
   const supabase = await createSupabaseServerClient();
   const attachmentMessageKind = getAttachmentMessageKind(input.file.type);
+  const isVoiceMessageSend = attachmentMessageKind === 'voice';
   const storageFolder = attachmentMessageKind === 'voice' ? 'voice' : 'files';
+
+  if (isVoiceMessageSend) {
+    logVoiceSendDiagnostics('send:start', {
+      conversationId: input.conversationId,
+      fileName: sanitizeAttachmentFileName(input.file.name),
+      mimeType: input.file.type,
+      replyToMessageId: input.replyToMessageId ?? null,
+      senderId: input.senderId,
+      sizeBytes: input.file.size,
+      voiceDurationMs: normalizeVoiceDurationMs(input.voiceDurationMs ?? null),
+    });
+  }
+
   const messageResult = await createMessageRecord({
     conversationId: input.conversationId,
     senderId: input.senderId,
@@ -8660,9 +8745,27 @@ export async function sendMessageWithAttachment(input: {
     touchConversation: false,
     kind: attachmentMessageKind,
   });
+
+  if (isVoiceMessageSend) {
+    logVoiceSendDiagnostics('message-commit:completed', {
+      clientId: messageResult.clientId,
+      conversationId: input.conversationId,
+      messageId: messageResult.messageId,
+      timestamp: messageResult.timestamp,
+    });
+  }
+
   const fileName = sanitizeAttachmentFileName(input.file.name);
   const objectPath = `${input.conversationId}/${messageResult.messageId}/${storageFolder}/${Date.now()}-${fileName}`;
   const fileBuffer = Buffer.from(await input.file.arrayBuffer());
+
+  if (isVoiceMessageSend) {
+    logVoiceSendDiagnostics('upload:started', {
+      conversationId: input.conversationId,
+      messageId: messageResult.messageId,
+      objectPath,
+    });
+  }
 
   const { error: uploadError } = await supabase.storage
     .from(CHAT_ATTACHMENT_BUCKET)
@@ -8673,14 +8776,39 @@ export async function sendMessageWithAttachment(input: {
     });
 
   if (uploadError) {
+    if (isVoiceMessageSend) {
+      logVoiceSendDiagnostics(
+        'upload:failed',
+        {
+          conversationId: input.conversationId,
+          errorMessage: uploadError.message,
+          messageId: messageResult.messageId,
+          objectPath,
+        },
+        'error',
+      );
+    }
     await supabase.from('messages').delete().eq('id', messageResult.messageId);
     throw new Error(uploadError.message);
+  }
+
+  if (isVoiceMessageSend) {
+    logVoiceSendDiagnostics('upload:completed', {
+      conversationId: input.conversationId,
+      messageId: messageResult.messageId,
+      objectPath,
+    });
   }
 
   const attachmentError =
     attachmentMessageKind === 'voice'
       ? await (async () => {
           try {
+            logVoiceSendDiagnostics('asset-link-commit:started', {
+              conversationId: input.conversationId,
+              messageId: messageResult.messageId,
+              objectPath,
+            });
             await insertCommittedVoiceAssetAndLink({
               client: supabase,
               conversationId: input.conversationId,
@@ -8690,8 +8818,22 @@ export async function sendMessageWithAttachment(input: {
               objectPath,
               senderId: input.senderId,
             });
+            logVoiceSendDiagnostics('asset-link-commit:completed', {
+              conversationId: input.conversationId,
+              messageId: messageResult.messageId,
+            });
             return null;
           } catch (error) {
+            logVoiceSendDiagnostics(
+              'asset-link-commit:failed',
+              {
+                conversationId: input.conversationId,
+                errorMessage:
+                  error instanceof Error ? error.message : String(error),
+                messageId: messageResult.messageId,
+              },
+              'error',
+            );
             return error instanceof Error ? error : new Error('Unknown voice asset error');
           }
         })()
@@ -8710,6 +8852,18 @@ export async function sendMessageWithAttachment(input: {
         })();
 
   if (attachmentError) {
+    if (isVoiceMessageSend) {
+      logVoiceSendDiagnostics(
+        'send:rollback-after-attachment-failure',
+        {
+          conversationId: input.conversationId,
+          errorMessage: attachmentError.message,
+          messageId: messageResult.messageId,
+          objectPath,
+        },
+        'error',
+      );
+    }
     await supabase.storage.from(CHAT_ATTACHMENT_BUCKET).remove([objectPath]);
     await supabase.from('messages').delete().eq('id', messageResult.messageId);
     throw attachmentError;
@@ -8720,6 +8874,19 @@ export async function sendMessageWithAttachment(input: {
     input.conversationId,
     messageResult.messageId,
   );
+
+  if (isVoiceMessageSend) {
+    logVoiceSendDiagnostics('summary-sync:completed', {
+      conversationId: input.conversationId,
+      messageId: messageResult.messageId,
+    });
+    logVoiceSendDiagnostics('send:completed', {
+      clientId: messageResult.clientId,
+      conversationId: input.conversationId,
+      messageId: messageResult.messageId,
+      timestamp: messageResult.timestamp,
+    });
+  }
 
   return messageResult;
 }
