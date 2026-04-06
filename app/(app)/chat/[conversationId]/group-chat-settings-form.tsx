@@ -624,95 +624,99 @@ export function GroupChatSettingsForm({
           type="file"
         />
 
-        <button
-          aria-label={labels.tapPhotoToChange}
-          className="conversation-group-avatar-button"
-          disabled={isBusy}
-          onClick={() => {
-            clearStatusQueryParams();
-            fileInputRef.current?.click();
-          }}
-          type="button"
-        >
-          <GroupIdentityAvatar
-            avatarPath={visibleAvatarPath}
-            label={draftTitle.trim() || labels.namePlaceholder}
-            size="lg"
-          />
-          <span aria-hidden="true" className="conversation-group-avatar-badge">
-            ✎
-          </span>
-        </button>
-
-        <div className="stack conversation-group-identity-fields">
-          <label className="field">
-            <span className="sr-only">{labels.name}</span>
-            <input
-              className="input"
-              disabled={isBusy}
-              maxLength={80}
-              onChange={(event) => {
-                clearStatusQueryParams();
-                setDraftTitle(event.target.value);
-              }}
-              placeholder={labels.namePlaceholder}
-              value={draftTitle}
+        <div className="conversation-group-identity-hero">
+          <button
+            aria-label={labels.tapPhotoToChange}
+            className="conversation-group-avatar-button"
+            disabled={isBusy}
+            onClick={() => {
+              clearStatusQueryParams();
+              fileInputRef.current?.click();
+            }}
+            type="button"
+          >
+            <GroupIdentityAvatar
+              avatarPath={visibleAvatarPath}
+              label={draftTitle.trim() || labels.namePlaceholder}
+              size="lg"
             />
-          </label>
+            <span aria-hidden="true" className="conversation-group-avatar-badge">
+              ✎
+            </span>
+          </button>
 
-          <p className="muted conversation-settings-note">{draftNote}</p>
+          <div className="stack conversation-group-identity-fields">
+            <label className="field conversation-group-identity-name-field">
+              <span className="sr-only">{labels.name}</span>
+              <input
+                className="input conversation-group-identity-name-input"
+                disabled={isBusy}
+                maxLength={80}
+                onChange={(event) => {
+                  clearStatusQueryParams();
+                  setDraftTitle(event.target.value);
+                }}
+                placeholder={labels.namePlaceholder}
+                value={draftTitle}
+              />
+            </label>
 
-          <section className="stack conversation-settings-subsection conversation-group-privacy-subsection">
-            <div className="stack conversation-settings-panel-copy">
-              <h4 className="conversation-settings-subtitle">{labels.privacyTitle}</h4>
-              <p className="muted conversation-settings-note">{labels.privacyNote}</p>
-            </div>
-
-            <div className="checkbox-list inbox-settings-option-list conversation-group-privacy-list">
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  checked={draftJoinPolicy === 'closed'}
-                  className="inbox-settings-option-input"
-                  disabled={isBusy}
-                  name="group-join-policy"
-                  onChange={() => {
-                    clearStatusQueryParams();
-                    setDraftJoinPolicy('closed');
-                  }}
-                  type="radio"
-                />
-                <span aria-hidden="true" className="inbox-settings-option-mark" />
-                <span className="stack checkbox-copy inbox-settings-option-copy">
-                  <span className="inbox-settings-option-title">{labels.privacyClosed}</span>
-                  <span className="inbox-settings-option-note">
-                    {labels.privacyClosedNote}
-                  </span>
-                </span>
-              </label>
-
-              <label className="checkbox-row inbox-settings-option-row">
-                <input
-                  checked={draftJoinPolicy === 'open'}
-                  className="inbox-settings-option-input"
-                  disabled={isBusy}
-                  name="group-join-policy"
-                  onChange={() => {
-                    clearStatusQueryParams();
-                    setDraftJoinPolicy('open');
-                  }}
-                  type="radio"
-                />
-                <span aria-hidden="true" className="inbox-settings-option-mark" />
-                <span className="stack checkbox-copy inbox-settings-option-copy">
-                  <span className="inbox-settings-option-title">{labels.privacyOpen}</span>
-                  <span className="inbox-settings-option-note">
-                    {labels.privacyOpenNote}
-                  </span>
-                </span>
-              </label>
-            </div>
-          </section>
+            <p className="muted conversation-settings-note conversation-group-identity-note">
+              {draftNote}
+            </p>
+          </div>
         </div>
+
+        <section className="stack conversation-settings-subsection conversation-group-privacy-subsection">
+          <div className="stack conversation-settings-panel-copy">
+            <h4 className="conversation-settings-subtitle">{labels.privacyTitle}</h4>
+            <p className="muted conversation-settings-note">{labels.privacyNote}</p>
+          </div>
+
+          <div className="checkbox-list inbox-settings-option-list conversation-group-privacy-list">
+            <label className="checkbox-row inbox-settings-option-row">
+              <input
+                checked={draftJoinPolicy === 'closed'}
+                className="inbox-settings-option-input"
+                disabled={isBusy}
+                name="group-join-policy"
+                onChange={() => {
+                  clearStatusQueryParams();
+                  setDraftJoinPolicy('closed');
+                }}
+                type="radio"
+              />
+              <span aria-hidden="true" className="inbox-settings-option-mark" />
+              <span className="stack checkbox-copy inbox-settings-option-copy">
+                <span className="inbox-settings-option-title">{labels.privacyClosed}</span>
+                <span className="inbox-settings-option-note">
+                  {labels.privacyClosedNote}
+                </span>
+              </span>
+            </label>
+
+            <label className="checkbox-row inbox-settings-option-row">
+              <input
+                checked={draftJoinPolicy === 'open'}
+                className="inbox-settings-option-input"
+                disabled={isBusy}
+                name="group-join-policy"
+                onChange={() => {
+                  clearStatusQueryParams();
+                  setDraftJoinPolicy('open');
+                }}
+                type="radio"
+              />
+              <span aria-hidden="true" className="inbox-settings-option-mark" />
+              <span className="stack checkbox-copy inbox-settings-option-copy">
+                <span className="inbox-settings-option-title">{labels.privacyOpen}</span>
+                <span className="inbox-settings-option-note">
+                  {labels.privacyOpenNote}
+                </span>
+              </span>
+            </label>
+          </div>
+        </section>
       </div>
 
       <div className="conversation-group-identity-savebar">
