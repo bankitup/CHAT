@@ -234,7 +234,7 @@ export function PlaintextChatComposerForm({
         attachment: detail.attachment ?? null,
         attachmentLabel: detail.attachmentLabel ?? null,
         body: detail.body,
-        clientId: detail.clientId,
+        clientId: detail.clientId ?? null,
         createdAt: detail.createdAt,
         kind:
           detail.kind === 'voice'

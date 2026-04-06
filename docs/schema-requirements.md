@@ -87,6 +87,18 @@ Operational note:
 - current default bucket is `avatars` (override with `SUPABASE_AVATARS_BUCKET` if needed)
 - new `avatar_path` writes store bucket object paths, not baked public URLs
 
+### `storage.buckets` / `storage.objects`
+
+Required current buckets:
+
+- `avatars`
+- `message-attachments`
+
+Current attachment runtime note:
+
+- chat attachments and voice notes default to the `message-attachments` bucket
+- current default bucket is `message-attachments` (override with `NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET` only if code and SQL stay aligned)
+
 ### `public.message_reactions`
 
 - `id`
@@ -141,6 +153,7 @@ Apply these if the fields are not yet present in your Supabase project:
 - [2026-04-06-messages-kind-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-messages-kind-runtime-align.sql)
 - [2026-04-06-message-assets-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-runtime-align.sql)
 - [2026-04-03-avatars-storage-policies.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-avatars-storage-policies.sql)
+- [2026-04-06-message-attachments-storage-policies.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-attachments-storage-policies.sql)
 
 ## Defensive behavior currently in code
 

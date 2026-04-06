@@ -841,7 +841,7 @@ export function EncryptedDmComposerForm({
       enqueue({
         attachmentLabel: detail.attachmentLabel ?? null,
         body: detail.body,
-        clientId: detail.clientId,
+        clientId: detail.clientId ?? null,
         createdAt: detail.createdAt,
         kind: detail.kind === 'voice' ? 'voice' : 'text',
         payload:

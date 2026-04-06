@@ -44,7 +44,7 @@ export type OptimisticThreadRetryPayload = {
   attachment?: File | null;
   attachmentLabel?: string | null;
   body: string;
-  clientId: string;
+  clientId?: string | null;
   conversationId: string;
   createdAt: string;
   kind?: 'text' | 'attachment' | 'voice';

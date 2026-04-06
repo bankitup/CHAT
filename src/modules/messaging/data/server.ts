@@ -2529,6 +2529,16 @@ function getAvatarBucketRequirementErrorMessage() {
   return 'Avatar uploads are not available right now.';
 }
 
+function getChatAttachmentBucketRequirementErrorMessage() {
+  console.error('[message-attachment-storage]', {
+    issue: 'bucket-not-found',
+    bucket: CHAT_ATTACHMENT_BUCKET,
+    setupSql: 'docs/sql/2026-04-06-message-attachments-storage-policies.sql',
+  });
+
+  return 'Chat attachment uploads are not available right now.';
+}
+
 const avatarDiagnosticsEnabled = process.env.CHAT_DEBUG_AVATARS === '1';
 
 async function resolveStoredAvatarPath(
@@ -7887,6 +7897,28 @@ async function createMessageRecord(input: {
       );
     }
 
+    if (
+      input.kind === 'voice' &&
+      isUniqueConstraintErrorMessage(
+        insertError.message,
+        'messages_sender_id_client_id_key',
+      )
+    ) {
+      logVoiceSendDiagnostics(
+        'message-commit:duplicate-client-id',
+        {
+          clientId,
+          conversationId: input.conversationId,
+          errorMessage: insertError.message,
+          senderId: input.senderId,
+        },
+        'error',
+      );
+      throw new Error(
+        'Voice message retry conflicted with an earlier send attempt. Try sending it again.',
+      );
+    }
+
     if (insertError.message.includes('row-level security policy')) {
       throw new Error(
         `Message sending debug: insert blocked by messages RLS. auth user id=${user.id}, payload sender_id=${input.senderId}, conversation_id=${input.conversationId}. Values match, so the failure is likely database-side RLS state or membership policy rather than payload construction.`,
@@ -8677,6 +8709,26 @@ async function insertCommittedVoiceAssetAndLink(input: {
   });
 
   if (linkError) {
+    const cleanupClient =
+      (createSupabaseServiceRoleClient() ?? input.client) as MessageAssetsWriteClient;
+    const { error: assetCleanupError } = await cleanupClient
+      .from('message_assets')
+      .delete()
+      .eq('id', assetId);
+
+    if (assetCleanupError) {
+      logVoiceSendDiagnostics(
+        'message-assets-cleanup:failed',
+        {
+          assetId,
+          conversationId: input.conversationId,
+          errorMessage: assetCleanupError.message,
+          messageId: input.messageId,
+        },
+        'error',
+      );
+    }
+
     logVoiceSendDiagnostics(
       'message-asset-links-insert:failed',
       {
@@ -8696,7 +8748,6 @@ async function insertCommittedVoiceAssetAndLink(input: {
       );
     }
 
-    await input.client.from('message_assets').delete().eq('id', assetId);
     throw new Error(linkError.message);
   }
 
@@ -8729,18 +8780,26 @@ export async function sendMessageWithAttachment(input: {
   }
 
   const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const storageClient =
+    (serviceSupabase ?? supabase) as Awaited<
+      ReturnType<typeof createSupabaseServerClient>
+    >;
   const attachmentMessageKind = getAttachmentMessageKind(input.file.type);
   const isVoiceMessageSend = attachmentMessageKind === 'voice';
   const storageFolder = attachmentMessageKind === 'voice' ? 'voice' : 'files';
 
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('send:start', {
+      bucket: CHAT_ATTACHMENT_BUCKET,
       conversationId: input.conversationId,
       fileName: sanitizeAttachmentFileName(input.file.name),
       mimeType: input.file.type,
+      requestedClientId: input.clientId?.trim() || null,
       replyToMessageId: input.replyToMessageId ?? null,
       senderId: input.senderId,
       sizeBytes: input.file.size,
+      storageClientType: serviceSupabase ? 'service-role' : 'request-auth',
       voiceDurationMs: normalizeVoiceDurationMs(input.voiceDurationMs ?? null),
     });
   }
@@ -8767,16 +8826,77 @@ export async function sendMessageWithAttachment(input: {
   const fileName = sanitizeAttachmentFileName(input.file.name);
   const objectPath = `${input.conversationId}/${messageResult.messageId}/${storageFolder}/${Date.now()}-${fileName}`;
   const fileBuffer = Buffer.from(await input.file.arrayBuffer());
+  const cleanupFailedMessageShell = async (failureStage: string) => {
+    const { error: messageCleanupError } = await storageClient
+      .from('messages')
+      .delete()
+      .eq('id', messageResult.messageId)
+      .eq('conversation_id', input.conversationId);
+
+    if (messageCleanupError) {
+      logVoiceSendDiagnostics(
+        'cleanup:message-delete-failed',
+        {
+          clientId: messageResult.clientId,
+          conversationId: input.conversationId,
+          errorMessage: messageCleanupError.message,
+          failureStage,
+          messageId: messageResult.messageId,
+        },
+        'error',
+      );
+      return false;
+    }
+
+    logVoiceSendDiagnostics('cleanup:message-delete-completed', {
+      clientId: messageResult.clientId,
+      conversationId: input.conversationId,
+      failureStage,
+      messageId: messageResult.messageId,
+    });
+    return true;
+  };
+  const cleanupUploadedObject = async (failureStage: string) => {
+    const { error: storageCleanupError } = await storageClient.storage
+      .from(CHAT_ATTACHMENT_BUCKET)
+      .remove([objectPath]);
+
+    if (storageCleanupError) {
+      logVoiceSendDiagnostics(
+        'cleanup:object-remove-failed',
+        {
+          bucket: CHAT_ATTACHMENT_BUCKET,
+          conversationId: input.conversationId,
+          errorMessage: storageCleanupError.message,
+          failureStage,
+          messageId: messageResult.messageId,
+          objectPath,
+        },
+        'error',
+      );
+      return false;
+    }
+
+    logVoiceSendDiagnostics('cleanup:object-remove-completed', {
+      bucket: CHAT_ATTACHMENT_BUCKET,
+      conversationId: input.conversationId,
+      failureStage,
+      messageId: messageResult.messageId,
+      objectPath,
+    });
+    return true;
+  };
 
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:started', {
+      bucket: CHAT_ATTACHMENT_BUCKET,
       conversationId: input.conversationId,
       messageId: messageResult.messageId,
       objectPath,
     });
   }
 
-  const { error: uploadError } = await supabase.storage
+  const { error: uploadError } = await storageClient.storage
     .from(CHAT_ATTACHMENT_BUCKET)
     .upload(objectPath, fileBuffer, {
       cacheControl: '3600',
@@ -8789,6 +8909,8 @@ export async function sendMessageWithAttachment(input: {
       logVoiceSendDiagnostics(
         'upload:failed',
         {
+          bucket: CHAT_ATTACHMENT_BUCKET,
+          clientId: messageResult.clientId,
           conversationId: input.conversationId,
           errorMessage: uploadError.message,
           messageId: messageResult.messageId,
@@ -8797,12 +8919,21 @@ export async function sendMessageWithAttachment(input: {
         'error',
       );
     }
-    await supabase.from('messages').delete().eq('id', messageResult.messageId);
+    await cleanupFailedMessageShell('upload');
+
+    if (isBucketNotFoundStorageErrorMessage(uploadError.message)) {
+      getChatAttachmentBucketRequirementErrorMessage();
+      throw createSchemaRequirementError(
+        `Chat attachment storage bucket \`${CHAT_ATTACHMENT_BUCKET}\` is missing.`,
+      );
+    }
+
     throw new Error(uploadError.message);
   }
 
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:completed', {
+      bucket: CHAT_ATTACHMENT_BUCKET,
       conversationId: input.conversationId,
       messageId: messageResult.messageId,
       objectPath,
@@ -8865,6 +8996,8 @@ export async function sendMessageWithAttachment(input: {
       logVoiceSendDiagnostics(
         'send:rollback-after-attachment-failure',
         {
+          bucket: CHAT_ATTACHMENT_BUCKET,
+          clientId: messageResult.clientId,
           conversationId: input.conversationId,
           errorMessage: attachmentError.message,
           messageId: messageResult.messageId,
@@ -8873,8 +9006,8 @@ export async function sendMessageWithAttachment(input: {
         'error',
       );
     }
-    await supabase.storage.from(CHAT_ATTACHMENT_BUCKET).remove([objectPath]);
-    await supabase.from('messages').delete().eq('id', messageResult.messageId);
+    await cleanupUploadedObject('attachment-metadata');
+    await cleanupFailedMessageShell('attachment-metadata');
     throw attachmentError;
   }
 

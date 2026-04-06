@@ -157,7 +157,7 @@ export function OptimisticThreadMessages({
       attachment: item.attachment ?? null,
       attachmentLabel: item.attachmentLabel ?? null,
       body: item.body,
-      clientId: item.clientId,
+      clientId: null,
       conversationId,
       createdAt: item.createdAt,
       kind: item.kind,
