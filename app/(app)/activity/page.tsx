@@ -248,11 +248,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       />
 
       <section className="stack settings-hero activity-hero">
-        <div className="stack activity-hero-copy">
-          <h1 className="inbox-home-title">{t.activity.title}</h1>
-          <p className="muted inbox-home-subtitle">{t.activity.subtitle}</p>
-        </div>
-
         <section className="activity-focus-card">
           <div className="stack activity-focus-copy">
             <span className="activity-focus-kicker">{t.activity.overviewTitle}</span>

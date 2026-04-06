@@ -2057,11 +2057,7 @@ main {
 }
 
 .activity-hero {
-  gap: 12px;
-}
-
-.activity-hero-copy {
-  gap: 4px;
+  gap: 6px;
 }
 
 .activity-focus-card {
