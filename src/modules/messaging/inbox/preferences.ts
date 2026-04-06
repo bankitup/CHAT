@@ -4,10 +4,12 @@ export const INBOX_PRIMARY_FILTERS = ['all', 'dm', 'groups'] as const;
 
 export type InboxPrimaryFilter = (typeof INBOX_PRIMARY_FILTERS)[number];
 export type InboxListDensity = 'comfortable' | 'compact';
+export type InboxPreviewDisplayMode = 'show' | 'mask' | 'reveal_after_open';
 
 export type InboxSectionPreferences = {
   defaultFilter: InboxPrimaryFilter;
   density: InboxListDensity;
+  previewMode: InboxPreviewDisplayMode;
   showGroupsSeparately: boolean;
   showPersonalChatsFirst: boolean;
   visibleFilters: InboxPrimaryFilter[];
@@ -18,12 +20,14 @@ type InboxSectionPreferencesInput = Partial<
 > & {
   defaultFilter?: string | null;
   density?: string | null;
+  previewMode?: string | null;
   visibleFilters?: Array<string | null | undefined> | null;
 };
 
 export const DEFAULT_INBOX_SECTION_PREFERENCES: InboxSectionPreferences = {
   defaultFilter: 'all',
   density: 'comfortable',
+  previewMode: 'show',
   showGroupsSeparately: false,
   showPersonalChatsFirst: false,
   visibleFilters: ['all', 'dm', 'groups'],
@@ -70,6 +74,20 @@ export function normalizeInboxListDensity(
   return value === 'compact' ? 'compact' : 'comfortable';
 }
 
+export function normalizeInboxPreviewDisplayMode(
+  value: string | null | undefined,
+): InboxPreviewDisplayMode {
+  if (value === 'mask') {
+    return 'mask';
+  }
+
+  if (value === 'reveal_after_open') {
+    return 'reveal_after_open';
+  }
+
+  return 'show';
+}
+
 export function normalizeInboxSectionPreferences(
   input?: InboxSectionPreferencesInput | null,
 ): InboxSectionPreferences {
@@ -78,6 +96,7 @@ export function normalizeInboxSectionPreferences(
   return {
     defaultFilter: normalizeInboxDefaultFilter(input?.defaultFilter, visibleFilters),
     density: normalizeInboxListDensity(input?.density),
+    previewMode: normalizeInboxPreviewDisplayMode(input?.previewMode),
     showGroupsSeparately: input?.showGroupsSeparately === true,
     showPersonalChatsFirst: input?.showPersonalChatsFirst === true,
     visibleFilters,

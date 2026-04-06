@@ -154,6 +154,14 @@ type LanguageDictionary = {
     groupingNote: string;
     showGroupsSeparately: string;
     showPersonalChatsFirst: string;
+    previewsTitle: string;
+    previewsNote: string;
+    previewModeShow: string;
+    previewModeShowNote: string;
+    previewModeMask: string;
+    previewModeMaskNote: string;
+    previewModeRevealAfterOpen: string;
+    previewModeRevealAfterOpenNote: string;
     viewTitle: string;
     viewNote: string;
     densityComfortable: string;
@@ -356,6 +364,7 @@ type LanguageDictionary = {
     someone: string;
     you: string;
     emptyMessage: string;
+    newMessage: string;
     image: string;
     audio: string;
     voiceMessage: string;
@@ -592,6 +601,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       groupingNote: 'Lightweight organization for the main chats list.',
       showGroupsSeparately: 'Show groups separately',
       showPersonalChatsFirst: 'Show personal chats first',
+      previewsTitle: 'Message previews',
+      previewsNote: 'Choose how message previews appear in your chats list.',
+      previewModeShow: 'Show message content',
+      previewModeShowNote: 'Show the latest message content normally.',
+      previewModeMask: 'Mask message content',
+      previewModeMaskNote: 'Hide text and show only a generic preview by message kind.',
+      previewModeRevealAfterOpen: 'Reveal after open',
+      previewModeRevealAfterOpenNote:
+        'Keep previews generic until the chat has been opened and read.',
       viewTitle: 'View preferences',
       viewNote: 'Pick the inbox density that feels best on your phone.',
       densityComfortable: 'Comfortable list density',
@@ -800,6 +818,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       someone: 'Someone',
       you: 'You',
       emptyMessage: 'Empty message',
+      newMessage: 'New message',
       image: 'Image',
       audio: 'Audio',
       voiceMessage: 'Voice message',
@@ -1046,6 +1065,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       groupingNote: 'Лёгкая организация для основного списка чатов.',
       showGroupsSeparately: 'Показывать группы отдельно',
       showPersonalChatsFirst: 'Показывать личные чаты первыми',
+      previewsTitle: 'Превью сообщений',
+      previewsNote: 'Выберите, как превью сообщений выглядят в списке чатов.',
+      previewModeShow: 'Показывать текст сообщений',
+      previewModeShowNote: 'Показывать последнее сообщение как обычно.',
+      previewModeMask: 'Скрывать текст сообщений',
+      previewModeMaskNote:
+        'Скрывать текст и показывать только общий тип последнего сообщения.',
+      previewModeRevealAfterOpen: 'Показывать после открытия',
+      previewModeRevealAfterOpenNote:
+        'Оставлять превью общим, пока чат не был открыт и прочитан.',
       viewTitle: 'Вид списка',
       viewNote: 'Выберите плотность списка, которая удобнее на телефоне.',
       densityComfortable: 'Комфортная плотность списка',
@@ -1254,6 +1283,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       someone: 'Кто-то',
       you: 'Вы',
       emptyMessage: 'Пустое сообщение',
+      newMessage: 'Новое сообщение',
       image: 'Изображение',
       audio: 'Аудио',
       voiceMessage: 'Голосовое сообщение',

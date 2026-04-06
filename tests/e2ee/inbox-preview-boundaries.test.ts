@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  getInboxDisplayPreviewText,
   getInboxPreviewText,
   getSearchableConversationPreview,
   resolveEncryptedDmInboxPreview,
@@ -15,6 +16,11 @@ const labels = {
   attachment: 'Attachment',
   file: 'File',
   image: 'Image',
+};
+
+const displayLabels = {
+  ...labels,
+  newMessage: 'New message',
 };
 
 test('encrypted DM inbox preview uses truthful generic fallback instead of plaintext body', () => {
@@ -106,4 +112,58 @@ test('unread encrypted DM inbox preview uses explicit new-encrypted fallback', (
   );
 
   assert.equal(preview, 'New encrypted message');
+});
+
+test('mask mode hides plaintext inbox preview behind generic new-message text', () => {
+  const preview = getInboxDisplayPreviewText(
+    {
+      lastMessageAt: '2026-04-03T12:00:00.000Z',
+      latestMessageDeletedAt: null,
+      latestMessageKind: 'text',
+      latestMessageContentMode: 'plaintext',
+      latestMessageBody: 'see you at 5',
+      latestMessageAttachmentKind: null,
+      unreadCount: 0,
+    },
+    displayLabels,
+    'mask',
+  );
+
+  assert.equal(preview, 'New message');
+});
+
+test('reveal-after-open keeps unread plaintext previews masked', () => {
+  const preview = getInboxDisplayPreviewText(
+    {
+      lastMessageAt: '2026-04-03T12:00:00.000Z',
+      latestMessageDeletedAt: null,
+      latestMessageKind: 'text',
+      latestMessageContentMode: 'plaintext',
+      latestMessageBody: 'private snippet',
+      latestMessageAttachmentKind: null,
+      unreadCount: 2,
+    },
+    displayLabels,
+    'reveal_after_open',
+  );
+
+  assert.equal(preview, 'New message');
+});
+
+test('reveal-after-open shows plaintext previews once the chat is read', () => {
+  const preview = getInboxDisplayPreviewText(
+    {
+      lastMessageAt: '2026-04-03T12:00:00.000Z',
+      latestMessageDeletedAt: null,
+      latestMessageKind: 'text',
+      latestMessageContentMode: 'plaintext',
+      latestMessageBody: 'private snippet',
+      latestMessageAttachmentKind: null,
+      unreadCount: 0,
+    },
+    displayLabels,
+    'reveal_after_open',
+  );
+
+  assert.equal(preview, 'private snippet');
 });

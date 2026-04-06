@@ -1,4 +1,5 @@
 import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
 
 export type InboxPreviewLabels = {
   audio: string;
@@ -9,6 +10,10 @@ export type InboxPreviewLabels = {
   attachment: string;
   file: string;
   image: string;
+};
+
+export type InboxDisplayPreviewLabels = InboxPreviewLabels & {
+  newMessage: string;
 };
 
 export type EncryptedDmPreviewCacheEntry = {
@@ -67,6 +72,79 @@ export function getInboxPreviewText(
   }
 
   return labels.attachment;
+}
+
+export function getMaskedInboxPreviewText(
+  conversation: {
+    lastMessageAt: string | null;
+    latestMessageDeletedAt: string | null;
+    latestMessageKind: string | null;
+    latestMessageContentMode: string | null;
+    latestMessageBody: string | null;
+    latestMessageAttachmentKind?: InboxAttachmentPreviewKind | null;
+    unreadCount?: number | null;
+  },
+  labels: InboxDisplayPreviewLabels,
+) {
+  if (!conversation.lastMessageAt) {
+    return null;
+  }
+
+  if (conversation.latestMessageDeletedAt) {
+    return labels.deletedMessage;
+  }
+
+  if (conversation.latestMessageKind === 'voice') {
+    return labels.voiceMessage;
+  }
+
+  if (conversation.latestMessageContentMode === 'dm_e2ee_v1') {
+    return (conversation.unreadCount ?? 0) > 0
+      ? labels.newEncryptedMessage
+      : labels.encryptedMessage;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'image') {
+    return labels.image;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'audio') {
+    return labels.audio;
+  }
+
+  if (conversation.latestMessageAttachmentKind === 'file') {
+    return labels.file;
+  }
+
+  if (conversation.latestMessageBody?.trim()) {
+    return labels.newMessage;
+  }
+
+  return labels.attachment;
+}
+
+export function getInboxDisplayPreviewText(
+  conversation: {
+    lastMessageAt: string | null;
+    latestMessageDeletedAt: string | null;
+    latestMessageKind: string | null;
+    latestMessageContentMode: string | null;
+    latestMessageBody: string | null;
+    latestMessageAttachmentKind?: InboxAttachmentPreviewKind | null;
+    unreadCount?: number | null;
+  },
+  labels: InboxDisplayPreviewLabels,
+  mode: InboxPreviewDisplayMode,
+) {
+  if (mode === 'mask') {
+    return getMaskedInboxPreviewText(conversation, labels);
+  }
+
+  if (mode === 'reveal_after_open' && (conversation.unreadCount ?? 0) > 0) {
+    return getMaskedInboxPreviewText(conversation, labels);
+  }
+
+  return getInboxPreviewText(conversation, labels);
 }
 
 export function getSearchableConversationPreview(input: {

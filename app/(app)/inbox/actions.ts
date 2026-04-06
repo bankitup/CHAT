@@ -14,6 +14,7 @@ import {
 } from '@/modules/messaging/data/server';
 import {
   normalizeInboxListDensity,
+  normalizeInboxPreviewDisplayMode,
   normalizeInboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
 import { setInboxSectionPreferencesCookie } from '@/modules/messaging/inbox/preferences-server';
@@ -296,10 +297,14 @@ export async function saveInboxPreferencesAction(formData: FormData) {
       .map((value) => String(value).trim());
     const defaultFilter = readText(formData, 'defaultFilter');
     const density = normalizeInboxListDensity(readText(formData, 'density'));
+    const previewMode = normalizeInboxPreviewDisplayMode(
+      readText(formData, 'previewMode'),
+    );
 
     const preferences = normalizeInboxSectionPreferences({
       defaultFilter,
       density,
+      previewMode,
       showGroupsSeparately: readText(formData, 'showGroupsSeparately') === '1',
       showPersonalChatsFirst: readText(formData, 'showPersonalChatsFirst') === '1',
       visibleFilters,

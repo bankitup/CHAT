@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { memo, useSyncExternalStore } from 'react';
-import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
+import { getInboxDisplayPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
+import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
 import {
   getInboxConversationSummarySnapshot,
   subscribeToInboxConversationSummary,
@@ -21,6 +22,7 @@ type InboxConversationLiveRowProps = {
   initialSummary: InboxConversationLiveSummary;
   isPrimaryChatsView: boolean;
   isArchivedView: boolean;
+  previewMode: InboxPreviewDisplayMode;
   item: {
     conversationId: string;
     groupAvatarPath: string | null;
@@ -45,6 +47,7 @@ type InboxConversationLiveRowProps = {
     file: string;
     group: string;
     image: string;
+    newMessage: string;
     newEncryptedMessage: string;
     noActivityYet: string;
     unreadAria: string;
@@ -294,6 +297,7 @@ function InboxConversationLiveRowComponent({
   initialSummary,
   isArchivedView,
   isPrimaryChatsView,
+  previewMode,
   item,
   language,
   labels,
@@ -318,7 +322,7 @@ function InboxConversationLiveRowComponent({
     return null;
   }
 
-  const preview = getInboxPreviewText(
+  const preview = getInboxDisplayPreviewText(
     {
       lastMessageAt: liveSummary.lastMessageAt,
       latestMessageAttachmentKind: liveSummary.latestMessageAttachmentKind,
@@ -335,9 +339,11 @@ function InboxConversationLiveRowComponent({
       encryptedMessage: labels.encryptedMessage,
       file: labels.file,
       image: labels.image,
+      newMessage: labels.newMessage,
       newEncryptedMessage: labels.newEncryptedMessage,
       voiceMessage: labels.voiceMessage,
     },
+    previewMode,
   );
   const hasUnread = liveSummary.unreadCount > 0;
   const lastActivityAt = liveSummary.lastMessageAt ?? liveSummary.createdAt;

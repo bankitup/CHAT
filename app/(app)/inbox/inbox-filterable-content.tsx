@@ -14,7 +14,7 @@ import {
   type AppLanguage,
 } from '@/modules/i18n';
 import {
-  getInboxPreviewText,
+  getInboxDisplayPreviewText,
   getSearchableConversationPreview,
 } from '@/modules/messaging/e2ee/inbox-policy';
 import {
@@ -26,6 +26,7 @@ import {
 import { requestInboxManualRefresh } from '@/modules/messaging/realtime/inbox-manual-refresh';
 import {
   resolveInboxInitialFilter,
+  type InboxPreviewDisplayMode,
   type InboxPrimaryFilter,
   type InboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
@@ -83,6 +84,7 @@ type InboxPresentationLabels = {
   file: string;
   group: string;
   image: string;
+  newMessage: string;
   newEncryptedMessage: string;
   noActivityYet: string;
   unreadAria: string;
@@ -324,6 +326,7 @@ function areDerivedConversationSummariesEqual(
 function deriveConversationItemFromLiveState(input: {
   item: ConversationListItem;
   labels: InboxPresentationLabels;
+  previewMode: InboxPreviewDisplayMode;
   summary: DerivedConversationSummarySnapshot;
   visibility: InboxView;
 }) {
@@ -341,7 +344,7 @@ function deriveConversationItemFromLiveState(input: {
     ...input.item,
     hasUnread: input.summary.unreadCount > 0,
     latestMessageContentMode: input.summary.latestMessageContentMode,
-    preview: getInboxPreviewText(
+    preview: getInboxDisplayPreviewText(
       {
         lastMessageAt: input.summary.lastMessageAt,
         latestMessageAttachmentKind: input.summary.latestMessageAttachmentKind,
@@ -358,9 +361,11 @@ function deriveConversationItemFromLiveState(input: {
         encryptedMessage: input.labels.encryptedMessage,
         file: input.labels.file,
         image: input.labels.image,
+        newMessage: input.labels.newMessage,
         newEncryptedMessage: input.labels.newEncryptedMessage,
         voiceMessage: input.labels.voiceMessage,
       },
+      input.previewMode,
     ),
   } satisfies ConversationListItem;
 }
@@ -375,6 +380,7 @@ function createDerivedConversationItemsMemoizer() {
     items: ConversationListItem[];
     labels: InboxPresentationLabels;
     liveSummariesByConversationId: Map<string, InboxConversationLiveSummary>;
+    previewMode: InboxPreviewDisplayMode;
     visibility: InboxView;
   }) => {
     const nextCache = new Map<string, DerivedConversationCacheEntry>();
@@ -394,11 +400,12 @@ function createDerivedConversationItemsMemoizer() {
         areDerivedConversationSummariesEqual(previousEntry.summary, summary)
           ? previousEntry.derivedItem
           : deriveConversationItemFromLiveState({
-              item,
-              labels: input.labels,
-              summary,
-              visibility: input.visibility,
-            });
+        item,
+        labels: input.labels,
+        previewMode: input.previewMode,
+        summary,
+        visibility: input.visibility,
+      });
 
       if (previousEntry?.derivedItem !== derivedItem) {
         changed = true;
@@ -785,6 +792,7 @@ export function InboxFilterableContent({
       file: t.chat.file,
       group: t.inbox.metaGroup,
       image: t.chat.image,
+      newMessage: t.chat.newMessage,
       newEncryptedMessage: t.chat.newEncryptedMessage,
       noActivityYet: t.inbox.noActivityYet,
       unreadAria: t.inbox.unreadAria,
@@ -814,12 +822,14 @@ export function InboxFilterableContent({
         items: mainConversationItems,
         labels: rowLabels,
         liveSummariesByConversationId,
+        previewMode: preferences.previewMode,
         visibility: 'main',
       }),
     [
       deriveMainConversationItemsMemoized,
       liveSummariesByConversationId,
       mainConversationItems,
+      preferences.previewMode,
       rowLabels,
     ],
   );
@@ -829,12 +839,14 @@ export function InboxFilterableContent({
         items: archivedConversationItems,
         labels: rowLabels,
         liveSummariesByConversationId,
+        previewMode: preferences.previewMode,
         visibility: 'archived',
       }),
     [
       archivedConversationItems,
       deriveArchivedConversationItemsMemoized,
       liveSummariesByConversationId,
+      preferences.previewMode,
       rowLabels,
     ],
   );
@@ -1268,6 +1280,7 @@ export function InboxFilterableContent({
                   item={conversation}
                   language={language}
                   labels={rowLabels}
+                  previewMode={preferences.previewMode}
                   restoreAction={activeView === 'archived' ? restoreAction : null}
                   restoreLabel={activeView === 'archived' ? t.inbox.restore : undefined}
                 />

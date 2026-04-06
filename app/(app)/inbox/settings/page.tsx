@@ -271,6 +271,81 @@ export default async function InboxSettingsPage({
             </div>
           </section>
 
+          <section className="conversation-settings-panel inbox-settings-section stack">
+            <div className="stack conversation-settings-panel-copy inbox-settings-section-copy">
+              <h2 className="card-title">{t.inboxSettings.previewsTitle}</h2>
+              <p className="muted conversation-settings-note">
+                {t.inboxSettings.previewsNote}
+              </p>
+            </div>
+
+            <div className="checkbox-list conversation-checkbox-list inbox-settings-option-list">
+              <label className="checkbox-row inbox-settings-option-row">
+                <input
+                  className="inbox-settings-option-input"
+                  defaultChecked={preferences.previewMode === 'show'}
+                  name="previewMode"
+                  type="radio"
+                  value="show"
+                />
+                <span
+                  aria-hidden="true"
+                  className="inbox-settings-option-mark"
+                />
+                <span className="checkbox-copy inbox-settings-option-copy">
+                  <span className="user-label inbox-settings-option-title">
+                    {t.inboxSettings.previewModeShow}
+                  </span>
+                  <span className="muted conversation-settings-note">
+                    {t.inboxSettings.previewModeShowNote}
+                  </span>
+                </span>
+              </label>
+              <label className="checkbox-row inbox-settings-option-row">
+                <input
+                  className="inbox-settings-option-input"
+                  defaultChecked={preferences.previewMode === 'mask'}
+                  name="previewMode"
+                  type="radio"
+                  value="mask"
+                />
+                <span
+                  aria-hidden="true"
+                  className="inbox-settings-option-mark"
+                />
+                <span className="checkbox-copy inbox-settings-option-copy">
+                  <span className="user-label inbox-settings-option-title">
+                    {t.inboxSettings.previewModeMask}
+                  </span>
+                  <span className="muted conversation-settings-note">
+                    {t.inboxSettings.previewModeMaskNote}
+                  </span>
+                </span>
+              </label>
+              <label className="checkbox-row inbox-settings-option-row">
+                <input
+                  className="inbox-settings-option-input"
+                  defaultChecked={preferences.previewMode === 'reveal_after_open'}
+                  name="previewMode"
+                  type="radio"
+                  value="reveal_after_open"
+                />
+                <span
+                  aria-hidden="true"
+                  className="inbox-settings-option-mark"
+                />
+                <span className="checkbox-copy inbox-settings-option-copy">
+                  <span className="user-label inbox-settings-option-title">
+                    {t.inboxSettings.previewModeRevealAfterOpen}
+                  </span>
+                  <span className="muted conversation-settings-note">
+                    {t.inboxSettings.previewModeRevealAfterOpenNote}
+                  </span>
+                </span>
+              </label>
+            </div>
+          </section>
+
           <div className="inbox-settings-actions">
             <div className="inbox-settings-actions-shell">
               <PendingSubmitButton

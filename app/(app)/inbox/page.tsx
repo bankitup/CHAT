@@ -4,7 +4,7 @@ import {
 } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
-  getInboxPreviewText,
+  getInboxDisplayPreviewText,
 } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getInboxSectionPreferences,
@@ -332,7 +332,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             },
           })
         : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
-      const preview = getInboxPreviewText(conversation, {
+      const preview = getInboxDisplayPreviewText(conversation, {
         audio: t.chat.audio,
         deletedMessage: t.chat.deletedMessage,
         voiceMessage: t.chat.voiceMessage,
@@ -341,7 +341,8 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         attachment: t.chat.attachment,
         file: t.chat.file,
         image: t.chat.image,
-      });
+        newMessage: t.chat.newMessage,
+      }, inboxPreferences.previewMode);
       const hasUnread = conversation.unreadCount > 0;
       const metaLabels = [
         ...(isGroupConversation
