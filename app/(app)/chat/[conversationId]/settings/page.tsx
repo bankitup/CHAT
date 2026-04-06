@@ -597,6 +597,7 @@ export default async function ChatSettingsPage({
             <div className="conversation-group-actions">
               {canEditGroupIdentity ? (
                 <GroupChatSettingsForm
+                  key={`group-settings-${conversation.title ?? ''}-${conversation.avatarPath ?? ''}-${groupJoinPolicy ?? 'closed'}-${hasSettingsSavedState ? 'saved' : 'idle'}`}
                   conversationId={conversationId}
                   defaultAvatarPath={conversation.avatarPath}
                   defaultJoinPolicy={groupJoinPolicy ?? 'closed'}

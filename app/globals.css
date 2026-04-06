@@ -4047,7 +4047,8 @@ main {
 }
 
 .conversation-settings-route-screen {
-  padding-bottom: calc(var(--app-bottom-nav-reserve) + 56px);
+  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
 }
 
 .conversation-settings-route-hero {
@@ -4060,7 +4061,8 @@ main {
 
 .conversation-settings-route-surface {
   gap: 14px;
-  padding: 14px 14px calc(92px + env(safe-area-inset-bottom));
+  padding: 14px 14px calc(28px + env(safe-area-inset-bottom));
+  overflow: visible;
 }
 
 .conversation-settings-header {
@@ -4366,6 +4368,7 @@ main {
 
 .conversation-group-identity-form {
   gap: 10px;
+  padding-bottom: 6px;
 }
 
 .conversation-group-identity-shell {
@@ -4439,10 +4442,9 @@ main {
 }
 
 .conversation-group-identity-savebar {
-  position: sticky;
-  bottom: max(10px, env(safe-area-inset-bottom));
+  position: static;
   z-index: 2;
-  padding-top: 4px;
+  padding-top: 8px;
 }
 
 .conversation-group-identity-savebar-shell {
