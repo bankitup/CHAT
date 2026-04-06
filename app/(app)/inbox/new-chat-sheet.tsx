@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
   getTranslations,
   type AppLanguage,
@@ -22,9 +21,11 @@ type NewChatSheetUser = {
 };
 
 type NewChatSheetProps = {
-  availableUsers: NewChatSheetUser[];
+  availableDmUsers: NewChatSheetUser[];
+  availableGroupUsers: NewChatSheetUser[];
+  hasAnyDmUsers: boolean;
   hasAnyUsers: boolean;
-  closeHref: string;
+  onClose: () => void;
   language: AppLanguage;
   spaceId: string;
 };
@@ -32,9 +33,11 @@ type NewChatSheetProps = {
 type NewChatMode = 'dm' | 'group';
 
 export function NewChatSheet({
-  availableUsers,
+  availableDmUsers,
+  availableGroupUsers,
+  hasAnyDmUsers,
   hasAnyUsers,
-  closeHref,
+  onClose,
   language,
   spaceId,
 }: NewChatSheetProps) {
@@ -46,9 +49,9 @@ export function NewChatSheet({
 
   const selectedDmUser = useMemo(
     () =>
-      availableUsers.find((availableUser) => availableUser.userId === selectedDmUserId) ??
+      availableDmUsers.find((availableUser) => availableUser.userId === selectedDmUserId) ??
       null,
-    [availableUsers, selectedDmUserId],
+    [availableDmUsers, selectedDmUserId],
   );
   const isGroupReady =
     selectedGroupUserIds.length > 0 && groupTitle.trim().length > 0;
@@ -66,19 +69,24 @@ export function NewChatSheet({
   }
 
   return (
-    <section className="card stack inbox-create-sheet">
+    <section
+      aria-modal="true"
+      className="card stack inbox-create-sheet"
+      role="dialog"
+    >
       <div className="inbox-create-header">
         <div className="stack inbox-create-copy">
           <h2 className="section-title">{t.inbox.create.title}</h2>
           <p className="muted">{t.inbox.create.subtitle}</p>
         </div>
-        <Link
+        <button
           aria-label={t.inbox.create.closeAria}
           className="pill inbox-create-close"
-          href={closeHref}
+          onClick={onClose}
+          type="button"
         >
           {t.inbox.create.close}
-        </Link>
+        </button>
       </div>
 
       <div
@@ -125,13 +133,17 @@ export function NewChatSheet({
             <p className="muted inbox-compose-empty">
               {t.inbox.create.noUsers}
             </p>
-          ) : availableUsers.length === 0 ? (
+          ) : !hasAnyDmUsers ? (
+            <p className="muted inbox-compose-empty">
+              {t.inbox.create.existingDmOnly}
+            </p>
+          ) : availableDmUsers.length === 0 ? (
             <p className="muted inbox-compose-empty">
               {t.inbox.create.noMatches}
             </p>
           ) : (
             <div className="inbox-compose-user-list inbox-create-user-list">
-              {availableUsers.map((availableUser) => {
+              {availableDmUsers.map((availableUser) => {
                 const isSelected = availableUser.userId === selectedDmUserId;
 
                 return (
@@ -222,13 +234,13 @@ export function NewChatSheet({
               <p className="muted inbox-compose-empty">
                 {t.inbox.create.noUsers}
               </p>
-            ) : availableUsers.length === 0 ? (
+            ) : availableGroupUsers.length === 0 ? (
               <p className="muted inbox-compose-empty">
                 {t.inbox.create.noMatches}
               </p>
             ) : (
               <div className="inbox-compose-user-list inbox-create-user-list">
-                {availableUsers.map((availableUser) => {
+                {availableGroupUsers.map((availableUser) => {
                   const isSelected = selectedGroupUserIds.includes(
                     availableUser.userId,
                   );

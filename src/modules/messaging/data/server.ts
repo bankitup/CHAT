@@ -4180,6 +4180,69 @@ export async function getAvailableUsers(
   }) satisfies AvailableUser[];
 }
 
+export async function getExistingActiveDmPartnerUserIds(
+  currentUserId: string,
+  options?: {
+    spaceId?: string | null;
+  },
+) {
+  const supabase = await createSupabaseServerClient();
+  let activeDmMembershipQuery = supabase
+    .from('conversation_members')
+    .select(
+      options?.spaceId
+        ? 'conversation_id, conversations!inner(id, kind, space_id)'
+        : 'conversation_id, conversations!inner(id, kind)',
+    )
+    .eq('user_id', currentUserId)
+    .eq('state', 'active')
+    .eq('conversations.kind', 'dm');
+
+  if (options?.spaceId) {
+    activeDmMembershipQuery = activeDmMembershipQuery.eq(
+      'conversations.space_id',
+      options.spaceId,
+    );
+  }
+
+  const { data: activeDmMemberships, error: activeDmMembershipsError } =
+    await activeDmMembershipQuery;
+
+  if (activeDmMembershipsError) {
+    throw new Error(activeDmMembershipsError.message);
+  }
+
+  const conversationIds = ((activeDmMemberships ?? []) as Array<{
+    conversation_id: string;
+  }>)
+    .map((row) => row.conversation_id)
+    .filter(Boolean);
+
+  if (conversationIds.length === 0) {
+    return [] as string[];
+  }
+
+  const { data: partnerMemberships, error: partnerMembershipsError } =
+    await supabase
+      .from('conversation_members')
+      .select('conversation_id, user_id')
+      .in('conversation_id', conversationIds)
+      .eq('state', 'active')
+      .neq('user_id', currentUserId);
+
+  if (partnerMembershipsError) {
+    throw new Error(partnerMembershipsError.message);
+  }
+
+  return Array.from(
+    new Set(
+      ((partnerMemberships ?? []) as Array<{ user_id: string }>).map(
+        (row) => row.user_id,
+      ),
+    ),
+  );
+}
+
 export async function getConversationParticipantIdentities(
   conversationIds: string[],
 ) {

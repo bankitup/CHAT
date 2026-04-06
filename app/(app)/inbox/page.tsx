@@ -18,6 +18,7 @@ import {
   getConversationDisplayName,
   getDirectMessageDisplayName,
   getConversationParticipantIdentities,
+  getExistingActiveDmPartnerUserIds,
   getInboxConversations,
   getInboxConversationsStable,
   type InboxConversation,
@@ -210,10 +211,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     logDiagnostics('loader:archived-skip-main-view');
   }
 
-  const [conversations, archivedConversations, availableUsers]: [
+  const [conversations, archivedConversations, availableUsers, existingDmPartnerUserIds]: [
     InboxConversation[],
     InboxConversation[],
     Awaited<ReturnType<typeof getAvailableUsers>>,
+    string[],
   ] = await Promise.all([
     loadInboxConversationsForSsr({
       view: 'main',
@@ -252,6 +254,19 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
             throw error;
           }),
+    getExistingActiveDmPartnerUserIds(user.id, {
+      spaceId: activeSpaceId,
+    })
+      .then((value) => {
+        logDiagnostics('loader:existing-dm-users-ok', { count: value.length });
+        return value;
+      })
+      .catch((error) => {
+        logDiagnostics('loader:existing-dm-users-error', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return [] as string[];
+      }),
   ]);
   logDiagnostics('loader:all-ok');
   const allVisibleConversations = [...conversations, ...archivedConversations];
@@ -274,6 +289,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ...availableUser,
     label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
   }));
+  const existingDmPartnerUserIdsSet = new Set(existingDmPartnerUserIds);
+  const availableDmUserEntries = availableUserEntries.filter(
+    (availableUser) => !existingDmPartnerUserIdsSet.has(availableUser.userId),
+  );
   const buildConversationItems = (input: InboxConversation[]) =>
     input.map((conversation) => {
       const participantOptions =
@@ -366,6 +385,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         activeSpaceId={activeSpaceId}
         archivedConversationItems={archivedConversationItems}
         archivedSummaries={archivedSummaries}
+        availableDmUserEntries={availableDmUserEntries}
         availableUserEntries={availableUserEntries}
         createOpen={isCreateOpen}
         currentUserId={user.id}

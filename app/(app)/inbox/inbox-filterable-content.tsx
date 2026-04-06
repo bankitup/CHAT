@@ -118,6 +118,7 @@ const EMPTY_LIVE_SUMMARY: InboxConversationLiveSummary = {
 
 type InboxFilterableContentProps = {
   activeSpaceId: string;
+  availableDmUserEntries: AvailableUserEntry[];
   availableUserEntries: AvailableUserEntry[];
   createOpen: boolean;
   currentUserId: string;
@@ -506,6 +507,7 @@ export function InboxFilterableContent({
   activeSpaceId,
   archivedConversationItems,
   archivedSummaries,
+  availableDmUserEntries,
   availableUserEntries,
   createOpen,
   currentUserId,
@@ -530,6 +532,7 @@ export function InboxFilterableContent({
   const searchTerm = normalizeSearchTerm(queryValue);
   const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
   const [activeView, setActiveView] = useState<InboxView>(initialView);
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(createOpen);
   const visibleFilters = useMemo(
     () => preferences.visibleFilters,
     [preferences.visibleFilters],
@@ -548,6 +551,10 @@ export function InboxFilterableContent({
   }, [initialView]);
 
   useEffect(() => {
+    setIsCreateSheetOpen(createOpen);
+  }, [createOpen]);
+
+  useEffect(() => {
     const resolvedFilter = resolveInboxInitialFilter(activeFilter, preferences);
 
     if (resolvedFilter !== activeFilter) {
@@ -561,7 +568,7 @@ export function InboxFilterableContent({
     }
 
     const nextHref = buildInboxHref({
-      create: createOpen,
+      create: isCreateSheetOpen,
       filter: activeFilter,
       query: queryValue,
       spaceId: activeSpaceId,
@@ -573,7 +580,48 @@ export function InboxFilterableContent({
     }
 
     window.history.replaceState(window.history.state, '', nextHref);
-  }, [activeFilter, activeSpaceId, activeView, createOpen, queryValue]);
+  }, [activeFilter, activeSpaceId, activeView, isCreateSheetOpen, queryValue]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || !isCreateSheetOpen) {
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [isCreateSheetOpen]);
+
+  useEffect(() => {
+    if (!isCreateSheetOpen || typeof window === 'undefined') {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsCreateSheetOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCreateSheetOpen]);
+
+  const availableDmUserEntriesFiltered = useMemo(
+    () =>
+      availableDmUserEntries.filter((availableUser) => {
+        if (!searchTerm) {
+          return true;
+        }
+
+        return availableUser.label.toLowerCase().includes(searchTerm);
+      }),
+    [availableDmUserEntries, searchTerm],
+  );
+
   const availableUserEntriesFiltered = useMemo(
     () =>
       availableUserEntries.filter((availableUser) => {
@@ -808,21 +856,16 @@ export function InboxFilterableContent({
                 ⚙
               </span>
             </Link>
-            <Link
+            <button
               aria-label={t.inbox.createAria}
               className="inbox-compose-trigger inbox-topbar-action-button"
-              href={buildInboxHref({
-                create: true,
-                filter: activeFilter,
-                query: queryValue,
-                spaceId: activeSpaceId,
-                view: activeView,
-              })}
+              onClick={() => setIsCreateSheetOpen(true)}
+              type="button"
             >
               <span aria-hidden="true" className="inbox-topbar-action-icon">
                 +
               </span>
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -1049,30 +1092,23 @@ export function InboxFilterableContent({
         </section>
       )}
 
-      {createOpen ? (
+      {isCreateSheetOpen ? (
         <section className="inbox-create-overlay" aria-label="Create chat">
-          <Link
+          <button
             aria-label="Close create chat"
             className="inbox-create-backdrop"
-            href={buildInboxHref({
-              filter: activeFilter,
-              query: queryValue,
-              spaceId: activeSpaceId,
-              view: activeView,
-            })}
+            onClick={() => setIsCreateSheetOpen(false)}
+            type="button"
           />
 
           <NewChatSheet
-            availableUsers={availableUserEntriesFiltered}
+            availableDmUsers={availableDmUserEntriesFiltered}
+            availableGroupUsers={availableUserEntriesFiltered}
+            hasAnyDmUsers={availableDmUserEntries.length > 0}
             hasAnyUsers={availableUserEntries.length > 0}
-            closeHref={buildInboxHref({
-              filter: activeFilter,
-              query: queryValue,
-              spaceId: activeSpaceId,
-              view: activeView,
-            })}
-            spaceId={activeSpaceId}
             language={language}
+            onClose={() => setIsCreateSheetOpen(false)}
+            spaceId={activeSpaceId}
           />
         </section>
       ) : null}

@@ -246,6 +246,7 @@ type LanguageDictionary = {
       peopleTitle: string;
       peopleSubtitle: string;
       noUsers: string;
+      existingDmOnly: string;
       noMatches: string;
       selected: string;
       choose: string;
@@ -670,6 +671,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         peopleTitle: 'People',
         peopleSubtitle: 'Pick one person to start chatting.',
         noUsers: 'No other registered users are available yet.',
+        existingDmOnly: 'Everyone here already has a direct chat with you.',
         noMatches: 'No matching people yet.',
         selected: 'Selected',
         choose: 'Choose',
@@ -1106,6 +1108,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         peopleTitle: 'Люди',
         peopleSubtitle: 'Выберите одного человека, чтобы начать чат.',
         noUsers: 'Других зарегистрированных пользователей пока нет.',
+        existingDmOnly: 'Со всеми доступными людьми у вас уже есть личные чаты.',
         noMatches: 'Подходящих людей нет.',
         selected: 'Выбрано',
         choose: 'Выбрать',
