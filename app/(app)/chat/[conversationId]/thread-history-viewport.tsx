@@ -12,6 +12,7 @@ import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee'
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import type { MessagingVoicePlaybackState } from '@/modules/messaging/media';
 import {
+  emitThreadHistorySyncRequest,
   emitThreadHistoryVisibleMessageIds,
   LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
   type ThreadHistorySyncRequestPayload,
@@ -166,6 +167,9 @@ type VoiceMessageRenderState =
   | 'unavailable';
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
+const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
+  'local-encrypted-send:retry-missing-envelope';
+const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -846,6 +850,64 @@ function getThreadHistorySyncMode(input: {
   }
 
   return 'noop' as const;
+}
+
+function shouldRetryLocalEncryptedDmMissingEnvelope(reason: string | null) {
+  return (
+    reason === 'local-encrypted-send' ||
+    reason === ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON
+  );
+}
+
+function resolveMissingOwnEncryptedMessageIdsForRetry(input: {
+  currentUserId: string;
+  requestedMessageIds: string[];
+  snapshot: ThreadHistoryPageSnapshot;
+}) {
+  const requestedMessageIdSet = new Set(input.requestedMessageIds);
+  const presentRequestedMessageIdSet = new Set(
+    input.snapshot.messages
+      .filter((message) => requestedMessageIdSet.has(message.id))
+      .map((message) => message.id),
+  );
+  const encryptedEnvelopeMessageIdSet = new Set(
+    (input.snapshot.dmE2ee?.envelopesByMessage ?? []).map(
+      (entry) => entry.messageId,
+    ),
+  );
+  const historyHintByMessageId = new Map(
+    (input.snapshot.dmE2ee?.historyHintsByMessage ?? []).map((entry) => [
+      entry.messageId,
+      entry.hint,
+    ] as const),
+  );
+  const missingRequestedMessageIds = input.snapshot.messages.flatMap(
+    (message) => {
+      if (!requestedMessageIdSet.has(message.id)) {
+        return [];
+      }
+
+      if (message.sender_id !== input.currentUserId) {
+        return [];
+      }
+
+      if (message.kind !== 'text' || message.content_mode !== 'dm_e2ee_v1') {
+        return [];
+      }
+
+      const historyHint = historyHintByMessageId.get(message.id);
+      const hasReadableEnvelope =
+        encryptedEnvelopeMessageIdSet.has(message.id) ||
+        historyHint?.code === 'envelope-present';
+
+      return hasReadableEnvelope ? [] : [message.id];
+    },
+  );
+
+  return {
+    missingRequestedMessageIds,
+    presentRequestedMessageIds: Array.from(presentRequestedMessageIdSet),
+  };
 }
 
 function buildTimelineItems(input: {
@@ -1704,6 +1766,10 @@ export function ThreadHistoryViewport({
   const pendingRestoreRef = useRef<PendingScrollRestore | null>(null);
   const pendingSyncRequestRef = useRef<ThreadHistorySyncRequestState | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const encryptedDmRecoveryAttemptsRef = useRef(new Map<string, number>());
+  const encryptedDmRecoveryTimeoutsRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
   const isSyncingRef = useRef(false);
   const historySyncDiagnosticsEnabled =
     typeof window !== 'undefined' &&
@@ -1999,8 +2065,118 @@ export function ThreadHistoryViewport({
     [conversationId, historySyncDiagnosticsEnabled],
   );
 
+  const scheduleMissingEncryptedDmEnvelopeRecovery = useCallback(
+    (input: {
+      reason: string | null;
+      requestedMessageIds: string[];
+      snapshot: ThreadHistoryPageSnapshot;
+    }) => {
+      if (
+        !shouldRetryLocalEncryptedDmMissingEnvelope(input.reason) ||
+        input.requestedMessageIds.length === 0
+      ) {
+        return;
+      }
+
+      const {
+        missingRequestedMessageIds,
+        presentRequestedMessageIds,
+      } = resolveMissingOwnEncryptedMessageIdsForRetry({
+        currentUserId,
+        requestedMessageIds: input.requestedMessageIds,
+        snapshot: input.snapshot,
+      });
+      const missingMessageIdSet = new Set(missingRequestedMessageIds);
+
+      for (const messageId of presentRequestedMessageIds) {
+        if (missingMessageIdSet.has(messageId)) {
+          continue;
+        }
+
+        const timeoutId = encryptedDmRecoveryTimeoutsRef.current.get(messageId);
+
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          encryptedDmRecoveryTimeoutsRef.current.delete(messageId);
+        }
+
+        encryptedDmRecoveryAttemptsRef.current.delete(messageId);
+      }
+
+      for (const messageId of missingRequestedMessageIds) {
+        if (encryptedDmRecoveryTimeoutsRef.current.has(messageId)) {
+          continue;
+        }
+
+        const attemptIndex =
+          encryptedDmRecoveryAttemptsRef.current.get(messageId) ?? 0;
+        const retryDelayMs =
+          ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS[attemptIndex];
+
+        if (retryDelayMs === undefined) {
+          if (historySyncDiagnosticsEnabled) {
+            console.info(
+              '[chat-history]',
+              'topology-sync:encrypted-missing-envelope-retry-exhausted',
+              {
+                attemptCount: attemptIndex,
+                conversationId,
+                messageId,
+                reason: input.reason,
+              },
+            );
+          }
+          continue;
+        }
+
+        encryptedDmRecoveryAttemptsRef.current.set(messageId, attemptIndex + 1);
+
+        if (historySyncDiagnosticsEnabled) {
+          console.info(
+            '[chat-history]',
+            'topology-sync:encrypted-missing-envelope-retry-scheduled',
+            {
+              attemptNumber: attemptIndex + 1,
+              conversationId,
+              messageId,
+              reason: input.reason,
+              retryDelayMs,
+            },
+          );
+        }
+
+        const timeoutId = setTimeout(() => {
+          encryptedDmRecoveryTimeoutsRef.current.delete(messageId);
+
+          if (historySyncDiagnosticsEnabled) {
+            console.info(
+              '[chat-history]',
+              'topology-sync:encrypted-missing-envelope-retry-dispatched',
+              {
+                conversationId,
+                messageId,
+                reason: ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON,
+              },
+            );
+          }
+
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: [messageId],
+            reason: ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON,
+          });
+        }, retryDelayMs);
+
+        encryptedDmRecoveryTimeoutsRef.current.set(messageId, timeoutId);
+      }
+    },
+    [conversationId, currentUserId, historySyncDiagnosticsEnabled],
+  );
+
   useEffect(() => {
     let isDisposed = false;
+    const encryptedDmRecoveryAttempts = encryptedDmRecoveryAttemptsRef.current;
+    const encryptedDmRecoveryTimeouts = encryptedDmRecoveryTimeoutsRef.current;
 
     const flushPendingSyncRequest = async () => {
       if (isDisposed || isSyncingRef.current) {
@@ -2057,6 +2233,12 @@ export function ThreadHistoryViewport({
           if (isDisposed || !snapshot) {
             return;
           }
+
+          scheduleMissingEncryptedDmEnvelopeRecovery({
+            reason: request.reason,
+            requestedMessageIds: request.messageIds,
+            snapshot,
+          });
 
           setHistoryState((currentState) => {
             const nextState = mergeThreadHistoryState({
@@ -2168,6 +2350,12 @@ export function ThreadHistoryViewport({
         syncTimeoutRef.current = null;
       }
 
+      for (const timeoutId of encryptedDmRecoveryTimeouts.values()) {
+        clearTimeout(timeoutId);
+      }
+      encryptedDmRecoveryAttempts.clear();
+      encryptedDmRecoveryTimeouts.clear();
+
       window.removeEventListener(
         LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
         handleSyncRequest as EventListener,
@@ -2178,6 +2366,7 @@ export function ThreadHistoryViewport({
     historySyncDiagnosticsEnabled,
     mergeSyncRequest,
     performSyncFetch,
+    scheduleMissingEncryptedDmEnvelopeRecovery,
   ]);
 
   useLayoutEffect(() => {
