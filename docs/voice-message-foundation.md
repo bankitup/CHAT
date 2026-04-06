@@ -13,7 +13,9 @@ It is intentionally scoped to architecture and minimal scaffolding:
 Related boundary documents:
 
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
+- [docs/sql/2026-04-06-message-assets-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-foundation.sql)
 - [src/modules/messaging/media/README.md](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/README.md)
+- [src/modules/messaging/media/message-assets.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/message-assets.ts)
 - [src/modules/messaging/rtc/README.md](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/rtc/README.md)
 
 ## Current stable runtime
@@ -36,7 +38,9 @@ Current attachment sending still couples:
 - attachment metadata insert
 - summary projection update
 
-That is acceptable for the restored baseline, but it is not the long-term place for voice runtime concerns.
+That remains acceptable for the restored baseline, but this batch introduces the
+forward schema/model landing zone so future voice work does not keep growing
+through `message_attachments`.
 
 ## Core product rule
 
@@ -62,17 +66,18 @@ Voice messages should continue to use a normal `messages` row:
 
 ### Committed media metadata
 
-For the near-term MVP, committed voice media can stay on the current attachment storage model:
+This batch introduces the durable committed media model:
 
-- `public.message_attachments`
-- Supabase Storage object
-- message-linked metadata only
+- `public.message_assets`
+- `public.message_asset_links`
+- Supabase Storage object for the binary payload
 
-The important boundary is conceptual:
+The important boundary is now explicit:
 
-- thread renders committed voice metadata
-- thread does not own upload job state
-- inbox/activity do not inspect attachment rows to build previews
+- thread renders committed asset metadata
+- upload jobs stay outside durable history
+- inbox/activity never inspect asset rows or blobs to build previews
+- calls remain outside this model entirely
 
 ### Upload lifecycle
 
@@ -82,8 +87,8 @@ Voice sending should eventually follow this narrow lifecycle:
 2. local encoding / blob preparation
 3. upload job creation
 4. storage upload
-5. metadata commit
-6. message finalize
+5. asset metadata commit
+6. message create/finalize
 7. local thread patch and inbox summary patch
 
 Only steps 5-7 belong to durable message history.
@@ -95,7 +100,8 @@ The thread should eventually care about two separate kinds of state:
 ### Durable committed state
 
 - message row
-- committed media metadata
+- committed asset metadata
+- message-to-asset links
 - reply linkage
 - reactions/read state
 
@@ -117,7 +123,7 @@ For the first durable voice foundation:
 
 - voice summary is derived from message summary projection
 - `last_message_kind = 'voice'` is enough to render a truthful preview label
-- inbox/activity should not read waveform, duration, or attachment blobs
+- inbox/activity should not read `message_assets`, waveform data, duration, or blobs
 
 Later optional upgrades may add richer projection fields such as:
 
@@ -129,31 +135,51 @@ Those are future additive optimizations, not requirements for the first foundati
 
 ## Minimal schema / model proposal
 
-This batch does not require a production schema change.
+This batch adds the forward schema proposal here:
 
-The recommended near-term model is:
+- [docs/sql/2026-04-06-message-assets-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-foundation.sql)
+
+The intended durable model is:
 
 - `messages`
-  - durable conversation ordering and semantics
-  - `kind = 'voice'`
-- `message_attachments`
+  - durable ordering and semantics
+  - `kind = 'voice'` for voice notes
+- `message_assets`
   - committed binary metadata and storage identity
+- `message_asset_links`
+  - links committed assets to durable message rows
 - local upload-job runtime
   - not part of the durable conversation history query
 
-If voice/files grow enough to justify a more explicit media layer later, the recommended additive direction is:
+Minimal committed asset fields for voice are:
 
-- `media_assets`
-  - asset identity
-  - storage path
-  - mime type
-  - size
-  - duration
-  - derived metadata
-- `message_media_links`
-  - links committed assets to message rows
+- `id`
+- `conversation_id`
+- `created_by`
+- `kind = 'voice-note'`
+- `source`
+- `storage_bucket`
+- `storage_object_path`
+- `mime_type`
+- `file_name`
+- `size_bytes`
+- `duration_ms`
+- `created_at`
 
-That future extraction should be driven by scale and feature needs, not rushed into this stabilization batch.
+Minimal message linkage fields are:
+
+- `message_id`
+- `asset_id`
+- `ordinal`
+- `render_as_primary`
+- `created_at`
+
+The current runtime does not switch to these tables yet.
+That is deliberate:
+
+- keep restored chat sending stable
+- add the durable schema/model now
+- migrate runtime attachment/voice commit paths later in a controlled pass
 
 ## Voice vs files
 
@@ -196,6 +222,7 @@ The current safe evolution path is:
 - leave inbox/activity on summary projection
 - leave thread history on committed row snapshots
 - move future recording/upload runtime into `src/modules/messaging/media`
+- treat `message_assets` + `message_asset_links` as the committed media layer
 - keep future call runtime in `src/modules/messaging/rtc`
 
 Do not overload:

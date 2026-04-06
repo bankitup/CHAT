@@ -5,6 +5,7 @@ This folder defines the long-term boundary for file, image, audio, and voice-not
 Planned responsibilities:
 
 - Stable media asset contracts.
+- Committed `message_assets` and `message_asset_links` model scaffolding.
 - Upload-job lifecycle types and orchestration interfaces.
 - Message-to-media metadata separation.
 - Voice-message draft, commit, and playback contracts.

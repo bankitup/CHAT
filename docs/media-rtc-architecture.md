@@ -11,9 +11,9 @@ It is intentionally architectural and incremental:
 
 ## Current reality
 
-Today, message attachments and voice notes still pass through the message send path in [src/modules/messaging/data/server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts).
+Today, committed attachments and voice notes still pass through the message send path in [src/modules/messaging/data/server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts).
 
-That is acceptable for the current product stage, but it couples too many concerns:
+That is acceptable for the current restored baseline, but it couples too many concerns:
 
 - message row creation
 - storage upload
@@ -26,7 +26,7 @@ The new boundary should separate those concerns before voice/files/calls grow.
 
 Message metadata and binary asset transport are separate concerns.
 
-The message thread should render message rows and attached asset metadata.
+The message thread should render message rows and committed asset metadata.
 It should not own:
 
 - upload orchestration
@@ -49,7 +49,7 @@ Inbox and activity should continue to read only conversation summary data:
 They must not depend on:
 
 - full message history loading
-- attachment scans
+- `message_assets` scans
 - upload job state
 - RTC session event streams
 
@@ -79,7 +79,19 @@ Media should have its own module contract for:
 - upload job lifecycle
 - commit result back into message metadata
 
-The message model should reference media metadata, not binary transport state.
+This batch introduces the forward schema/model foundation for that:
+
+- [docs/sql/2026-04-06-message-assets-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-foundation.sql)
+- [src/modules/messaging/media/message-assets.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/message-assets.ts)
+
+The intended durable split is:
+
+- `messages`
+  - sender, seq, kind, content mode, reply linkage, visible summary
+- `message_assets`
+  - committed binary identity, mime type, size, duration, storage path
+- `message_asset_links`
+  - which committed assets belong to which message
 
 ### 4. Voice-message boundary
 
@@ -90,8 +102,8 @@ Recommended lifecycle:
 1. local draft / capture
 2. encoding / blob preparation
 3. upload job execution
-4. committed media metadata
-5. committed message row referencing that media
+4. committed asset metadata
+5. committed message row referencing that asset
 6. thread playback state handled locally in a voice-ui/runtime layer
 
 That keeps voice transport and playback evolution out of inbox summary and out of route-level refresh logic.
@@ -135,15 +147,15 @@ Server/runtime boundary:
 - persist message-visible media metadata
 - update conversation summary projection
 
-### Message and attachment separation
+### Message and asset separation
 
-Use this mental split even if the current physical schema still stores attachments in `message_attachments`:
+Use this mental split even if the current physical runtime still writes to `message_attachments`:
 
-- `messages`:
+- `messages`
   - sender, seq, kind, content mode, reply linkage, visible summary
-- `media assets`:
-  - binary identity, mime type, size, duration, derived metadata, storage path
-- `message asset links`:
+- `message_assets`
+  - committed binary identity, mime type, size, duration, storage path
+- `message_asset_links`
   - which committed assets belong to which message
 
 That keeps future voice/files extensible without teaching inbox/thread loaders to understand upload internals.
@@ -174,15 +186,14 @@ The thread route may launch or resume a call surface, but it should not subscrib
 
 ## Local module layout
 
-This scaffolding introduces two new top-level messaging boundaries:
+This scaffolding keeps two top-level messaging boundaries:
 
 - `src/modules/messaging/media`
 - `src/modules/messaging/rtc`
 
-They are currently type/interface-first.
-
 Current media scaffolding entrypoints:
 
+- `src/modules/messaging/media/message-assets.ts`
 - `src/modules/messaging/media/message-metadata.ts`
 - `src/modules/messaging/media/upload-jobs.ts`
 - `src/modules/messaging/media/voice.ts`
@@ -215,17 +226,17 @@ Use them for all future work in these areas before adding feature logic to:
 The current code can evolve in this order:
 
 1. Keep current attachment sending behavior working.
-2. Introduce media upload job state in a dedicated local runtime.
+2. Introduce `message_assets` / `message_asset_links` as the committed media model.
 3. Move file/voice transport orchestration out of generic message server helpers.
-4. Add committed media metadata projection that the thread renders.
+4. Switch thread rendering from `message_attachments` reads to committed asset reads.
 5. Add RTC signaling/session metadata without putting transport into chat history.
 
 ## Non-goals of this scaffolding
 
 - No call implementation yet
-- No new storage schema yet
 - No recording UI yet
 - No upload-job UI yet
+- No media E2EE yet
 - No inbox redesign
 
 The goal is to make future work land in stable boundaries, not to ship the features in this pass.
