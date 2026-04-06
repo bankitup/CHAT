@@ -27,6 +27,7 @@ type EncryptedDmMessageBodyProps = {
   envelope: StoredDmE2eeEnvelope | null;
   fallbackLabel: string;
   historyDiagnosticHint: EncryptedDmServerHistoryHint;
+  olderHistoryLabel: string;
   historyUnavailableNoteLabel: string;
   messageSenderId: string | null;
   policyUnavailableNoteLabel: string;
@@ -77,6 +78,7 @@ export function EncryptedDmMessageBody({
   envelope,
   fallbackLabel,
   historyDiagnosticHint,
+  olderHistoryLabel,
   historyUnavailableNoteLabel,
   messageSenderId,
   policyUnavailableNoteLabel,
@@ -435,6 +437,9 @@ export function EncryptedDmMessageBody({
   }
 
   if (renderState.kind === 'unavailable') {
+    const isHistoricalUnavailable =
+      renderState.currentDeviceAccessState === 'history-unavailable-on-this-device' ||
+      renderState.currentDeviceAccessState === 'policy-blocked';
     const unavailableNote =
       renderState.unavailableNoteKind === 'history-unavailable'
         ? historyUnavailableNoteLabel
@@ -454,7 +459,15 @@ export function EncryptedDmMessageBody({
           diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
         }
       >
-        <p className="message-body">{renderState.text}</p>
+        <p
+          className={
+            isHistoricalUnavailable
+              ? 'message-encryption-title'
+              : 'message-body'
+          }
+        >
+          {isHistoricalUnavailable ? olderHistoryLabel : renderState.text}
+        </p>
         {unavailableNote ? (
           <p className="message-encryption-note">{unavailableNote}</p>
         ) : null}

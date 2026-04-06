@@ -772,6 +772,16 @@ function ThreadMessageRow({
       messageCreatedAt: message.created_at ?? null,
       viewerJoinedAt: null,
     };
+  const isUnavailableHistoricalEncryptedHint =
+    encryptedHistoryHint.code !== 'envelope-present';
+  const encryptedHistoryFallbackAccessState =
+    encryptedHistoryHint.code === 'policy-blocked-history'
+      ? 'policy-blocked'
+      : 'history-unavailable-on-this-device';
+  const encryptedHistoryFallbackNote =
+    encryptedHistoryHint.code === 'policy-blocked-history'
+      ? t.chat.encryptedHistoryPolicyBlockedNote
+      : t.chat.encryptedHistoryUnavailableNote;
   const canAttemptEncryptedRender = canRenderEncryptedDmBody({
     clientId: message.client_id,
   });
@@ -935,10 +945,31 @@ function ThreadMessageRow({
                 conversationId={conversationId}
                 {...threadClientDiagnostics}
                 fallback={
-                  <div className="message-encryption-state">
-                    <p className="message-body">
-                      {t.chat.encryptedMessageUnavailable}
+                  <div
+                    className="message-encryption-state"
+                    data-dm-e2ee-access-state={
+                      isUnavailableHistoricalEncryptedHint
+                        ? encryptedHistoryFallbackAccessState
+                        : 'temporary-local-read-failure'
+                    }
+                    data-dm-e2ee-history-state="present"
+                  >
+                    <p
+                      className={
+                        isUnavailableHistoricalEncryptedHint
+                          ? 'message-encryption-title'
+                          : 'message-body'
+                      }
+                    >
+                      {isUnavailableHistoricalEncryptedHint
+                        ? t.chat.olderEncryptedMessage
+                        : t.chat.encryptedMessageUnavailable}
                     </p>
+                    {isUnavailableHistoricalEncryptedHint ? (
+                      <p className="message-encryption-note">
+                        {encryptedHistoryFallbackNote}
+                      </p>
+                    ) : null}
                   </div>
                 }
                 messageId={message.id}
@@ -951,6 +982,7 @@ function ThreadMessageRow({
                   envelope={encryptedEnvelope}
                   fallbackLabel={t.chat.encryptedMessage}
                   historyDiagnosticHint={encryptedHistoryHint}
+                  olderHistoryLabel={t.chat.olderEncryptedMessage}
                   historyUnavailableNoteLabel={
                     t.chat.encryptedHistoryUnavailableNote
                   }
@@ -971,13 +1003,34 @@ function ThreadMessageRow({
             ) : (
               <div
                 className="message-encryption-state"
+                data-dm-e2ee-access-state={
+                  isUnavailableHistoricalEncryptedHint
+                    ? encryptedHistoryFallbackAccessState
+                    : 'temporary-local-read-failure'
+                }
+                data-dm-e2ee-history-state="present"
                 data-dm-e2ee-debug-bucket={
                   process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
                     ? encryptedHistoryHint.code
                     : undefined
                 }
               >
-                <p className="message-body">{t.chat.encryptedMessageUnavailable}</p>
+                <p
+                  className={
+                    isUnavailableHistoricalEncryptedHint
+                      ? 'message-encryption-title'
+                      : 'message-body'
+                  }
+                >
+                  {isUnavailableHistoricalEncryptedHint
+                    ? t.chat.olderEncryptedMessage
+                    : t.chat.encryptedMessageUnavailable}
+                </p>
+                {isUnavailableHistoricalEncryptedHint ? (
+                  <p className="message-encryption-note">
+                    {encryptedHistoryFallbackNote}
+                  </p>
+                ) : null}
                 {process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ? (
                   <p className="message-encryption-debug-label">
                     {encryptedHistoryHint.code}
