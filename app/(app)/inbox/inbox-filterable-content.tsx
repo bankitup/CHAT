@@ -61,6 +61,12 @@ type FilterBucket = {
   unreadByFilter: Record<InboxFilter, number>;
 };
 
+type OrganizedConversationSection = {
+  items: ConversationListItem[];
+  key: 'all' | 'dm' | 'groups';
+  label: string | null;
+};
+
 type InboxPresentationLabels = {
   attachment: string;
   deletedMessage: string;
@@ -423,6 +429,79 @@ function partitionConversationItemsByKind(items: ConversationListItem[]) {
   };
 }
 
+function buildOrganizedConversationSectionsByFilter(input: {
+  buckets: FilterBucket;
+  preferences: Pick<
+    InboxSectionPreferences,
+    'showGroupsSeparately' | 'showPersonalChatsFirst'
+  >;
+  t: ReturnType<typeof getTranslations>;
+}) {
+  const sectionsByFilter: Record<InboxFilter, OrganizedConversationSection[]> = {
+    all: [],
+    dm: [],
+    groups: [],
+  };
+
+  for (const filter of ['all', 'dm', 'groups'] as const) {
+    const filteredConversationItems = input.buckets.itemsByFilter[filter];
+    const shouldGroupByKind =
+      input.preferences.showGroupsSeparately && filter === 'all';
+    const partitionedItems = partitionConversationItemsByKind(
+      filteredConversationItems,
+    );
+
+    if (!shouldGroupByKind) {
+      const orderedItems =
+        input.preferences.showPersonalChatsFirst && filter === 'all'
+          ? [...partitionedItems.directMessages, ...partitionedItems.groups]
+          : filteredConversationItems;
+
+      sectionsByFilter[filter] = [
+        {
+          items: orderedItems,
+          key: 'all',
+          label: null,
+        },
+      ];
+      continue;
+    }
+
+    const orderedSections: OrganizedConversationSection[] =
+      input.preferences.showPersonalChatsFirst
+      ? [
+          {
+            items: partitionedItems.directMessages,
+            key: 'dm',
+            label: input.t.inbox.filters.dm,
+          },
+          {
+            items: partitionedItems.groups,
+            key: 'groups',
+            label: input.t.inbox.filters.groups,
+          },
+        ]
+      : [
+          {
+            items: partitionedItems.groups,
+            key: 'groups',
+            label: input.t.inbox.filters.groups,
+          },
+          {
+            items: partitionedItems.directMessages,
+            key: 'dm',
+            label: input.t.inbox.filters.dm,
+          },
+        ];
+
+    sectionsByFilter[filter] = orderedSections.filter(
+      (section) => section.items.length > 0,
+    );
+  }
+
+  return sectionsByFilter;
+}
+
 export function InboxFilterableContent({
   activeSpaceId,
   archivedConversationItems,
@@ -600,49 +679,26 @@ export function InboxFilterableContent({
     [derivedArchivedConversationItems, searchTerm, t],
   );
   const activeBuckets = activeView === 'archived' ? archivedBuckets : mainBuckets;
-  const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
-  const organizedConversationSections = useMemo(() => {
-    const shouldGroupByKind =
-      preferences.showGroupsSeparately && activeFilter === 'all';
-    const partitionedItems = partitionConversationItemsByKind(filteredConversationItems);
-
-    if (!shouldGroupByKind) {
-      const orderedItems =
-        preferences.showPersonalChatsFirst && activeFilter === 'all'
-          ? [
-              ...partitionedItems.directMessages,
-              ...partitionedItems.groups,
-            ]
-          : filteredConversationItems;
-
-      return [
-        {
-          items: orderedItems,
-          key: 'all',
-          label: null,
+  const organizedConversationSectionsByFilter = useMemo(
+    () =>
+      buildOrganizedConversationSectionsByFilter({
+        buckets: activeBuckets,
+        preferences: {
+          showGroupsSeparately: preferences.showGroupsSeparately,
+          showPersonalChatsFirst: preferences.showPersonalChatsFirst,
         },
-      ];
-    }
-
-    const { directMessages, groups } = partitionedItems;
-    const orderedSections = preferences.showPersonalChatsFirst
-      ? [
-          { items: directMessages, key: 'dm', label: t.inbox.filters.dm },
-          { items: groups, key: 'groups', label: t.inbox.filters.groups },
-        ]
-      : [
-          { items: groups, key: 'groups', label: t.inbox.filters.groups },
-          { items: directMessages, key: 'dm', label: t.inbox.filters.dm },
-        ];
-
-    return orderedSections.filter((section) => section.items.length > 0);
-  }, [
-    activeFilter,
-    filteredConversationItems,
-    preferences.showGroupsSeparately,
-    preferences.showPersonalChatsFirst,
-    t,
-  ]);
+        t,
+      }),
+    [
+      activeBuckets,
+      preferences.showGroupsSeparately,
+      preferences.showPersonalChatsFirst,
+      t,
+    ],
+  );
+  const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
+  const organizedConversationSections =
+    organizedConversationSectionsByFilter[activeFilter];
   const activeConversationSourceCount =
     activeView === 'archived'
       ? derivedArchivedConversationItems.length
@@ -654,20 +710,27 @@ export function InboxFilterableContent({
   const searchPlaceholder = isDmFilter
     ? t.inbox.searchDmPlaceholder
     : t.inbox.searchPlaceholder;
-  const searchScopeSummary = searchTerm
-    ? (() => {
-        const parts = [
-          filteredConversationItems.length > 0
-            ? t.inbox.searchResultChat(filteredConversationItems.length)
-            : null,
-          availableUserEntriesFiltered.length > 0
-            ? t.inbox.searchResultPerson(availableUserEntriesFiltered.length)
-            : null,
-        ].filter(Boolean);
+  const searchScopeSummary = useMemo(() => {
+    if (!searchTerm) {
+      return null;
+    }
 
-        return parts.length > 0 ? parts.join(' · ') : t.inbox.searchSummaryNone;
-      })()
-    : null;
+    const parts = [
+      filteredConversationItems.length > 0
+        ? t.inbox.searchResultChat(filteredConversationItems.length)
+        : null,
+      availableUserEntriesFiltered.length > 0
+        ? t.inbox.searchResultPerson(availableUserEntriesFiltered.length)
+        : null,
+    ].filter(Boolean);
+
+    return parts.length > 0 ? parts.join(' · ') : t.inbox.searchSummaryNone;
+  }, [
+    availableUserEntriesFiltered.length,
+    filteredConversationItems.length,
+    searchTerm,
+    t,
+  ]);
 
   return (
     <div className={isPrimaryChatsView ? 'stack inbox-screen-dm' : 'stack'}>
