@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { memo, useSyncExternalStore } from 'react';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
@@ -295,6 +296,7 @@ function InboxConversationLiveRowComponent({
   restoreAction,
   restoreLabel,
 }: InboxConversationLiveRowProps) {
+  const router = useRouter();
   const liveSummary = useSyncExternalStore(
     (listener) =>
       subscribeToInboxConversationSummary(item.conversationId, listener),
@@ -337,6 +339,29 @@ function InboxConversationLiveRowComponent({
     language,
     labels.noActivityYet,
   );
+  const chatHref =
+    activeSpaceId?.trim()
+      ? `/chat/${item.conversationId}?space=${encodeURIComponent(activeSpaceId)}`
+      : `/chat/${item.conversationId}`;
+  const diagnosticsEnabled =
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_INBOX_NAV === '1';
+
+  const logNavigationDiagnostics = (
+    stage: string,
+    details?: Record<string, unknown>,
+  ) => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+
+    if (details) {
+      console.info('[inbox-nav]', stage, details);
+      return;
+    }
+
+    console.info('[inbox-nav]', stage);
+  };
 
   return (
     <article
@@ -367,11 +392,33 @@ function InboxConversationLiveRowComponent({
               ? 'conversation-row-link conversation-row-link-dm'
               : 'conversation-row-link'
           }
-          href={
-            activeSpaceId?.trim()
-              ? `/chat/${item.conversationId}?space=${encodeURIComponent(activeSpaceId)}`
-              : `/chat/${item.conversationId}`
-          }
+          href={chatHref}
+          onClick={(event) => {
+            if (
+              event.defaultPrevented ||
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            ) {
+              logNavigationDiagnostics('row:navigation-bypassed', {
+                conversationId: item.conversationId,
+                defaultPrevented: event.defaultPrevented,
+                href: chatHref,
+                reason: 'modified-or-nonprimary-click',
+              });
+              return;
+            }
+
+            event.preventDefault();
+            logNavigationDiagnostics('row:navigation-attempt', {
+              conversationId: item.conversationId,
+              href: chatHref,
+              isGroupConversation: item.isGroupConversation,
+            });
+            router.push(chatHref);
+          }}
           prefetch={false}
         >
           <InboxConversationAvatarVisual

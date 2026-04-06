@@ -1311,6 +1311,7 @@ main {
 
 .conversation-card {
   display: block;
+  position: relative;
   background: rgba(255, 255, 255, 0.38);
   border: 1px solid transparent;
   border-bottom: 1px solid rgba(221, 226, 232, 0.62);
@@ -1397,6 +1398,9 @@ main {
   color: inherit;
   width: 100%;
   grid-column: 1 / -1;
+  position: relative;
+  z-index: 1;
+  touch-action: manipulation;
 }
 
 .conversation-row-link-dm {
