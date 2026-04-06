@@ -5076,7 +5076,10 @@ export async function getConversationHistorySnapshot(input: {
     ]);
   const messageIds = messages.map((message) => message.id);
   const encryptedMessageIds = messages
-    .filter((message) => message.kind === 'dm_e2ee_v1')
+    .filter(
+      (message) =>
+        message.kind === 'text' && message.content_mode === 'dm_e2ee_v1',
+    )
     .map((message) => message.id);
   const senderProfileIds = Array.from(
     new Set(messages.map((message) => message.sender_id ?? '').filter(Boolean)),
@@ -5137,6 +5140,18 @@ export async function getConversationHistorySnapshot(input: {
       messageId,
     };
   });
+
+  if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
+    console.info('[chat-history-load]', 'dm-e2ee-history-snapshot', {
+      conversationId: input.conversationId,
+      debugRequestId: input.debugRequestId ?? null,
+      encryptedEnvelopeCount: e2eeEnvelopeHistory.envelopesByMessage.size,
+      encryptedMessageCount: encryptedMessageIds.length,
+      encryptedMessageIds,
+      selectionSource: e2eeEnvelopeHistory.selectionSource,
+      userId: input.userId,
+    });
+  }
 
   return {
     attachmentsByMessage: messageIds.map((messageId) => ({

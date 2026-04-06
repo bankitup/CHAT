@@ -45,6 +45,29 @@ function normalizeAfterSeq(value: string | null) {
   return Math.floor(parsed);
 }
 
+function shouldLogHistoryRouteDiagnostics() {
+  return (
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ||
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1'
+  );
+}
+
+function logHistoryRouteDiagnostics(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (!shouldLogHistoryRouteDiagnostics()) {
+    return;
+  }
+
+  if (details) {
+    console.info('[chat-history-route]', stage, details);
+    return;
+  }
+
+  console.info('[chat-history-route]', stage);
+}
+
 export async function GET(
   request: Request,
   context: ConversationHistoryRouteContext,
@@ -66,22 +89,44 @@ export async function GET(
   }
 
   const { searchParams } = new URL(request.url);
-  const beforeSeqExclusive = normalizeBeforeSeq(searchParams.get('beforeSeq'));
-  const afterSeqExclusive = normalizeAfterSeq(searchParams.get('afterSeq'));
-  const messageIds = Array.from(
+  const rawBeforeSeqExclusive = normalizeBeforeSeq(searchParams.get('beforeSeq'));
+  const rawAfterSeqExclusive = normalizeAfterSeq(searchParams.get('afterSeq'));
+  const rawMessageIds = Array.from(
     new Set(searchParams.getAll('messageId').map((messageId) => messageId.trim()).filter(Boolean)),
   );
+  const requestedModes = [
+    rawBeforeSeqExclusive !== null ? 'before-seq' : null,
+    rawAfterSeqExclusive !== null ? 'after-seq' : null,
+    rawMessageIds.length > 0 ? 'by-id' : null,
+  ].filter((value): value is string => Boolean(value));
 
-  if (
-    Number(beforeSeqExclusive !== null) +
-      Number(afterSeqExclusive !== null) +
-      Number(messageIds.length > 0) >
-    1
-  ) {
-    return NextResponse.json(
-      { error: 'Choose only one history cursor mode per request.' },
-      { status: 400 },
-    );
+  const messageIds =
+    rawMessageIds.length > 0
+      ? rawMessageIds
+      : [];
+  const afterSeqExclusive =
+    rawMessageIds.length === 0 ? rawAfterSeqExclusive : null;
+  const beforeSeqExclusive =
+    rawMessageIds.length === 0 && rawAfterSeqExclusive === null
+      ? rawBeforeSeqExclusive
+      : null;
+
+  if (requestedModes.length > 1) {
+    logHistoryRouteDiagnostics('validation:mode-conflict-normalized', {
+      afterSeqExclusive: rawAfterSeqExclusive,
+      beforeSeqExclusive: rawBeforeSeqExclusive,
+      conversationId,
+      messageIdsCount: rawMessageIds.length,
+      normalizedMode:
+        messageIds.length > 0
+          ? 'by-id'
+          : afterSeqExclusive !== null
+            ? 'after-seq'
+            : beforeSeqExclusive !== null
+              ? 'before-seq'
+              : 'latest',
+      requestedModes,
+    });
   }
 
   const snapshot = await getConversationHistorySnapshot({

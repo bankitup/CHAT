@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { emitOptimisticThreadRetry, LOCAL_OPTIMISTIC_MESSAGE_EVENT, type OptimisticThreadMessagePayload } from '@/modules/messaging/realtime/optimistic-thread';
 import { MessageStatusIndicator } from './message-status-indicator';
 
@@ -35,6 +35,10 @@ export function OptimisticThreadMessages({
   labels,
 }: OptimisticThreadMessagesProps) {
   const [items, setItems] = useState<OptimisticThreadMessagePayload[]>([]);
+  const diagnosticsEnabled =
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
+  const lastResolvedClientIdsRef = useRef('');
   const confirmedIds = useMemo(
     () => new Set(confirmedClientIds.filter(Boolean)),
     [confirmedClientIds],
@@ -46,6 +50,27 @@ export function OptimisticThreadMessages({
       ),
     [confirmedIds, items],
   );
+
+  useEffect(() => {
+    const resolvedClientIds = items
+      .filter((item) => item.status !== 'failed' && confirmedIds.has(item.clientId))
+      .map((item) => item.clientId);
+    const resolvedClientIdsKey = resolvedClientIds.join(',');
+
+    if (
+      diagnosticsEnabled &&
+      resolvedClientIds.length > 0 &&
+      lastResolvedClientIdsRef.current !== resolvedClientIdsKey
+    ) {
+      console.info('[optimistic-thread]', 'reconcile:confirmed-client-id', {
+        confirmedClientIds: resolvedClientIds,
+        conversationId,
+        replacementReason: 'confirmed-client-id',
+      });
+    }
+
+    lastResolvedClientIdsRef.current = resolvedClientIdsKey;
+  }, [confirmedIds, conversationId, diagnosticsEnabled, items]);
 
   useEffect(() => {
     const handleOptimisticMessage = (event: Event) => {

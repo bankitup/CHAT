@@ -690,6 +690,22 @@ export function EncryptedDmComposerForm({
                 contentMode: 'dm_e2ee_v1',
                 envelopes: encryptedPayload.envelopes,
               });
+              if (
+                process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+                typeof window !== 'undefined'
+              ) {
+                console.info('[dm-e2ee-send-client]', 'send:committed', {
+                  clientId,
+                  committedMessageId: sendResult.messageId ?? null,
+                  conversationId,
+                  envelopeCount: encryptedPayload.envelopes.length,
+                  envelopeRecipientDeviceIds: encryptedPayload.envelopes.map(
+                    (envelope) => envelope.recipientDeviceRecordId,
+                  ),
+                  replyToMessageId: replyToMessageId ?? null,
+                  senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
+                });
+              }
               await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
                 clientId,
                 conversationId,

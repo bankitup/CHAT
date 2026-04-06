@@ -411,18 +411,24 @@ function buildHistoryPageUrl(input: {
 }) {
   const params = new URLSearchParams();
   params.set('limit', String(input.limit));
+  const normalizedMessageIds = Array.from(
+    new Set((input.messageIds ?? []).map((value) => value.trim()).filter(Boolean)),
+  );
+  const hasMessageIds = normalizedMessageIds.length > 0;
+  const hasAfterSeq =
+    typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq);
+  const hasBeforeSeq =
+    typeof input.beforeSeq === 'number' && Number.isFinite(input.beforeSeq);
 
-  if (typeof input.beforeSeq === 'number' && Number.isFinite(input.beforeSeq)) {
+  if (!hasMessageIds && !hasAfterSeq && hasBeforeSeq) {
     params.set('beforeSeq', String(input.beforeSeq));
   }
 
-  if (typeof input.afterSeq === 'number' && Number.isFinite(input.afterSeq)) {
+  if (!hasMessageIds && hasAfterSeq) {
     params.set('afterSeq', String(input.afterSeq));
   }
 
-  for (const messageId of Array.from(
-    new Set((input.messageIds ?? []).map((value) => value.trim()).filter(Boolean)),
-  )) {
+  for (const messageId of normalizedMessageIds) {
     params.append('messageId', messageId);
   }
 
@@ -1246,6 +1252,9 @@ export function ThreadHistoryViewport({
   const pendingSyncRequestRef = useRef<ThreadHistorySyncRequestState | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSyncingRef = useRef(false);
+  const historySyncDiagnosticsEnabled =
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
 
   useEffect(() => {
     historyStateRef.current = historyState;
@@ -1450,6 +1459,18 @@ export function ThreadHistoryViewport({
       messageIds?: string[] | null;
       reason: string | null;
     }) => {
+      const normalizedMessageIds = Array.from(
+        new Set((input.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
+      );
+      if (historySyncDiagnosticsEnabled) {
+        console.info('[chat-history]', 'topology-sync:fetch:start', {
+          afterSeq: input.afterSeq ?? null,
+          conversationId,
+          messageIds: normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
+          reason: input.reason ?? null,
+        });
+      }
+
       const response = await fetch(
         buildHistoryPageUrl({
           afterSeq: input.afterSeq ?? null,
@@ -1473,9 +1494,22 @@ export function ThreadHistoryViewport({
         );
       }
 
-      return (await response.json()) as ThreadHistoryPageSnapshot;
+      const snapshot = (await response.json()) as ThreadHistoryPageSnapshot;
+
+      if (historySyncDiagnosticsEnabled) {
+        console.info('[chat-history]', 'topology-sync:fetch:done', {
+          afterSeq: input.afterSeq ?? null,
+          conversationId,
+          fetchedCount: snapshot.messages.length,
+          messageIds: normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
+          oldestMessageSeq: snapshot.oldestMessageSeq,
+          reason: input.reason ?? null,
+        });
+      }
+
+      return snapshot;
     },
-    [conversationId],
+    [conversationId, historySyncDiagnosticsEnabled],
   );
 
   useEffect(() => {

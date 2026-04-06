@@ -80,7 +80,7 @@ export function DmE2eeAuthenticatedBoundary({
     ) => {
       try {
         const bootstrap = await ensureDmE2eeDeviceRegistered(userId, {
-          forcePublish: reason !== 'initial',
+          forcePublish: false,
         });
 
         if (bootstrap.status === 'registered') {

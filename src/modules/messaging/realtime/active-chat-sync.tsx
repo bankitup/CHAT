@@ -181,6 +181,19 @@ export function ActiveChatRealtimeSync({
         return;
       }
 
+      if (
+        detail.source === 'plaintext-chat-send' ||
+        detail.source === 'encrypted-dm-send'
+      ) {
+        logDiagnostics('topology-sync:local-committed-suppressed', {
+          clientId: detail.clientId ?? null,
+          conversationId,
+          messageId: detail.messageId ?? null,
+          reason: detail.source,
+        });
+        return;
+      }
+
       requestTopologySync({
         messageIds: detail.messageId ? [detail.messageId] : null,
         newerThanLatest: !detail.messageId,
@@ -223,7 +236,7 @@ export function ActiveChatRealtimeSync({
 
         requestTopologySync({
           messageIds: messageId ? [messageId] : null,
-          newerThanLatest: !messageId || payload.eventType === 'INSERT',
+          newerThanLatest: !messageId,
           reason: `message-postgres:${payload.eventType.toLowerCase()}`,
         });
       })
