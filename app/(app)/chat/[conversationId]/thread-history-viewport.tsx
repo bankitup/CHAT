@@ -1749,6 +1749,11 @@ export function ThreadHistoryViewport({
   threadClientDiagnostics,
 }: ThreadHistoryViewportProps) {
   const t = getTranslations(language);
+  const clientRuntimeDiagnosticsEnabled =
+    typeof window !== 'undefined' &&
+    (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||
+      process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1');
+  const renderCountRef = useRef(0);
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
     createThreadHistoryState(initialSnapshot),
   );
@@ -1770,6 +1775,30 @@ export function ThreadHistoryViewport({
   const historySyncDiagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
+  renderCountRef.current += 1;
+
+  useEffect(() => {
+    if (!clientRuntimeDiagnosticsEnabled) {
+      return;
+    }
+
+    console.info('[chat-thread-runtime]', 'viewport:mount', {
+      conversationId,
+      initialMessageCount: initialSnapshot.messages.length,
+      renderCount: renderCountRef.current,
+    });
+
+    return () => {
+      console.info('[chat-thread-runtime]', 'viewport:dispose', {
+        conversationId,
+        renderCount: renderCountRef.current,
+      });
+    };
+  }, [
+    clientRuntimeDiagnosticsEnabled,
+    conversationId,
+    initialSnapshot.messages.length,
+  ]);
 
   useEffect(() => {
     historyStateRef.current = historyState;

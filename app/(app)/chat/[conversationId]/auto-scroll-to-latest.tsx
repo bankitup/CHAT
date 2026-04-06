@@ -19,6 +19,36 @@ export function AutoScrollToLatest({
   const isNearBottomRef = useRef(true);
   const lastConversationIdRef = useRef(conversationId);
   const resizeFrameRef = useRef<number | null>(null);
+  const diagnosticsEnabled =
+    typeof window !== 'undefined' &&
+    (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||
+      process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1');
+
+  useEffect(() => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+
+    console.info('[chat-thread-runtime]', 'auto-scroll:mount', {
+      bottomSentinelId,
+      conversationId,
+      latestVisibleMessageSeq,
+      targetId,
+    });
+
+    return () => {
+      console.info('[chat-thread-runtime]', 'auto-scroll:dispose', {
+        conversationId,
+        targetId,
+      });
+    };
+  }, [
+    bottomSentinelId,
+    conversationId,
+    diagnosticsEnabled,
+    latestVisibleMessageSeq,
+    targetId,
+  ]);
 
   useEffect(() => {
     const target =
@@ -87,6 +117,26 @@ export function AutoScrollToLatest({
       });
     });
 
+    if (typeof ResizeObserver !== 'function') {
+      if (diagnosticsEnabled) {
+        console.info('[chat-thread-runtime]', 'auto-scroll:resize-observer-unavailable', {
+          conversationId,
+          latestVisibleMessageSeq,
+          targetId,
+        });
+      }
+
+      return () => {
+        if (firstFrameId !== null) {
+          cancelAnimationFrame(firstFrameId);
+        }
+        if (resizeFrameRef.current !== null) {
+          cancelAnimationFrame(resizeFrameRef.current);
+          resizeFrameRef.current = null;
+        }
+      };
+    }
+
     const resizeObserver = new ResizeObserver(() => {
       if (resizeFrameRef.current !== null) {
         cancelAnimationFrame(resizeFrameRef.current);
@@ -114,7 +164,13 @@ export function AutoScrollToLatest({
       }
       resizeObserver.disconnect();
     };
-  }, [bottomSentinelId, conversationId, latestVisibleMessageSeq, targetId]);
+  }, [
+    bottomSentinelId,
+    conversationId,
+    diagnosticsEnabled,
+    latestVisibleMessageSeq,
+    targetId,
+  ]);
 
   return null;
 }
