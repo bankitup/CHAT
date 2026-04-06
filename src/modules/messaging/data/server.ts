@@ -472,8 +472,8 @@ type MessageE2eeEnvelopeRow = {
   used_one_time_prekey_id: number | null;
   created_at: string | null;
   messages:
-    | { sender_device_id?: string | null }
-    | Array<{ sender_device_id?: string | null }>
+    | { sender_device_id?: string | null; sender_id?: string | null }
+    | Array<{ sender_device_id?: string | null; sender_id?: string | null }>
     | null;
 };
 
@@ -3999,26 +3999,12 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     selectionSource: activeDevice?.selectionSource ?? null,
   });
 
-  if (!activeDeviceRecordId) {
-    logDiagnostics('envelopes:no-active-device', {
-      currentUserId: input.userId,
-      debugRequestId: input.debugRequestId ?? null,
-    });
-    return {
-      activeDeviceCreatedAt: null,
-      activeDeviceRecordId: null,
-      envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
-      selectionSource: null,
-    };
-  }
-
   const supabase = await createSupabaseServerClient();
   const response = await supabase
     .from('message_e2ee_envelopes')
     .select(
-      'message_id, recipient_device_id, envelope_type, ciphertext, used_one_time_prekey_id, created_at, messages!inner(sender_device_id)',
+      'message_id, recipient_device_id, envelope_type, ciphertext, used_one_time_prekey_id, created_at, messages!inner(sender_device_id,sender_id)',
     )
-    .eq('recipient_device_id', activeDeviceRecordId)
     .in('message_id', uniqueMessageIds);
 
   if (response.error) {
@@ -4041,7 +4027,16 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     throw new Error(response.error.message);
   }
 
+  if (!activeDeviceRecordId) {
+    logDiagnostics('envelopes:no-active-device', {
+      currentUserId: input.userId,
+      debugRequestId: input.debugRequestId ?? null,
+    });
+  }
+
   let malformedEnvelopeCount = 0;
+  let selectedCurrentDeviceEnvelopeCount = 0;
+  let selectedSenderSelfEnvelopeCount = 0;
   const envelopes = ((response.data ?? []) as MessageE2eeEnvelopeRow[]).flatMap<
     [string, StoredDmE2eeEnvelope]
   >((row) => {
@@ -4049,7 +4044,21 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       const senderDeviceRecordId = String(
         messageRecord?.sender_device_id ?? '',
       ).trim();
+      const senderId = String(messageRecord?.sender_id ?? '').trim();
+      const recipientDeviceRecordId = String(row.recipient_device_id ?? '').trim();
       const ciphertext = String(row.ciphertext ?? '').trim();
+
+      const isCurrentDeviceEnvelope =
+        Boolean(activeDeviceRecordId) &&
+        recipientDeviceRecordId === activeDeviceRecordId;
+      const isSenderSelfEnvelope =
+        senderId === input.userId &&
+        Boolean(senderDeviceRecordId) &&
+        recipientDeviceRecordId === senderDeviceRecordId;
+
+      if (!isCurrentDeviceEnvelope && !isSenderSelfEnvelope) {
+        return [];
+      }
 
       if (!senderDeviceRecordId || !ciphertext) {
         malformedEnvelopeCount += 1;
@@ -4058,10 +4067,16 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
           debugRequestId: input.debugRequestId ?? null,
           hasCiphertext: Boolean(ciphertext),
           messageId: row.message_id,
-          recipientDeviceRecordId: row.recipient_device_id,
+          recipientDeviceRecordId,
           senderDeviceRecordId,
         });
         return [];
+      }
+
+      if (isCurrentDeviceEnvelope) {
+        selectedCurrentDeviceEnvelopeCount += 1;
+      } else if (isSenderSelfEnvelope) {
+        selectedSenderSelfEnvelopeCount += 1;
       }
 
       return [[
@@ -4069,7 +4084,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
         {
           messageId: row.message_id,
           senderDeviceRecordId,
-          recipientDeviceRecordId: row.recipient_device_id,
+          recipientDeviceRecordId,
           envelopeType:
             row.envelope_type === 'signal_message'
               ? 'signal_message'
@@ -4086,6 +4101,8 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
     debugRequestId: input.debugRequestId ?? null,
     malformedEnvelopeCount,
+    selectedCurrentDeviceEnvelopeCount,
+    selectedSenderSelfEnvelopeCount,
     requestedMessageCount: uniqueMessageIds.length,
     envelopeCount: envelopes.length,
     selectionSource: activeDevice?.selectionSource ?? null,
