@@ -27,6 +27,38 @@ type ActiveChatRealtimeSyncProps = {
 const THREAD_REFRESH_DEBOUNCE_MS = 180;
 const THREAD_REFRESH_MIN_INTERVAL_MS = 900;
 const THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
+const CONVERSATION_SUMMARY_ONLY_KEYS = new Set([
+  'last_message_at',
+  'last_message_body',
+  'last_message_content_mode',
+  'last_message_deleted_at',
+  'last_message_id',
+  'last_message_kind',
+  'last_message_sender_id',
+  'last_message_seq',
+  'updated_at',
+]);
+
+function getChangedRealtimeRecordKeys(
+  nextRow: Record<string, unknown> | null,
+  previousRow: Record<string, unknown> | null,
+) {
+  const keys = new Set([
+    ...Object.keys(nextRow ?? {}),
+    ...Object.keys(previousRow ?? {}),
+  ]);
+
+  return Array.from(keys).filter((key) => {
+    const nextValue = nextRow?.[key];
+    const previousValue = previousRow?.[key];
+
+    if (Array.isArray(nextValue) || Array.isArray(previousValue)) {
+      return JSON.stringify(nextValue) !== JSON.stringify(previousValue);
+    }
+
+    return nextValue !== previousValue;
+  });
+}
 
 export function ActiveChatRealtimeSync({
   conversationId,
@@ -245,7 +277,30 @@ export function ActiveChatRealtimeSync({
         schema: 'public',
         table: 'conversations',
         filter: `id=eq.${conversationId}`,
-      }, () => scheduleRefresh('conversation-postgres'))
+      }, (payload) => {
+        const nextRow =
+          payload.new && typeof payload.new === 'object'
+            ? (payload.new as Record<string, unknown>)
+            : null;
+        const previousRow =
+          payload.old && typeof payload.old === 'object'
+            ? (payload.old as Record<string, unknown>)
+            : null;
+        const changedKeys = getChangedRealtimeRecordKeys(nextRow, previousRow);
+
+        if (
+          changedKeys.length > 0 &&
+          changedKeys.every((key) => CONVERSATION_SUMMARY_ONLY_KEYS.has(key))
+        ) {
+          logDiagnostics('conversation-postgres:summary-suppressed', {
+            changedKeys,
+            conversationId,
+          });
+          return;
+        }
+
+        scheduleRefresh('conversation-postgres:metadata');
+      })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
@@ -264,9 +319,28 @@ export function ActiveChatRealtimeSync({
             : typeof payload.old?.last_read_message_seq === 'number'
               ? payload.old.last_read_message_seq
               : null;
+        const nextRow =
+          payload.new && typeof payload.new === 'object'
+            ? (payload.new as Record<string, unknown>)
+            : null;
+        const previousRow =
+          payload.old && typeof payload.old === 'object'
+            ? (payload.old as Record<string, unknown>)
+            : null;
+        const changedKeys = getChangedRealtimeRecordKeys(nextRow, previousRow);
+        const stateChanged = changedKeys.includes('state');
 
         if (!userId) {
-          scheduleRefresh('membership-postgres:fallback');
+          if (stateChanged) {
+            scheduleRefresh('membership-postgres:state-fallback');
+            return;
+          }
+
+          logDiagnostics('membership-postgres:fallback-suppressed', {
+            changedKeys,
+            conversationId,
+            lastReadMessageSeq,
+          });
           return;
         }
 
