@@ -2596,6 +2596,7 @@ function getChatAttachmentBucketRequirementErrorMessage() {
   console.error('[message-attachment-storage]', {
     issue: 'bucket-not-found',
     bucket: CHAT_ATTACHMENT_BUCKET,
+    bucket_used_for_upload: CHAT_ATTACHMENT_BUCKET,
     bucket_configured_normalized:
       CHAT_ATTACHMENT_BUCKET_CONFIG.configuredBucketNormalized,
     bucket_ignored_public: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
@@ -8860,6 +8861,7 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('send:start', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketUsedForUpload: CHAT_ATTACHMENT_BUCKET,
       bucketConfiguredNormalized:
         CHAT_ATTACHMENT_BUCKET_CONFIG.configuredBucketNormalized,
       bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
@@ -8963,6 +8965,7 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:started', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketUsedForUpload: CHAT_ATTACHMENT_BUCKET,
       bucketConfiguredNormalized:
         CHAT_ATTACHMENT_BUCKET_CONFIG.configuredBucketNormalized,
       bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
@@ -8988,6 +8991,7 @@ export async function sendMessageWithAttachment(input: {
         'upload:failed',
         {
           bucket: CHAT_ATTACHMENT_BUCKET,
+          bucketUsedForUpload: CHAT_ATTACHMENT_BUCKET,
           bucketConfiguredNormalized:
             CHAT_ATTACHMENT_BUCKET_CONFIG.configuredBucketNormalized,
           bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
@@ -9017,6 +9021,7 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:completed', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketUsedForUpload: CHAT_ATTACHMENT_BUCKET,
       bucketConfiguredNormalized:
         CHAT_ATTACHMENT_BUCKET_CONFIG.configuredBucketNormalized,
       bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
