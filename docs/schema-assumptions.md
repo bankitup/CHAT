@@ -98,6 +98,12 @@ Assumptions:
 - direct-message uniqueness must now be enforced per space via `space_id` plus `dm_key`; the runtime no longer treats DMs as global.
 - there is currently no separate global messenger-admin role in the app; closed-group member management is enforced through actual group membership roles (`owner` / `admin`) only.
 
+Operational note:
+
+- production group/privacy rollouts should now treat `join_policy` as part of the active runtime contract, not only as a future hardening column.
+- some helper paths still degrade safely when `join_policy` is absent, but current `/chat/[conversationId]` production rendering has already shown that missing `public.conversations.join_policy` can break route rendering before those fallbacks are enough.
+- if production is missing both newer group columns, apply [2026-04-06-conversations-group-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-conversations-group-runtime-align.sql).
+
 ## `public.conversation_members`
 
 Required columns used by current code:
