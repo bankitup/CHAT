@@ -289,7 +289,24 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ...availableUser,
     label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
   }));
-  const existingDmPartnerUserIdsSet = new Set(existingDmPartnerUserIds);
+  const visibleExistingDmPartnerUserIds = new Set(
+    allVisibleConversations.flatMap((conversation) => {
+      if (conversation.kind !== 'dm') {
+        return [];
+      }
+
+      const participants =
+        participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
+
+      return participants
+        .map((participant) => participant.userId)
+        .filter((participantUserId) => participantUserId && participantUserId !== user.id);
+    }),
+  );
+  const existingDmPartnerUserIdsSet = new Set([
+    ...existingDmPartnerUserIds,
+    ...visibleExistingDmPartnerUserIds,
+  ]);
   const availableDmUserEntries = availableUserEntries.filter(
     (availableUser) => !existingDmPartnerUserIdsSet.has(availableUser.userId),
   );

@@ -1130,8 +1130,10 @@ main {
   z-index: 22;
   display: grid;
   align-items: end;
-  padding: 8px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  padding:
+    calc(14px + env(safe-area-inset-top))
+    10px
+    calc(10px + env(safe-area-inset-bottom));
 }
 
 .inbox-create-backdrop {
@@ -1154,11 +1156,16 @@ main {
   flex-direction: column;
   gap: 18px;
   width: min(100%, 720px);
-  max-height: min(96dvh, 960px);
+  max-height: min(
+    calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 28px),
+    920px
+  );
   margin: 0 auto;
   padding: 12px 14px calc(24px + env(safe-area-inset-bottom));
   border-radius: 34px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(246, 249, 252, 0.975));
   box-shadow:
@@ -1190,6 +1197,23 @@ main {
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
     0 12px 32px rgba(15, 23, 42, 0.05);
   backdrop-filter: blur(12px);
+}
+
+@media (max-width: 640px) {
+  .inbox-create-overlay {
+    padding:
+      calc(18px + env(safe-area-inset-top))
+      8px
+      calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .inbox-create-sheet {
+    width: 100%;
+    max-height: calc(
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 34px
+    );
+    border-radius: 30px;
+  }
 }
 
 .inbox-create-header {
