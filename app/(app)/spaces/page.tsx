@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
@@ -8,7 +9,13 @@ import {
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
-export default async function SpacesPage() {
+type SpacesPageProps = {
+  searchParams: Promise<{
+    space?: string;
+  }>;
+};
+
+export default async function SpacesPage({ searchParams }: SpacesPageProps) {
   const diagnosticsEnabled = process.env.CHAT_DEBUG_SPACES_SSR === '1';
   const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
     if (!diagnosticsEnabled) {
@@ -29,8 +36,10 @@ export default async function SpacesPage() {
   } = await supabase.auth.getUser();
 
   if (!user?.id) {
-    return null;
+    redirect('/login');
   }
+
+  const query = await searchParams;
 
   const language = await getRequestLanguage();
   const t = getTranslations(language);
@@ -55,9 +64,27 @@ export default async function SpacesPage() {
     }
   }
 
+  const requestedSpaceId = query.space?.trim() || null;
+  const currentSpaceId =
+    (requestedSpaceId && spaces.some((space) => space.id === requestedSpaceId)
+      ? requestedSpaceId
+      : spaces[0]?.id) ?? null;
+
   return (
     <section className="stack spaces-screen">
       <section className="stack settings-hero spaces-hero">
+        {currentSpaceId ? (
+          <div className="spaces-header">
+            <Link
+              aria-label={t.spaces.backToChats}
+              className="back-arrow-link spaces-back-link"
+              href={withSpaceParam('/inbox', currentSpaceId)}
+            >
+              <span aria-hidden="true">←</span>
+            </Link>
+          </div>
+        ) : null}
+
         <p className="eyebrow">{t.shell.chats}</p>
         <h1 className="settings-hero-title">{t.spaces.title}</h1>
         <p className="muted settings-hero-note">{t.spaces.subtitle}</p>
@@ -74,11 +101,22 @@ export default async function SpacesPage() {
             {spaces.map((space) => (
               <Link
                 key={space.id}
-                className="space-card"
+                className={
+                  currentSpaceId === space.id
+                    ? 'space-card space-card-current'
+                    : 'space-card'
+                }
                 href={withSpaceParam('/inbox', space.id)}
               >
                 <div className="stack space-card-copy">
-                  <h2 className="card-title space-card-title">{space.name}</h2>
+                  <div className="space-card-title-row">
+                    <h2 className="card-title space-card-title">{space.name}</h2>
+                    {currentSpaceId === space.id ? (
+                      <span className="summary-pill summary-pill-muted space-card-current-pill">
+                        {t.spaces.currentSpace}
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="muted space-card-note">
                     {t.spaces.currentActivityNote}
                   </p>

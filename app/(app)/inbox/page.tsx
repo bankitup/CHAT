@@ -38,7 +38,7 @@ import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 import { resolveV1TestSpaceFallback } from '@/modules/spaces/server';
 import { InboxFilterableContent } from './inbox-filterable-content';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import {
   restoreConversationAction,
 } from './actions';
@@ -143,7 +143,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
       if (!activeSpaceState.activeSpace) {
         logDiagnostics('no-active-space-notFound');
-        notFound();
+        redirect('/spaces');
       }
 
       if (activeSpaceState.requestedSpaceWasInvalid) {

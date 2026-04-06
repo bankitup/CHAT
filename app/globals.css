@@ -1727,6 +1727,15 @@ main {
     flex-direction: column;
     align-items: stretch;
   }
+
+  .settings-space-summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-space-switch {
+    width: 100%;
+  }
 }
 
 .user-card,
@@ -1979,6 +1988,12 @@ main {
   gap: 6px;
 }
 
+.spaces-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
 .spaces-surface {
   gap: 12px;
 }
@@ -2007,6 +2022,13 @@ main {
   min-width: 0;
 }
 
+.space-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .space-card-title {
   margin: 0;
 }
@@ -2014,6 +2036,18 @@ main {
 .space-card-note {
   font-size: 0.82rem;
   line-height: 1.4;
+}
+
+.space-card-current {
+  border-color: rgba(31, 111, 235, 0.22);
+  background:
+    linear-gradient(180deg, rgba(244, 248, 255, 0.94), rgba(251, 253, 255, 0.9));
+}
+
+.space-card-current-pill {
+  min-height: 24px;
+  padding-inline: 10px;
+  font-size: 0.68rem;
 }
 
 .space-card-action {
@@ -2200,6 +2234,40 @@ main {
 
 .settings-hub {
   gap: 12px;
+}
+
+.settings-space-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-space-copy {
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.settings-space-label {
+  color: rgba(91, 100, 112, 0.84);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.settings-space-name {
+  color: var(--foreground);
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.settings-space-switch {
+  flex-shrink: 0;
+  min-height: 38px;
+  white-space: nowrap;
 }
 
 .settings-topbar {

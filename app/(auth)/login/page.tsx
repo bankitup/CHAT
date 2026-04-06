@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getTranslations } from '@/modules/i18n';
 import { getCookieLanguage } from '@/modules/i18n/server';
 import { DmE2eePublicBoundaryCleanup } from '@/modules/messaging/e2ee/local-state-boundary';
+import { resolveChatsHrefForUser } from '@/modules/spaces/server';
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -20,7 +21,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect('/spaces');
+    redirect(
+      await resolveChatsHrefForUser({
+        userId: user.id,
+        source: 'login-page',
+      }),
+    );
   }
 
   const params = await searchParams;

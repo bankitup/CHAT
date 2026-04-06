@@ -64,7 +64,7 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href="/settings"
+              href={navSpaceHref('/settings')}
               prefetch
             >
               <span className="app-bottom-nav-label">{t.shell.home}</span>

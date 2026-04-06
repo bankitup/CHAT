@@ -43,6 +43,8 @@ type LanguageDictionary = {
   spaces: {
     title: string;
     subtitle: string;
+    backToChats: string;
+    currentSpace: string;
     openSpace: string;
     currentActivityNote: string;
     emptyTitle: string;
@@ -102,6 +104,11 @@ type LanguageDictionary = {
     statusEmojiTooLong: string;
     statusTextTooLong: string;
     statusUpdateFailed: string;
+    spaceTitle: string;
+    spaceSubtitle: string;
+    currentSpaceLabel: string;
+    noSpaceSelected: string;
+    chooseAnotherSpace: string;
     logoutTitle: string;
     logoutSubtitle: string;
     logoutButton: string;
@@ -444,6 +451,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     spaces: {
       title: 'Choose a space',
       subtitle: 'Pick the project or team context you want to open first.',
+      backToChats: 'Back to chats',
+      currentSpace: 'Current space',
       openSpace: 'Open space',
       currentActivityNote: 'Current messaging activity is available here for now.',
       emptyTitle: 'No spaces yet',
@@ -503,6 +512,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       statusEmojiTooLong: 'Emoji status can be up to 16 characters.',
       statusTextTooLong: 'Status text can be up to 80 characters.',
       statusUpdateFailed: 'Unable to update your status right now.',
+      spaceTitle: 'Space',
+      spaceSubtitle: 'Your chats open in the current space by default. Switch spaces only when you want to change context.',
+      currentSpaceLabel: 'Current space',
+      noSpaceSelected: 'No space selected yet',
+      chooseAnotherSpace: 'Choose another space',
       logoutTitle: 'Log out',
       logoutSubtitle: 'Sign out on this device',
       logoutButton: 'Log out',
@@ -861,6 +875,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     spaces: {
       title: 'Выберите пространство',
       subtitle: 'Сначала откройте нужный проектный или командный контекст.',
+      backToChats: 'Назад к чатам',
+      currentSpace: 'Текущее пространство',
       openSpace: 'Открыть пространство',
       currentActivityNote: 'Текущая переписка пока доступна здесь.',
       emptyTitle: 'Пока нет пространств',
@@ -920,6 +936,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       statusEmojiTooLong: 'Эмодзи-статус может быть до 16 символов.',
       statusTextTooLong: 'Текст статуса может быть до 80 символов.',
       statusUpdateFailed: 'Сейчас не удалось обновить статус.',
+      spaceTitle: 'Пространство',
+      spaceSubtitle: 'По умолчанию чаты открываются в текущем пространстве. Меняйте пространство только когда хотите сменить контекст.',
+      currentSpaceLabel: 'Текущее пространство',
+      noSpaceSelected: 'Пространство пока не выбрано',
+      chooseAnotherSpace: 'Выбрать другое пространство',
       logoutTitle: 'Выйти',
       logoutSubtitle: 'Выйти на этом устройстве',
       logoutButton: 'Выйти',

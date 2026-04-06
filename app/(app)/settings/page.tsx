@@ -2,11 +2,17 @@ import { logoutAction } from '../actions';
 import { updateLanguagePreferenceAction } from './actions';
 import { ProfileSettingsForm } from './profile-settings-form';
 import { ProfileStatusForm } from './profile-status-form';
+import Link from 'next/link';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import {
+  isSpaceMembersSchemaCacheErrorMessage,
+  resolveActiveSpaceForUser,
+} from '@/modules/spaces/server';
+import { withSpaceParam } from '@/modules/spaces/url';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
@@ -16,6 +22,7 @@ type SettingsPageProps = {
   searchParams: Promise<{
     error?: string;
     message?: string;
+    space?: string;
   }>;
 };
 
@@ -52,6 +59,26 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   const profileLabel = getProfileLabel(profile.email, profile.displayName, t.settings.heroEyebrow);
   const currentLanguage = (profile.preferredLanguage ?? language) as AppLanguage;
   const hasAvatar = Boolean(profile.avatarPath);
+  let activeSpaceId = params.space?.trim() || null;
+  let activeSpaceName: string | null = null;
+
+  try {
+    const activeSpaceState = await resolveActiveSpaceForUser({
+      userId: user.id,
+      requestedSpaceId: activeSpaceId,
+      source: 'settings-page',
+    });
+
+    activeSpaceId = activeSpaceState.activeSpace?.id ?? null;
+    activeSpaceName = activeSpaceState.activeSpace?.name ?? null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (!isSpaceMembersSchemaCacheErrorMessage(message)) {
+      throw error;
+    }
+  }
+
   const visibleError = params.error
     ? sanitizeUserFacingErrorMessage({
         fallback: getUserFacingErrorFallback(language, 'settings'),
@@ -201,6 +228,31 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               language={language}
               statusUpdatedAt={profile.statusUpdatedAt}
             />
+          </section>
+
+          <section className="card stack settings-surface settings-home-card">
+            <div className="stack settings-card-copy settings-section-copy">
+              <h2 className="section-title">{t.settings.spaceTitle}</h2>
+              <p className="muted">{t.settings.spaceSubtitle}</p>
+            </div>
+
+            <div className="settings-space-summary">
+              <div className="stack settings-space-copy">
+                <span className="settings-space-label">
+                  {t.settings.currentSpaceLabel}
+                </span>
+                <strong className="settings-space-name">
+                  {activeSpaceName ?? t.settings.noSpaceSelected}
+                </strong>
+              </div>
+
+              <Link
+                className="button button-secondary settings-space-switch"
+                href={withSpaceParam('/spaces', activeSpaceId)}
+              >
+                {t.settings.chooseAnotherSpace}
+              </Link>
+            </div>
           </section>
         </section>
       </div>

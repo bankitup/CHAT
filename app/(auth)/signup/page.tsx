@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getTranslations } from '@/modules/i18n';
 import { getCookieLanguage } from '@/modules/i18n/server';
+import { resolveChatsHrefForUser } from '@/modules/spaces/server';
 
 export default async function SignupPage() {
   const supabase = await createSupabaseServerClient();
@@ -10,7 +11,12 @@ export default async function SignupPage() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect('/spaces');
+    redirect(
+      await resolveChatsHrefForUser({
+        userId: user.id,
+        source: 'signup-page',
+      }),
+    );
   }
   const language = await getCookieLanguage();
   const t = getTranslations(language);

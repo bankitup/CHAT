@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import type { SpaceRecord, SpaceRole } from './model';
+import { withSpaceParam } from './url';
 
 export type UserSpaceRecord = SpaceRecord & {
   role: SpaceRole;
@@ -289,4 +290,28 @@ export async function resolveActiveSpaceForUser(input: {
     requestedSpaceId,
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
   };
+}
+
+export async function resolveChatsHrefForUser(input: {
+  userId: string;
+  requestedSpaceId?: string | null;
+  source?: string;
+}) {
+  try {
+    const { activeSpace } = await resolveActiveSpaceForUser(input);
+
+    if (!activeSpace) {
+      return '/spaces';
+    }
+
+    return withSpaceParam('/inbox', activeSpace.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+      return '/spaces';
+    }
+
+    throw error;
+  }
 }
