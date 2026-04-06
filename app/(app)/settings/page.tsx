@@ -207,6 +207,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
               <Link
                 className="button button-secondary settings-space-switch"
                 href={withSpaceParam('/spaces', activeSpaceId)}
+                prefetch={false}
               >
                 {t.settings.chooseAnotherSpace}
               </Link>
