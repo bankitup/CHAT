@@ -73,6 +73,43 @@ type InboxPresentationLabels = {
   yesterday: string;
 };
 
+type DerivedConversationSummarySnapshot = Pick<
+  InboxConversationLiveSummary,
+  | 'conversationId'
+  | 'createdAt'
+  | 'hiddenAt'
+  | 'lastMessageAt'
+  | 'latestMessageBody'
+  | 'latestMessageContentMode'
+  | 'latestMessageDeletedAt'
+  | 'latestMessageKind'
+  | 'removed'
+  | 'unreadCount'
+>;
+
+type DerivedConversationCacheEntry = {
+  baseItem: ConversationListItem;
+  derivedItem: ConversationListItem | null;
+  summary: DerivedConversationSummarySnapshot;
+};
+
+const EMPTY_LIVE_SUMMARY: InboxConversationLiveSummary = {
+  conversationId: '',
+  createdAt: null,
+  hiddenAt: null,
+  lastMessageAt: null,
+  lastReadAt: null,
+  lastReadMessageSeq: null,
+  latestMessageBody: null,
+  latestMessageContentMode: null,
+  latestMessageDeletedAt: null,
+  latestMessageId: null,
+  latestMessageKind: null,
+  latestMessageSenderId: null,
+  latestMessageSeq: null,
+  unreadCount: 0,
+};
+
 type InboxFilterableContentProps = {
   activeSpaceId: string;
   availableUserEntries: AvailableUserEntry[];
@@ -211,69 +248,160 @@ function buildFilterBucket(input: {
   } satisfies FilterBucket;
 }
 
-function deriveConversationItemsFromLiveState(input: {
-  items: ConversationListItem[];
-  labels: InboxPresentationLabels;
-  liveSummariesByConversationId: Map<string, InboxConversationLiveSummary>;
-  visibility: InboxView;
-}) {
-  const derivedItems: ConversationListItem[] = [];
+function getDerivedConversationSummarySnapshot(
+  conversationId: string,
+  liveSummariesByConversationId: Map<string, InboxConversationLiveSummary>,
+) {
+  const liveSummary =
+    liveSummariesByConversationId.get(conversationId) ?? EMPTY_LIVE_SUMMARY;
 
-  for (const item of input.items) {
-    const fallbackSummary =
-      input.liveSummariesByConversationId.get(item.conversationId) ?? {
-        conversationId: item.conversationId,
-        createdAt: null,
-        hiddenAt: null,
-        lastMessageAt: null,
-        lastReadAt: null,
-        lastReadMessageSeq: null,
-        latestMessageBody: null,
-        latestMessageContentMode: null,
-        latestMessageDeletedAt: null,
-        latestMessageId: null,
-        latestMessageKind: null,
-        latestMessageSenderId: null,
-        latestMessageSeq: null,
-        unreadCount: 0,
-      };
-    const liveSummary = fallbackSummary;
+  return {
+    conversationId,
+    createdAt: liveSummary.createdAt,
+    hiddenAt: liveSummary.hiddenAt,
+    lastMessageAt: liveSummary.lastMessageAt,
+    latestMessageBody: liveSummary.latestMessageBody,
+    latestMessageContentMode: liveSummary.latestMessageContentMode,
+    latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
+    latestMessageKind: liveSummary.latestMessageKind,
+    removed: liveSummary.removed,
+    unreadCount: liveSummary.unreadCount,
+  } satisfies DerivedConversationSummarySnapshot;
+}
 
-    if (liveSummary.removed) {
-      continue;
-    }
-
-    const isHidden = Boolean(liveSummary.hiddenAt);
-
-    if (input.visibility === 'main' ? isHidden : !isHidden) {
-      continue;
-    }
-
-    derivedItems.push({
-      ...item,
-      hasUnread: liveSummary.unreadCount > 0,
-      latestMessageContentMode: liveSummary.latestMessageContentMode,
-      preview: getInboxPreviewText(
-        {
-          lastMessageAt: liveSummary.lastMessageAt,
-          latestMessageBody: liveSummary.latestMessageBody,
-          latestMessageContentMode: liveSummary.latestMessageContentMode,
-          latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
-          latestMessageKind: liveSummary.latestMessageKind,
-          unreadCount: liveSummary.unreadCount,
-        },
-        {
-          attachment: input.labels.attachment,
-          deletedMessage: input.labels.deletedMessage,
-          encryptedMessage: input.labels.encryptedMessage,
-          newEncryptedMessage: input.labels.newEncryptedMessage,
-          voiceMessage: input.labels.voiceMessage,
-        },
-      ),
-    });
+function areDerivedConversationSummariesEqual(
+  left: DerivedConversationSummarySnapshot | null,
+  right: DerivedConversationSummarySnapshot | null,
+) {
+  if (left === right) {
+    return true;
   }
 
-  return derivedItems;
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.conversationId === right.conversationId &&
+    left.createdAt === right.createdAt &&
+    left.hiddenAt === right.hiddenAt &&
+    left.lastMessageAt === right.lastMessageAt &&
+    left.latestMessageBody === right.latestMessageBody &&
+    left.latestMessageContentMode === right.latestMessageContentMode &&
+    left.latestMessageDeletedAt === right.latestMessageDeletedAt &&
+    left.latestMessageKind === right.latestMessageKind &&
+    left.removed === right.removed &&
+    left.unreadCount === right.unreadCount
+  );
+}
+
+function deriveConversationItemFromLiveState(input: {
+  item: ConversationListItem;
+  labels: InboxPresentationLabels;
+  summary: DerivedConversationSummarySnapshot;
+  visibility: InboxView;
+}) {
+  if (input.summary.removed) {
+    return null;
+  }
+
+  const isHidden = Boolean(input.summary.hiddenAt);
+
+  if (input.visibility === 'main' ? isHidden : !isHidden) {
+    return null;
+  }
+
+  return {
+    ...input.item,
+    hasUnread: input.summary.unreadCount > 0,
+    latestMessageContentMode: input.summary.latestMessageContentMode,
+    preview: getInboxPreviewText(
+      {
+        lastMessageAt: input.summary.lastMessageAt,
+        latestMessageBody: input.summary.latestMessageBody,
+        latestMessageContentMode: input.summary.latestMessageContentMode,
+        latestMessageDeletedAt: input.summary.latestMessageDeletedAt,
+        latestMessageKind: input.summary.latestMessageKind,
+        unreadCount: input.summary.unreadCount,
+      },
+      {
+        attachment: input.labels.attachment,
+        deletedMessage: input.labels.deletedMessage,
+        encryptedMessage: input.labels.encryptedMessage,
+        newEncryptedMessage: input.labels.newEncryptedMessage,
+        voiceMessage: input.labels.voiceMessage,
+      },
+    ),
+  } satisfies ConversationListItem;
+}
+
+function createDerivedConversationItemsMemoizer() {
+  let previousItemsRef: ConversationListItem[] | null = null;
+  let previousLabelsRef: InboxPresentationLabels | null = null;
+  let previousResult: ConversationListItem[] = [];
+  let previousCacheByConversationId = new Map<string, DerivedConversationCacheEntry>();
+
+  return (input: {
+    items: ConversationListItem[];
+    labels: InboxPresentationLabels;
+    liveSummariesByConversationId: Map<string, InboxConversationLiveSummary>;
+    visibility: InboxView;
+  }) => {
+    const nextCache = new Map<string, DerivedConversationCacheEntry>();
+    const nextItems: ConversationListItem[] = [];
+    let changed =
+      previousItemsRef !== input.items || previousLabelsRef !== input.labels;
+
+    for (const item of input.items) {
+      const summary = getDerivedConversationSummarySnapshot(
+        item.conversationId,
+        input.liveSummariesByConversationId,
+      );
+      const previousEntry = previousCacheByConversationId.get(item.conversationId);
+      const derivedItem =
+        previousEntry &&
+        previousEntry.baseItem === item &&
+        areDerivedConversationSummariesEqual(previousEntry.summary, summary)
+          ? previousEntry.derivedItem
+          : deriveConversationItemFromLiveState({
+              item,
+              labels: input.labels,
+              summary,
+              visibility: input.visibility,
+            });
+
+      if (previousEntry?.derivedItem !== derivedItem) {
+        changed = true;
+      }
+
+      nextCache.set(item.conversationId, {
+        baseItem: item,
+        derivedItem,
+        summary,
+      });
+
+      if (derivedItem) {
+        nextItems.push(derivedItem);
+      }
+    }
+
+    if (!changed && nextItems.length === previousResult.length) {
+      const isSameOrder = nextItems.every(
+        (item, index) => item === previousResult[index],
+      );
+
+      if (isSameOrder) {
+        previousCacheByConversationId = nextCache;
+        return previousResult;
+      }
+    }
+
+    previousItemsRef = input.items;
+    previousLabelsRef = input.labels;
+    previousCacheByConversationId = nextCache;
+    previousResult = nextItems;
+    return nextItems;
+  };
 }
 
 function partitionConversationItemsByKind(items: ConversationListItem[]) {
@@ -312,6 +440,14 @@ export function InboxFilterableContent({
   restoreAction,
 }: InboxFilterableContentProps) {
   const t = useMemo(() => getTranslations(language), [language]);
+  const deriveMainConversationItemsMemoized = useMemo(
+    () => createDerivedConversationItemsMemoizer(),
+    [],
+  );
+  const deriveArchivedConversationItemsMemoized = useMemo(
+    () => createDerivedConversationItemsMemoizer(),
+    [],
+  );
   const searchTerm = normalizeSearchTerm(queryValue);
   const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
   const [activeView, setActiveView] = useState<InboxView>(initialView);
@@ -417,17 +553,22 @@ export function InboxFilterableContent({
   }, [inboxSummaryRevision, summariesByConversationId]);
   const derivedMainConversationItems = useMemo(
     () =>
-      deriveConversationItemsFromLiveState({
+      deriveMainConversationItemsMemoized({
         items: mainConversationItems,
         labels: rowLabels,
         liveSummariesByConversationId,
         visibility: 'main',
       }),
-    [liveSummariesByConversationId, mainConversationItems, rowLabels],
+    [
+      deriveMainConversationItemsMemoized,
+      liveSummariesByConversationId,
+      mainConversationItems,
+      rowLabels,
+    ],
   );
   const derivedArchivedConversationItems = useMemo(
     () =>
-      deriveConversationItemsFromLiveState({
+      deriveArchivedConversationItemsMemoized({
         items: archivedConversationItems,
         labels: rowLabels,
         liveSummariesByConversationId,
@@ -435,6 +576,7 @@ export function InboxFilterableContent({
       }),
     [
       archivedConversationItems,
+      deriveArchivedConversationItemsMemoized,
       liveSummariesByConversationId,
       rowLabels,
     ],
@@ -462,13 +604,14 @@ export function InboxFilterableContent({
   const organizedConversationSections = useMemo(() => {
     const shouldGroupByKind =
       preferences.showGroupsSeparately && activeFilter === 'all';
+    const partitionedItems = partitionConversationItemsByKind(filteredConversationItems);
 
     if (!shouldGroupByKind) {
       const orderedItems =
         preferences.showPersonalChatsFirst && activeFilter === 'all'
           ? [
-              ...partitionConversationItemsByKind(filteredConversationItems).directMessages,
-              ...partitionConversationItemsByKind(filteredConversationItems).groups,
+              ...partitionedItems.directMessages,
+              ...partitionedItems.groups,
             ]
           : filteredConversationItems;
 
@@ -481,8 +624,7 @@ export function InboxFilterableContent({
       ];
     }
 
-    const { directMessages, groups } =
-      partitionConversationItemsByKind(filteredConversationItems);
+    const { directMessages, groups } = partitionedItems;
     const orderedSections = preferences.showPersonalChatsFirst
       ? [
           { items: directMessages, key: 'dm', label: t.inbox.filters.dm },

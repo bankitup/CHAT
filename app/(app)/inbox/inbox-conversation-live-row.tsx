@@ -197,6 +197,29 @@ function areInboxMetaLabelsEqual(
   );
 }
 
+function areInboxConversationSummariesEqual(
+  previous: InboxConversationLiveSummary,
+  next: InboxConversationLiveSummary,
+) {
+  return (
+    previous.conversationId === next.conversationId &&
+    previous.createdAt === next.createdAt &&
+    previous.hiddenAt === next.hiddenAt &&
+    previous.lastMessageAt === next.lastMessageAt &&
+    previous.lastReadAt === next.lastReadAt &&
+    previous.lastReadMessageSeq === next.lastReadMessageSeq &&
+    previous.latestMessageBody === next.latestMessageBody &&
+    previous.latestMessageContentMode === next.latestMessageContentMode &&
+    previous.latestMessageDeletedAt === next.latestMessageDeletedAt &&
+    previous.latestMessageId === next.latestMessageId &&
+    previous.latestMessageKind === next.latestMessageKind &&
+    previous.latestMessageSenderId === next.latestMessageSenderId &&
+    previous.latestMessageSeq === next.latestMessageSeq &&
+    previous.removed === next.removed &&
+    previous.unreadCount === next.unreadCount
+  );
+}
+
 const InboxConversationAvatarVisual = memo(function InboxConversationAvatarVisual({
   groupAvatarPath,
   isGroupConversation,
@@ -471,7 +494,7 @@ export const InboxConversationLiveRow = memo(
   (previous, next) =>
     previous.activeSpaceId === next.activeSpaceId &&
     previous.currentUserId === next.currentUserId &&
-    previous.initialSummary === next.initialSummary &&
+    areInboxConversationSummariesEqual(previous.initialSummary, next.initialSummary) &&
     previous.isArchivedView === next.isArchivedView &&
     previous.isPrimaryChatsView === next.isPrimaryChatsView &&
     previous.item.conversationId === next.item.conversationId &&
