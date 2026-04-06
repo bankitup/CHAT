@@ -43,12 +43,14 @@ export function emitOptimisticThreadMessage(
 export type OptimisticThreadRetryPayload = {
   attachment?: File | null;
   attachmentLabel?: string | null;
+  attemptKind?: 'retry';
   body: string;
   clientId?: string | null;
   conversationId: string;
   createdAt: string;
   kind?: 'text' | 'attachment' | 'voice';
   replyToMessageId?: string | null;
+  retryOfClientId?: string | null;
   voiceDurationMs?: number | null;
 };
 

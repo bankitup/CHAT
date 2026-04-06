@@ -835,13 +835,29 @@ export function EncryptedDmComposerForm({
       if (!detail || detail.conversationId !== conversationId) {
         return;
       }
+      const nextRetryClientId = crypto.randomUUID();
+
+      if (
+        process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+        detail.kind === 'voice' &&
+        typeof window !== 'undefined'
+      ) {
+        console.info('[voice-send-retry]', 'enqueue', {
+          conversationId,
+          nextClientId: nextRetryClientId,
+          retryOfClientId: detail.retryOfClientId ?? null,
+        });
+      }
       setErrorMessage(null);
       setErrorCode(null);
       setErrorDebugDetails(null);
       enqueue({
         attachmentLabel: detail.attachmentLabel ?? null,
         body: detail.body,
-        clientId: detail.clientId ?? null,
+        clientId:
+          detail.attemptKind === 'retry'
+            ? nextRetryClientId
+            : detail.clientId ?? null,
         createdAt: detail.createdAt,
         kind: detail.kind === 'voice' ? 'voice' : 'text',
         payload:

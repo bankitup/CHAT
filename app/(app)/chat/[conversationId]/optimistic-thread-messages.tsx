@@ -156,12 +156,14 @@ export function OptimisticThreadMessages({
     emitOptimisticThreadRetry({
       attachment: item.attachment ?? null,
       attachmentLabel: item.attachmentLabel ?? null,
+      attemptKind: 'retry',
       body: item.body,
       clientId: null,
       conversationId,
       createdAt: item.createdAt,
       kind: item.kind,
       replyToMessageId: item.replyToMessageId ?? null,
+      retryOfClientId: item.clientId,
       voiceDurationMs: item.voiceDurationMs ?? null,
     });
   };

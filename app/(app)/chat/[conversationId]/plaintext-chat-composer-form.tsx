@@ -230,11 +230,28 @@ export function PlaintextChatComposerForm({
         return;
       }
 
+      const nextRetryClientId = crypto.randomUUID();
+
+      if (
+        process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+        detail.kind === 'voice' &&
+        typeof window !== 'undefined'
+      ) {
+        console.info('[voice-send-retry]', 'enqueue', {
+          conversationId,
+          nextClientId: nextRetryClientId,
+          retryOfClientId: detail.retryOfClientId ?? null,
+        });
+      }
+
       enqueue({
         attachment: detail.attachment ?? null,
         attachmentLabel: detail.attachmentLabel ?? null,
         body: detail.body,
-        clientId: detail.clientId ?? null,
+        clientId:
+          detail.attemptKind === 'retry'
+            ? nextRetryClientId
+            : detail.clientId ?? null,
         createdAt: detail.createdAt,
         kind:
           detail.kind === 'voice'
