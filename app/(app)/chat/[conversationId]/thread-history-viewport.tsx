@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   formatPersonFallbackLabel,
@@ -1284,7 +1283,6 @@ export function ThreadHistoryViewport({
   otherParticipantUserId,
   threadClientDiagnostics,
 }: ThreadHistoryViewportProps) {
-  const router = useRouter();
   const t = getTranslations(language);
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
     createThreadHistoryState(initialSnapshot),
@@ -1673,12 +1671,18 @@ export function ThreadHistoryViewport({
         console.error('[chat-history]', 'topology-sync-failed', {
           conversationId,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          preservedMessageCount: historyStateRef.current.messages.length,
           messageIds: request.messageIds,
           newerThanLatest: request.newerThanLatest,
           reason: request.reason,
         });
-        if (!isDisposed) {
-          router.refresh();
+
+        if (!isDisposed && historySyncDiagnosticsEnabled) {
+          console.info('[chat-history]', 'topology-sync:degraded-preserving-thread', {
+            conversationId,
+            preservedMessageCount: historyStateRef.current.messages.length,
+            reason: request.reason,
+          });
         }
       } finally {
         isSyncingRef.current = false;
@@ -1737,7 +1741,6 @@ export function ThreadHistoryViewport({
     historySyncDiagnosticsEnabled,
     mergeSyncRequest,
     performSyncFetch,
-    router,
   ]);
 
   useLayoutEffect(() => {

@@ -11,6 +11,12 @@ type ConversationHistoryRouteContext = {
   }>;
 };
 
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 function normalizePositiveInteger(
   value: string | null,
   fallback: number,
@@ -91,8 +97,12 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const rawBeforeSeqExclusive = normalizeBeforeSeq(searchParams.get('beforeSeq'));
   const rawAfterSeqExclusive = normalizeAfterSeq(searchParams.get('afterSeq'));
-  const rawMessageIds = Array.from(
+  const requestedMessageIds = Array.from(
     new Set(searchParams.getAll('messageId').map((messageId) => messageId.trim()).filter(Boolean)),
+  );
+  const rawMessageIds = requestedMessageIds.filter(looksLikeUuid);
+  const droppedInvalidMessageIds = requestedMessageIds.filter(
+    (messageId) => !looksLikeUuid(messageId),
   );
   const requestedModes = [
     rawBeforeSeqExclusive !== null ? 'before-seq' : null,
@@ -104,6 +114,16 @@ export async function GET(
     rawMessageIds.length > 0
       ? rawMessageIds
       : [];
+
+  if (droppedInvalidMessageIds.length > 0) {
+    logHistoryRouteDiagnostics('validation:invalid-message-ids-dropped', {
+      conversationId,
+      droppedCount: droppedInvalidMessageIds.length,
+      droppedMessageIds: droppedInvalidMessageIds,
+      preservedMessageIds: rawMessageIds,
+    });
+  }
+
   const afterSeqExclusive =
     rawMessageIds.length === 0 ? rawAfterSeqExclusive : null;
   const beforeSeqExclusive =
@@ -127,6 +147,34 @@ export async function GET(
               : 'latest',
       requestedModes,
     });
+  }
+
+  if (
+    requestedMessageIds.length > 0 &&
+    messageIds.length === 0 &&
+    afterSeqExclusive === null &&
+    beforeSeqExclusive === null
+  ) {
+    logHistoryRouteDiagnostics('validation:empty-by-id-fallback', {
+      conversationId,
+      requestedMessageIds,
+    });
+
+    return NextResponse.json(
+      {
+        attachmentsByMessage: [],
+        hasMoreOlder: false,
+        messages: [],
+        oldestMessageSeq: null,
+        reactionsByMessage: [],
+        senderProfiles: [],
+      },
+      {
+        headers: {
+          'Cache-Control': 'private, no-store',
+        },
+      },
+    );
   }
 
   const snapshot = await getConversationHistorySnapshot({

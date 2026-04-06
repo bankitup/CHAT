@@ -164,6 +164,12 @@ function normalizeMessageBodyText(value: unknown) {
   return trimmed || null;
 }
 
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
 function logThreadRenderDiagnostics(
   stage: string,
   details: Record<string, unknown>,
@@ -499,7 +505,7 @@ export default async function ChatPage({
         query.deleteMessageId?.trim() ?? '',
         query.editMessageId?.trim() ?? '',
         query.replyToMessageId?.trim() ?? '',
-      ].filter(Boolean),
+      ].filter((value) => value && looksLikeUuid(value)),
     ),
   );
   const requestedHistoryTargetWindowSize =
