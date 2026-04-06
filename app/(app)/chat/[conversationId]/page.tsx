@@ -61,7 +61,7 @@ import {
   updateConversationNotificationLevelAction,
 } from './actions';
 import { ConversationPresenceStatus } from './conversation-presence-status';
-import { ChatHeaderAvatarVisual } from './chat-header-avatar-visual';
+import { ChatHeaderAvatarPreviewTrigger } from './chat-header-avatar-preview-trigger';
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import {
   DmThreadClientSubtree,
@@ -997,27 +997,29 @@ export default async function ChatPage({
             <span aria-hidden="true">←</span>
           </Link>
 
-          <Link
-            aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
-            className="chat-header-main-link"
-            href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
-          >
-            <div className="chat-header-identity">
-              <ChatHeaderAvatarVisual
-                conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
-                groupAvatarPath={conversation.avatarPath}
-                participant={
-                  directParticipantIdentity
-                    ? {
-                        avatarPath: directParticipantIdentity.avatarPath ?? null,
-                        displayName: directParticipantIdentity.displayName ?? null,
-                        userId: directParticipantIdentity.userId,
-                      }
-                    : null
-                }
-                title={directConversationDisplayTitle}
-              />
+          <div className="chat-header-identity">
+            <ChatHeaderAvatarPreviewTrigger
+              closeLabel={t.chat.closeAvatarPreview}
+              conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
+              groupAvatarPath={conversation.avatarPath}
+              openLabel={t.chat.openAvatarPreviewAria(directConversationDisplayTitle)}
+              participant={
+                directParticipantIdentity
+                  ? {
+                      avatarPath: directParticipantIdentity.avatarPath ?? null,
+                      displayName: directParticipantIdentity.displayName ?? null,
+                      userId: directParticipantIdentity.userId,
+                    }
+                  : null
+              }
+              title={directConversationDisplayTitle}
+            />
 
+            <Link
+              aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
+              className="chat-header-main-link"
+              href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
+            >
               <div className="stack chat-header-copy">
                 <h1 className="conversation-screen-title">
                   {directConversationDisplayTitle}
@@ -1043,8 +1045,8 @@ export default async function ChatPage({
                   </div>
                 ) : null}
               </div>
-            </div>
-          </Link>
+            </Link>
+          </div>
         </section>
       </section>
 

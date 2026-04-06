@@ -263,6 +263,8 @@ type LanguageDictionary = {
   chat: {
     backToChats: string;
     openInfoAria: (title: string) => string;
+    openAvatarPreviewAria: (title: string) => string;
+    closeAvatarPreview: string;
     directChat: string;
     person: string;
     group: string;
@@ -685,6 +687,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     chat: {
       backToChats: 'Back to chats',
       openInfoAria: (title) => `Open info for ${title}`,
+      openAvatarPreviewAria: (title) => `Open avatar preview for ${title}`,
+      closeAvatarPreview: 'Close avatar preview',
       directChat: 'Direct chat',
       person: 'Person',
       group: 'Group',
@@ -1119,6 +1123,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     chat: {
       backToChats: 'Назад к чатам',
       openInfoAria: (title) => `Открыть информацию о чате ${title}`,
+      openAvatarPreviewAria: (title) => `Открыть фото профиля чата ${title}`,
+      closeAvatarPreview: 'Закрыть просмотр аватара',
       directChat: 'Личный чат',
       person: 'Человек',
       group: 'Группа',
