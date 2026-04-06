@@ -5025,7 +5025,7 @@ main {
 }
 
 .message-bubble-with-reply {
-  padding-top: 10px;
+  padding-top: 11px;
 }
 
 .message-bubble-optimistic {
@@ -5051,28 +5051,28 @@ main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
-  column-gap: 8px;
+  column-gap: 9px;
   margin-bottom: 10px;
-  padding: 8px 10px 9px 9px;
-  border: 1px solid rgba(221, 228, 238, 0.82);
-  border-radius: 15px;
+  padding: 8px 10px 9px 10px;
+  border: 1px solid rgba(221, 228, 238, 0.78);
+  border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(244, 247, 252, 0.84));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(244, 247, 252, 0.86));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 1px 1px rgba(17, 24, 39, 0.018);
+    0 1px 2px rgba(17, 24, 39, 0.018);
   min-width: 0;
 }
 
 .message-reply-reference-own {
-  border-color: rgba(31, 111, 235, 0.16);
+  border-color: rgba(31, 111, 235, 0.15);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(226, 238, 255, 0.64));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(226, 238, 255, 0.68));
 }
 
 .message-reply-accent {
   display: block;
-  width: 3px;
+  width: 2.5px;
   min-height: 100%;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(31, 111, 235, 0.94), rgba(31, 111, 235, 0.42));
@@ -5081,24 +5081,24 @@ main {
 
 .message-reply-copy {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
 .message-reply-sender {
   color: rgba(19, 96, 213, 0.94);
-  font-size: 0.77rem;
+  font-size: 0.76rem;
   font-weight: 700;
-  line-height: 1.14;
-  letter-spacing: 0.012em;
+  line-height: 1.12;
+  letter-spacing: 0.01em;
 }
 
 .message-reply-snippet {
   display: -webkit-box;
   overflow: hidden;
-  color: rgba(72, 82, 95, 0.88);
-  font-size: 0.79rem;
-  line-height: 1.3;
+  color: rgba(72, 82, 95, 0.86);
+  font-size: 0.78rem;
+  line-height: 1.28;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   text-overflow: ellipsis;
@@ -5111,7 +5111,7 @@ main {
 .message-reply-snippet[data-reply-target-diagnostic='target-deleted'],
 .message-reply-snippet[data-reply-target-diagnostic='target-not-loaded'],
 .message-reply-snippet[data-reply-target-diagnostic='temporary-loading'] {
-  color: rgba(91, 100, 112, 0.78);
+  color: rgba(91, 100, 112, 0.74);
 }
 
 .message-reply-snippet[data-reply-target-diagnostic='target-deleted'] {
@@ -6370,20 +6370,20 @@ main {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   column-gap: 10px;
-  margin-bottom: 2px;
-  padding: 8px 9px 8px 8px;
-  border: 1px solid rgba(31, 111, 235, 0.085);
-  border-radius: 17px;
+  margin-bottom: 3px;
+  padding: 9px 10px 9px 9px;
+  border: 1px solid rgba(31, 111, 235, 0.09);
+  border-radius: 18px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.92));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(244, 248, 255, 0.93));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 8px 18px rgba(17, 24, 39, 0.035);
+    0 10px 20px rgba(17, 24, 39, 0.032);
 }
 
 .composer-reply-accent {
   display: block;
-  width: 3px;
+  width: 2.5px;
   min-height: 100%;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(31, 111, 235, 0.96), rgba(31, 111, 235, 0.44));
@@ -6391,43 +6391,55 @@ main {
 }
 
 .composer-reply-main {
+  display: grid;
+  gap: 1px;
   min-width: 0;
 }
 
 .composer-reply-copy {
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
 .composer-reply-label {
-  color: rgba(91, 100, 112, 0.88);
-  font-size: 0.7rem;
+  color: rgba(91, 100, 112, 0.82);
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.035em;
+  letter-spacing: 0.028em;
   text-transform: uppercase;
 }
 
 .composer-reply-sender {
-  color: rgba(24, 34, 48, 0.96);
-  font-size: 0.84rem;
+  color: rgba(19, 96, 213, 0.94);
+  font-size: 0.8rem;
   font-weight: 700;
-  line-height: 1.18;
+  line-height: 1.14;
 }
 
 .composer-reply-snippet {
   display: -webkit-box;
   overflow: hidden;
-  color: rgba(91, 100, 112, 0.9);
-  font-size: 0.79rem;
-  line-height: 1.3;
+  color: rgba(72, 82, 95, 0.84);
+  font-size: 0.77rem;
+  line-height: 1.28;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   text-overflow: ellipsis;
 }
 
+.composer-reply-snippet[data-reply-target-diagnostic='target-deleted'],
+.composer-reply-snippet[data-reply-target-diagnostic='target-not-loaded'],
+.composer-reply-snippet[data-reply-target-diagnostic='temporary-loading'] {
+  color: rgba(91, 100, 112, 0.74);
+}
+
+.composer-reply-snippet[data-reply-target-diagnostic='target-deleted'] {
+  font-style: italic;
+}
+
 .composer-reply-note {
-  margin-top: 1px;
-  color: rgba(91, 100, 112, 0.8);
+  margin-top: 2px;
+  color: rgba(91, 100, 112, 0.76);
   font-size: 0.72rem;
   line-height: 1.32;
 }
@@ -6436,13 +6448,16 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(219, 227, 238, 0.92);
+  align-self: center;
+  width: 31px;
+  height: 31px;
+  border: 1px solid rgba(219, 227, 238, 0.88);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: rgba(73, 84, 98, 0.86);
-  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.025);
+  background: rgba(255, 255, 255, 0.8);
+  color: rgba(73, 84, 98, 0.82);
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.022),
+    inset 0 1px 0 rgba(255, 255, 255, 0.64);
   backdrop-filter: blur(12px);
 }
 
