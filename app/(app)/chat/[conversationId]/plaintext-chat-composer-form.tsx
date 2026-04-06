@@ -79,6 +79,7 @@ export function PlaintextChatComposerForm({
 }: PlaintextChatComposerFormProps) {
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const lastVoiceEntryAttemptAtRef = useRef(0);
   const [composerResetKey, setComposerResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const voiceDraft = useComposerVoiceDraft({
@@ -157,6 +158,68 @@ export function PlaintextChatComposerForm({
         ? error.message
         : 'Unable to send that message right now.',
   });
+
+  function attemptVoiceEntry(source: 'click' | 'pointer') {
+    const now = Date.now();
+
+    if (now - lastVoiceEntryAttemptAtRef.current < 480) {
+      if (
+        process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+        typeof window !== 'undefined'
+      ) {
+        console.info('[voice-composer-button]', 'mic:trigger-suppressed', {
+          captureState: voiceDraft.captureState,
+          conversationId,
+          disabledReason: voiceEntryDisabledReason,
+          isSupported: voiceDraft.isSupported,
+          source,
+        });
+      }
+
+      return;
+    }
+
+    lastVoiceEntryAttemptAtRef.current = now;
+
+    if (
+      process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+      typeof window !== 'undefined'
+    ) {
+      console.info('[voice-composer-button]', 'mic:triggered', {
+        captureState: voiceDraft.captureState,
+        conversationId,
+        disabledReason: voiceEntryDisabledReason,
+        isSupported: voiceDraft.isSupported,
+        source,
+      });
+    }
+
+    const activeElement = document.activeElement;
+
+    if (
+      activeElement instanceof HTMLElement &&
+      (activeElement.tagName === 'TEXTAREA' ||
+        (activeElement.tagName === 'INPUT' &&
+          activeElement.getAttribute('type') !== 'file'))
+    ) {
+      activeElement.blur();
+    }
+
+    window.setTimeout(() => {
+      if (
+        process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
+        typeof window !== 'undefined'
+      ) {
+        console.info('[voice-composer-button]', 'mic:entry-attempt', {
+          captureState: voiceDraft.captureState,
+          conversationId,
+          source,
+        });
+      }
+
+      void voiceDraft.startRecording();
+    }, 0);
+  }
 
   useEffect(() => {
     const handleRetryRequest = (event: Event) => {
@@ -339,6 +402,14 @@ export function PlaintextChatComposerForm({
                 : t.chat.voiceRecorderUnavailable
             }
             type="button"
+            onPointerUp={(event) => {
+              if (event.pointerType !== 'touch' && event.pointerType !== 'pen') {
+                return;
+              }
+
+              event.preventDefault();
+              attemptVoiceEntry('pointer');
+            }}
             onClick={() => {
               if (
                 process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
@@ -351,7 +422,7 @@ export function PlaintextChatComposerForm({
                   isSupported: voiceDraft.isSupported,
                 });
               }
-              void voiceDraft.startRecording();
+              attemptVoiceEntry('click');
             }}
           >
             <span aria-hidden="true" className="composer-mic-icon" />
