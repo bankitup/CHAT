@@ -277,6 +277,7 @@ type ConversationMemberRow = {
   notification_level?: string | null;
   last_read_message_seq?: number | null;
   last_read_at?: string | null;
+  visible_from_seq?: number | null;
   conversations: ConversationRecord | ConversationRecord[] | null;
 };
 
@@ -632,6 +633,56 @@ function normalizeConversationLatestMessageSeq(value: number | string | null | u
   }
 
   return null;
+}
+
+function normalizeConversationMemberVisibleFromSeq(
+  value: number | string | null | undefined,
+) {
+  const normalizedValue = normalizeConversationLatestMessageSeq(value);
+
+  if (normalizedValue === null) {
+    return null;
+  }
+
+  return normalizedValue > 0 ? normalizedValue : null;
+}
+
+function resolveConversationVisibleReadFloorSeq(
+  visibleFromSeq: number | null,
+) {
+  if (visibleFromSeq === null) {
+    return null;
+  }
+
+  return Math.max(0, visibleFromSeq - 1);
+}
+
+function resolveConversationUnreadCount(input: {
+  lastReadMessageSeq: number | null;
+  latestMessageSeq: number | null;
+  visibleFromSeq?: number | null;
+}) {
+  const latestMessageSeq = input.latestMessageSeq;
+
+  if (latestMessageSeq === null) {
+    return 0;
+  }
+
+  const baselineReadFloorSeq = resolveConversationVisibleReadFloorSeq(
+    input.visibleFromSeq ?? null,
+  );
+  const effectiveLastReadSeq =
+    input.lastReadMessageSeq === null
+      ? baselineReadFloorSeq
+      : baselineReadFloorSeq === null
+        ? input.lastReadMessageSeq
+        : Math.max(input.lastReadMessageSeq, baselineReadFloorSeq);
+
+  if (effectiveLastReadSeq === null) {
+    return latestMessageSeq;
+  }
+
+  return Math.max(0, latestMessageSeq - effectiveLastReadSeq);
 }
 
 function getConversationSummarySelect(input?: {
@@ -1014,21 +1065,31 @@ async function getConversationsByVisibility(
   };
   logDiagnostics('start', { hasSpaceScope: Boolean(options?.spaceId) });
   const baseMembershipSelect =
-    'conversation_id, state, last_read_message_seq, last_read_at';
+    'conversation_id, state, last_read_message_seq, last_read_at, visible_from_seq';
   const baseMemberships = await supabase
     .from('conversation_members')
     .select(baseMembershipSelect)
     .eq('user_id', userId)
     .eq('state', 'active');
+  const fallbackBaseMemberships =
+    baseMemberships.error &&
+    isMissingColumnErrorMessage(baseMemberships.error.message, 'visible_from_seq')
+      ? await supabase
+          .from('conversation_members')
+          .select('conversation_id, state, last_read_message_seq, last_read_at')
+          .eq('user_id', userId)
+          .eq('state', 'active')
+      : null;
+  const resolvedBaseMemberships = fallbackBaseMemberships ?? baseMemberships;
 
-  if (baseMemberships.error) {
+  if (resolvedBaseMemberships.error) {
     logDiagnostics('base-memberships-error', {
-      message: baseMemberships.error.message,
+      message: resolvedBaseMemberships.error.message,
     });
-    throw new Error(baseMemberships.error.message);
+    throw new Error(resolvedBaseMemberships.error.message);
   }
 
-  const membershipRows = (baseMemberships.data ?? []) as ConversationMemberRow[];
+  const membershipRows = (resolvedBaseMemberships.data ?? []) as ConversationMemberRow[];
   logDiagnostics('base-memberships-ok', { count: membershipRows.length });
 
   const fallbackVisibleConversations = async () =>
@@ -1356,20 +1417,17 @@ async function mapInboxConversations(
         typeof membershipRow.last_read_message_seq === 'number'
           ? membershipRow.last_read_message_seq
           : null;
-
-      if (latestSeq === null) {
-        unreadCountByConversation.set(membershipRow.conversation_id, 0);
-        continue;
-      }
-
-      if (lastReadSeq === null) {
-        unreadCountByConversation.set(membershipRow.conversation_id, latestSeq);
-        continue;
-      }
+      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+        membershipRow.visible_from_seq,
+      );
 
       unreadCountByConversation.set(
         membershipRow.conversation_id,
-        Math.max(0, latestSeq - lastReadSeq),
+        resolveConversationUnreadCount({
+          lastReadMessageSeq: lastReadSeq,
+          latestMessageSeq: latestSeq,
+          visibleFromSeq,
+        }),
       );
     }
   } else if (conversationIds.length > 0) {
@@ -1434,22 +1492,19 @@ async function mapInboxConversations(
         typeof membershipRow.last_read_message_seq === 'number'
           ? membershipRow.last_read_message_seq
           : null;
+      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+        membershipRow.visible_from_seq,
+      );
       const latestSeq =
         latestMessageSeqByConversation.get(membershipRow.conversation_id) ?? null;
 
-      if (latestSeq === null) {
-        unreadCountByConversation.set(membershipRow.conversation_id, 0);
-        continue;
-      }
-
-      if (lastReadSeq === null) {
-        unreadCountByConversation.set(membershipRow.conversation_id, latestSeq);
-        continue;
-      }
-
       unreadCountByConversation.set(
         membershipRow.conversation_id,
-        Math.max(0, latestSeq - lastReadSeq),
+        resolveConversationUnreadCount({
+          lastReadMessageSeq: lastReadSeq,
+          latestMessageSeq: latestSeq,
+          visibleFromSeq,
+        }),
       );
     }
   }
@@ -1461,11 +1516,17 @@ async function mapInboxConversations(
         typeof row.last_read_message_seq === 'number'
           ? row.last_read_message_seq
           : null;
+      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+        row.visible_from_seq,
+      );
       const latestMessageSeq =
         latestMessageSeqByConversation.get(row.conversation_id) ?? null;
       const latestMessage = latestMessageByConversation.get(row.conversation_id);
       const unreadCount =
         unreadCountByConversation.get(row.conversation_id) ?? 0;
+      const latestMessageVisible =
+        latestMessageSeq !== null &&
+        (visibleFromSeq === null || latestMessageSeq >= visibleFromSeq);
 
       return {
         conversationId: row.conversation_id,
@@ -1477,18 +1538,24 @@ async function mapInboxConversations(
           conversation?.avatar_path ?? null,
         ),
         createdBy: conversation?.created_by ?? null,
-        lastMessageAt: conversation?.last_message_at ?? null,
+        lastMessageAt: latestMessageVisible ? conversation?.last_message_at ?? null : null,
         createdAt: conversation?.created_at ?? null,
         hiddenAt: row.hidden_at ?? null,
         lastReadMessageSeq,
         lastReadAt: row.last_read_at ?? null,
-        latestMessageId: latestMessage?.id ?? null,
-        latestMessageSeq,
-        latestMessageSenderId: latestMessage?.senderId ?? null,
-        latestMessageBody: latestMessage?.body ?? null,
-        latestMessageKind: latestMessage?.kind ?? null,
-        latestMessageContentMode: latestMessage?.contentMode ?? null,
-        latestMessageDeletedAt: latestMessage?.deletedAt ?? null,
+        latestMessageId: latestMessageVisible ? latestMessage?.id ?? null : null,
+        latestMessageSeq: latestMessageVisible ? latestMessageSeq : null,
+        latestMessageSenderId: latestMessageVisible
+          ? latestMessage?.senderId ?? null
+          : null,
+        latestMessageBody: latestMessageVisible ? latestMessage?.body ?? null : null,
+        latestMessageKind: latestMessageVisible ? latestMessage?.kind ?? null : null,
+        latestMessageContentMode: latestMessageVisible
+          ? latestMessage?.contentMode ?? null
+          : null,
+        latestMessageDeletedAt: latestMessageVisible
+          ? latestMessage?.deletedAt ?? null
+          : null,
         unreadCount,
       };
     }),
@@ -1537,13 +1604,28 @@ export async function getConversationForUser(
   },
 ) {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  let membershipResponse = await supabase
     .from('conversation_members')
-    .select('conversation_id, notification_level')
+    .select('conversation_id, notification_level, visible_from_seq')
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
     .eq('state', 'active')
     .maybeSingle();
+
+  if (
+    membershipResponse.error &&
+    isMissingColumnErrorMessage(membershipResponse.error.message, 'visible_from_seq')
+  ) {
+    membershipResponse = await supabase
+      .from('conversation_members')
+      .select('conversation_id, notification_level')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .eq('state', 'active')
+      .maybeSingle();
+  }
+
+  const { data, error } = membershipResponse;
 
   if (error) {
     if (isMissingColumnErrorMessage(error.message, 'notification_level')) {
@@ -1601,7 +1683,11 @@ export async function getConversationForUser(
         createdBy: fallbackConversation.created_by ?? null,
         lastMessageAt: fallbackConversation.last_message_at,
         createdAt: fallbackConversation.created_at,
+        latestMessageSeq: normalizeConversationLatestMessageSeq(
+          fallbackConversation.last_message_seq ?? null,
+        ),
         notificationLevel: 'default' as const,
+        visibleFromSeq: null,
       };
     }
 
@@ -1649,8 +1735,14 @@ export async function getConversationForUser(
     createdBy: conversation.created_by ?? null,
     lastMessageAt: conversation.last_message_at,
     createdAt: conversation.created_at,
+    latestMessageSeq: normalizeConversationLatestMessageSeq(
+      conversation.last_message_seq ?? null,
+    ),
     notificationLevel:
       scopedRow.notification_level === 'muted' ? 'muted' : 'default',
+    visibleFromSeq: normalizeConversationMemberVisibleFromSeq(
+      scopedRow.visible_from_seq,
+    ),
   };
 }
 
@@ -1662,13 +1754,28 @@ export async function getConversationSummaryForUser(
   },
 ) {
   const supabase = await createSupabaseServerClient();
-  const membershipResponse = await supabase
+  let membershipResponse = await supabase
     .from('conversation_members')
-    .select('conversation_id, hidden_at, last_read_message_seq, last_read_at')
+    .select(
+      'conversation_id, hidden_at, last_read_message_seq, last_read_at, visible_from_seq',
+    )
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
     .eq('state', 'active')
     .maybeSingle();
+
+  if (
+    membershipResponse.error &&
+    isMissingColumnErrorMessage(membershipResponse.error.message, 'visible_from_seq')
+  ) {
+    membershipResponse = await supabase
+      .from('conversation_members')
+      .select('conversation_id, hidden_at, last_read_message_seq, last_read_at')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .eq('state', 'active')
+      .maybeSingle();
+  }
 
   if (membershipResponse.error) {
     throw new Error(membershipResponse.error.message);
@@ -1687,6 +1794,10 @@ export async function getConversationSummaryForUser(
         last_read_message_seq:
           typeof membershipResponse.data.last_read_message_seq === 'number'
             ? membershipResponse.data.last_read_message_seq
+            : null,
+        visible_from_seq:
+          typeof membershipResponse.data.visible_from_seq === 'number'
+            ? membershipResponse.data.visible_from_seq
             : null,
         conversations: null,
       } satisfies ConversationMemberRow,
@@ -1735,27 +1846,38 @@ export async function getConversationSummaryForUser(
     typeof scopedRow.last_read_message_seq === 'number'
       ? scopedRow.last_read_message_seq
       : null;
-  const unreadCount =
-    latestMessageSeq === null
-      ? 0
-      : lastReadMessageSeq === null
-        ? latestMessageSeq
-        : Math.max(0, latestMessageSeq - lastReadMessageSeq);
+  const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+    scopedRow.visible_from_seq,
+  );
+  const unreadCount = resolveConversationUnreadCount({
+    lastReadMessageSeq,
+    latestMessageSeq,
+    visibleFromSeq,
+  });
+  const latestMessageVisible =
+    latestMessageSeq !== null &&
+    (visibleFromSeq === null || latestMessageSeq >= visibleFromSeq);
 
   return {
     conversationId: scopedRow.conversation_id,
     createdAt: conversation.created_at ?? null,
     hiddenAt: scopedRow.hidden_at ?? null,
-    lastMessageAt: conversation.last_message_at ?? null,
+    lastMessageAt: latestMessageVisible ? conversation.last_message_at ?? null : null,
     lastReadAt: scopedRow.last_read_at ?? null,
     lastReadMessageSeq,
-    latestMessageBody: latestMessage?.body ?? null,
-    latestMessageContentMode: latestMessage?.contentMode ?? null,
-    latestMessageDeletedAt: latestMessage?.deletedAt ?? null,
-    latestMessageId: latestMessage?.id ?? null,
-    latestMessageKind: latestMessage?.kind ?? null,
-    latestMessageSenderId: latestMessage?.senderId ?? null,
-    latestMessageSeq,
+    latestMessageBody: latestMessageVisible ? latestMessage?.body ?? null : null,
+    latestMessageContentMode: latestMessageVisible
+      ? latestMessage?.contentMode ?? null
+      : null,
+    latestMessageDeletedAt: latestMessageVisible
+      ? latestMessage?.deletedAt ?? null
+      : null,
+    latestMessageId: latestMessageVisible ? latestMessage?.id ?? null : null,
+    latestMessageKind: latestMessageVisible ? latestMessage?.kind ?? null : null,
+    latestMessageSenderId: latestMessageVisible
+      ? latestMessage?.senderId ?? null
+      : null,
+    latestMessageSeq: latestMessageVisible ? latestMessageSeq : null,
     unreadCount,
   } satisfies InboxConversationSummarySnapshot;
 }
@@ -1801,27 +1923,58 @@ export async function getConversationMemberJoinedAt(
   conversationId: string,
   userId: string,
 ) {
+  const boundary = await getConversationMemberHistoryBoundary(conversationId, userId);
+  return boundary?.joinedAt ?? null;
+}
+
+export async function getConversationMemberHistoryBoundary(
+  conversationId: string,
+  userId: string,
+) {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  let response = await supabase
     .from('conversation_members')
-    .select('created_at')
+    .select('created_at, visible_from_seq')
     .eq('conversation_id', conversationId)
     .eq('user_id', userId)
     .eq('state', 'active')
     .maybeSingle();
+
+  if (
+    response.error &&
+    isMissingColumnErrorMessage(response.error.message, 'visible_from_seq')
+  ) {
+    response = await supabase
+      .from('conversation_members')
+      .select('created_at')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .eq('state', 'active')
+      .maybeSingle();
+  }
+
+  const { data, error } = response;
 
   if (error) {
     if (
       error.message.includes('created_at') ||
       error.message.includes('column')
     ) {
-      return null;
+      return {
+        joinedAt: null,
+        visibleFromSeq: null,
+      };
     }
 
     throw new Error(error.message);
   }
 
-  return typeof data?.created_at === 'string' ? data.created_at : null;
+  return {
+    joinedAt: typeof data?.created_at === 'string' ? data.created_at : null,
+    visibleFromSeq: normalizeConversationMemberVisibleFromSeq(
+      typeof data?.visible_from_seq === 'number' ? data.visible_from_seq : null,
+    ),
+  };
 }
 
 export async function getConversationMemberReadStates(conversationId: string) {
@@ -5187,6 +5340,7 @@ export async function getConversationMessages(
     debugRequestId?: string | null;
     limitLatest?: number | null;
     messageIds?: string[] | null;
+    visibleFromSeqInclusive?: number | null;
   },
 ) {
   const supabase = await createSupabaseServerClient();
@@ -5223,11 +5377,21 @@ export async function getConversationMessages(
       : queryMode === 'after-seq'
         ? normalizedLimit
         : null;
+  const visibleFromSeqInclusive =
+    typeof options?.visibleFromSeqInclusive === 'number' &&
+    Number.isFinite(options.visibleFromSeqInclusive) &&
+    options.visibleFromSeqInclusive > 0
+      ? Math.floor(options.visibleFromSeqInclusive)
+      : null;
   const buildMessagesQuery = (selectClause: string) => {
     let query = supabase
       .from('messages')
       .select(selectClause)
       .eq('conversation_id', conversationId);
+
+    if (visibleFromSeqInclusive !== null) {
+      query = query.gte('seq', visibleFromSeqInclusive);
+    }
 
     if (normalizedMessageIds.length > 0) {
       query = query
@@ -5281,6 +5445,7 @@ export async function getConversationMessages(
           normalizedMessageIds.length > 0 ? normalizedMessageIds : null,
         mode: queryMode,
         queryLimit,
+        visibleFromSeqInclusive,
         vercelUrl: process.env.VERCEL_URL ?? null,
       });
     }
@@ -5327,6 +5492,7 @@ function parseConversationHistoryDate(value: string | null) {
 export async function getConversationHistoryWindowSizeForMessageTargets(input: {
   conversationId: string;
   messageIds: string[];
+  userId: string;
 }) {
   const normalizedMessageIds = Array.from(
     new Set(input.messageIds.map((value) => value.trim()).filter(Boolean)),
@@ -5336,11 +5502,16 @@ export async function getConversationHistoryWindowSizeForMessageTargets(input: {
     return null;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const [supabase, historyBoundary] = await Promise.all([
+    createSupabaseServerClient(),
+    getConversationMemberHistoryBoundary(input.conversationId, input.userId),
+  ]);
+  const visibleFromSeq = historyBoundary?.visibleFromSeq ?? null;
   const targetMessages = await supabase
     .from('messages')
     .select('id, seq')
     .eq('conversation_id', input.conversationId)
+    .gte('seq', visibleFromSeq ?? 0)
     .in('id', normalizedMessageIds);
 
   if (targetMessages.error) {
@@ -5377,6 +5548,7 @@ export async function getConversationHistoryWindowSizeForMessageTargets(input: {
     .from('messages')
     .select('id', { count: 'exact', head: true })
     .eq('conversation_id', input.conversationId)
+    .gte('seq', visibleFromSeq ?? 0)
     .gte('seq', minimumTargetSeq);
 
   if (countLookup.error) {
@@ -5399,17 +5571,23 @@ export async function getConversationHistorySnapshot(input: {
     Number.isFinite(input.limit) && input.limit > 0
       ? Math.floor(input.limit)
       : 26;
-  const [{ messages, hasMoreOlder }, currentUserConversationJoinedAt] =
-    await Promise.all([
-      getConversationMessages(input.conversationId, {
-        afterSeqExclusive: input.afterSeqExclusive ?? null,
-        beforeSeqExclusive: input.beforeSeqExclusive ?? null,
-        debugRequestId: input.debugRequestId ?? null,
-        limitLatest: normalizedLimit,
-        messageIds: input.messageIds ?? null,
-      }),
-      getConversationMemberJoinedAt(input.conversationId, input.userId),
-    ]);
+  const historyBoundary = await getConversationMemberHistoryBoundary(
+    input.conversationId,
+    input.userId,
+  );
+  const currentUserConversationJoinedAt = historyBoundary?.joinedAt ?? null;
+  const visibleFromSeq = historyBoundary?.visibleFromSeq ?? null;
+  const { messages, hasMoreOlder } = await getConversationMessages(
+    input.conversationId,
+    {
+      afterSeqExclusive: input.afterSeqExclusive ?? null,
+      beforeSeqExclusive: input.beforeSeqExclusive ?? null,
+      debugRequestId: input.debugRequestId ?? null,
+      limitLatest: normalizedLimit,
+      messageIds: input.messageIds ?? null,
+      visibleFromSeqInclusive: visibleFromSeq,
+    },
+  );
   const messageIds = messages.map((message) => message.id);
   const encryptedMessageIds = messages
     .filter(
@@ -5485,6 +5663,7 @@ export async function getConversationHistorySnapshot(input: {
       encryptedMessageCount: encryptedMessageIds.length,
       encryptedMessageIds,
       selectionSource: e2eeEnvelopeHistory.selectionSource,
+      visibleFromSeq,
       userId: input.userId,
     });
   }
@@ -6153,6 +6332,90 @@ export async function updateConversationNotificationLevel(input: {
   }
 
   return { updated: true };
+}
+
+export async function setConversationHistoryVisibleFromNextMessage(input: {
+  conversationId: string;
+  userId: string;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+
+  if (!input.userId) {
+    throw new Error('Conversation history baseline debug: authenticated user is required.');
+  }
+
+  const user = await requireRequestViewer('Conversation history baseline debug');
+
+  if (!user?.id) {
+    throw new Error('Conversation history baseline debug: no authenticated user found.');
+  }
+
+  if (user.id !== input.userId) {
+    throw new Error(
+      `Conversation history baseline debug: user mismatch. auth user id=${user.id}, payload user id=${input.userId}.`,
+    );
+  }
+
+  const { data: membershipRow, error: membershipError } = await supabase
+    .from('conversation_members')
+    .select('conversation_id')
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active')
+    .maybeSingle();
+
+  if (membershipError) {
+    throw new Error(membershipError.message);
+  }
+
+  if (!membershipRow) {
+    throw new Error('Only an active participant can reset visible history.');
+  }
+
+  const latestRow = await supabase
+    .from('messages')
+    .select('seq')
+    .eq('conversation_id', input.conversationId)
+    .order('seq', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestRow.error) {
+    throw new Error(latestRow.error.message);
+  }
+
+  const latestMessageSeq = normalizeConversationLatestMessageSeq(
+    latestRow.data?.seq ?? null,
+  );
+  const nextVisibleFromSeq = latestMessageSeq === null ? 1 : latestMessageSeq + 1;
+
+  const { error: updateError } = await supabase
+    .from('conversation_members')
+    .update({ visible_from_seq: nextVisibleFromSeq })
+    .eq('conversation_id', input.conversationId)
+    .eq('user_id', input.userId)
+    .eq('state', 'active');
+
+  if (updateError) {
+    if (isMissingColumnErrorMessage(updateError.message, 'visible_from_seq')) {
+      throw createSchemaRequirementError(
+        'Per-member history baselines require public.conversation_members.visible_from_seq.',
+      );
+    }
+
+    if (updateError.message.includes('row-level security policy')) {
+      throw new Error(
+        'Conversation history baseline debug: update blocked by conversation_members RLS.',
+      );
+    }
+
+    throw new Error(updateError.message);
+  }
+
+  return {
+    nextVisibleFromSeq,
+    updated: true,
+  };
 }
 
 export async function assertConversationExists(conversationId: string) {

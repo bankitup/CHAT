@@ -513,6 +513,7 @@ export default async function ChatPage({
       ? await getConversationHistoryWindowSizeForMessageTargets({
           conversationId,
           messageIds: requestedHistoryTargetMessageIds,
+          userId: user.id,
         })
       : null;
   const threadHistoryLimit =

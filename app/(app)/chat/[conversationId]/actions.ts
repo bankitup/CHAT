@@ -26,6 +26,7 @@ import {
   STARTER_REACTIONS,
   sendMessageWithAttachment,
   sendTextMessage,
+  setConversationHistoryVisibleFromNextMessage,
   toggleMessageReaction,
   updateConversationIdentity,
   updateConversationNotificationLevel,
@@ -1396,6 +1397,56 @@ export async function updateConversationNotificationLevelAction(
     );
   }
 
+  revalidatePath(`/chat/${conversationId}`);
+  revalidatePath(`/chat/${conversationId}/settings`);
+  redirectWithSettingsSaved(conversationId, spaceId, settingsReturnTarget);
+}
+
+export async function resetConversationHistoryBaselineAction(
+  formData: FormData,
+) {
+  const conversationId = String(formData.get('conversationId') ?? '').trim();
+  const spaceId = readSpaceId(formData);
+  const settingsReturnTarget = readSettingsReturnTarget(formData);
+
+  if (!conversationId) {
+    redirectToInbox(spaceId);
+  }
+
+  const user = await getRequestViewer();
+
+  if (!user?.id) {
+    redirect('/login');
+  }
+
+  const isMember = await assertConversationMembership(conversationId, user.id);
+
+  if (!isMember) {
+    redirectToInbox(spaceId);
+  }
+
+  try {
+    await setConversationHistoryVisibleFromNextMessage({
+      conversationId,
+      userId: user.id,
+    });
+  } catch (error) {
+    const message = getFriendlyChatActionErrorMessage(
+      error,
+      'Unable to reset visible history right now.',
+      'chat:reset-history-baseline',
+    );
+
+    redirectWithSettingsError(
+      conversationId,
+      message,
+      spaceId,
+      settingsReturnTarget,
+    );
+  }
+
+  revalidatePath('/inbox');
+  revalidatePath('/activity');
   revalidatePath(`/chat/${conversationId}`);
   revalidatePath(`/chat/${conversationId}/settings`);
   redirectWithSettingsSaved(conversationId, spaceId, settingsReturnTarget);

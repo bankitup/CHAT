@@ -116,6 +116,7 @@ Required columns used by current code:
 - `last_read_at`
 - `hidden_at`
 - `notification_level`
+- `visible_from_seq`
 
 Assumptions:
 
@@ -124,6 +125,7 @@ Assumptions:
 - `last_read_message_seq` and `last_read_at` power unread state and DM seen state.
 - `hidden_at` powers per-user archive/hide and archived chats.
 - `notification_level` powers per-conversation notification preference.
+- `visible_from_seq` powers member-scoped clean history baselines without deleting stored message rows.
 
 Optional / future-facing:
 

@@ -48,6 +48,7 @@ import {
   hideConversationAction,
   leaveGroupAction,
   removeGroupParticipantAction,
+  resetConversationHistoryBaselineAction,
   updateConversationNotificationLevelAction,
 } from '../actions';
 import { DmChatDeleteConfirmForm } from '../dm-chat-delete-confirm-form';
@@ -359,6 +360,11 @@ export default async function ChatSettingsPage({
   const canDeleteDirectConversation =
     conversation.kind === 'dm' &&
     participants.some((participant) => participant.userId === user.id);
+  const historyBaselineStartsAfterLatest =
+    conversation.visibleFromSeq !== null &&
+    conversation.latestMessageSeq !== null &&
+    conversation.visibleFromSeq > conversation.latestMessageSeq;
+  const canResetVisibleHistoryBaseline = conversation.latestMessageSeq !== null;
   const participantItems = participants.map((participant) => {
     const identity = identitiesByUserId.get(participant.userId);
     const label = resolvePublicIdentityLabel(identity, t.chat.unknownUser);
@@ -799,6 +805,32 @@ export default async function ChatSettingsPage({
             </p>
           </section>
         )}
+
+        <section className="conversation-settings-panel stack">
+          <div className="stack conversation-settings-panel-copy">
+            <h3 className="card-title">{t.chat.historySection}</h3>
+            <p className="muted conversation-settings-note">
+              {historyBaselineStartsAfterLatest
+                ? t.chat.historyBaselineActiveNote
+                : t.chat.historyBaselineNote}
+            </p>
+          </div>
+
+          <div className="conversation-manage-actions">
+            <GuardedServerActionForm action={resetConversationHistoryBaselineAction}>
+              <input name="conversationId" type="hidden" value={conversationId} />
+              <input name="returnTo" type="hidden" value="settings-screen" />
+              <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
+              <PendingSubmitButton
+                className="button button-compact button-secondary"
+                disabled={!canResetVisibleHistoryBaseline}
+                type="submit"
+              >
+                {t.chat.historyBaselineAction}
+              </PendingSubmitButton>
+            </GuardedServerActionForm>
+          </div>
+        </section>
 
         <section className="conversation-settings-panel stack">
           <div className="stack conversation-settings-panel-copy">

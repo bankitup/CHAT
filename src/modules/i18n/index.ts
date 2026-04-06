@@ -322,6 +322,10 @@ type LanguageDictionary = {
     notificationsDefaultNote: string;
     notificationsMuted: string;
     notificationsMutedNote: string;
+    historySection: string;
+    historyBaselineNote: string;
+    historyBaselineActiveNote: string;
+    historyBaselineAction: string;
     changesSaved: string;
     inbox: string;
     inboxNote: string;
@@ -752,6 +756,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       notificationsDefaultNote: 'Use your usual setting.',
       notificationsMuted: 'Muted',
       notificationsMutedNote: 'Keep this chat quieter.',
+      historySection: 'History',
+      historyBaselineNote:
+        'Hide earlier history on this device and continue from the next message.',
+      historyBaselineActiveNote:
+        'Earlier history is already hidden for you here. New messages continue from the clean baseline.',
+      historyBaselineAction: 'Start fresh from next message',
       changesSaved: 'Saved',
       inbox: 'Inbox',
       inboxNote: 'Hide this chat from your inbox only.',
@@ -1194,6 +1204,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       notificationsDefaultNote: 'Использовать обычную настройку.',
       notificationsMuted: 'Без звука',
       notificationsMutedNote: 'Сделать этот чат тише.',
+      historySection: 'История',
+      historyBaselineNote:
+        'Скрыть более раннюю историю на этом устройстве и продолжить с следующего сообщения.',
+      historyBaselineActiveNote:
+        'Более ранняя история уже скрыта для вас здесь. Новые сообщения продолжаются от чистой точки.',
+      historyBaselineAction: 'Начать заново со следующего сообщения',
       changesSaved: 'Сохранено',
       inbox: 'Входящие',
       inboxNote: 'Скрыть этот чат только из списка.',
