@@ -21,6 +21,9 @@ function extractRecipientReadinessDebugState(
 
   return {
     recipientBundleQueryStage: details.recipientBundleQueryStage ?? null,
+    recipientConversationIdChecked:
+      details.recipientConversationIdChecked ?? null,
+    recipientRequestedUserId: details.recipientRequestedUserId ?? null,
     recipientUserIdChecked: details.recipientUserIdChecked ?? null,
     recipientDeviceRowsFound: details.recipientDeviceRowsFound ?? null,
     recipientActiveDeviceRowsFound:
@@ -79,6 +82,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const conversationId = searchParams.get('conversationId')?.trim() ?? '';
+  const recipientUserId = searchParams.get('recipientUserId')?.trim() ?? '';
 
   if (!conversationId) {
     return NextResponse.json(
@@ -90,6 +94,7 @@ export async function GET(request: Request) {
   try {
     const bundle = await getCurrentUserDmE2eeRecipientBundle({
       conversationId,
+      recipientUserId: recipientUserId || null,
       userId: user.id,
     });
 

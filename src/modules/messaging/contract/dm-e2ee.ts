@@ -48,6 +48,8 @@ export type DmE2eeBootstrapDebugState = {
 
 export type DmE2eeRecipientReadinessDebugState = {
   recipientBundleQueryStage?: string | null;
+  recipientConversationIdChecked?: string | null;
+  recipientRequestedUserId?: string | null;
   recipientUserIdChecked?: string | null;
   recipientDeviceRowsFound?: number | null;
   recipientActiveDeviceRowsFound?: number | null;

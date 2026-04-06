@@ -1178,6 +1178,7 @@ export default async function ChatPage({
                 mentionParticipants={mentionParticipants}
                 mentionSuggestionsLabel={t.chat.mentionSuggestions}
                 messagePlaceholder={t.chat.messagePlaceholder}
+                recipientUserId={otherParticipantUserId}
                 replyToMessageId={activeReplyTarget?.id ?? null}
               />
             </DmThreadClientSubtree>

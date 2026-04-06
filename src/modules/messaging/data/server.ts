@@ -3316,6 +3316,7 @@ export async function publishCurrentUserDmE2eeDevice(
 
 export async function getCurrentUserDmE2eeRecipientBundle(input: {
   conversationId: string;
+  recipientUserId?: string | null;
   userId: string;
 }) {
   const supabase = await createSupabaseServerClient();
@@ -3335,6 +3336,8 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
 
   const recipientDebugState: DmE2eeRecipientReadinessDebugState = {
     recipientBundleQueryStage: 'participants:auth-query',
+    recipientConversationIdChecked: input.conversationId,
+    recipientRequestedUserId: input.recipientUserId?.trim() || null,
     recipientUserIdChecked: null,
     recipientDeviceRowsFound: null,
     recipientActiveDeviceRowsFound: null,
@@ -3353,7 +3356,36 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     recipientMismatchRight: null,
     recipientReadinessFailedReason: null,
   };
+  const requestedRecipientUserId = input.recipientUserId?.trim() || null;
+
+  if (requestedRecipientUserId === input.userId) {
+    recipientDebugState.recipientBundleQueryStage =
+      'participants:selected-invalid-self';
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: requested recipient matches sender';
+    recipientDebugState.recipientMismatchLeft = requestedRecipientUserId;
+    recipientDebugState.recipientMismatchRight = input.userId;
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Direct-message recipient is not available.',
+      recipientDebugState,
+    );
+  }
+
   const lookupRecipientParticipant = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  ) =>
+    client
+      .from('conversation_members')
+      .select('user_id, role, state')
+      .eq('conversation_id', input.conversationId)
+      .eq('state', 'active')
+      .eq('user_id', requestedRecipientUserId ?? '__dm-e2ee-bundle-no-recipient__')
+      .order('user_id', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+  const lookupAnyOtherRecipientParticipant = async (
     client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   ) =>
     client
@@ -3366,7 +3398,9 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
       .limit(1)
       .maybeSingle();
 
-  let recipientParticipantLookup = await lookupRecipientParticipant(supabase);
+  let recipientParticipantLookup = requestedRecipientUserId
+    ? await lookupRecipientParticipant(supabase)
+    : await lookupAnyOtherRecipientParticipant(supabase);
 
   if (
     !recipientParticipantLookup.error &&
@@ -3374,8 +3408,9 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     serviceRoleSupabase
   ) {
     recipientDebugState.recipientBundleQueryStage = 'participants:service-query';
-    const privilegedLookup =
-      await lookupRecipientParticipant(serviceRoleSupabase);
+    const privilegedLookup = requestedRecipientUserId
+      ? await lookupRecipientParticipant(serviceRoleSupabase)
+      : await lookupAnyOtherRecipientParticipant(serviceRoleSupabase);
 
     if (!privilegedLookup.error) {
       recipientParticipantLookup = privilegedLookup;
@@ -3419,10 +3454,30 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     recipientDebugState.recipientBundleQueryStage =
       'participants:selected-recipient-missing';
     recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: recipient participant missing';
-    recipientDebugState.recipientMismatchLeft = input.userId;
+      requestedRecipientUserId
+        ? 'recipient readiness: requested recipient participant missing'
+        : 'recipient readiness: recipient participant missing';
+    recipientDebugState.recipientMismatchLeft =
+      requestedRecipientUserId ?? input.userId;
     recipientDebugState.recipientMismatchRight =
       recipientParticipantLookup.data?.user_id ?? null;
+    throw createDmE2eeRecipientReadinessError(
+      'dm_e2ee_recipient_unavailable',
+      'Direct-message recipient is not available.',
+      recipientDebugState,
+    );
+  }
+
+  if (
+    requestedRecipientUserId &&
+    recipientParticipant.userId !== requestedRecipientUserId
+  ) {
+    recipientDebugState.recipientBundleQueryStage =
+      'participants:selected-recipient-mismatch';
+    recipientDebugState.recipientReadinessFailedReason =
+      'recipient readiness: selected participant mismatched requested recipient';
+    recipientDebugState.recipientMismatchLeft = requestedRecipientUserId;
+    recipientDebugState.recipientMismatchRight = recipientParticipant.userId;
     throw createDmE2eeRecipientReadinessError(
       'dm_e2ee_recipient_unavailable',
       'Direct-message recipient is not available.',

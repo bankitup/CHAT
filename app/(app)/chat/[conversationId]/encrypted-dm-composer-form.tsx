@@ -62,14 +62,22 @@ type EncryptedDmComposerFormProps = {
   mentionParticipants?: MentionParticipant[];
   mentionSuggestionsLabel: string;
   messagePlaceholder: string;
+  recipientUserId?: string | null;
   replyToMessageId?: string | null;
 };
 
-async function fetchRecipientBundle(conversationId: string) {
+async function fetchRecipientBundle(
+  conversationId: string,
+  recipientUserId?: string | null,
+) {
+  const params = new URLSearchParams({ conversationId });
+
+  if (recipientUserId?.trim()) {
+    params.set('recipientUserId', recipientUserId.trim());
+  }
+
   const response = await fetch(
-    `/api/messaging/dm-e2ee/bundle?conversationId=${encodeURIComponent(
-      conversationId,
-    )}`,
+    `/api/messaging/dm-e2ee/bundle?${params.toString()}`,
     {
       method: 'GET',
       headers: {
@@ -107,6 +115,10 @@ async function fetchRecipientBundle(conversationId: string) {
     error.retireTargetIds = errorPayload.retireTargetIds ?? null;
     error.recipientBundleQueryStage =
       errorPayload.recipientBundleQueryStage ?? null;
+    error.recipientConversationIdChecked =
+      errorPayload.recipientConversationIdChecked ?? null;
+    error.recipientRequestedUserId =
+      errorPayload.recipientRequestedUserId ?? null;
     error.recipientUserIdChecked = errorPayload.recipientUserIdChecked ?? null;
     error.recipientDeviceRowsFound = errorPayload.recipientDeviceRowsFound ?? null;
     error.recipientActiveDeviceRowsFound =
@@ -471,6 +483,7 @@ export function EncryptedDmComposerForm({
   mentionParticipants,
   mentionSuggestionsLabel,
   messagePlaceholder,
+  recipientUserId,
   replyToMessageId,
 }: EncryptedDmComposerFormProps) {
   const router = useRouter();
@@ -512,6 +525,8 @@ export function EncryptedDmComposerForm({
         errorDebugDetails?.sendSelectedRecipientDeviceRowId ||
         errorDebugDetails?.recipientReadinessFailedReason ||
         errorDebugDetails?.recipientBundleQueryStage ||
+        errorDebugDetails?.recipientConversationIdChecked ||
+        errorDebugDetails?.recipientRequestedUserId ||
         errorDebugDetails?.recipientUserIdChecked ||
         typeof errorDebugDetails?.recipientDeviceRowsFound === 'number' ||
         typeof errorDebugDetails?.recipientActiveDeviceRowsFound === 'number' ||
@@ -673,7 +688,10 @@ export function EncryptedDmComposerForm({
                 currentUserId,
                 retriedAfterRepublish,
               );
-              const recipientBundle = await fetchRecipientBundle(conversationId);
+              const recipientBundle = await fetchRecipientBundle(
+                conversationId,
+                recipientUserId,
+              );
               const encryptedPayload = await encryptDmTextForRecipient({
                 conversationId,
                 clientId,
