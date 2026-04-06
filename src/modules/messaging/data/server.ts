@@ -3626,21 +3626,56 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
     recipientMismatchRight: null,
     recipientReadinessFailedReason: null,
   };
-  const requestedRecipientUserId = input.recipientUserId?.trim() || null;
+  const rawRequestedRecipientUserId = input.recipientUserId?.trim() || null;
+  const requestedRecipientUserId =
+    rawRequestedRecipientUserId && rawRequestedRecipientUserId !== input.userId
+      ? rawRequestedRecipientUserId
+      : null;
 
-  if (requestedRecipientUserId === input.userId) {
+  if (rawRequestedRecipientUserId && rawRequestedRecipientUserId === input.userId) {
     recipientDebugState.recipientBundleQueryStage =
-      'participants:selected-invalid-self';
-    recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: requested recipient matches sender';
-    recipientDebugState.recipientMismatchLeft = requestedRecipientUserId;
+      'participants:selected-invalid-self-hint';
+    recipientDebugState.recipientMismatchLeft = rawRequestedRecipientUserId;
     recipientDebugState.recipientMismatchRight = input.userId;
-    throw createDmE2eeRecipientReadinessError(
-      'dm_e2ee_recipient_unavailable',
-      'Direct-message recipient is not available.',
-      recipientDebugState,
-    );
+    logDmE2eeRecipientBundleDiagnostics('participants:self-hint-ignored', {
+      conversationId: input.conversationId,
+      requestedRecipientUserId: rawRequestedRecipientUserId,
+      userId: input.userId,
+    });
   }
+
+  const normalizeConversationParticipants = (
+    rows: Array<{
+      role?: string | null;
+      state?: string | null;
+      user_id: string;
+    }>,
+  ) => {
+    const memberships = rows.map((member) => ({
+      userId: member.user_id,
+      role: member.role ?? null,
+      state: member.state ?? null,
+    }));
+    const uniqueMemberships = Array.from(
+      new Map(memberships.map((member) => [member.userId, member])).values(),
+    );
+    const rolePriority = new Map([
+      ['owner', 0],
+      ['admin', 1],
+      ['member', 2],
+    ]);
+
+    return uniqueMemberships.sort((left, right) => {
+      const leftPriority = rolePriority.get(left.role ?? 'member') ?? 99;
+      const rightPriority = rolePriority.get(right.role ?? 'member') ?? 99;
+
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return left.userId.localeCompare(right.userId);
+    }) satisfies ConversationParticipant[];
+  };
 
   let activeConversationParticipants: ConversationParticipant[] = [];
 
@@ -3653,11 +3688,63 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
       error instanceof Error
         ? error.message
         : 'Unable to resolve direct-message participants.';
-    recipientDebugState.recipientBundleQueryStage = 'participants:error';
-    recipientDebugState.recipientBundleQueryErrorMessage = message;
-    recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: participant list query failed';
-    throw createDmE2eeRecipientLookupError(message, recipientDebugState);
+
+    if (serviceRoleSupabase && isSupabasePermissionDeniedError(error)) {
+      recipientDebugState.recipientBundleQueryStage = 'participants:service';
+      recipientDebugState.recipientBundleQueryErrorMessage = message;
+      recipientDebugState.recipientReadinessFailedReason =
+        'recipient readiness: participant list auth query failed';
+      logDmE2eeRecipientBundleDiagnostics('participants:auth-error-fallback', {
+        conversationId: input.conversationId,
+        message,
+        requestedRecipientUserId,
+        userId: input.userId,
+      });
+
+      const serviceResponse = await serviceRoleSupabase
+        .from('conversation_members')
+        .select('conversation_id, user_id, role, state')
+        .eq('conversation_id', input.conversationId)
+        .eq('state', 'active')
+        .returns<
+          {
+            conversation_id: string;
+            role?: string | null;
+            state?: string | null;
+            user_id: string;
+          }[]
+        >();
+
+      if (serviceResponse.error) {
+        recipientDebugState.recipientBundleQueryStage = 'participants:error';
+        recipientDebugState.recipientBundleQueryErrorMessage =
+          serviceResponse.error.message;
+        recipientDebugState.recipientReadinessFailedReason =
+          'recipient readiness: participant list query failed';
+        throw createDmE2eeRecipientLookupError(
+          serviceResponse.error.message,
+          recipientDebugState,
+        );
+      }
+
+      activeConversationParticipants = normalizeConversationParticipants(
+        (serviceResponse.data ?? []).filter(
+          (membership) => membership.conversation_id === input.conversationId,
+        ),
+      );
+      logDmE2eeRecipientBundleDiagnostics('participants:service-recovered', {
+        conversationId: input.conversationId,
+        participantCount: activeConversationParticipants.length,
+        requestedRecipientUserId,
+        userId: input.userId,
+      });
+    } else {
+      recipientDebugState.recipientBundleQueryStage = 'participants:error';
+      recipientDebugState.recipientBundleQueryErrorMessage = message;
+      recipientDebugState.recipientReadinessFailedReason =
+        'recipient readiness: participant list query failed';
+      throw createDmE2eeRecipientLookupError(message, recipientDebugState);
+    }
   }
 
   const activeOtherParticipants = activeConversationParticipants.filter(
