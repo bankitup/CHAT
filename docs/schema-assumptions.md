@@ -25,7 +25,9 @@ Current rollout assumption:
 - `public.conversations`
 - `public.conversation_members`
 - `public.messages`
-- `public.message_attachments`
+- `public.message_assets`
+- `public.message_asset_links`
+- `public.message_attachments` (still active as a transitional legacy/non-voice attachment layer)
 - `public.message_reactions`
 
 ## `public.profiles`
@@ -150,9 +152,10 @@ Required columns used by current code:
 Assumptions:
 
 - `seq` is the per-conversation ordering/read-position anchor.
-- `kind` is currently used for current text messaging flows and future-facing `voice` message support.
+- `kind` is part of the current active runtime contract and must allow `text`, `attachment`, and `voice`.
 - `body` remains the plaintext source of truth for non-encrypted message rendering and previews.
 - `deleted_at` is used for soft-deleted message rendering.
+- `kind = 'voice'` is now active production behavior for committed voice-message rows; the binary media metadata for those rows lives in `public.message_assets` and `public.message_asset_links`, not in `public.message_attachments`.
 
 Required additions when DM E2EE is enabled:
 
@@ -179,9 +182,68 @@ Required columns used by current code:
 
 Assumptions:
 
-- Attachment metadata lives here; file bytes live in Supabase Storage.
-- `bucket` and `object_path` must match the actual storage layout.
-- Voice messages reuse this table; current object paths use `/voice/` for voice-note files and `/files/` for other attachments.
+- This table is still active, but no longer represents the full committed media runtime.
+- Historical attachment rows and the current non-voice attachment send path still read/write here.
+- Chat history loading still reads this table alongside `public.message_assets` / `public.message_asset_links`.
+- Message cleanup still deletes legacy attachment objects from here when present.
+- This table should now be treated as transitional for media evolution, not as the sole attachment source of truth.
+
+## `public.message_assets`
+
+Required columns used by current code:
+
+- `id`
+- `conversation_id`
+- `created_by`
+- `kind`
+- `source`
+- `storage_bucket`
+- `storage_object_path`
+- `external_url`
+- `mime_type`
+- `file_name`
+- `size_bytes`
+- `duration_ms`
+- `created_at`
+
+Assumptions:
+
+- This is the active committed media metadata table for current voice-note runtime.
+- Current voice sends upload the binary first, then persist one committed asset row here with `kind = 'voice-note'`.
+- `storage_bucket` and `storage_object_path` must point at the real media object in Supabase Storage when `source = 'supabase-storage'`.
+- `duration_ms` is the committed voice-note duration used by thread UI; inbox/activity must not load the blob to derive it.
+- This table is also the intended forward path for future image/file/audio media work beyond voice.
+
+## `public.message_asset_links`
+
+Required columns used by current code:
+
+- `id`
+- `message_id`
+- `asset_id`
+- `ordinal`
+- `render_as_primary`
+- `created_at`
+
+Assumptions:
+
+- This table links committed media assets to their parent message rows.
+- Current voice sends create exactly one link row from the committed `messages.kind = 'voice'` row to the committed `message_assets.kind = 'voice-note'` row.
+- `ordinal` and `render_as_primary` are part of the active projection contract used by current thread history mapping.
+- Missing this table or its expected columns is now a real production blocker for committed voice/media rendering.
+
+## `storage.buckets` / canonical media bucket
+
+Required current buckets:
+
+- `avatars`
+- `message-media`
+
+Assumptions:
+
+- Active chat media and voice uploads use the canonical `message-media` bucket.
+- The older `message-attachments` bucket name should now be treated as stale legacy naming, not an active runtime target.
+- Current voice/media debugging should verify the actual upload target against `message-media`.
 
 ## `public.message_reactions`
 
@@ -376,11 +438,21 @@ These schema changes must exist in Supabase for the current app to run safely:
 3. `public.profiles.preferred_language`
    Source file: [2026-04-03-profiles-preferred-language.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-profiles-preferred-language.sql)
 
-4. `public.messages.kind` must allow `voice`
-   Source file: [2026-04-03-messages-kind-voice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-messages-kind-voice.sql)
+4. `public.messages.kind` runtime align for active `voice` support
+   Source file: [2026-04-06-messages-kind-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-messages-kind-runtime-align.sql)
 
-5. `public.conversations.space_id` final active-space alignment
+5. `public.message_assets` and `public.message_asset_links` runtime align for committed voice/media
+   Source file: [2026-04-06-message-assets-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-runtime-align.sql)
+
+6. `storage.objects` / `storage.buckets` policy setup for canonical `message-media`
+   Source file: [2026-04-06-message-attachments-storage-policies.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-attachments-storage-policies.sql)
+
+7. `public.conversations.space_id` final active-space alignment
    Source file: [2026-04-05-conversations-space-id-required.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-05-conversations-space-id-required.sql)
+
+Operational note:
+
+- keep `public.message_attachments` in place for now; current runtime still reads it for legacy/non-voice attachment rows even though committed voice now depends on `message_assets` / `message_asset_links`
 
 ## Recommended hardening before broader testing
 
@@ -440,7 +512,10 @@ Operational alignment note for partial production rollouts:
 - Missing `conversation_members.last_read_message_seq` / `last_read_at` falls back to `null` read state.
 - Missing `conversation_members.hidden_at` no longer causes a raw confusing crash on the main inbox path, but archive-related behavior still requires the migration.
 - Missing `conversation_members.notification_level` falls back to `default` for conversation loading, but preference updates still require the migration.
-- If `messages.kind` is restricted to older values, voice-message inserts require the migration before they can be stored safely.
+- If `messages.kind` is restricted to older values, voice-message inserts require the runtime-align migration before they can be stored safely.
+- If `message_assets` / `message_asset_links` or their expected columns are missing, committed voice send and chat-thread media projection can fail even when the base `messages` row exists.
+- If the canonical `message-media` storage bucket or its policies are missing, committed voice upload fails before asset persistence completes.
+- Legacy `message_attachments` absence is now less critical for committed voice than missing `message_assets` / `message_asset_links`, but non-voice attachments and historical attachment rows still depend on it.
 - If `conversations.dm_key` is missing, direct-message creation still falls back to active-member lookup, but race-safe one-DM-per-pair enforcement depends on the migration set in [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql).
 - DM text E2EE is only partially active today. Direct-message text can now be uploaded as ciphertext for the DM-only encrypted send path, and the current device can decrypt those encrypted DM messages in-thread. Inbox rows may use a device-local decrypted preview cache when available; the server still cannot read DM preview text.
 - DM search remains server-blind for encrypted text. Current search continues to work for conversation and participant identity, but not encrypted DM plaintext.
@@ -459,3 +534,10 @@ Operational alignment note for partial production rollouts:
 - `conversation_members.last_read_at`
 
 These fields directly affect language preference persistence, inbox loading, archive behavior, notification preferences, and read/unread UX.
+
+Current media/voice production blockers to watch with equal priority:
+
+- `messages.kind` allowing `voice`
+- `message_assets`
+- `message_asset_links`
+- canonical `message-media` bucket and policies
