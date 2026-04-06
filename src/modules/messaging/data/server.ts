@@ -1,7 +1,9 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
+import type { User } from '@supabase/supabase-js';
 import {
+  getRequestViewer,
   getRequestSupabaseServerClient,
   requireRequestViewer,
 } from '@/lib/request-context/server';
@@ -2346,11 +2348,16 @@ export async function getProfileIdentities(userIds: string[]) {
 
 export async function getCurrentUserProfile(userId: string, email?: string | null) {
   const supabase = await createSupabaseServerClient();
+  const requestViewer = await getRequestViewer();
   const [identity] = await getProfileIdentities([userId]);
   let preferredLanguage: AppLanguage | null = null;
   let statusEmoji: string | null = null;
   let statusText: string | null = null;
   let statusUpdatedAt: string | null = null;
+  let usedStatusMetadataFallback = false;
+  const requestViewerStatusFallback = getProfileStatusFromUserMetadata(
+    requestViewer?.id === userId ? requestViewer : null,
+  );
 
   const withLanguage = await supabase
     .from('profiles')
@@ -2393,8 +2400,27 @@ export async function getCurrentUserProfile(userId: string, email?: string | nul
     ) {
       throw new Error(languageOnly.error.message);
     }
+    usedStatusMetadataFallback = true;
   } else if (!isMissingColumnErrorMessage(withLanguage.error.message, 'preferred_language')) {
     throw new Error(withLanguage.error.message);
+  }
+
+  const hasMetadataStatusFallback = Boolean(
+    requestViewerStatusFallback.statusEmoji ||
+      requestViewerStatusFallback.statusText ||
+      requestViewerStatusFallback.statusUpdatedAt,
+  );
+
+  if (
+    usedStatusMetadataFallback ||
+    (hasMetadataStatusFallback &&
+      !statusEmoji &&
+      !statusText &&
+      !statusUpdatedAt)
+  ) {
+    statusEmoji = requestViewerStatusFallback.statusEmoji;
+    statusText = requestViewerStatusFallback.statusText;
+    statusUpdatedAt = requestViewerStatusFallback.statusUpdatedAt;
   }
 
   return {
@@ -2407,6 +2433,41 @@ export async function getCurrentUserProfile(userId: string, email?: string | nul
     statusText,
     statusUpdatedAt,
   } satisfies CurrentUserProfile;
+}
+
+function getProfileStatusFromUserMetadata(user: User | null) {
+  const metadata =
+    user?.user_metadata && typeof user.user_metadata === 'object'
+      ? (user.user_metadata as Record<string, unknown>)
+      : null;
+
+  const normalizeMetadataValue = (value: unknown) =>
+    typeof value === 'string' ? value.trim() || null : null;
+
+  return {
+    statusEmoji: normalizeMetadataValue(metadata?.status_emoji),
+    statusText: normalizeMetadataValue(metadata?.status_text),
+    statusUpdatedAt: normalizeMetadataValue(metadata?.status_updated_at),
+  };
+}
+
+async function updateCurrentUserStatusMetadata(input: {
+  supabase: Awaited<ReturnType<typeof getRequestSupabaseServerClient>>;
+  statusEmoji: string | null;
+  statusText: string | null;
+  statusUpdatedAt: string | null;
+}) {
+  const response = await input.supabase.auth.updateUser({
+    data: {
+      status_emoji: input.statusEmoji,
+      status_text: input.statusText,
+      status_updated_at: input.statusUpdatedAt,
+    },
+  });
+
+  if (response.error) {
+    throw new Error(response.error.message);
+  }
 }
 
 export async function getStoredProfileLanguage(userId: string) {
@@ -4597,9 +4658,17 @@ export async function updateCurrentUserStatus(input: {
       isMissingColumnErrorMessage(profileWrite.error.message, 'status_text') ||
       isMissingColumnErrorMessage(profileWrite.error.message, 'status_updated_at')
     ) {
-      throw createSchemaRequirementError(
-        'Profile status requires profiles.status_emoji, profiles.status_text, and profiles.status_updated_at.',
-      );
+      logProfileSettingsDiagnostics('status-profile-write:fallback-auth-metadata', {
+        userId: input.userId,
+      });
+
+      await updateCurrentUserStatusMetadata({
+        supabase,
+        statusEmoji: nextStatusEmoji,
+        statusText: nextStatusText,
+        statusUpdatedAt: nextStatusUpdatedAt,
+      });
+      return;
     }
 
     if (profileWrite.error.message.includes('row-level security policy')) {
@@ -4607,6 +4676,20 @@ export async function updateCurrentUserStatus(input: {
     }
 
     throw new Error(profileWrite.error.message);
+  }
+
+  try {
+    await updateCurrentUserStatusMetadata({
+      supabase,
+      statusEmoji: nextStatusEmoji,
+      statusText: nextStatusText,
+      statusUpdatedAt: nextStatusUpdatedAt,
+    });
+  } catch (error) {
+    logProfileSettingsDiagnostics('status-auth-metadata-sync-error', {
+      userId: input.userId,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

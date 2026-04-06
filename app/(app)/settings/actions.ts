@@ -191,14 +191,15 @@ export async function updateProfileStatusAction(formData: FormData) {
       statusText: statusText || null,
     });
   } catch (error) {
-    redirectWithMessage(
-      'error',
-      getProfileSettingsErrorMessage(
-        error,
-        t.settings.statusUpdateFailed,
-        t.settings.statusUpdateFailed,
-      ),
-    );
+    const rawMessage =
+      error instanceof Error ? error.message : t.settings.statusUpdateFailed;
+    const safeMessage = sanitizeUserFacingErrorMessage({
+      fallback: t.settings.statusUpdateFailed,
+      language,
+      rawMessage,
+    });
+
+    redirectWithMessage('error', safeMessage);
   }
 
   revalidatePath('/settings');

@@ -39,6 +39,9 @@ Optional / fallback-supported:
 
 - `avatar_path`
 - `preferred_language` is read defensively, but authenticated language persistence requires it
+- `status_emoji`
+- `status_text`
+- `status_updated_at`
 
 Notes:
 
@@ -51,6 +54,9 @@ Notes:
 - Managed avatar cleanup is restricted to user-owned object paths in the form `<user_id>/...`.
 - Legacy absolute avatar URLs remain renderable, but they are not automatically deletable because they do not carry a trusted storage object path.
 - Settings language preference writes `preferred_language` when the column exists.
+- Profile status writes `status_emoji`, `status_text`, and `status_updated_at` when the columns exist.
+- If the status columns are missing, the current user's own profile status falls back to authenticated `user_metadata` for save/read on the settings screen.
+- Cross-user status rendering on chat surfaces still depends on the `profiles.status_*` columns being present.
 
 ## `public.conversations`
 
@@ -419,6 +425,7 @@ Operational alignment note for partial production rollouts:
 
 - Missing `profiles.avatar_path` is tolerated.
 - Missing `profiles.preferred_language` falls back to cookie/default language for reads, but language preference updates still require the migration.
+- Missing `profiles.status_emoji` / `status_text` / `status_updated_at` now falls back to authenticated `user_metadata` for the current user's own settings screen, but shared chat/profile surfaces still require the migration.
 - Missing `conversation_members.last_read_message_seq` / `last_read_at` falls back to `null` read state.
 - Missing `conversation_members.hidden_at` no longer causes a raw confusing crash on the main inbox path, but archive-related behavior still requires the migration.
 - Missing `conversation_members.notification_level` falls back to `default` for conversation loading, but preference updates still require the migration.

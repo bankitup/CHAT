@@ -207,6 +207,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
           <section className="card stack settings-surface settings-home-card">
             <ProfileStatusForm
+              key={`profile-status-${profile.statusEmoji ?? ''}-${profile.statusText ?? ''}-${profile.statusUpdatedAt ?? ''}`}
               defaultStatusEmoji={profile.statusEmoji ?? ''}
               defaultStatusText={profile.statusText ?? ''}
               labels={{
