@@ -4883,7 +4883,7 @@ main {
   z-index: 1;
   display: flex;
   justify-content: center;
-  padding: 14px 0 10px;
+  padding: 16px 0 12px;
   background: transparent;
 }
 
@@ -4905,7 +4905,7 @@ main {
 .message-unread-separator {
   display: flex;
   justify-content: center;
-  padding: 8px 0 10px;
+  padding: 10px 0 12px;
 }
 
 .message-unread-label {
@@ -4934,17 +4934,17 @@ main {
 }
 
 .message-row + .message-row {
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
 .message-row.message-row-own + .message-row.message-row-own,
 .message-row:not(.message-row-own) + .message-row:not(.message-row-own) {
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .message-row.message-row-own + .message-row:not(.message-row-own),
 .message-row:not(.message-row-own) + .message-row.message-row-own {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .message-row-own {
@@ -4957,7 +4957,7 @@ main {
 
 .message-card {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   width: min(100%, 336px);
   flex: 0 0 min(100%, 336px);
   padding: 0;
@@ -4985,7 +4985,7 @@ main {
   justify-content: flex-end;
   gap: 0;
   min-height: 22px;
-  margin-bottom: 1px;
+  margin-bottom: 2px;
 }
 
 .message-header-own {
@@ -4999,7 +4999,7 @@ main {
 }
 
 .message-bubble {
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-radius: 20px;
   background: rgba(246, 248, 251, 0.96);
   border: 1px solid rgba(221, 228, 238, 0.76);
@@ -5013,7 +5013,7 @@ main {
 }
 
 .message-bubble-with-reply {
-  padding-top: 9px;
+  padding-top: 10px;
 }
 
 .message-bubble-optimistic {
@@ -5040,8 +5040,8 @@ main {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   column-gap: 8px;
-  margin-bottom: 9px;
-  padding: 8px 10px 8px 9px;
+  margin-bottom: 10px;
+  padding: 8px 10px 9px 9px;
   border: 1px solid rgba(221, 228, 238, 0.82);
   border-radius: 15px;
   background:
@@ -5069,7 +5069,7 @@ main {
 
 .message-reply-copy {
   display: grid;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -5128,7 +5128,7 @@ main {
   text-align: left;
   letter-spacing: 0.01em;
   white-space: nowrap;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 .message-meta-own {
@@ -5309,7 +5309,7 @@ main {
 
 .message-voice-stack {
   display: grid;
-  gap: 8px;
+  gap: 9px;
 }
 
 .message-voice-card {
@@ -5450,8 +5450,8 @@ main {
 
 .message-attachments {
   display: grid;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 7px;
+  margin-top: 7px;
 }
 
 .message-attachment-card {
@@ -5587,8 +5587,8 @@ main {
 }
 
 .reaction-groups {
-  gap: 3px;
-  margin-top: 1px;
+  gap: 4px;
+  margin-top: 2px;
 }
 
 .reaction-groups-own {
