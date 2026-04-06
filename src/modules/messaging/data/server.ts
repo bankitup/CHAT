@@ -543,6 +543,25 @@ export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif'
 
 const CANONICAL_CHAT_ATTACHMENT_BUCKET = 'message-media';
 
+type ChatAttachmentBucketConfig = {
+  bucket: string;
+  ignoredPublicBucket: string | null;
+  rawBucket: string | null;
+  source: 'SUPABASE_ATTACHMENTS_BUCKET' | 'default';
+};
+
+function readServerEnvironmentValue(name: string) {
+  const rawValue = globalThis.process?.env?.[name];
+
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+
+  const trimmedValue = rawValue.trim();
+
+  return trimmedValue.length > 0 ? trimmedValue : null;
+}
+
 function normalizeChatAttachmentBucketName(value: string | null | undefined) {
   const normalizedValue = value?.trim() || null;
 
@@ -557,33 +576,27 @@ function normalizeChatAttachmentBucketName(value: string | null | undefined) {
   return normalizedValue;
 }
 
-function resolveChatAttachmentBucketConfig() {
-  const serverBucket = process.env.SUPABASE_ATTACHMENTS_BUCKET?.trim() || null;
+function resolveChatAttachmentBucketConfig(): ChatAttachmentBucketConfig {
+  const serverBucket = readServerEnvironmentValue('SUPABASE_ATTACHMENTS_BUCKET');
+  const ignoredPublicBucket = readServerEnvironmentValue(
+    'NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET',
+  );
 
   if (serverBucket) {
     return {
       bucket: normalizeChatAttachmentBucketName(serverBucket) ?? CANONICAL_CHAT_ATTACHMENT_BUCKET,
+      ignoredPublicBucket,
       rawBucket: serverBucket,
       source: 'SUPABASE_ATTACHMENTS_BUCKET',
-    } as const;
-  }
-
-  const publicBucket =
-    process.env.NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET?.trim() || null;
-
-  if (publicBucket) {
-    return {
-      bucket: normalizeChatAttachmentBucketName(publicBucket) ?? CANONICAL_CHAT_ATTACHMENT_BUCKET,
-      rawBucket: publicBucket,
-      source: 'NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET',
-    } as const;
+    };
   }
 
   return {
     bucket: CANONICAL_CHAT_ATTACHMENT_BUCKET,
+    ignoredPublicBucket,
     rawBucket: null,
     source: 'default',
-  } as const;
+  };
 }
 
 const CHAT_ATTACHMENT_BUCKET_CONFIG = resolveChatAttachmentBucketConfig();
@@ -2578,6 +2591,7 @@ function getChatAttachmentBucketRequirementErrorMessage() {
   console.error('[message-attachment-storage]', {
     issue: 'bucket-not-found',
     bucket: CHAT_ATTACHMENT_BUCKET,
+    bucket_ignored_public: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
     bucket_raw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
     bucket_source: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
     setupSql: 'docs/sql/2026-04-06-message-attachments-storage-policies.sql',
@@ -8839,6 +8853,7 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('send:start', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
       bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
       bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
       conversationId: input.conversationId,
@@ -8939,6 +8954,7 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:started', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
       bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
       bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
       conversationId: input.conversationId,
@@ -8961,6 +8977,7 @@ export async function sendMessageWithAttachment(input: {
         'upload:failed',
         {
           bucket: CHAT_ATTACHMENT_BUCKET,
+          bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
           bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
           bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
           clientId: messageResult.clientId,
@@ -8987,6 +9004,7 @@ export async function sendMessageWithAttachment(input: {
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('upload:completed', {
       bucket: CHAT_ATTACHMENT_BUCKET,
+      bucketIgnoredPublic: CHAT_ATTACHMENT_BUCKET_CONFIG.ignoredPublicBucket,
       bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
       bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
       conversationId: input.conversationId,

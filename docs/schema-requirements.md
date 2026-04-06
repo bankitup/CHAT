@@ -99,7 +99,7 @@ Current attachment runtime note:
 - chat attachments and voice notes default to the `message-media` bucket
 - current default bucket is `message-media`
 - server runtime may override with `SUPABASE_ATTACHMENTS_BUCKET`
-- legacy `NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET=message-attachments` is normalized to `message-media` in the current server runtime, but `SUPABASE_ATTACHMENTS_BUCKET` is the canonical setting
+- server upload paths ignore `NEXT_PUBLIC_SUPABASE_ATTACHMENTS_BUCKET`; `SUPABASE_ATTACHMENTS_BUCKET` is the only supported override
 
 ### `public.message_reactions`
 
