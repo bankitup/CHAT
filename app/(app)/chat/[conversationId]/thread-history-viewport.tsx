@@ -365,7 +365,57 @@ function resolveVoiceMessageRenderState(input: {
     return 'ready' satisfies VoiceMessageRenderState;
   }
 
+  if (
+    input.attachment?.id &&
+    input.attachment?.messageId &&
+    input.attachment?.bucket &&
+    input.attachment?.objectPath
+  ) {
+    return 'processing' satisfies VoiceMessageRenderState;
+  }
+
   return 'unavailable' satisfies VoiceMessageRenderState;
+}
+
+function resolveVoiceMessageRenderReason(input: {
+  attachment: MessageAttachment | null;
+  playbackFailed: boolean;
+  stageHint?: 'uploading' | 'processing' | 'failed' | null;
+}) {
+  if (input.stageHint === 'uploading') {
+    return 'stage-uploading';
+  }
+
+  if (input.stageHint === 'processing') {
+    return 'stage-processing';
+  }
+
+  if (input.stageHint === 'failed') {
+    return 'stage-failed';
+  }
+
+  if (input.playbackFailed) {
+    return 'playback-failed';
+  }
+
+  if (input.attachment?.signedUrl) {
+    return 'signed-url-ready';
+  }
+
+  if (
+    input.attachment?.id &&
+    input.attachment?.messageId &&
+    input.attachment?.bucket &&
+    input.attachment?.objectPath
+  ) {
+    return 'storage-locator-present-awaiting-url';
+  }
+
+  if (input.attachment) {
+    return 'attachment-present-without-resolver';
+  }
+
+  return 'attachment-missing';
 }
 
 function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
@@ -750,8 +800,7 @@ function ThreadVoiceMessageBubble({
   const effectiveStageHint =
     stageHint ??
     (isResolvingSignedUrl && !effectiveSignedUrl ? 'processing' : null);
-
-  const voiceState = resolveVoiceMessageRenderState({
+  const voiceStateInput = {
     attachment:
       attachment === null
         ? null
@@ -761,7 +810,10 @@ function ThreadVoiceMessageBubble({
           },
     playbackFailed,
     stageHint: effectiveStageHint,
-  });
+  } as const;
+
+  const voiceState = resolveVoiceMessageRenderState(voiceStateInput);
+  const voiceRenderReason = resolveVoiceMessageRenderReason(voiceStateInput);
   const totalDurationMs = resolvedDurationMs && resolvedDurationMs > 0
     ? resolvedDurationMs
     : 0;
@@ -898,7 +950,10 @@ function ThreadVoiceMessageBubble({
   ]);
 
   useEffect(() => {
-    if (!canResolveSignedUrl || voiceState !== 'unavailable') {
+    if (
+      !canResolveSignedUrl ||
+      (voiceState !== 'unavailable' && voiceState !== 'processing')
+    ) {
       return;
     }
 
@@ -915,18 +970,29 @@ function ThreadVoiceMessageBubble({
 
     console.info('[voice-thread]', 'render-state', {
       attachmentId: attachment?.id ?? null,
+      attachmentMessageId: attachment?.messageId ?? null,
+      canResolveSignedUrl,
       conversationId,
       hasSignedUrl: Boolean(effectiveSignedUrl),
       isOwnMessage,
       messageId,
+      renderReason: voiceRenderReason,
       renderState: voiceState,
+      storageLocatorPresent: Boolean(
+        attachment?.bucket && attachment?.objectPath,
+      ),
     });
   }, [
+    attachment?.bucket,
     attachment?.id,
+    attachment?.messageId,
+    attachment?.objectPath,
+    canResolveSignedUrl,
     conversationId,
     effectiveSignedUrl,
     isOwnMessage,
     messageId,
+    voiceRenderReason,
     voiceState,
   ]);
 
