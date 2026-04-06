@@ -50,6 +50,7 @@ export function OptimisticThreadMessages({
   labels,
 }: OptimisticThreadMessagesProps) {
   const [items, setItems] = useState<OptimisticThreadMessagePayload[]>([]);
+  const retryingFailedClientIdsRef = useRef(new Set<string>());
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
@@ -148,6 +149,11 @@ export function OptimisticThreadMessages({
   }
 
   const retryFailedItem = (item: OptimisticThreadMessagePayload) => {
+    if (retryingFailedClientIdsRef.current.has(item.clientId)) {
+      return;
+    }
+
+    retryingFailedClientIdsRef.current.add(item.clientId);
     setItems((currentItems) =>
       currentItems.filter(
         (currentItem) => currentItem.clientId !== item.clientId,
