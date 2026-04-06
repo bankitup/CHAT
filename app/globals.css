@@ -20,7 +20,7 @@
   --radius-control: 15px;
   --safe-area-bottom-pad: max(8px, env(safe-area-inset-bottom));
   --app-bottom-nav-reserve: calc(84px + env(safe-area-inset-bottom));
-  --chat-composer-bottom-offset: calc(var(--safe-area-bottom-pad) + var(--chat-keyboard-offset));
+  --chat-composer-bottom-offset: calc(max(4px, calc(env(safe-area-inset-bottom) - 4px)) + var(--chat-keyboard-offset));
   --chat-thread-bottom-reserve: calc(18px + var(--safe-area-bottom-pad));
   --chat-thread-scroll-reserve: calc(28px + var(--safe-area-bottom-pad));
 }
