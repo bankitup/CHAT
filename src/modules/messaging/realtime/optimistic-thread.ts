@@ -3,9 +3,15 @@
 export const LOCAL_OPTIMISTIC_MESSAGE_EVENT = 'chat:optimistic-message';
 export const LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT = 'chat:optimistic-message-retry';
 
-export type OptimisticThreadMessageStatus = 'pending' | 'sent' | 'failed';
+export type OptimisticThreadMessageStatus =
+  | 'local_pending'
+  | 'sending'
+  | 'sent'
+  | 'failed';
 
 export type OptimisticThreadMessagePayload = {
+  attachment?: File | null;
+  attachmentLabel?: string | null;
   body: string;
   clientId: string;
   conversationId: string;
@@ -33,9 +39,12 @@ export function emitOptimisticThreadMessage(
 }
 
 export type OptimisticThreadRetryPayload = {
+  attachment?: File | null;
+  attachmentLabel?: string | null;
   body: string;
   clientId: string;
   conversationId: string;
+  createdAt: string;
   replyToMessageId?: string | null;
 };
 

@@ -27,13 +27,13 @@ import { encryptDmTextForRecipient } from '@/modules/messaging/e2ee/prekey-encry
 import { getEncryptedDmComposerErrorMessage } from '@/modules/messaging/e2ee/ui-policy';
 import { broadcastMessageCommitted } from '@/modules/messaging/realtime/live-refresh';
 import {
-  emitOptimisticThreadMessage,
   LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
   type OptimisticThreadRetryPayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
+import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
 type MentionParticipant = {
   userId: string;
@@ -490,13 +490,10 @@ export function EncryptedDmComposerForm({
   const [, startNavigationTransition] = useTransition();
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
-  const isSubmittingRef = useRef(false);
-  const sendSignatureRef = useRef<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
   const [errorDebugDetails, setErrorDebugDetails] =
     useState<EncryptedDmDebugFailureDetails | null>(null);
-  const [isSendingEncrypted, setIsSendingEncrypted] = useState(false);
   const [isRefreshingSetup, setIsRefreshingSetup] = useState(false);
   const [isResettingSetup, setIsResettingSetup] = useState(false);
   const showDevResetAction =
@@ -547,6 +544,112 @@ export function EncryptedDmComposerForm({
         errorDebugDetails?.recipientMismatchLeft ||
         errorDebugDetails?.recipientMismatchRight,
     );
+  const { enqueue } = useConversationOutgoingQueue({
+    conversationId,
+    onItemFailed: ({ error }) => {
+      const nextCode =
+        error instanceof Error && 'code' in error
+          ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
+          : error instanceof Error && error.message === 'dm_e2ee_unsupported_browser'
+            ? 'dm_e2ee_unsupported_browser'
+            : null;
+      setErrorCode(nextCode);
+      setErrorMessage(getEncryptedDmErrorMessage(error, t));
+      setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
+    },
+    onItemSent: () => {
+      setErrorMessage(null);
+      setErrorCode(null);
+      setErrorDebugDetails(null);
+    },
+    processItem: async (item) => {
+      let retriedAfterRepublish = false;
+      let retriedAfterBundleRefresh = false;
+
+      while (true) {
+        try {
+          const localRecord = await resolveLocalRecordForEncryptedDm(
+            currentUserId,
+            retriedAfterRepublish,
+          );
+          const recipientBundle = await fetchRecipientBundle(
+            conversationId,
+            recipientUserId,
+          );
+          const encryptedPayload = await encryptDmTextForRecipient({
+            conversationId,
+            clientId: item.clientId,
+            plaintext: item.body,
+            localRecord,
+            recipientBundle,
+          });
+
+          const sendResult = await postEncryptedDmMessage({
+            conversationId,
+            clientId: item.clientId,
+            replyToMessageId: item.replyToMessageId ?? null,
+            senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
+            kind: 'text',
+            contentMode: 'dm_e2ee_v1',
+            envelopes: encryptedPayload.envelopes,
+          });
+
+          if (
+            process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+            typeof window !== 'undefined'
+          ) {
+            console.info('[dm-e2ee-send-client]', 'send:committed', {
+              clientId: item.clientId,
+              committedMessageId: sendResult.messageId ?? null,
+              conversationId,
+              envelopeCount: encryptedPayload.envelopes.length,
+              envelopeRecipientDeviceIds: encryptedPayload.envelopes.map(
+                (envelope) => envelope.recipientDeviceRecordId,
+              ),
+              replyToMessageId: item.replyToMessageId ?? null,
+              senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
+            });
+          }
+
+          await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+            clientId: item.clientId,
+            conversationId,
+            messageId: sendResult.messageId ?? null,
+            source: 'encrypted-dm-send',
+          });
+
+          if (sendResult.messageId) {
+            emitThreadHistorySyncRequest({
+              conversationId,
+              messageIds: [sendResult.messageId],
+              reason: 'local-encrypted-send',
+            });
+          }
+
+          return;
+        } catch (error) {
+          const code =
+            error instanceof Error && 'code' in error
+              ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
+              : null;
+
+          if (code === 'dm_e2ee_sender_device_stale' && !retriedAfterRepublish) {
+            retriedAfterRepublish = true;
+            await markLocalDmE2eeDeviceRegistrationStale(currentUserId);
+            continue;
+          }
+
+          if (code === 'dm_e2ee_prekey_conflict' && !retriedAfterBundleRefresh) {
+            retriedAfterBundleRefresh = true;
+            continue;
+          }
+
+          throw error;
+        }
+      }
+    },
+    resolveErrorMessage: (error) => getEncryptedDmErrorMessage(error, t),
+  });
 
   useEffect(() => {
     const handleRetryRequest = (event: Event) => {
@@ -555,39 +658,17 @@ export function EncryptedDmComposerForm({
       if (!detail || detail.conversationId !== conversationId) {
         return;
       }
-
-      const form = formRef.current;
-      const textarea = form?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
-
-      if (!form || !textarea) {
-        return;
-      }
-
-      const valueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype,
-        'value',
-      )?.set;
-
-      if (valueSetter) {
-        valueSetter.call(textarea, detail.body);
-      } else {
-        textarea.value = detail.body;
-      }
-
-      textarea.focus();
-      textarea.setSelectionRange(detail.body.length, detail.body.length);
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
       setErrorMessage(null);
       setErrorCode(null);
       setErrorDebugDetails(null);
-
-      if ((detail.replyToMessageId ?? null) === (replyToMessageId ?? null)) {
-        const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-
-        window.requestAnimationFrame(() => {
-          form.requestSubmit(submitButton ?? undefined);
-        });
-      }
+      enqueue({
+        attachmentLabel: detail.attachmentLabel ?? null,
+        body: detail.body,
+        clientId: detail.clientId,
+        createdAt: detail.createdAt,
+        payload: null,
+        replyToMessageId: detail.replyToMessageId ?? null,
+      });
     };
 
     window.addEventListener(
@@ -601,7 +682,7 @@ export function EncryptedDmComposerForm({
         handleRetryRequest as EventListener,
       );
     };
-  }, [conversationId, replyToMessageId]);
+  }, [conversationId, enqueue]);
 
   return (
     <form
@@ -642,30 +723,9 @@ export function EncryptedDmComposerForm({
         }
 
         event.preventDefault();
-        const sendSignature = `${conversationId}:${replyToMessageId ?? ''}:${body}`;
-
-        if (isSubmittingRef.current || sendSignatureRef.current === sendSignature) {
-          return;
-        }
-
-        isSubmittingRef.current = true;
-        sendSignatureRef.current = sendSignature;
-        setIsSendingEncrypted(true);
         setErrorMessage(null);
         setErrorCode(null);
         setErrorDebugDetails(null);
-
-        const clientId = crypto.randomUUID();
-        const optimisticCreatedAt = new Date().toISOString();
-
-        emitOptimisticThreadMessage({
-          body,
-          clientId,
-          conversationId,
-          createdAt: optimisticCreatedAt,
-          replyToMessageId: replyToMessageId ?? null,
-          status: 'pending',
-        });
 
         form.reset();
         window.requestAnimationFrame(() => {
@@ -677,123 +737,12 @@ export function EncryptedDmComposerForm({
 
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
         });
-
-        try {
-          let retriedAfterRepublish = false;
-          let retriedAfterBundleRefresh = false;
-
-          while (true) {
-            try {
-              const localRecord = await resolveLocalRecordForEncryptedDm(
-                currentUserId,
-                retriedAfterRepublish,
-              );
-              const recipientBundle = await fetchRecipientBundle(
-                conversationId,
-                recipientUserId,
-              );
-              const encryptedPayload = await encryptDmTextForRecipient({
-                conversationId,
-                clientId,
-                plaintext: body,
-                localRecord,
-                recipientBundle,
-              });
-
-              const sendResult = await postEncryptedDmMessage({
-                conversationId,
-                clientId,
-                replyToMessageId: replyToMessageId ?? null,
-                senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
-                kind: 'text',
-                contentMode: 'dm_e2ee_v1',
-                envelopes: encryptedPayload.envelopes,
-              });
-              if (
-                process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
-                typeof window !== 'undefined'
-              ) {
-                console.info('[dm-e2ee-send-client]', 'send:committed', {
-                  clientId,
-                  committedMessageId: sendResult.messageId ?? null,
-                  conversationId,
-                  envelopeCount: encryptedPayload.envelopes.length,
-                  envelopeRecipientDeviceIds: encryptedPayload.envelopes.map(
-                    (envelope) => envelope.recipientDeviceRecordId,
-                  ),
-                  replyToMessageId: replyToMessageId ?? null,
-                  senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
-                });
-              }
-              await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
-                clientId,
-                conversationId,
-                messageId: sendResult.messageId ?? null,
-                source: 'encrypted-dm-send',
-              });
-              if (sendResult.messageId) {
-                emitThreadHistorySyncRequest({
-                  conversationId,
-                  messageIds: [sendResult.messageId],
-                  reason: 'local-encrypted-send',
-                });
-              }
-              emitOptimisticThreadMessage({
-                body,
-                clientId,
-                conversationId,
-                createdAt: sendResult.timestamp ?? optimisticCreatedAt,
-                replyToMessageId: replyToMessageId ?? null,
-                status: 'sent',
-              });
-              break;
-            } catch (error) {
-              const code =
-                error instanceof Error && 'code' in error
-                  ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
-                  : null;
-
-              if (code === 'dm_e2ee_sender_device_stale' && !retriedAfterRepublish) {
-                retriedAfterRepublish = true;
-                await markLocalDmE2eeDeviceRegistrationStale(currentUserId);
-                continue;
-              }
-
-              if (code === 'dm_e2ee_prekey_conflict' && !retriedAfterBundleRefresh) {
-                retriedAfterBundleRefresh = true;
-                continue;
-              }
-
-              throw error;
-            }
-          }
-
-          clearReplyTargetFromCurrentUrl();
-        } catch (error) {
-          const nextCode =
-            error instanceof Error && 'code' in error
-              ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
-              : error instanceof Error && error.message === 'dm_e2ee_unsupported_browser'
-                ? 'dm_e2ee_unsupported_browser'
-                : null;
-          setErrorCode(nextCode);
-          const nextErrorMessage = getEncryptedDmErrorMessage(error, t);
-          setErrorMessage(nextErrorMessage);
-          setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
-          emitOptimisticThreadMessage({
-            body,
-            clientId,
-            conversationId,
-            createdAt: optimisticCreatedAt,
-            errorMessage: nextErrorMessage,
-            replyToMessageId: replyToMessageId ?? null,
-            status: 'failed',
-          });
-        } finally {
-          isSubmittingRef.current = false;
-          sendSignatureRef.current = null;
-          setIsSendingEncrypted(false);
-        }
+        enqueue({
+          body,
+          payload: null,
+          replyToMessageId: replyToMessageId ?? null,
+        });
+        clearReplyTargetFromCurrentUrl();
       }}
     >
       <input name="conversationId" type="hidden" value={conversationId} />
@@ -839,8 +788,6 @@ export function EncryptedDmComposerForm({
           <button
             aria-label={t.chat.sendMessage}
             className="button composer-button composer-button-icon"
-            disabled={isSendingEncrypted}
-            aria-busy={isSendingEncrypted}
             type="submit"
           >
             <span aria-hidden="true">➤</span>
@@ -1151,14 +1098,9 @@ export function EncryptedDmComposerForm({
           ) : null}
           <div className="composer-encryption-actions">
             {errorCode === 'dm_e2ee_prekey_conflict' ? (
-              <button
-                className="button button-secondary button-compact composer-recovery-button"
-                disabled={isSendingEncrypted}
-                onClick={() => formRef.current?.requestSubmit()}
-                type="button"
-              >
+              <p className="attachment-helper composer-debug-line">
                 {t.chat.retryEncryptedAction}
-              </button>
+              </p>
             ) : null}
             {(errorCode === 'dm_e2ee_sender_device_stale' ||
               errorCode === 'dm_e2ee_local_state_incomplete') ? (
@@ -1241,7 +1183,7 @@ export function EncryptedDmComposerForm({
             ) : null}
             <button
               className="button button-secondary button-compact composer-recovery-button"
-              disabled={isSendingEncrypted || isRefreshingSetup || isResettingSetup}
+              disabled={isRefreshingSetup || isResettingSetup}
               onClick={() => {
                 setErrorMessage(null);
                 setErrorCode(null);

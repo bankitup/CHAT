@@ -1,11 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { patchInboxConversationSummary } from '@/modules/messaging/realtime/inbox-summary-store';
 import { broadcastMessageCommitted } from '@/modules/messaging/realtime/live-refresh';
 import {
-  emitOptimisticThreadMessage,
-  type OptimisticThreadMessagePayload,
+  LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
+  type OptimisticThreadRetryPayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
@@ -13,6 +13,7 @@ import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { sendMessageMutationAction } from './actions';
+import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
 type MentionParticipant = {
   userId: string;
@@ -64,11 +65,94 @@ export function PlaintextChatComposerForm({
 }: PlaintextChatComposerFormProps) {
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
-  const isSubmittingRef = useRef(false);
-  const sendSignatureRef = useRef<string | null>(null);
   const [composerResetKey, setComposerResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
+  const { enqueue } = useConversationOutgoingQueue({
+    conversationId,
+    processItem: async (item) => {
+      const nextFormData = new FormData();
+      nextFormData.set('conversationId', conversationId);
+      nextFormData.set('clientId', item.clientId);
+
+      if (item.body.trim()) {
+        nextFormData.set('body', item.body);
+      }
+
+      if (item.replyToMessageId) {
+        nextFormData.set('replyToMessageId', item.replyToMessageId);
+      }
+
+      if (item.attachment) {
+        nextFormData.set('attachment', item.attachment);
+      }
+
+      const result = await sendMessageMutationAction(nextFormData);
+
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+
+      if (result.data.summary) {
+        patchInboxConversationSummary(result.data.summary);
+      }
+
+      patchThreadConversationReadState({
+        conversationId,
+        isCurrentUser: true,
+        lastReadMessageSeq: result.data.lastReadMessageSeq,
+      });
+      emitThreadHistorySyncRequest({
+        conversationId,
+        messageIds: [result.data.messageId],
+        reason: 'local-send-mutation',
+      });
+
+      await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+        clientId: result.data.clientId,
+        conversationId,
+        messageId: result.data.messageId,
+        source: 'plaintext-chat-send',
+      });
+    },
+    resolveErrorMessage: (error) =>
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : 'Unable to send that message right now.',
+  });
+
+  useEffect(() => {
+    const handleRetryRequest = (event: Event) => {
+      const detail = (event as CustomEvent<OptimisticThreadRetryPayload>).detail;
+
+      if (!detail || detail.conversationId !== conversationId) {
+        return;
+      }
+
+      enqueue({
+        attachment: detail.attachment ?? null,
+        attachmentLabel: detail.attachmentLabel ?? null,
+        body: detail.body,
+        clientId: detail.clientId,
+        createdAt: detail.createdAt,
+        payload: {
+          attachment: detail.attachment ?? null,
+        },
+        replyToMessageId: detail.replyToMessageId ?? null,
+      });
+    };
+
+    window.addEventListener(
+      LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
+      handleRetryRequest as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
+        handleRetryRequest as EventListener,
+      );
+    };
+  }, [conversationId, enqueue]);
 
   return (
     <form
@@ -78,9 +162,9 @@ export function PlaintextChatComposerForm({
         event.preventDefault();
 
         const form = event.currentTarget;
-        const formData = new FormData(form);
-        const body = String(formData.get('body') ?? '').trim();
-        const attachmentEntry = formData.get('attachment');
+        const nextFormData = new FormData(form);
+        const body = String(nextFormData.get('body') ?? '').trim();
+        const attachmentEntry = nextFormData.get('attachment');
         const attachment =
           attachmentEntry instanceof File && attachmentEntry.size > 0
             ? attachmentEntry
@@ -90,129 +174,32 @@ export function PlaintextChatComposerForm({
           return;
         }
 
-        const sendSignature = [
-          conversationId,
-          replyToMessageId ?? '',
-          body,
-          attachment?.name ?? '',
-          attachment ? String(attachment.size) : '',
-          attachment?.type ?? '',
-        ].join(':');
-
-        if (isSubmittingRef.current || sendSignatureRef.current === sendSignature) {
-          return;
-        }
-
-        isSubmittingRef.current = true;
-        sendSignatureRef.current = sendSignature;
-        setIsSending(true);
         setErrorMessage(null);
+        enqueue({
+          attachment,
+          attachmentLabel: attachment?.name ?? (attachment ? t.chat.attachment : null),
+          body,
+          payload: {
+            attachment,
+          },
+          replyToMessageId: replyToMessageId ?? null,
+        });
 
-        const canUseOptimisticTextOnly = Boolean(body && !attachment);
-        const optimisticClientId = crypto.randomUUID();
-        const optimisticCreatedAt = new Date().toISOString();
-        formData.set('clientId', optimisticClientId);
+        form.reset();
+        setComposerResetKey((current) => current + 1);
+        clearReplyTargetFromCurrentUrl();
 
-        if (canUseOptimisticTextOnly) {
-          emitOptimisticThreadMessage({
-            body,
-            clientId: optimisticClientId,
-            conversationId,
-            createdAt: optimisticCreatedAt,
-            replyToMessageId: replyToMessageId ?? null,
-            status: 'pending',
-          } satisfies OptimisticThreadMessagePayload);
-        }
+        window.requestAnimationFrame(() => {
+          const textarea =
+            formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
 
-        try {
-          const result = await sendMessageMutationAction(formData);
-
-          if (!result.ok) {
-            setErrorMessage(result.error);
-
-            if (canUseOptimisticTextOnly) {
-              emitOptimisticThreadMessage({
-                body,
-                clientId: optimisticClientId,
-                conversationId,
-                createdAt: optimisticCreatedAt,
-                errorMessage: result.error,
-                replyToMessageId: replyToMessageId ?? null,
-                status: 'failed',
-              } satisfies OptimisticThreadMessagePayload);
-            }
-
+          if (!textarea) {
             return;
           }
 
-          if (result.data.summary) {
-            patchInboxConversationSummary(result.data.summary);
-          }
-
-          patchThreadConversationReadState({
-            conversationId,
-            isCurrentUser: true,
-            lastReadMessageSeq: result.data.lastReadMessageSeq,
-          });
-          emitThreadHistorySyncRequest({
-            conversationId,
-            messageIds: [result.data.messageId],
-            reason: 'local-send-mutation',
-          });
-
-          if (canUseOptimisticTextOnly) {
-            emitOptimisticThreadMessage({
-              body,
-              clientId: result.data.clientId ?? optimisticClientId,
-              conversationId,
-              createdAt: result.data.timestamp ?? optimisticCreatedAt,
-              replyToMessageId: replyToMessageId ?? null,
-              status: 'sent',
-            } satisfies OptimisticThreadMessagePayload);
-          }
-
-          form.reset();
-          setComposerResetKey((current) => current + 1);
-          clearReplyTargetFromCurrentUrl();
-
-          window.requestAnimationFrame(() => {
-            const textarea =
-              formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
-
-            if (!textarea) {
-              return;
-            }
-
-            textarea.focus();
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-          });
-
-          await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
-            clientId: result.data.clientId,
-            conversationId,
-            messageId: result.data.messageId,
-            source: 'plaintext-chat-send',
-          });
-        } catch {
-          const fallbackError = 'Unable to send that message right now.';
-          setErrorMessage(fallbackError);
-
-          if (canUseOptimisticTextOnly) {
-            emitOptimisticThreadMessage({
-              body,
-              clientId: optimisticClientId,
-              conversationId,
-              createdAt: optimisticCreatedAt,
-              errorMessage: fallbackError,
-              replyToMessageId: replyToMessageId ?? null,
-              status: 'failed',
-            } satisfies OptimisticThreadMessagePayload);
-          }
-        } finally {
-          isSubmittingRef.current = false;
-          sendSignatureRef.current = null;
-          setIsSending(false);
-        }
+          textarea.focus();
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        });
       }}
     >
       <input name="conversationId" type="hidden" value={conversationId} />
@@ -260,7 +247,6 @@ export function PlaintextChatComposerForm({
           <button
             aria-label={t.chat.sendMessage}
             className="button composer-button composer-button-icon"
-            disabled={isSending}
             type="submit"
           >
             <span aria-hidden="true">➤</span>

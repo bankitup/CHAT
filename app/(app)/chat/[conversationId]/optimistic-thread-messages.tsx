@@ -8,6 +8,7 @@ type OptimisticThreadMessagesProps = {
   confirmedClientIds: string[];
   conversationId: string;
   labels: {
+    attachment: string;
     failed: string;
     justNow: string;
     retry: string;
@@ -135,8 +136,11 @@ export function OptimisticThreadMessages({
   return (
     <>
       {visibleItems.map((item) => {
-        const isPending = item.status === 'pending';
+        const isPending =
+          item.status === 'local_pending' || item.status === 'sending';
         const isFailed = item.status === 'failed';
+        const messagePreview =
+          item.body.trim() || item.attachmentLabel?.trim() || labels.attachment;
 
         return (
           <article
@@ -145,7 +149,7 @@ export function OptimisticThreadMessages({
           >
             <div className="message-card message-card-own message-card-optimistic">
               <div className="message-bubble message-bubble-own message-bubble-optimistic">
-                <p className="message-body">{item.body}</p>
+                <p className="message-body">{messagePreview}</p>
               </div>
               <span className="message-meta message-meta-own message-meta-optimistic">
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
@@ -166,9 +170,12 @@ export function OptimisticThreadMessages({
                           ),
                         );
                         emitOptimisticThreadRetry({
+                          attachment: item.attachment ?? null,
+                          attachmentLabel: item.attachmentLabel ?? null,
                           body: item.body,
                           clientId: item.clientId,
                           conversationId,
+                          createdAt: item.createdAt,
                           replyToMessageId: item.replyToMessageId ?? null,
                         });
                       }}
