@@ -2504,38 +2504,73 @@ main {
 }
 
 .inbox-settings-route-screen {
-  gap: 14px;
+  gap: 16px;
+  padding-bottom: calc(22px + env(safe-area-inset-bottom));
 }
 
 .inbox-settings-route-hero {
-  gap: 12px;
+  gap: 10px;
 }
 
 .inbox-settings-route-header {
   display: flex;
   align-items: center;
+  padding: 0 2px;
 }
 
 .inbox-settings-route-copy {
-  gap: 4px;
+  gap: 6px;
+  padding: 0 2px;
 }
 
 .inbox-settings-route-surface {
-  padding: 14px;
+  gap: 14px;
+  padding: 16px 16px 14px;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(247, 250, 255, 0.95));
+  box-shadow:
+    0 18px 44px rgba(17, 24, 39, 0.08),
+    0 6px 18px rgba(31, 111, 235, 0.035);
 }
 
 .inbox-settings-form {
-  gap: 12px;
+  gap: 18px;
 }
 
 .inbox-settings-block {
-  gap: 8px;
+  gap: 10px;
 }
 
 .inbox-settings-actions {
-  display: flex;
-  justify-content: flex-end;
+  position: sticky;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 2;
   padding-top: 2px;
+}
+
+.inbox-settings-actions-shell {
+  display: flex;
+  align-items: center;
+  justify-content: stretch;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(221, 228, 238, 0.88);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 255, 0.92));
+  box-shadow:
+    0 16px 34px rgba(17, 24, 39, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+}
+
+.inbox-settings-save-button {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 16px;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .settings-card {
@@ -3744,6 +3779,47 @@ main {
     linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(248, 251, 255, 0.78));
 }
 
+.inbox-settings-section {
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.inbox-settings-section + .inbox-settings-section {
+  margin-top: 0;
+  padding-top: 18px;
+  border-top: 1px solid rgba(221, 226, 232, 0.72);
+}
+
+.inbox-settings-section-copy {
+  gap: 4px;
+}
+
+.inbox-settings-section .card-title {
+  font-size: 1.02rem;
+  letter-spacing: -0.01em;
+}
+
+.inbox-settings-section .conversation-settings-note {
+  font-size: 0.78rem;
+  line-height: 1.42;
+  color: rgba(91, 100, 112, 0.82);
+}
+
+.inbox-settings-subsection {
+  padding-top: 12px;
+}
+
+.inbox-settings-subsection + .inbox-settings-subsection {
+  border-top: 1px solid rgba(221, 226, 232, 0.58);
+}
+
+.inbox-settings-subsection-copy {
+  gap: 4px;
+}
+
 .conversation-info-list + .conversation-settings-panel,
 .conversation-settings-panel + .conversation-settings-panel {
   margin-top: 10px;
@@ -4001,6 +4077,141 @@ main {
 
 .conversation-checkbox-list .checkbox-row + .checkbox-row {
   border-top: 1px solid rgba(221, 226, 232, 0.58);
+}
+
+.inbox-settings-option-list {
+  gap: 8px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.inbox-settings-option-list .checkbox-row + .checkbox-row {
+  border-top: 0;
+}
+
+.inbox-settings-option-row {
+  position: relative;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid rgba(221, 228, 238, 0.88);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(246, 249, 253, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 8px 20px rgba(17, 24, 39, 0.04);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.inbox-settings-option-row .checkbox-copy {
+  flex: 1 1 auto;
+}
+
+.inbox-settings-option-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.inbox-settings-option-mark {
+  position: relative;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid rgba(179, 189, 201, 0.96);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(17, 24, 39, 0.04);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.inbox-settings-option-input[type='checkbox'] + .inbox-settings-option-mark {
+  border-radius: 7px;
+}
+
+.inbox-settings-option-input[type='radio'] + .inbox-settings-option-mark::after,
+.inbox-settings-option-input[type='checkbox'] + .inbox-settings-option-mark::after {
+  content: '';
+  position: absolute;
+  inset: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  transform: translate(-50%, -50%) scale(0.2);
+  opacity: 0;
+  transition:
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+.inbox-settings-option-input[type='checkbox'] + .inbox-settings-option-mark::after {
+  width: 9px;
+  height: 5px;
+  border-radius: 0;
+  border: solid rgba(255, 255, 255, 0.98);
+  border-width: 0 0 2px 2px;
+  background: transparent;
+  transform: translate(-50%, -58%) rotate(-45deg) scale(0.35);
+}
+
+.inbox-settings-option-input:checked + .inbox-settings-option-mark {
+  border-color: rgba(31, 111, 235, 0.44);
+  background:
+    linear-gradient(180deg, rgba(56, 132, 247, 0.98), rgba(31, 111, 235, 0.98));
+  box-shadow:
+    0 8px 18px rgba(31, 111, 235, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.inbox-settings-option-input:checked + .inbox-settings-option-mark::after {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.inbox-settings-option-input[type='checkbox']:checked + .inbox-settings-option-mark::after {
+  transform: translate(-50%, -58%) rotate(-45deg) scale(1);
+}
+
+.inbox-settings-option-input:checked ~ .inbox-settings-option-copy .inbox-settings-option-title {
+  color: rgba(17, 24, 39, 0.96);
+}
+
+.inbox-settings-option-row:has(.inbox-settings-option-input:checked) {
+  border-color: rgba(31, 111, 235, 0.22);
+  background:
+    linear-gradient(180deg, rgba(244, 248, 255, 0.98), rgba(236, 243, 255, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 12px 24px rgba(31, 111, 235, 0.07);
+}
+
+.inbox-settings-option-row:has(.inbox-settings-option-input:focus-visible) {
+  border-color: rgba(31, 111, 235, 0.34);
+  box-shadow:
+    0 0 0 3px rgba(31, 111, 235, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 12px 24px rgba(31, 111, 235, 0.07);
+}
+
+.inbox-settings-option-title {
+  font-size: 0.91rem;
+  font-weight: 650;
+  line-height: 1.32;
 }
 
 .conversation-member-row .button-compact,
