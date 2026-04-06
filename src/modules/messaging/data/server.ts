@@ -4209,79 +4209,15 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       )
       .in('message_id', uniqueMessageIds);
 
-  let response = await lookupEnvelopes(supabase);
-  let usedPrivilegedEnvelopeLookup = false;
-
-  const authEnvelopeRowCount = Array.isArray(response.data)
-    ? response.data.length
-    : 0;
-  const shouldRetryWithPrivilegedEnvelopeLookup =
-    serviceRoleSupabase &&
-    (isSupabasePermissionDeniedError(response.error) ||
-      (!response.error && authEnvelopeRowCount < uniqueMessageIds.length));
-
-  if (shouldRetryWithPrivilegedEnvelopeLookup) {
-    logDiagnostics(
-      response.error
-        ? 'envelopes:auth-error-fallback'
-        : 'envelopes:auth-partial-fallback',
-      {
-        activeDeviceRecordId,
-        authEnvelopeRowCount,
-        currentUserId: input.userId,
-        debugRequestId: input.debugRequestId ?? null,
-        errorMessage: response.error?.message ?? null,
-        requestedMessageCount: uniqueMessageIds.length,
-      },
-    );
-
-    const privilegedResponse = await lookupEnvelopes(serviceRoleSupabase);
-    const privilegedEnvelopeRowCount = Array.isArray(privilegedResponse.data)
-      ? privilegedResponse.data.length
-      : 0;
-
-    if (
-      !privilegedResponse.error &&
-      (response.error || privilegedEnvelopeRowCount > authEnvelopeRowCount)
-    ) {
-      response = privilegedResponse;
-      usedPrivilegedEnvelopeLookup = true;
-    }
-  }
-
-  if (response.error) {
-    if (
-      isMissingRelationErrorMessage(
-        response.error.message,
-        'message_e2ee_envelopes',
-      ) ||
-      isMissingColumnErrorMessage(response.error.message, 'sender_device_id') ||
-      isMissingColumnErrorMessage(response.error.message, 'ciphertext')
-    ) {
-      return {
-        activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
-        activeDeviceRecordId,
-        envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
-        selectionSource: activeDevice?.selectionSource ?? null,
-      };
-    }
-
-    throw new Error(response.error.message);
-  }
-
-  if (!activeDeviceRecordId) {
-    logDiagnostics('envelopes:no-active-device', {
-      currentUserId: input.userId,
-      debugRequestId: input.debugRequestId ?? null,
-    });
-  }
-
-  let malformedEnvelopeCount = 0;
-  let selectedCurrentDeviceEnvelopeCount = 0;
-  let selectedSenderSelfEnvelopeCount = 0;
-  const envelopes = ((response.data ?? []) as MessageE2eeEnvelopeRow[]).flatMap<
-    [string, StoredDmE2eeEnvelope]
-  >((row) => {
+  const selectReadableEnvelopes = (
+    rows: MessageE2eeEnvelopeRow[] | null | undefined,
+  ) => {
+    let malformedEnvelopeCount = 0;
+    let selectedCurrentDeviceEnvelopeCount = 0;
+    let selectedSenderSelfEnvelopeCount = 0;
+    const selectedEnvelopes = (rows ?? []).flatMap<
+      [string, StoredDmE2eeEnvelope]
+    >((row) => {
       const messageRecord = normalizeJoinedRecord(row.messages);
       const senderDeviceRecordId = String(
         messageRecord?.sender_device_id ?? '',
@@ -4337,17 +4273,109 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
         } satisfies StoredDmE2eeEnvelope,
       ]];
     });
+
+    return {
+      envelopeMap: new Map(selectedEnvelopes),
+      malformedEnvelopeCount,
+      selectedCurrentDeviceEnvelopeCount,
+      selectedSenderSelfEnvelopeCount,
+    };
+  };
+
+  let response = await lookupEnvelopes(supabase);
+  let usedPrivilegedEnvelopeLookup = false;
+  const authEnvelopeRowCount = Array.isArray(response.data)
+    ? response.data.length
+    : 0;
+  let selectedEnvelopeResult = selectReadableEnvelopes(
+    (response.data ?? null) as MessageE2eeEnvelopeRow[] | null,
+  );
+  const authSelectedEnvelopeCount = selectedEnvelopeResult.envelopeMap.size;
+  const shouldRetryWithPrivilegedEnvelopeLookup =
+    serviceRoleSupabase &&
+    (isSupabasePermissionDeniedError(response.error) ||
+      (!response.error &&
+        authSelectedEnvelopeCount < uniqueMessageIds.length));
+
+  if (shouldRetryWithPrivilegedEnvelopeLookup) {
+    logDiagnostics(
+      response.error
+        ? 'envelopes:auth-error-fallback'
+        : 'envelopes:auth-selection-fallback',
+      {
+        activeDeviceRecordId,
+        authEnvelopeRowCount,
+        authSelectedEnvelopeCount,
+        currentUserId: input.userId,
+        debugRequestId: input.debugRequestId ?? null,
+        errorMessage: response.error?.message ?? null,
+        requestedMessageCount: uniqueMessageIds.length,
+      },
+    );
+
+    const privilegedResponse = await lookupEnvelopes(serviceRoleSupabase);
+    const privilegedEnvelopeRowCount = Array.isArray(privilegedResponse.data)
+      ? privilegedResponse.data.length
+      : 0;
+    const privilegedSelectedEnvelopeResult = selectReadableEnvelopes(
+      (privilegedResponse.data ?? null) as MessageE2eeEnvelopeRow[] | null,
+    );
+    const privilegedSelectedEnvelopeCount =
+      privilegedSelectedEnvelopeResult.envelopeMap.size;
+
+    if (
+      !privilegedResponse.error &&
+      (response.error ||
+        privilegedSelectedEnvelopeCount > authSelectedEnvelopeCount ||
+        (privilegedSelectedEnvelopeCount === authSelectedEnvelopeCount &&
+          privilegedEnvelopeRowCount > authEnvelopeRowCount))
+    ) {
+      response = privilegedResponse;
+      selectedEnvelopeResult = privilegedSelectedEnvelopeResult;
+      usedPrivilegedEnvelopeLookup = true;
+    }
+  }
+
+  if (response.error) {
+    if (
+      isMissingRelationErrorMessage(
+        response.error.message,
+        'message_e2ee_envelopes',
+      ) ||
+      isMissingColumnErrorMessage(response.error.message, 'sender_device_id') ||
+      isMissingColumnErrorMessage(response.error.message, 'ciphertext')
+    ) {
+      return {
+        activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
+        activeDeviceRecordId,
+        envelopesByMessage: new Map<string, StoredDmE2eeEnvelope>(),
+        selectionSource: activeDevice?.selectionSource ?? null,
+      };
+    }
+
+    throw new Error(response.error.message);
+  }
+
+  if (!activeDeviceRecordId) {
+    logDiagnostics('envelopes:no-active-device', {
+      currentUserId: input.userId,
+      debugRequestId: input.debugRequestId ?? null,
+    });
+  }
   logDiagnostics('envelopes:loaded', {
     currentUserId: input.userId,
     activeDeviceRecordId,
     activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
     authEnvelopeRowCount,
+    authSelectedEnvelopeCount,
     debugRequestId: input.debugRequestId ?? null,
-    malformedEnvelopeCount,
-    selectedCurrentDeviceEnvelopeCount,
-    selectedSenderSelfEnvelopeCount,
+    malformedEnvelopeCount: selectedEnvelopeResult.malformedEnvelopeCount,
+    selectedCurrentDeviceEnvelopeCount:
+      selectedEnvelopeResult.selectedCurrentDeviceEnvelopeCount,
+    selectedSenderSelfEnvelopeCount:
+      selectedEnvelopeResult.selectedSenderSelfEnvelopeCount,
     requestedMessageCount: uniqueMessageIds.length,
-    envelopeCount: envelopes.length,
+    envelopeCount: selectedEnvelopeResult.envelopeMap.size,
     selectionSource: activeDevice?.selectionSource ?? null,
     usedPrivilegedEnvelopeLookup,
   });
@@ -4355,7 +4383,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   return {
     activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
     activeDeviceRecordId,
-    envelopesByMessage: new Map(envelopes),
+    envelopesByMessage: selectedEnvelopeResult.envelopeMap,
     selectionSource: activeDevice?.selectionSource ?? null,
   };
 }
