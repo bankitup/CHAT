@@ -180,6 +180,57 @@ function logThreadRenderDiagnostics(
   console.info('[chat-thread-render]', stage, details);
 }
 
+function logThreadRenderCheckpoint(
+  stage: string,
+  details?: Record<string, unknown>,
+  level: 'info' | 'error' = 'info',
+) {
+  if (details) {
+    console[level]('[chat-thread-checkpoint]', stage, details);
+    return;
+  }
+
+  console[level]('[chat-thread-checkpoint]', stage);
+}
+
+function getThreadRenderErrorDiagnostics(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      errorMessage: error.message,
+      errorName: error.name,
+    };
+  }
+
+  return {
+    errorMessage: String(error),
+    errorName: null,
+  };
+}
+
+async function resolveThreadRenderStage<T>(
+  stage: string,
+  details: Record<string, unknown>,
+  resolver: () => Promise<T> | T,
+) {
+  logThreadRenderCheckpoint(`${stage}:started`, details);
+  logThreadRenderDiagnostics(`${stage}:started`, details);
+
+  try {
+    const result = await resolver();
+    logThreadRenderCheckpoint(`${stage}:completed`, details);
+    logThreadRenderDiagnostics(`${stage}:completed`, details);
+    return result;
+  } catch (error) {
+    const errorDetails = {
+      ...details,
+      ...getThreadRenderErrorDiagnostics(error),
+    };
+    logThreadRenderCheckpoint(`${stage}:failed`, errorDetails, 'error');
+    console.error('[chat-thread-render]', `${stage}:failed`, errorDetails);
+    throw error;
+  }
+}
+
 function getThreadDeploymentMarker() {
   return {
     deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
@@ -530,28 +581,94 @@ export default async function ChatPage({
       ? crypto.randomUUID()
       : null;
   const threadDeploymentMarker = getThreadDeploymentMarker();
+  logThreadRenderCheckpoint('conversation-loaded', {
+    ...threadDeploymentMarker,
+    activeSpaceId,
+    conversationId,
+    debugRequestId: threadRenderRequestId,
+    hasSettingsSavedState,
+    isSettingsOpen,
+    isV1TestBypass,
+    kind: conversation.kind,
+    requestedHistoryTargetMessageCount: requestedHistoryTargetMessageIds.length,
+    userId: user.id,
+  });
   const [
     threadHistorySnapshot,
     readState,
     memberReadStates,
     participants,
-  ] =
-    await Promise.all([
-      getConversationHistorySnapshot({
+  ] = await Promise.all([
+    resolveThreadRenderStage(
+      'history-snapshot-load',
+      {
         conversationId,
         debugRequestId: threadRenderRequestId,
-        limit: threadHistoryLimit,
+        kind: conversation.kind,
+        requestedHistoryTargetMessageCount:
+          requestedHistoryTargetMessageIds.length,
+        threadHistoryLimit,
+      },
+      () =>
+        getConversationHistorySnapshot({
+          conversationId,
+          debugRequestId: threadRenderRequestId,
+          limit: threadHistoryLimit,
+          userId: user.id,
+        }),
+    ),
+    resolveThreadRenderStage(
+      'read-state-load',
+      {
+        conversationId,
+        debugRequestId: threadRenderRequestId,
         userId: user.id,
-      }),
-      getConversationReadState(conversationId, user.id),
-      getConversationMemberReadStates(conversationId),
-      getConversationParticipants(conversationId),
-    ]);
+      },
+      () => getConversationReadState(conversationId, user.id),
+    ),
+    resolveThreadRenderStage(
+      'member-read-states-load',
+      {
+        conversationId,
+        debugRequestId: threadRenderRequestId,
+        kind: conversation.kind,
+      },
+      () => getConversationMemberReadStates(conversationId),
+    ),
+    resolveThreadRenderStage(
+      'participants-load',
+      {
+        conversationId,
+        debugRequestId: threadRenderRequestId,
+        kind: conversation.kind,
+      },
+      () => getConversationParticipants(conversationId),
+    ),
+  ]);
   const { hasMoreOlder, messages } = threadHistorySnapshot;
+  logThreadRenderCheckpoint('thread-history-loaded', {
+    ...threadDeploymentMarker,
+    conversationId,
+    debugRequestId: threadRenderRequestId,
+    hasMoreOlder,
+    kind: conversation.kind,
+    messageCount: messages.length,
+    oldestMessageSeq: threadHistorySnapshot.oldestMessageSeq,
+  });
   // Temporary v1 unblocker: do not trigger space_members-backed available user lookup in TEST bypass flow.
   const availableUsers =
     conversation.kind === 'group' && isSettingsOpen && !isV1TestBypass
-      ? await getAvailableUsers(user.id, { spaceId: activeSpaceId })
+      ? await resolveThreadRenderStage(
+          'available-users-load',
+          {
+            activeSpaceId,
+            conversationId,
+            debugRequestId: threadRenderRequestId,
+            kind: conversation.kind,
+            userId: user.id,
+          },
+          () => getAvailableUsers(user.id, { spaceId: activeSpaceId }),
+        )
       : [];
   const messageIds = messages.map((message) => message.id);
   const firstMessage = messages[0] ?? null;
@@ -572,17 +689,50 @@ export default async function ChatPage({
     ].filter((userId) => !snapshotSenderProfileIds.has(userId)),
   );
   const supplementalSenderProfiles = supplementalSenderProfileIds.length
-    ? await getMessageSenderProfiles(supplementalSenderProfileIds)
+    ? await resolveThreadRenderStage(
+        'sender-profiles-supplemental-load',
+        {
+          conversationId,
+          debugRequestId: threadRenderRequestId,
+          kind: conversation.kind,
+          participantCount: participants.length,
+          requestedProfileCount: supplementalSenderProfileIds.length,
+        },
+        () => getMessageSenderProfiles(supplementalSenderProfileIds),
+      )
     : [];
   const senderProfiles = [
     ...snapshotSenderProfiles,
     ...supplementalSenderProfiles,
   ];
-  const reactionsByMessage = new Map(
-    threadHistorySnapshot.reactionsByMessage.map((entry) => [
-      entry.messageId,
-      entry.reactions,
-    ] as const),
+  logThreadRenderCheckpoint('thread-row-mapping:started', {
+    conversationId,
+    debugRequestId: threadRenderRequestId,
+    kind: conversation.kind,
+    messageCount: messages.length,
+  });
+  const reactionsByMessage = await resolveThreadRenderStage(
+    'reaction-mapping',
+    {
+      conversationId,
+      debugRequestId: threadRenderRequestId,
+      kind: conversation.kind,
+      messageCount: messages.length,
+      messagesWithReactionsCount: threadHistorySnapshot.reactionsByMessage.filter(
+        (entry) => entry.reactions.length > 0,
+      ).length,
+      reactionGroupCount: threadHistorySnapshot.reactionsByMessage.reduce(
+        (count, entry) => count + entry.reactions.length,
+        0,
+      ),
+    },
+    () =>
+      new Map(
+        threadHistorySnapshot.reactionsByMessage.map((entry) => [
+          entry.messageId,
+          entry.reactions,
+        ] as const),
+      ),
   );
   const e2eeEnvelopeHistory = {
     activeDeviceCreatedAt:
@@ -607,6 +757,49 @@ export default async function ChatPage({
       entry.messageId,
       entry.hint,
     ] as const),
+  );
+  await resolveThreadRenderStage(
+    'attachment-voice-mapping',
+    {
+      conversationId,
+      debugRequestId: threadRenderRequestId,
+      kind: conversation.kind,
+      messageCount: messages.length,
+      messagesWithAttachmentsCount: threadHistorySnapshot.attachmentsByMessage.filter(
+        (entry) => entry.attachments.length > 0,
+      ).length,
+      totalAttachmentCount: threadHistorySnapshot.attachmentsByMessage.reduce(
+        (count, entry) => count + entry.attachments.length,
+        0,
+      ),
+      voiceAttachmentCount: threadHistorySnapshot.attachmentsByMessage.reduce(
+        (count, entry) =>
+          count +
+          entry.attachments.filter((attachment) => attachment.isVoiceMessage)
+            .length,
+        0,
+      ),
+    },
+    () => null,
+  );
+  await resolveThreadRenderStage(
+    'encrypted-unavailable-mapping',
+    {
+      conversationId,
+      debugRequestId: threadRenderRequestId,
+      encryptedEnvelopeCount: e2eeEnvelopesByMessage.size,
+      encryptedHintCount: encryptedHistoryHintsByMessage.size,
+      encryptedMessageCount: encryptedMessageIds.length,
+      kind: conversation.kind,
+      missingEnvelopeCount: encryptedMessageIds.filter(
+        (messageId) => !e2eeEnvelopesByMessage.has(messageId),
+      ).length,
+      unavailableEncryptedCount: encryptedMessageIds.filter((messageId) => {
+        const hint = encryptedHistoryHintsByMessage.get(messageId);
+        return hint?.code === 'missing-envelope' || hint?.code === 'policy-blocked-history';
+      }).length,
+    },
+    () => null,
   );
   if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' && encryptedMessageIds.length > 0) {
     const missingEnvelopeMessageIds = encryptedMessageIds.filter(
@@ -682,62 +875,124 @@ export default async function ChatPage({
       vercelUrl: threadDeploymentMarker.vercelUrl,
     });
   }
-  const senderNames = new Map<string, string>(
-    senderProfiles.map((profile) => [
-      profile.userId,
-      resolvePublicIdentityLabel(profile, t.chat.unknownUser),
-    ] as const),
-  );
-  const senderIdentities = new Map<string, (typeof senderProfiles)[number]>(
-    senderProfiles.map((profile) => [profile.userId, profile] as const),
-  );
-  const otherParticipants = participants.filter(
-    (participant) => participant.userId !== user.id,
-  );
-  const otherParticipantLabels = otherParticipants.map((participant) =>
-    resolvePublicIdentityLabel(
-      senderIdentities.get(participant.userId),
-      t.chat.unknownUser,
-    ),
-  );
-  const directParticipantIdentity = otherParticipants[0]
-    ? senderIdentities.get(otherParticipants[0].userId)
-    : null;
-  const conversationDisplayTitle = getConversationDisplayName({
-    kind: conversation.kind === 'group' ? conversation.kind : null,
-    title: conversation.title,
-    participantLabels:
-      conversation.kind === 'group' ? otherParticipantLabels : [],
-    fallbackTitles: {
-      group: language === 'ru' ? 'Новая группа' : 'New group',
+  const {
+    currentUserDisplayLabel,
+    directConversationDisplayTitle,
+    directParticipantIdentity,
+    groupMemberSummary,
+    otherParticipants,
+    senderIdentities,
+    senderNames,
+  } = await resolveThreadRenderStage(
+    'shared-identity-derive',
+    {
+      conversationId,
+      debugRequestId: threadRenderRequestId,
+      kind: conversation.kind,
+      messageCount: messages.length,
+      participantCount: participants.length,
+      senderProfileCount: senderProfiles.length,
     },
-  });
-  const directConversationDisplayTitle =
-    conversation.kind === 'dm'
-      ? getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser)
-      : conversationDisplayTitle;
-  const currentUserDisplayLabel = resolvePublicIdentityLabel(
-    senderIdentities.get(user.id),
-    t.chat.unknownUser,
+    () => {
+      const nextSenderNames = new Map<string, string>(
+        senderProfiles.map((profile) => [
+          profile.userId,
+          resolvePublicIdentityLabel(profile, t.chat.unknownUser),
+        ] as const),
+      );
+      const nextSenderIdentities = new Map<string, (typeof senderProfiles)[number]>(
+        senderProfiles.map((profile) => [profile.userId, profile] as const),
+      );
+      const nextOtherParticipants = participants.filter(
+        (participant) => participant.userId !== user.id,
+      );
+      const nextOtherParticipantLabels = nextOtherParticipants.map((participant) =>
+        resolvePublicIdentityLabel(
+          nextSenderIdentities.get(participant.userId),
+          t.chat.unknownUser,
+        ),
+      );
+      const nextDirectParticipantIdentity = nextOtherParticipants[0]
+        ? nextSenderIdentities.get(nextOtherParticipants[0].userId)
+        : null;
+      const nextConversationDisplayTitle = getConversationDisplayName({
+        kind: conversation.kind === 'group' ? conversation.kind : null,
+        title: conversation.title,
+        participantLabels:
+          conversation.kind === 'group' ? nextOtherParticipantLabels : [],
+        fallbackTitles: {
+          group: language === 'ru' ? 'Новая группа' : 'New group',
+        },
+      });
+      const nextDirectConversationDisplayTitle =
+        conversation.kind === 'dm'
+          ? getDirectMessageDisplayName(
+              nextOtherParticipantLabels,
+              t.chat.unknownUser,
+            )
+          : nextConversationDisplayTitle;
+      const nextCurrentUserDisplayLabel = resolvePublicIdentityLabel(
+        nextSenderIdentities.get(user.id),
+        t.chat.unknownUser,
+      );
+      const nextGroupMemberSummary =
+        conversation.kind === 'group'
+          ? formatGroupMemberSummary(
+              participants.map((participant) => participant.userId),
+              user.id,
+              nextSenderNames,
+              language,
+              t,
+            )
+          : null;
+
+      return {
+        currentUserDisplayLabel: nextCurrentUserDisplayLabel,
+        directConversationDisplayTitle: nextDirectConversationDisplayTitle,
+        directParticipantIdentity: nextDirectParticipantIdentity,
+        groupMemberSummary: nextGroupMemberSummary,
+        otherParticipants: nextOtherParticipants,
+        senderIdentities: nextSenderIdentities,
+        senderNames: nextSenderNames,
+      };
+    },
   );
-  const groupMemberSummary =
-    conversation.kind === 'group'
-      ? formatGroupMemberSummary(
-          participants.map((participant) => participant.userId),
-          user.id,
-          senderNames,
-          language,
-          t,
-        )
-      : null;
   const attachmentHelpText =
     language === 'ru'
       ? 'Поддерживаются JPG, PNG, WEBP, GIF, PDF и TXT до 10 МБ.'
       : CHAT_ATTACHMENT_HELP_TEXT;
   const attachmentMaxSizeLabel = language === 'ru' ? 'До 10 МБ' : 'Up to 10 MB';
-  const activeReplyTarget = query.replyToMessageId
-    ? messagesById.get(query.replyToMessageId) ?? null
-    : null;
+  const replyMessageIds = messages.flatMap((message) =>
+    message.reply_to_message_id ? [message.reply_to_message_id] : [],
+  );
+  const activeReplyTarget = await resolveThreadRenderStage(
+    'reply-mapping',
+    {
+      conversationId,
+      debugRequestId: threadRenderRequestId,
+      kind: conversation.kind,
+      missingReplyTargetCount: replyMessageIds.filter(
+        (replyMessageId) => !messagesById.has(replyMessageId),
+      ).length,
+      missingReplyTargetSample: messages
+        .filter(
+          (message) =>
+            message.reply_to_message_id &&
+            !messagesById.has(message.reply_to_message_id),
+        )
+        .slice(0, 5)
+        .map((message) => ({
+          messageId: message.id,
+          replyToMessageId: message.reply_to_message_id,
+        })),
+      replyReferenceCount: replyMessageIds.length,
+      requestedReplyTargetId: query.replyToMessageId?.trim() || null,
+    },
+    () =>
+      query.replyToMessageId
+        ? messagesById.get(query.replyToMessageId) ?? null
+        : null,
+  );
   const activeEditMessageId = query.editMessageId?.trim() || null;
   const activeDeleteMessageId = query.deleteMessageId?.trim() || null;
   const activeActionMessageId = query.actionMessageId?.trim() || null;
@@ -928,6 +1183,16 @@ export default async function ChatPage({
       unreadSeparatorFallbackUsed,
     });
   }
+  logThreadRenderCheckpoint('final-thread-props-prepared', {
+    ...threadDeploymentMarker,
+    conversationId,
+    debugRequestId: threadRenderRequestId,
+    hasActiveActionMessage: Boolean(activeActionMessage),
+    hasActiveReplyTarget: Boolean(activeReplyTarget),
+    kind: conversation.kind,
+    messageCount: messages.length,
+    participantCount: participants.length,
+  });
 
   return (
     <section className="stack chat-screen">

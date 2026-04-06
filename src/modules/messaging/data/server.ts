@@ -845,6 +845,18 @@ function logChatHistoryDiagnostics(
   console[level]('[chat-history-load]', stage);
 }
 
+function logChatThreadSnapshotCheckpoint(
+  stage: string,
+  details?: Record<string, unknown>,
+) {
+  if (details) {
+    console.info('[chat-thread-snapshot]', stage, details);
+    return;
+  }
+
+  console.info('[chat-thread-snapshot]', stage);
+}
+
 function logSpaceMembershipDiagnostics(
   stage: string,
   details?: Record<string, unknown>,
@@ -2202,37 +2214,94 @@ async function getActiveConversationMembershipRows(
     return [] as ConversationMembershipRow[];
   }
 
-  const select = options?.includeRole
-    ? 'conversation_id, user_id, role, state'
-    : 'conversation_id, user_id';
+  const buildMembershipRowsQuery = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+    includeRole: boolean,
+  ) => {
+    const select = includeRole
+      ? 'conversation_id, user_id, role'
+      : 'conversation_id, user_id';
+
+    return client
+      .from('conversation_members')
+      .select(select)
+      .in('conversation_id', uniqueConversationIds)
+      .eq('state', 'active');
+  };
   const supabase = await createSupabaseServerClient();
-  const authResponse = await supabase
-    .from('conversation_members')
-    .select(select)
-    .in('conversation_id', uniqueConversationIds)
-    .eq('state', 'active');
+  const allowRoleFallback = options?.includeRole === true;
+  let authResponse = await buildMembershipRowsQuery(
+    supabase,
+    options?.includeRole === true,
+  );
+
+  if (
+    authResponse.error &&
+    allowRoleFallback &&
+    isMissingColumnErrorMessage(authResponse.error.message, 'role')
+  ) {
+    authResponse = await buildMembershipRowsQuery(supabase, false);
+  }
+
+  let baseRows: ConversationMembershipRow[] = [];
 
   if (authResponse.error) {
-    throw new Error(authResponse.error.message);
+    const serviceSupabase = createSupabaseServiceRoleClient();
+
+    if (!serviceSupabase || !isSupabasePermissionDeniedError(authResponse.error)) {
+      throw new Error(authResponse.error.message);
+    }
+
+    let serviceResponse = await buildMembershipRowsQuery(
+      serviceSupabase as Awaited<ReturnType<typeof createSupabaseServerClient>>,
+      options?.includeRole === true,
+    );
+
+    if (
+      serviceResponse.error &&
+      allowRoleFallback &&
+      isMissingColumnErrorMessage(serviceResponse.error.message, 'role')
+    ) {
+      serviceResponse = await buildMembershipRowsQuery(
+        serviceSupabase as Awaited<ReturnType<typeof createSupabaseServerClient>>,
+        false,
+      );
+    }
+
+    if (serviceResponse.error) {
+      throw new Error(serviceResponse.error.message);
+    }
+
+    baseRows = (serviceResponse.data ?? []) as unknown as ConversationMembershipRow[];
+  } else {
+    baseRows = (authResponse.data ?? []) as unknown as ConversationMembershipRow[];
   }
 
   const mergedRows = new Map<
     string,
     ConversationMembershipRow
   >(
-    ((authResponse.data ?? []) as unknown as ConversationMembershipRow[]).map(
-      (row) => [`${row.conversation_id}:${row.user_id}`, row] as const,
-    ),
+    baseRows.map((row) => [`${row.conversation_id}:${row.user_id}`, row] as const),
   );
 
   const serviceSupabase = createSupabaseServiceRoleClient();
 
   if (serviceSupabase) {
-    const serviceResponse = await serviceSupabase
-      .from('conversation_members')
-      .select(select)
-      .in('conversation_id', uniqueConversationIds)
-      .eq('state', 'active');
+    let serviceResponse = await buildMembershipRowsQuery(
+      serviceSupabase as Awaited<ReturnType<typeof createSupabaseServerClient>>,
+      options?.includeRole === true,
+    );
+
+    if (
+      serviceResponse.error &&
+      allowRoleFallback &&
+      isMissingColumnErrorMessage(serviceResponse.error.message, 'role')
+    ) {
+      serviceResponse = await buildMembershipRowsQuery(
+        serviceSupabase as Awaited<ReturnType<typeof createSupabaseServerClient>>,
+        false,
+      );
+    }
 
     if (!serviceResponse.error) {
       for (const row of (serviceResponse.data ?? []) as unknown as ConversationMembershipRow[]) {
@@ -5920,6 +5989,53 @@ export async function getConversationHistorySnapshot(input: {
   const senderProfileIds = Array.from(
     new Set(messages.map((message) => message.sender_id ?? '').filter(Boolean)),
   );
+  logChatThreadSnapshotCheckpoint('history-loaded', {
+    afterSeqExclusive: input.afterSeqExclusive ?? null,
+    beforeSeqExclusive: input.beforeSeqExclusive ?? null,
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    encryptedMessageCount: encryptedMessageIds.length,
+    hasMoreOlder,
+    messageCount: messages.length,
+    messageIdsCount: messageIds.length,
+    oldestMessageSeq:
+      messages.length > 0
+        ? Number(
+            typeof messages[0]?.seq === 'number'
+              ? messages[0]?.seq
+              : Number(messages[0]?.seq ?? 0),
+          )
+        : null,
+    senderProfileIdCount: senderProfileIds.length,
+    visibleFromSeq,
+  });
+  logChatThreadSnapshotCheckpoint('shared-substeps-started', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    encryptedMessageCount: encryptedMessageIds.length,
+    messageCount: messages.length,
+    senderProfileIdCount: senderProfileIds.length,
+  });
+  logChatThreadSnapshotCheckpoint('sender-profiles-started', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    senderProfileIdCount: senderProfileIds.length,
+  });
+  logChatThreadSnapshotCheckpoint('reaction-mapping-started', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    messageIdsCount: messageIds.length,
+  });
+  logChatThreadSnapshotCheckpoint('attachment-voice-mapping-started', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    messageIdsCount: messageIds.length,
+  });
+  logChatThreadSnapshotCheckpoint('encrypted-envelope-load-started', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    encryptedMessageCount: encryptedMessageIds.length,
+  });
   const [
     senderProfilesResult,
     reactionsByMessageResult,
@@ -5970,18 +6086,56 @@ export async function getConversationHistorySnapshot(input: {
     'sender-profiles',
     senderProfilesResult,
   );
+  logChatThreadSnapshotCheckpoint('sender-profiles-completed', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    profileCount: senderProfiles.length,
+  });
   const reactionsByMessage = unwrapSnapshotSubstep(
     'reactions',
     reactionsByMessageResult,
   );
+  logChatThreadSnapshotCheckpoint('reaction-mapping-completed', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    messagesWithReactionsCount: Array.from(reactionsByMessage.values()).filter(
+      (reactions) => reactions.length > 0,
+    ).length,
+    reactionGroupCount: Array.from(reactionsByMessage.values()).reduce(
+      (count, reactions) => count + reactions.length,
+      0,
+    ),
+  });
   const attachmentsByMessage = unwrapSnapshotSubstep(
     'attachments',
     attachmentsByMessageResult,
   );
+  logChatThreadSnapshotCheckpoint('attachment-voice-mapping-completed', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    messagesWithAttachmentsCount: Array.from(attachmentsByMessage.values()).filter(
+      (attachments) => attachments.length > 0,
+    ).length,
+    totalAttachmentCount: Array.from(attachmentsByMessage.values()).reduce(
+      (count, attachments) => count + attachments.length,
+      0,
+    ),
+    voiceAttachmentCount: Array.from(attachmentsByMessage.values()).reduce(
+      (count, attachments) =>
+        count + attachments.filter((attachment) => attachment.isVoiceMessage).length,
+      0,
+    ),
+  });
   const e2eeEnvelopeHistory = unwrapSnapshotSubstep(
     'dm-e2ee-envelopes',
     e2eeEnvelopeHistoryResult,
   );
+  logChatThreadSnapshotCheckpoint('encrypted-unavailable-mapping-started', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    encryptedEnvelopeCount: e2eeEnvelopeHistory.envelopesByMessage.size,
+    encryptedMessageCount: encryptedMessageIds.length,
+  });
   const messagesById = new Map(messages.map((message) => [message.id, message]));
   const currentUserJoinedAtDate = parseConversationHistoryDate(
     currentUserConversationJoinedAt,
@@ -6023,6 +6177,19 @@ export async function getConversationHistorySnapshot(input: {
       messageId,
     };
   });
+  logChatThreadSnapshotCheckpoint('encrypted-unavailable-mapping-completed', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    encryptedEnvelopeCount: e2eeEnvelopeHistory.envelopesByMessage.size,
+    encryptedHintCount: encryptedHistoryHints.length,
+    encryptedMessageCount: encryptedMessageIds.length,
+    missingEnvelopeCount: encryptedHistoryHints.filter(
+      (entry) => entry.hint.code === 'missing-envelope',
+    ).length,
+    policyBlockedCount: encryptedHistoryHints.filter(
+      (entry) => entry.hint.code === 'policy-blocked-history',
+    ).length,
+  });
 
   if (process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
     console.info('[chat-history-load]', 'dm-e2ee-history-snapshot', {
@@ -6036,6 +6203,14 @@ export async function getConversationHistorySnapshot(input: {
       userId: input.userId,
     });
   }
+
+  logChatThreadSnapshotCheckpoint('snapshot-props-prepared', {
+    conversationId: input.conversationId,
+    debugRequestId: input.debugRequestId ?? null,
+    hasMoreOlder,
+    messageCount: messages.length,
+    senderProfileCount: senderProfiles.length,
+  });
 
   return {
     attachmentsByMessage: messageIds.map((messageId) => ({
