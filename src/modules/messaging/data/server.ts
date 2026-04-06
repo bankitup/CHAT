@@ -4047,12 +4047,56 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   });
 
   const supabase = await createSupabaseServerClient();
-  const response = await supabase
-    .from('message_e2ee_envelopes')
-    .select(
-      'message_id, recipient_device_id, envelope_type, ciphertext, used_one_time_prekey_id, created_at, messages!inner(sender_device_id,sender_id)',
-    )
-    .in('message_id', uniqueMessageIds);
+  const serviceRoleSupabase = createSupabaseServiceRoleClient();
+  const lookupEnvelopes = async (
+    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  ) =>
+    client
+      .from('message_e2ee_envelopes')
+      .select(
+        'message_id, recipient_device_id, envelope_type, ciphertext, used_one_time_prekey_id, created_at, messages!inner(sender_device_id,sender_id)',
+      )
+      .in('message_id', uniqueMessageIds);
+
+  let response = await lookupEnvelopes(supabase);
+  let usedPrivilegedEnvelopeLookup = false;
+
+  const authEnvelopeRowCount = Array.isArray(response.data)
+    ? response.data.length
+    : 0;
+  const shouldRetryWithPrivilegedEnvelopeLookup =
+    serviceRoleSupabase &&
+    (isSupabasePermissionDeniedError(response.error) ||
+      (!response.error && authEnvelopeRowCount < uniqueMessageIds.length));
+
+  if (shouldRetryWithPrivilegedEnvelopeLookup) {
+    logDiagnostics(
+      response.error
+        ? 'envelopes:auth-error-fallback'
+        : 'envelopes:auth-partial-fallback',
+      {
+        activeDeviceRecordId,
+        authEnvelopeRowCount,
+        currentUserId: input.userId,
+        debugRequestId: input.debugRequestId ?? null,
+        errorMessage: response.error?.message ?? null,
+        requestedMessageCount: uniqueMessageIds.length,
+      },
+    );
+
+    const privilegedResponse = await lookupEnvelopes(serviceRoleSupabase);
+    const privilegedEnvelopeRowCount = Array.isArray(privilegedResponse.data)
+      ? privilegedResponse.data.length
+      : 0;
+
+    if (
+      !privilegedResponse.error &&
+      (response.error || privilegedEnvelopeRowCount > authEnvelopeRowCount)
+    ) {
+      response = privilegedResponse;
+      usedPrivilegedEnvelopeLookup = true;
+    }
+  }
 
   if (response.error) {
     if (
@@ -4146,6 +4190,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     currentUserId: input.userId,
     activeDeviceRecordId,
     activeDeviceCreatedAt: activeDevice?.createdAt ?? null,
+    authEnvelopeRowCount,
     debugRequestId: input.debugRequestId ?? null,
     malformedEnvelopeCount,
     selectedCurrentDeviceEnvelopeCount,
@@ -4153,6 +4198,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     requestedMessageCount: uniqueMessageIds.length,
     envelopeCount: envelopes.length,
     selectionSource: activeDevice?.selectionSource ?? null,
+    usedPrivilegedEnvelopeLookup,
   });
 
   return {
