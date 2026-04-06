@@ -3744,7 +3744,7 @@ main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
 .chat-header-main-link {
@@ -3761,7 +3761,7 @@ main {
 }
 
 .chat-header-copy {
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -3777,7 +3777,8 @@ main {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 13px;
+  padding-left: 6px;
 }
 
 .chat-header-avatar-trigger {
@@ -5695,14 +5696,16 @@ main {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 60px;
-  padding: 8px 9px 8px 10px;
-  border: 1px solid rgba(221, 228, 238, 0.82);
-  border-radius: 28px;
+  min-height: 64px;
+  padding: 9px 10px 9px 11px;
+  border: 1px solid rgba(219, 227, 239, 0.9);
+  border-radius: 30px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(251, 252, 254, 0.9));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(249, 251, 254, 0.93));
   backdrop-filter: blur(16px);
-  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.045);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.76),
+    0 12px 28px rgba(17, 24, 39, 0.055);
 }
 
 .composer-input-shell:focus-within {
@@ -5724,7 +5727,7 @@ main {
   position: relative;
   min-width: 0;
   width: 100%;
-  min-height: 46px;
+  min-height: 50px;
 }
 
 .composer-mention-menu {
@@ -5791,8 +5794,8 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border: 1px solid rgba(221, 228, 238, 0.82);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.78);
@@ -5986,10 +5989,10 @@ main {
 }
 
 .composer-button-icon {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  min-height: 46px;
   padding: 0;
   border-radius: 999px;
   border-color: rgba(31, 111, 235, 0.15);
@@ -5997,6 +6000,7 @@ main {
   color: var(--accent);
   box-shadow: none;
   font-size: 0.94rem;
+  line-height: 1;
 }
 
 .composer-action-cluster {
@@ -6007,10 +6011,10 @@ main {
 }
 
 .composer-button-mic {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  min-height: 46px;
   padding: 0;
   border-radius: 999px;
   border-color: rgba(221, 228, 238, 0.9);
@@ -6437,8 +6441,15 @@ main {
 }
 
 .composer-button {
-  min-width: 44px;
+  min-width: 46px;
   width: auto;
+}
+
+.composer-button-icon > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-1px);
 }
 
 .composer-input-field .textarea {
