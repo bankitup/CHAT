@@ -76,6 +76,23 @@ function logHistoryRouteDiagnostics(
   console.info('[chat-history-route]', stage);
 }
 
+function shouldSuppressRedundantByIdModeConflict(input: {
+  mode: HistoryRouteMode;
+  requestedModes: string[];
+  requestedMessageIdsCount: number;
+}) {
+  return (
+    input.mode === 'by-id' &&
+    input.requestedMessageIdsCount > 0 &&
+    input.requestedModes.every(
+      (requestedMode) =>
+        requestedMode === 'by-id' ||
+        requestedMode === 'after-seq' ||
+        requestedMode === 'before-seq',
+    )
+  );
+}
+
 function createEmptyHistorySnapshot() {
   return {
     attachmentsByMessage: [],
@@ -151,7 +168,14 @@ export async function GET(
           ? 'before-seq'
           : 'latest';
 
-  if (requestedModes.length > 1) {
+  if (
+    requestedModes.length > 1 &&
+    !shouldSuppressRedundantByIdModeConflict({
+      mode,
+      requestedMessageIdsCount: rawMessageIds.length,
+      requestedModes,
+    })
+  ) {
     logHistoryRouteDiagnostics('validation:mode-conflict-normalized', {
       afterSeqExclusive: rawAfterSeqExclusive,
       beforeSeqExclusive: rawBeforeSeqExclusive,
