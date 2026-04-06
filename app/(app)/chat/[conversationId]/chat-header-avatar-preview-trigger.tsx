@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChatHeaderAvatarVisual,
   type ChatHeaderParticipantIdentity,
@@ -39,6 +40,7 @@ export const ChatHeaderAvatarPreviewTrigger = memo(function ChatHeaderAvatarPrev
   const [isMounted, setIsMounted] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const exitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const portalRoot = typeof document !== 'undefined' ? document.body : null;
 
   const openPreview = () => {
     if (exitTimeoutRef.current) {
@@ -123,7 +125,8 @@ export const ChatHeaderAvatarPreviewTrigger = memo(function ChatHeaderAvatarPrev
         />
       </button>
 
-      {isMounted ? (
+      {isMounted && portalRoot
+        ? createPortal(
         <div
           aria-label={openLabel}
           aria-modal="true"
@@ -158,7 +161,10 @@ export const ChatHeaderAvatarPreviewTrigger = memo(function ChatHeaderAvatarPrev
             </div>
           </div>
         </div>
-      ) : null}
+        ,
+        portalRoot,
+      )
+        : null}
     </>
   );
 }, (previous, next) => {

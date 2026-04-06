@@ -3580,12 +3580,15 @@ main {
 .chat-header-avatar-preview-overlay {
   position: fixed;
   inset: 0;
-  z-index: 28;
+  z-index: 90;
   display: grid;
   place-items: center;
+  width: 100vw;
+  min-height: 100dvh;
   padding: 18px;
   padding-top: calc(22px + env(safe-area-inset-top));
   padding-bottom: calc(22px + env(safe-area-inset-bottom));
+  overflow: hidden;
   opacity: 0;
   transition: opacity 180ms ease;
 }
@@ -3618,6 +3621,7 @@ main {
   display: grid;
   align-items: start;
   width: min(100%, 34rem);
+  max-width: 100%;
   transform: translateY(10px) scale(0.92);
   transform-origin: top center;
   opacity: 0;
