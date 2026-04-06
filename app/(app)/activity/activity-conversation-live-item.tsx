@@ -266,16 +266,25 @@ export function ActivityConversationLiveItem({
           </span>
         </div>
 
-        {preview ? <p className="muted activity-item-preview">{preview}</p> : null}
+        {preview ? (
+          <p className="muted activity-item-preview">{preview}</p>
+        ) : (
+          <p className="muted activity-item-preview activity-item-preview-empty">
+            {labels.noActivityYet}
+          </p>
+        )}
 
         <div className="activity-item-meta">
-          {item.variant === 'unread' ? (
-            <span className="activity-unread-pill">
-              {labels.unreadMessages}: {liveSummary.unreadCount}
-            </span>
-          ) : item.isGroupConversation ? (
-            <span className="conversation-kind-label">{labels.group}</span>
-          ) : null}
+          <div className="activity-item-meta-left">
+            {item.variant === 'unread' ? (
+              <span className="activity-unread-pill">
+                {labels.unreadMessages}: {liveSummary.unreadCount}
+              </span>
+            ) : null}
+            {item.isGroupConversation ? (
+              <span className="conversation-kind-label">{labels.group}</span>
+            ) : null}
+          </div>
           <span className="muted activity-item-timestamp">
             {formatActivityTimestamp(lastActivityAt, language, labels.noActivityYet)}
           </span>

@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import { getRequestViewer } from '@/lib/request-context/server';
 import {
-  getLocaleForLanguage,
   getTranslations,
-  type AppLanguage,
 } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
@@ -37,8 +35,7 @@ type ActivityItem = {
   title: string;
   groupAvatarPath: string | null;
   preview: string | null;
-  recencyLabel: string;
-  timestampLabel: string;
+  lastActivityAt: string | null;
   unreadCount: number;
   isGroupConversation: boolean;
   primaryParticipant:
@@ -48,73 +45,6 @@ type ActivityItem = {
         avatarPath?: string | null;
       }
     | null;
-};
-
-function formatActivityRecency(value: string | null, language: AppLanguage) {
-  if (!value) {
-    return '';
-  }
-
-  const target = new Date(value);
-  const now = new Date();
-  const diffMs = now.getTime() - target.getTime();
-  const minuteMs = 60 * 1000;
-  const hourMs = 60 * minuteMs;
-  const dayMs = 24 * hourMs;
-
-  if (diffMs < minuteMs) {
-    return language === 'ru' ? 'Сейчас' : 'Now';
-  }
-
-  if (diffMs < hourMs) {
-    const minutes = Math.max(1, Math.round(diffMs / minuteMs));
-    return language === 'ru' ? `${minutes} мин` : `${minutes}m`;
-  }
-
-  if (diffMs < dayMs) {
-    return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(target);
-  }
-
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfTarget = new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    target.getDate(),
-  );
-  const dayDiff = Math.round(
-    (startOfToday.getTime() - startOfTarget.getTime()) / dayMs,
-  );
-
-  if (dayDiff === 1) {
-    return language === 'ru' ? 'Вчера' : 'Yesterday';
-  }
-
-  if (dayDiff < 7) {
-    return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-      weekday: 'short',
-    }).format(target);
-  }
-
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    month: 'short',
-    day: 'numeric',
-  }).format(target);
-}
-
-function formatActivityTimestamp(value: string | null, language: AppLanguage) {
-  if (!value) {
-    return '';
-  }
-
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
 }
 
 function buildInboxHref(input: {
@@ -253,12 +183,15 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         newEncryptedMessage: t.chat.newEncryptedMessage,
         attachment: t.chat.attachment,
       }),
-      recencyLabel: formatActivityRecency(lastActivityAt, language),
-      timestampLabel: formatActivityTimestamp(lastActivityAt, language),
+      lastActivityAt,
       unreadCount: conversation.unreadCount,
       isGroupConversation,
       primaryParticipant: otherParticipants[0] ?? null,
     } satisfies ActivityItem;
+  }).sort((left, right) => {
+    const leftValue = left.lastActivityAt ? new Date(left.lastActivityAt).getTime() : 0;
+    const rightValue = right.lastActivityAt ? new Date(right.lastActivityAt).getTime() : 0;
+    return rightValue - leftValue;
   });
   const liveSummariesByConversationId = new Map(
     conversations.map((conversation) => [
@@ -284,7 +217,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
   const unreadItems = activityItems.filter((conversation) => conversation.unreadCount > 0);
   const recentItems = activityItems
-    .filter((conversation) => conversation.preview)
+    .filter((conversation) => conversation.preview && conversation.unreadCount === 0)
     .slice(0, 8);
   const unreadChatCount = unreadItems.length;
   const unreadDmCount = unreadItems.filter(
@@ -315,12 +248,30 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       />
 
       <section className="stack settings-hero activity-hero">
-        <div className="inbox-topbar">
-          <div className="stack inbox-topbar-copy">
-            <h1 className="inbox-home-title">{t.activity.title}</h1>
-            <p className="muted inbox-home-subtitle">{t.activity.subtitle}</p>
-          </div>
+        <div className="stack activity-hero-copy">
+          <h1 className="inbox-home-title">{t.activity.title}</h1>
+          <p className="muted inbox-home-subtitle">{t.activity.subtitle}</p>
         </div>
+
+        <section className="activity-focus-card">
+          <div className="stack activity-focus-copy">
+            <span className="activity-focus-kicker">{t.activity.overviewTitle}</span>
+            <h2 className="activity-focus-title">
+              {unreadChatCount > 0 ? t.activity.unreadSectionTitle : t.activity.quietTitle}
+            </h2>
+            <p className="muted activity-focus-body">
+              {unreadChatCount > 0 ? t.activity.overviewBody : t.activity.quietBody}
+            </p>
+          </div>
+
+          <Link
+            className="activity-focus-action button button-secondary"
+            href={buildInboxHref({ spaceId: activeSpaceId })}
+            prefetch={false}
+          >
+            {t.activity.openChats}
+          </Link>
+        </section>
       </section>
 
       <section className="card stack settings-surface activity-surface">
@@ -347,15 +298,18 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               <h2 className="card-title">{t.activity.unreadSectionTitle}</h2>
               <p className="muted">{t.activity.unreadSectionBody}</p>
             </div>
-            {unreadItems.length > 0 ? (
-              <Link
-                className="pill activity-section-link"
-                href={buildInboxHref({ spaceId: activeSpaceId })}
-                prefetch
-              >
-                {t.activity.openChats}
-              </Link>
-            ) : null}
+            <div className="activity-section-actions">
+              <span className="activity-section-count">{unreadItems.length}</span>
+              {unreadItems.length > 0 ? (
+                <Link
+                  className="pill activity-section-link"
+                  href={buildInboxHref({ spaceId: activeSpaceId })}
+                  prefetch={false}
+                >
+                  {t.activity.openChats}
+                </Link>
+              ) : null}
+            </div>
           </div>
 
           {unreadItems.length > 0 ? (
@@ -397,7 +351,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     encryptedMessage: t.chat.encryptedMessage,
                     group: t.inbox.metaGroup,
                     newEncryptedMessage: t.chat.newEncryptedMessage,
-                    noActivityYet: '',
+                    noActivityYet: t.inbox.noActivityYet,
                     unreadMessages: t.chat.unreadMessages,
                     voiceMessage: t.chat.voiceMessage,
                     yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
@@ -419,18 +373,21 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               <h2 className="card-title">{t.activity.recentTitle}</h2>
               <p className="muted">{t.activity.recentBody}</p>
             </div>
-            {archivedConversations.length > 0 ? (
-              <Link
-                className="pill activity-section-link"
-                href={buildInboxHref({
-                  spaceId: activeSpaceId,
-                  view: 'archived',
-                })}
-                prefetch
-              >
-                {t.activity.openArchived}
-              </Link>
-            ) : null}
+            <div className="activity-section-actions">
+              <span className="activity-section-count">{recentItems.length}</span>
+              {archivedConversations.length > 0 ? (
+                <Link
+                  className="pill activity-section-link"
+                  href={buildInboxHref({
+                    spaceId: activeSpaceId,
+                    view: 'archived',
+                  })}
+                  prefetch={false}
+                >
+                  {t.activity.openArchived}
+                </Link>
+              ) : null}
+            </div>
           </div>
 
           {recentItems.length > 0 ? (
@@ -472,7 +429,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     encryptedMessage: t.chat.encryptedMessage,
                     group: t.inbox.metaGroup,
                     newEncryptedMessage: t.chat.newEncryptedMessage,
-                    noActivityYet: '',
+                    noActivityYet: t.inbox.noActivityYet,
                     unreadMessages: t.chat.unreadMessages,
                     voiceMessage: t.chat.voiceMessage,
                     yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
@@ -489,27 +446,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         </section>
 
         <section className="stack settings-section activity-section">
-          <div className="activity-section-header">
-            <div className="stack activity-section-copy">
-              <h2 className="card-title">{t.activity.alertsTitle}</h2>
-              <p className="muted">{t.activity.alertsBody}</p>
-            </div>
-          </div>
-
           <NotificationReadinessPanel embedded language={language} />
-        </section>
-
-        <section className="stack settings-section activity-section">
-          <div className="activity-section-header">
-            <div className="stack activity-section-copy">
-              <h2 className="card-title">{t.activity.digestTitle}</h2>
-              <p className="muted">{t.activity.digestBody}</p>
-            </div>
-          </div>
-
-          <section className="empty-card activity-future-card">
-            <p className="muted activity-future-copy">{t.activity.digestBody}</p>
-          </section>
         </section>
       </section>
     </section>
