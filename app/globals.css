@@ -4025,7 +4025,7 @@ main {
 }
 
 .conversation-settings-route-screen {
-  padding-bottom: calc(var(--app-bottom-nav-reserve) + 28px);
+  padding-bottom: calc(var(--app-bottom-nav-reserve) + 56px);
 }
 
 .conversation-settings-route-hero {
@@ -4038,7 +4038,7 @@ main {
 
 .conversation-settings-route-surface {
   gap: 14px;
-  padding: 14px 14px calc(28px + env(safe-area-inset-bottom));
+  padding: 14px 14px calc(92px + env(safe-area-inset-bottom));
 }
 
 .conversation-settings-header {
@@ -4407,9 +4407,69 @@ main {
   gap: 7px;
 }
 
+.conversation-group-identity-photo-actions {
+  padding-top: 2px;
+}
+
 .conversation-group-identity-cancel {
   min-height: 30px;
   padding-inline: 10px;
+}
+
+.conversation-group-identity-savebar {
+  position: sticky;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 2;
+  padding-top: 4px;
+}
+
+.conversation-group-identity-savebar-shell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(221, 228, 238, 0.88);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 253, 0.94));
+  box-shadow:
+    0 14px 34px rgba(17, 24, 39, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+}
+
+.conversation-group-identity-savebar-note {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.conversation-group-identity-savebar-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.conversation-group-identity-save {
+  min-width: 112px;
+}
+
+@media (max-width: 480px) {
+  .conversation-group-identity-savebar-shell {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .conversation-group-identity-savebar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .conversation-group-identity-savebar-actions > * {
+    flex: 1 1 0;
+  }
 }
 
 .conversation-settings-group-identity-preview {

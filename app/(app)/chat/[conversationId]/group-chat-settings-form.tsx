@@ -232,6 +232,15 @@ export function GroupChatSettingsForm({
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPreparingAvatar, setIsPreparingAvatar] = useState(false);
+  const lastAppliedDefaultsRef = useRef<string>(
+    `${defaultTitle}\u0000${defaultJoinPolicy}\u0000${defaultAvatarPath ?? ''}`,
+  );
+
+  const resetAvatarPickerInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     latestPreviewUrlRef.current = pendingAvatarDraft?.previewUrl ?? null;
@@ -247,6 +256,36 @@ export function GroupChatSettingsForm({
       revokeObjectUrl(latestEditorSourceUrlRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const nextDefaultsSignature = `${defaultTitle}\u0000${defaultJoinPolicy}\u0000${
+      defaultAvatarPath ?? ''
+    }`;
+
+    if (lastAppliedDefaultsRef.current === nextDefaultsSignature) {
+      return;
+    }
+
+    lastAppliedDefaultsRef.current = nextDefaultsSignature;
+    revokeObjectUrl(avatarEditorDraft?.sourceUrl ?? null);
+    revokeObjectUrl(pendingAvatarDraft?.previewUrl ?? null);
+    setDraftTitle(defaultTitle);
+    setDraftJoinPolicy(defaultJoinPolicy);
+    setAvatarEditorDraft(null);
+    setPendingAvatarDraft(null);
+    setSelectedFileName(null);
+    setIsAvatarRemovalDraft(false);
+    setLocalError(null);
+    setIsSaving(false);
+    setIsPreparingAvatar(false);
+    resetAvatarPickerInput();
+  }, [
+    avatarEditorDraft?.sourceUrl,
+    defaultAvatarPath,
+    defaultJoinPolicy,
+    defaultTitle,
+    pendingAvatarDraft?.previewUrl,
+  ]);
 
   useEffect(() => {
     if (!avatarEditorDraft || typeof document === 'undefined') {
@@ -289,10 +328,7 @@ export function GroupChatSettingsForm({
     setIsAvatarRemovalDraft(false);
     setLocalError(null);
     setIsPreparingAvatar(false);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    resetAvatarPickerInput();
 
     clearStatusQueryParams();
   }
@@ -364,9 +400,7 @@ export function GroupChatSettingsForm({
       setAvatarEditorDraft(null);
       setLocalError(null);
 
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      resetAvatarPickerInput();
 
       return nextPendingDraft;
     } catch (error) {
@@ -387,9 +421,7 @@ export function GroupChatSettingsForm({
     setSelectedFileName(pendingAvatarDraft?.file.name ?? null);
     setLocalError(null);
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    resetAvatarPickerInput();
   }
 
   function handleAvatarEditorPointerDown(
@@ -522,6 +554,17 @@ export function GroupChatSettingsForm({
     ? getAvatarRenderMetrics(avatarEditorDraft)
     : null;
   const isBusy = isSaving || isPreparingAvatar;
+  const normalizedDraftTitle = draftTitle.trim();
+  const hasUnsavedChanges =
+    normalizedDraftTitle !== defaultTitle.trim() ||
+    draftJoinPolicy !== defaultJoinPolicy ||
+    Boolean(pendingAvatarDraft) ||
+    isAvatarRemovalDraft;
+  const helperNote = isSaving
+    ? labels.avatarUploading
+    : isPreparingAvatar
+      ? labels.avatarEditorPreparing
+      : draftNote;
 
   return (
     <section className="stack conversation-settings-subsection conversation-group-identity-form">
@@ -621,7 +664,7 @@ export function GroupChatSettingsForm({
             </div>
           </section>
 
-          <div className="conversation-group-identity-actions">
+          <div className="conversation-group-identity-actions conversation-group-identity-photo-actions">
             <input
               ref={fileInputRef}
               accept={PROFILE_AVATAR_ACCEPT}
@@ -665,25 +708,35 @@ export function GroupChatSettingsForm({
                 {labels.removePhoto}
               </button>
             ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="conversation-group-identity-savebar">
+        <div className="conversation-group-identity-savebar-shell">
+          <p className="muted conversation-settings-note conversation-group-identity-savebar-note">
+            {helperNote}
+          </p>
+
+          <div className="conversation-group-identity-savebar-actions">
+            <button
+              className="pill conversation-group-identity-cancel"
+              disabled={isBusy || !hasUnsavedChanges}
+              onClick={resetDraftState}
+              type="button"
+            >
+              {labels.cancelEdit}
+            </button>
 
             <button
-              className="button button-compact"
-              disabled={isBusy}
+              className="button button-compact conversation-group-identity-save"
+              disabled={isBusy || !hasUnsavedChanges || Boolean(avatarEditorDraft)}
               onClick={() => {
                 void handleSave();
               }}
               type="button"
             >
               {isSaving ? labels.avatarUploading : labels.saveChanges}
-            </button>
-
-            <button
-              className="pill conversation-group-identity-cancel"
-              disabled={isBusy}
-              onClick={resetDraftState}
-              type="button"
-            >
-              {labels.cancelEdit}
             </button>
           </div>
         </div>
