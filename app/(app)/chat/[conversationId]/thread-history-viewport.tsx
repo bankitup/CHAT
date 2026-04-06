@@ -17,7 +17,10 @@ import {
 } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import { withSpaceParam } from '@/modules/spaces/url';
-import { useThreadMessagePatchedBody } from '@/modules/messaging/realtime/thread-message-patch-store';
+import {
+  useThreadMessagePatchedBody,
+  useThreadMessagePatchedDeletedAt,
+} from '@/modules/messaging/realtime/thread-message-patch-store';
 import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import {
   DmThreadClientSubtree,
@@ -788,7 +791,6 @@ function ThreadMessageRow({
 }: ThreadMessageRowProps) {
   const t = getTranslations(language);
   const isOwnMessage = message.sender_id === currentUserId;
-  const isDeletedMessage = Boolean(message.deleted_at);
   const isMessageActionActive =
     activeActionMessageId === message.id &&
     !activeEditMessageId &&
@@ -798,6 +800,12 @@ function ThreadMessageRow({
     message.id,
     message.body,
   );
+  const patchedDeletedAt = useThreadMessagePatchedDeletedAt(
+    conversationId,
+    message.id,
+    message.deleted_at,
+  );
+  const isDeletedMessage = Boolean(patchedDeletedAt);
   const normalizedMessageBody = normalizeMessageBodyText(patchedBody);
   const isMessageInEditMode =
     activeEditMessageId === message.id &&

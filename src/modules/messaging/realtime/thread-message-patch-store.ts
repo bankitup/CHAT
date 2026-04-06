@@ -3,8 +3,9 @@
 import { useSyncExternalStore } from 'react';
 
 type ThreadMessagePatch = {
-  body: string | null;
-  editedAt: string | null;
+  body?: string | null;
+  deletedAt?: string | null;
+  editedAt?: string | null;
 };
 
 const threadMessagePatchStore = new Map<string, Map<string, ThreadMessagePatch>>();
@@ -58,9 +59,10 @@ export function subscribeToThreadMessagePatches(
 }
 
 export function patchThreadMessageContent(input: {
-  body: string | null;
+  body?: string | null;
   conversationId: string;
-  editedAt: string | null;
+  deletedAt?: string | null;
+  editedAt?: string | null;
   messageId: string;
 }) {
   const normalizedConversationId = input.conversationId.trim();
@@ -75,8 +77,9 @@ export function patchThreadMessageContent(input: {
   );
 
   conversationPatches.set(normalizedMessageId, {
-    body: input.body,
-    editedAt: input.editedAt,
+    ...(input.body !== undefined ? { body: input.body } : null),
+    ...(input.deletedAt !== undefined ? { deletedAt: input.deletedAt } : null),
+    ...(input.editedAt !== undefined ? { editedAt: input.editedAt } : null),
   });
   threadMessagePatchStore.set(normalizedConversationId, conversationPatches);
   emitThreadMessagePatchChange(normalizedConversationId);
@@ -89,8 +92,10 @@ export function useThreadMessagePatchedBody(
 ) {
   return useSyncExternalStore(
     (listener) => subscribeToThreadMessagePatches(conversationId, listener),
-    () =>
-      getThreadMessagePatchMap(conversationId).get(messageId)?.body ?? fallback,
+    () => {
+      const patch = getThreadMessagePatchMap(conversationId).get(messageId);
+      return patch?.body !== undefined ? patch.body : fallback;
+    },
     () => fallback,
   );
 }
@@ -102,8 +107,25 @@ export function useThreadMessagePatchedEditedAt(
 ) {
   return useSyncExternalStore(
     (listener) => subscribeToThreadMessagePatches(conversationId, listener),
-    () =>
-      getThreadMessagePatchMap(conversationId).get(messageId)?.editedAt ?? fallback,
+    () => {
+      const patch = getThreadMessagePatchMap(conversationId).get(messageId);
+      return patch?.editedAt !== undefined ? patch.editedAt : fallback;
+    },
+    () => fallback,
+  );
+}
+
+export function useThreadMessagePatchedDeletedAt(
+  conversationId: string,
+  messageId: string,
+  fallback: string | null,
+) {
+  return useSyncExternalStore(
+    (listener) => subscribeToThreadMessagePatches(conversationId, listener),
+    () => {
+      const patch = getThreadMessagePatchMap(conversationId).get(messageId);
+      return patch?.deletedAt !== undefined ? patch.deletedAt : fallback;
+    },
     () => fallback,
   );
 }

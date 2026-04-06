@@ -232,6 +232,7 @@ export type MarkConversationReadMutationPayload = {
 
 export type DeleteMessageMutationPayload = {
   conversationId: string;
+  deletedAt: string;
   messageId: string;
   summary: ChatConversationSummaryMutationPayload | null;
 };
@@ -697,7 +698,7 @@ export async function deleteMessageMutationAction(
   }
 
   try {
-    await softDeleteMessage({
+    const deleteResult = await softDeleteMessage({
       messageId,
       conversationId,
       senderId: user.id,
@@ -706,6 +707,7 @@ export async function deleteMessageMutationAction(
 
     return mutationOk({
       conversationId,
+      deletedAt: deleteResult.deletedAt,
       messageId,
       summary,
     });

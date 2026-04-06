@@ -5,6 +5,7 @@ import {
   applyThreadReactionRealtimeEvent,
   patchThreadConversationReadState,
 } from '@/modules/messaging/realtime/thread-live-state-store';
+import { patchThreadMessageContent } from '@/modules/messaging/realtime/thread-message-patch-store';
 import {
   emitThreadHistorySyncRequest,
   LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
@@ -38,6 +39,11 @@ const CONVERSATION_SUMMARY_ONLY_KEYS = new Set([
   'last_message_seq',
   'updated_at',
 ]);
+const THREAD_VISIBLE_MESSAGE_PATCH_ONLY_KEYS = new Set([
+  'body',
+  'deleted_at',
+  'edited_at',
+]);
 
 function getChangedRealtimeRecordKeys(
   nextRow: Record<string, unknown> | null,
@@ -58,6 +64,34 @@ function getChangedRealtimeRecordKeys(
 
     return nextValue !== previousValue;
   });
+}
+
+function getNullableRealtimeString(
+  nextRow: Record<string, unknown> | null,
+  previousRow: Record<string, unknown> | null,
+  key: string,
+) {
+  const nextValue = nextRow?.[key];
+
+  if (typeof nextValue === 'string') {
+    return nextValue;
+  }
+
+  if (nextValue === null) {
+    return null;
+  }
+
+  const previousValue = previousRow?.[key];
+
+  if (typeof previousValue === 'string') {
+    return previousValue;
+  }
+
+  if (previousValue === null) {
+    return null;
+  }
+
+  return undefined;
 }
 
 export function ActiveChatRealtimeSync({
@@ -265,6 +299,37 @@ export function ActiveChatRealtimeSync({
             : typeof previousRow?.id === 'string'
               ? previousRow.id
               : null;
+        const changedKeys = getChangedRealtimeRecordKeys(nextRow, previousRow);
+        const isVisibleMessagePatchOnlyUpdate =
+          payload.eventType === 'UPDATE' &&
+          messageId !== null &&
+          trackedMessageIdsRef.current.has(messageId) &&
+          changedKeys.length > 0 &&
+          changedKeys.every((key) => THREAD_VISIBLE_MESSAGE_PATCH_ONLY_KEYS.has(key));
+
+        if (isVisibleMessagePatchOnlyUpdate && messageId) {
+          patchThreadMessageContent({
+            body: getNullableRealtimeString(nextRow, previousRow, 'body'),
+            conversationId,
+            deletedAt: getNullableRealtimeString(
+              nextRow,
+              previousRow,
+              'deleted_at',
+            ),
+            editedAt: getNullableRealtimeString(
+              nextRow,
+              previousRow,
+              'edited_at',
+            ),
+            messageId,
+          });
+          logDiagnostics('message-postgres:visible-patch-local', {
+            changedKeys,
+            conversationId,
+            messageId,
+          });
+          return;
+        }
 
         requestTopologySync({
           messageIds: messageId ? [messageId] : null,

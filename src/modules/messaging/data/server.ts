@@ -6948,6 +6948,10 @@ export async function softDeleteMessage(input: {
     supabase,
     input.conversationId,
   );
+
+  return {
+    deletedAt: timestamp,
+  };
 }
 
 export async function updateConversationTitle(input: {

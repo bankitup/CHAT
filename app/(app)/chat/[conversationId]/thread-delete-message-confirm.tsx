@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { patchInboxConversationSummary } from '@/modules/messaging/realtime/inbox-summary-store';
-import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
+import { patchThreadMessageContent } from '@/modules/messaging/realtime/thread-message-patch-store';
 import { deleteMessageMutationAction } from './actions';
 
 type ThreadDeleteMessageConfirmProps = {
@@ -53,10 +53,11 @@ export function ThreadDeleteMessageConfirm({
             patchInboxConversationSummary(result.data.summary);
           }
 
-          emitThreadHistorySyncRequest({
+          patchThreadMessageContent({
             conversationId,
-            messageIds: [messageId],
-            reason: 'local-delete-mutation',
+            deletedAt: result.data.deletedAt,
+            editedAt: null,
+            messageId,
           });
 
           if (typeof window !== 'undefined') {
