@@ -65,6 +65,8 @@ function assertConversationOperationalThreadContextConsistency(input: {
  *   chat history, or message payload shapes
  * - this helper must not become a policy engine or timeline/event writer;
  *   later branches own access mapping and timeline semantics
+ * - later policy-aware read wrappers may compose around this helper, but they
+ *   should not move raw companion-table access or chat-history loading here
  */
 export async function getConversationOperationalThreadContextForUser(
   conversationId: string,

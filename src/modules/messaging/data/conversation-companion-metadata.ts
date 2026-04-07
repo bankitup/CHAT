@@ -223,6 +223,8 @@ async function getConversationCompanionMetadataWriteClient(
  *   conversation
  * - later access-checked wrappers should call this only after existing
  *   conversation visibility checks succeed
+ * - later policy-aware wrappers may interpret audience/operator/assignment
+ *   inputs, but that interpretation must stay outside this raw table adapter
  */
 export async function getConversationCompanionMetadataByConversationIdsWithoutAccessCheck(
   input: {
@@ -295,6 +297,8 @@ export async function getConversationCompanionMetadataWithoutAccessCheck(input: 
  *   exists in a first-class domain table
  * - later access-checked wrappers should call this only after conversation
  *   ownership/visibility has already been validated
+ * - later policy-aware wrappers must decide whether the write is allowed; this
+ *   helper should stay a low-level persistence boundary only
  */
 export async function upsertConversationCompanionMetadataWithoutAccessCheck(
   input: {

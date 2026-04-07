@@ -410,6 +410,29 @@ Important rule:
 - later application-level helpers must still not invent broader access outside
   the reviewed policy matrix
 
+### Concrete backend adoption map
+
+The first enforcement pass should be read together with the existing backend
+helper seams, not as a replacement for them.
+
+| Path | Current role | Later enforcement-oriented role | Status in this branch |
+| --- | --- | --- | --- |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationForUser(...)` | access-checked base conversation shell read | keep as the base conversation allowlist before any companion-aware interpretation | unchanged |
+| [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts) `getConversationOperationalThreadContextForUser(...)` | additive conversation-plus-companion read seam | later policy-aware operational-thread read wrapper can compose here after base conversation access succeeds | unchanged in behavior |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationSummaryForUser(...)` | conversation summary loader | later summary-level policy-aware projection seam for companion metadata | unchanged |
+| future timeline read wrapper in `src/modules/spaces` or messaging data service | not implemented yet | later access-checked timeline feed loader that applies reviewed timeline visibility basis rules | deferred |
+| [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts) | raw companion-table adapter | stays a low-level row adapter; must not become the place where `audience_mode` or operator/assignment policy is interpreted | unchanged |
+| [visibility.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/visibility.ts) | personal archive/hide projection helper | remains per-user archive visibility only; must not absorb operational thread policy | unchanged |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts) | space-membership and active-space resolution | remains the outer space boundary source, not the place where thread/timeline policy is interpreted | unchanged |
+
+Practical rule:
+
+- policy-aware reads should compose existing conversation or space boundary
+  checks first
+- raw table adapters should stay narrow and policy-agnostic
+- read-side interpretation belongs in later service wrappers, not in UI
+  entrypoints or generic data-access helpers
+
 ### Write boundaries
 
 The first hardening pass intentionally does not add authenticated write
@@ -427,6 +450,95 @@ Important rule:
 
 - do not treat current UI/session-bound writes as ready for direct companion or
   timeline writes just because the tables exist
+
+### Concrete future write seams
+
+The later policy-aware write path should stay just as narrow as the read path.
+
+| Path | Current role | Later enforcement-oriented role | Status in this branch |
+| --- | --- | --- | --- |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `createConversationWithMembers(...)` | generic shell creator for `dm` and `group` | remain the shell creator only; a later operational wrapper should decide whether companion metadata write is allowed | unchanged |
+| [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts) `upsertConversationCompanionMetadataWithoutAccessCheck(...)` | raw low-level upsert helper | later access-checked operational-thread create/update wrapper may call it after policy and ownership checks succeed | unchanged |
+| [space-timeline-events.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/space-timeline-events.ts) `buildSpaceTimelineEventRow(...)` | low-level row builder only | later service-side emitters may call it after a committed operational transition is classified as timeline-worthy | unchanged |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `sendMessage(...)` and `sendMessageWithAttachment(...)` | ordinary chat send flows | should stay outside early operational enforcement and timeline emission work | intentionally unchanged |
+
+Hard rule:
+
+- raw write helpers may build or persist rows
+- they must not decide operational visibility, assignment scope, operator
+  widening, or audited exception behavior on their own
+
+### Where interpretation should live
+
+Enforcement interpretation should live in later access-checked service
+wrappers that already own a durable operational transition or a reviewed
+conversation/timeline read.
+
+Recommended homes later:
+
+- messaging data service wrappers above `getConversationForUser(...)` and
+  `getConversationSummaryForUser(...)`
+- reviewed operational-thread create/update wrappers above
+  `createConversationWithMembers(...)`
+- later timeline feed readers and emitters in the spaces module
+
+Raw data access should continue living in:
+
+- [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+- a later direct timeline table adapter beside
+  [space-timeline-events.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/space-timeline-events.ts)
+- current generic visibility helpers such as
+  [visibility.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/visibility.ts)
+
+Important distinction:
+
+- SQL/RLS sets the conservative read ceiling for the additive KeepCozy tables
+- service wrappers decide how and when those rows are composed into later
+  runtime reads and writes
+- UI/server-action entrypoints should stay thin and should not interpret the
+  policy matrix directly
+
+### Existing paths that should remain unchanged on this branch
+
+The following paths should stay out of scope for this enforcement pass:
+
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `getConversationHistorySnapshot(...)`
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `markConversationRead(...)`
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `sendMessage(...)`
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `sendMessageWithAttachment(...)`
+- [visibility.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/visibility.ts)
+  archive/hide projection behavior
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+  active-space and membership lookup behavior
+
+Reason:
+
+- those paths currently own ordinary chat behavior, read-state, personal
+  archive state, or outer space resolution
+- coupling early operational enforcement into them would widen the branch far
+  beyond the additive KeepCozy tables
+
+### What must wait for later runtime-integration and UI work
+
+Even after this first hardening pass, the following should wait for a later
+runtime-adoption branch:
+
+- conversation detail payloads that surface companion metadata by default
+- inbox or thread-list summaries that surface policy-aware operational badges
+- timeline feed queries exposed to page or server-action entrypoints
+- UI behavior that distinguishes `internal-only`, `restricted-external`, or
+  assignment-scoped visibility in product surfaces
+- any user-facing operator-overview or audited exception affordance
+
+Important rule:
+
+- this branch may define the reviewed enforcement ceiling
+- a later runtime/UI branch must still choose deliberately where to consume
+  that ceiling in actual product reads
 
 ## What This Pass Intentionally Does Not Enforce Yet
 
