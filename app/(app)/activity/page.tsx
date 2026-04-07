@@ -69,6 +69,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   });
   const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpace.name);
   const testFlowHomeHint = primaryFlow?.homeNameHint ?? 'TEST';
+  const primaryIssueUpdates = primaryFlow?.issue.updates ?? [];
+  const primaryTaskUpdates = primaryFlow?.task.updates ?? [];
   const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
@@ -288,53 +290,227 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   </Link>
                 </div>
 
-                <div className="keepcozy-timeline">
-                  {primaryFlow.history.map((entry) => (
-                    <article key={entry.id} className="keepcozy-timeline-item">
-                      <div className="keepcozy-timeline-topline">
-                        <h3 className="card-title">
-                          {entry.stage === 'issue' ? t.shell.issues : t.shell.tasks}
-                        </h3>
-                        <span className="keepcozy-timestamp">{entry.timestamp}</span>
-                      </div>
+                <div className="keepcozy-stack-list">
+                  <Link
+                    className="keepcozy-secondary-card"
+                    href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpace.id)}
+                    prefetch={false}
+                  >
+                    <div className="stack keepcozy-link-copy">
+                      <h3 className="card-title">{t.homeDashboard.roomsTitle}</h3>
                       <p className="muted">
-                        <strong>{entry.label}.</strong> {entry.note}
+                        {primaryFlow.room.summary || t.homeDashboard.roomsBody}
                       </p>
-                      <div className="keepcozy-card-actions">
-                        <Link
-                          className="pill"
-                          href={withSpaceParam(
-                            entry.href.kind === 'issue'
-                              ? `/issues/${entry.href.targetId}`
-                              : `/tasks/${entry.href.targetId}`,
-                            activeSpace.id,
-                          )}
-                          prefetch={false}
-                        >
-                          {entry.href.kind === 'issue'
-                            ? t.tasks.viewIssue
-                            : t.homeDashboard.openTasks}
-                        </Link>
-                      </div>
-                    </article>
-                  ))}
+                    </div>
+                    <span className="summary-pill summary-pill-muted">
+                      {primaryFlow.room.name}
+                    </span>
+                  </Link>
+
+                  <Link
+                    className="keepcozy-secondary-card"
+                    href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpace.id)}
+                    prefetch={false}
+                  >
+                    <div className="stack keepcozy-link-copy">
+                      <h3 className="card-title">{t.homeDashboard.issuesTitle}</h3>
+                      <p className="muted">
+                        {primaryFlow.issue.nextStep || primaryFlow.issue.summary || t.homeDashboard.issuesBody}
+                      </p>
+                    </div>
+                    <span className="summary-pill summary-pill-muted">
+                      {primaryFlow.issue.status}
+                    </span>
+                  </Link>
+
+                  <Link
+                    className="keepcozy-secondary-card"
+                    href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpace.id)}
+                    prefetch={false}
+                  >
+                    <div className="stack keepcozy-link-copy">
+                      <h3 className="card-title">{t.homeDashboard.tasksTitle}</h3>
+                      <p className="muted">
+                        {primaryFlow.task.nextStep || primaryFlow.task.summary || t.homeDashboard.tasksBody}
+                      </p>
+                    </div>
+                    <span className="summary-pill summary-pill-muted">
+                      {primaryFlow.task.status}
+                    </span>
+                  </Link>
                 </div>
+
+                <section className="stack keepcozy-section">
+                  <div className="activity-section-header">
+                    <div className="stack activity-section-copy">
+                      <h3 className="card-title">{t.activity.operationsIssues}</h3>
+                      <p className="muted">{t.issues.updatesBody}</p>
+                    </div>
+                    <div className="activity-section-actions">
+                      <span className="activity-section-count">{primaryIssueUpdates.length}</span>
+                      <Link
+                        className="pill activity-section-link"
+                        href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.tasks.viewIssue}
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="keepcozy-meta-row">
+                    <Link
+                      className="keepcozy-meta-pill"
+                      href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpace.id)}
+                      prefetch={false}
+                    >
+                      {primaryFlow.room.name}
+                    </Link>
+                    <Link
+                      className="keepcozy-meta-pill"
+                      href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpace.id)}
+                      prefetch={false}
+                    >
+                      {primaryFlow.issue.title}
+                    </Link>
+                  </div>
+
+                  <div className="keepcozy-timeline">
+                    {primaryIssueUpdates.length > 0 ? (
+                      primaryIssueUpdates.map((update) => (
+                        <article key={update.id} className="keepcozy-timeline-item">
+                          <div className="keepcozy-timeline-topline">
+                            <h3 className="card-title">{update.label}</h3>
+                            <span className="keepcozy-timestamp">{update.timestamp}</span>
+                          </div>
+                          <p className="muted">{update.note}</p>
+                        </article>
+                      ))
+                    ) : (
+                      <section className="empty-card">
+                        <p className="muted">{t.issues.updatesBody}</p>
+                      </section>
+                    )}
+                  </div>
+                </section>
+
+                <section className="stack keepcozy-section">
+                  <div className="activity-section-header">
+                    <div className="stack activity-section-copy">
+                      <h3 className="card-title">{t.activity.operationsTasks}</h3>
+                      <p className="muted">{t.tasks.updatesBody}</p>
+                    </div>
+                    <div className="activity-section-actions">
+                      <span className="activity-section-count">{primaryTaskUpdates.length}</span>
+                      <Link
+                        className="pill activity-section-link"
+                        href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.activity.openTask}
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="keepcozy-meta-row">
+                    <Link
+                      className="keepcozy-meta-pill"
+                      href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpace.id)}
+                      prefetch={false}
+                    >
+                      {primaryFlow.issue.title}
+                    </Link>
+                    <Link
+                      className="keepcozy-meta-pill"
+                      href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpace.id)}
+                      prefetch={false}
+                    >
+                      {primaryFlow.room.name}
+                    </Link>
+                  </div>
+
+                  <div className="keepcozy-timeline">
+                    {primaryTaskUpdates.length > 0 ? (
+                      primaryTaskUpdates.map((update) => (
+                        <article key={update.id} className="keepcozy-timeline-item">
+                          <div className="keepcozy-timeline-topline">
+                            <h3 className="card-title">{update.label}</h3>
+                            <span className="keepcozy-timestamp">{update.timestamp}</span>
+                          </div>
+                          <p className="muted">{update.note}</p>
+                        </article>
+                      ))
+                    ) : (
+                      <section className="empty-card">
+                        <p className="muted">{t.tasks.updatesBody}</p>
+                      </section>
+                    )}
+                  </div>
+                </section>
               </article>
             ) : (
-              <section className="empty-card">
+              <section className="empty-card keepcozy-preview-card">
                 <h3 className="card-title">{testFlowHomeHint}</h3>
                 <p className="muted">
                   {showPrimaryFlow
                     ? t.activity.testFlowPendingBody
                     : t.activity.testFlowMismatchBody}
                 </p>
-                <Link
-                  className="button button-secondary"
-                  href={withSpaceParam('/spaces', activeSpace.id)}
-                  prefetch={false}
-                >
-                  {t.homeDashboard.switchHome}
-                </Link>
+                <div className="keepcozy-meta-row">
+                  <span className="keepcozy-meta-pill">
+                    {t.homeDashboard.roomsTitle}: Kitchen
+                  </span>
+                  <span className="keepcozy-meta-pill">
+                    {t.homeDashboard.issuesTitle}: Kitchen faucet keeps dripping after shutoff
+                  </span>
+                  <span className="keepcozy-meta-pill">
+                    {t.homeDashboard.tasksTitle}: Capture faucet model and cartridge type
+                  </span>
+                </div>
+                <div className="keepcozy-card-actions">
+                  {showPrimaryFlow ? (
+                    <>
+                      <Link
+                        className="pill"
+                        href={withSpaceParam('/rooms', activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.homeDashboard.openRooms}
+                      </Link>
+                      <Link
+                        className="button button-secondary"
+                        href={withSpaceParam('/issues', activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.homeDashboard.openIssues}
+                      </Link>
+                      <Link
+                        className="button button-secondary"
+                        href={withSpaceParam('/tasks', activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.homeDashboard.openTasks}
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        className="button"
+                        href={withSpaceParam('/spaces', activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.homeDashboard.switchHome}
+                      </Link>
+                      <Link
+                        className="button button-secondary"
+                        href={withSpaceParam('/home', activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.activity.openHome}
+                      </Link>
+                    </>
+                  )}
+                </div>
               </section>
             )}
           </section>

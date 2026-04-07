@@ -144,8 +144,15 @@ The first proof path should be checked in this order:
    `body = Need one clear fixture photo before moving from identification to repair.`
 6. History
    Open `/activity` and confirm the `Primary test flow history` section shows
+<<<<<<< HEAD
+   the same issue/task update path in one place.
+   The surface should make the room -> issue -> task chain explicit and group
+   the operational updates into issue history and task history instead of
+   reading like a generic feed.
+=======
    the same issue/task update path in one place, including the newly appended
    persisted issue/task updates.
+>>>>>>> 229ac35874fd9fea5f73c213ec37ebb8c117604f
    If another home is active, the screen should again prompt the reviewer back
    to `TEST`.
 7. Optional creator-owned extension
