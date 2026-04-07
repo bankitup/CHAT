@@ -441,6 +441,8 @@ ambiguous, or prematurely coupled to the current chat runtime.
   event into the space timeline
 - optimistic sends, upload retries, playback state, read-state changes, and
   presence remain out of committed space history
+- per-user archive/hide state remains separate from operational close/reopen
+  history
 - thread-local system rendering, if added later, should remain distinct from
   committed `public.space_timeline_events`
 - timeline writes should happen only after the underlying operational change is

@@ -278,7 +278,7 @@ Recommended timeline event categories:
 - inspection scheduled or completed
 - incident escalated or resolved
 - document added
-- thread opened, archived, or closed
+- thread opened, reopened, or closed
 - participant invited, joined, removed, or reassigned
 
 First-foundation note:
@@ -302,6 +302,8 @@ Guardrail:
   state, or UI/system noise into committed space history
 - thread-local system notices and space-wide committed history should stay as
   separate concepts
+- per-user archive/hide state should not be collapsed into operational thread
+  lifecycle history
 
 Recommended target event fields:
 
@@ -314,8 +316,8 @@ Recommended target event fields:
 | `actor_user_id` | auditability |
 | `conversation_id` | optional thread context |
 | `message_id` | optional chat linkage |
-| `object_type` | operational reference |
-| `object_id` | operational reference |
+| `operational_object_type` | operational reference |
+| `operational_object_id` | operational reference |
 | `audience_mode` | internal-only vs external-visible control |
 | `summary_payload` | compact renderable details |
 | `search_text` or equivalent derived index input | future search support |
