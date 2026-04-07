@@ -231,9 +231,10 @@ Timeline boundary note:
 - this branch may expose optional operational thread context, but it must not
   become the place where timeline rows are committed
 
-## What Must Wait for `feature/space-timeline-foundation`
+## Completed Timeline Foundation Now In Place
 
-The following concerns belong to the later timeline branch, not this one:
+The following concerns are now owned by the completed timeline foundation and
+its later follow-on branches, not by this backend-link layer:
 
 - committed `space_timeline_events` writes
 - event categories for thread open/close/object-link activity
@@ -246,9 +247,10 @@ Rule:
 - this backend link layer may expose thread context
 - it must not start acting like the durable event log
 
-## What Must Wait for `feature/space-access-mapping-prep`
+## Completed Access-Mapping Prep Now In Place
 
-The following concerns belong to the later access-mapping branch, not this one:
+The following concerns are now described by the completed access-mapping prep
+foundation and still must stay outside this backend-link layer:
 
 - translation from global role to space role to thread participation scope
 - internal-only or restricted-external participant resolution
@@ -364,26 +366,31 @@ layer and then add:
 That keeps the migration path additive and avoids coupling unfinished
 operational objects to current chat behavior too early.
 
-## Handoff To `feature/space-timeline-foundation`
+## Status In The Current Sequence
 
-This branch is intended to hand off to:
+The timeline-foundation and access-mapping-prep branches are now already
+complete.
 
-- `feature/space-timeline-foundation`
-
-That next branch should treat the current backend link layer as a supporting
-dependency, not as the place where timeline semantics live.
+That means the current backend link layer should now be treated as settled
+foundation for later policy and enforcement work, not as an active design
+question.
 
 Recommended reuse pattern:
 
 - use [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
-  when timeline work needs optional conversation-level operational context
+  when later policy or operational-object work needs optional
+  conversation-level operational context
 - keep direct companion-table access inside
   [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
-- keep event creation, event taxonomy, and event-write rules in the later
-  timeline branch
+- keep event creation, event taxonomy, and event-write rules outside this
+  adapter layer
+
+Recommended exact next branch from the current state:
+
+- `feature/space-policy-matrix`
 
 Important boundary:
 
 - this branch can tell later code what thread context exists
-- the timeline branch must decide how that context becomes durable space-level
-  history
+- later branches must not reimplement companion-table access or turn this
+  helper boundary into an ad hoc policy engine

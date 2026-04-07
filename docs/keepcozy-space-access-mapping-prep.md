@@ -43,6 +43,21 @@ This branch is intended to prepare later access work around:
 
 It does not implement final authorization behavior.
 
+## Status In Current Sequence
+
+This preparation layer should now be treated as completed foundation work.
+
+That means later branches should use it as input rather than re-creating a
+separate visibility vocabulary.
+
+Recommended exact next branch:
+
+- `feature/space-policy-matrix`
+
+Recommended follow-on after that:
+
+- `feature/space-rls-hardening`
+
 ## Current Runtime Inputs vs Future Policy Inputs
 
 The current repository already exposes some useful access signals, but they do
@@ -384,6 +399,14 @@ That separation keeps this branch honest:
 - this branch names inputs and interpretation order
 - the next branch freezes policy meaning
 - the later RLS branch enforces that meaning
+
+Practical non-repeat rule:
+
+- later branches should extend this matrix into final policy only where real
+  enforcement detail is needed
+- they should not reopen role-layer separation, thread-audience vocabulary, or
+  timeline-visibility inheritance unless a new product constraint clearly
+  forces it
 
 It also keeps current runtime safer because the project does not have to guess
 policy intent while writing backend or SQL predicates.

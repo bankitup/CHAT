@@ -170,16 +170,16 @@ Important rule:
 
 ## What Must Wait for Later Branches
 
-### `feature/space-access-mapping-prep`
+### Completed preparation already in place
 
-This later branch should own:
+The access-interpretation foundation now already documents:
 
 - policy-aware filtering of timeline rows
 - interpretation of internal-only vs restricted-external audience
 - operator oversight rules
 - assignment-aware visibility rules
 
-The timeline helper must not become a policy engine before that work lands.
+The timeline helper must still not become a policy engine.
 
 Visibility boundary:
 
@@ -187,6 +187,21 @@ Visibility boundary:
 - timeline visibility interpretation is documented separately in
   [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
 - emission location and visibility scope must stay separate concerns
+
+### What must wait for the final enforcement sequence
+
+The following concerns should wait for:
+
+1. `feature/space-policy-matrix`
+2. `feature/space-rls-hardening`
+
+Those branches should own:
+
+- the exact allow/deny matrix for committed timeline visibility
+- the final SQL/RLS and backend enforcement predicates
+- any audited exception handling for support/admin review
+- any decision to widen or further constrain visibility for specific event
+  categories
 
 ### Later event-writing branches
 

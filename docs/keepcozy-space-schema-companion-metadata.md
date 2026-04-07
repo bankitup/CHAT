@@ -278,7 +278,7 @@ That means:
 
 ## Practical Implication For The Next Branches
 
-After this schema draft exists, the next safe follow-ons become:
+After this schema draft existed, the safe follow-ons were:
 
 1. backend helper boundaries for reading companion rows
 2. controlled write paths for one operational thread type
@@ -288,15 +288,24 @@ Current branch note:
 
 - the first low-level backend helper boundary now exists in
   [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
-- the next remaining step is access-checked integration in conversation-level
-  service flows, not a new schema redesign
+- the first narrow read-composition seam now also exists in
+  [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+- the next remaining steps are policy formalization and later enforcement work,
+  not a new schema redesign
 
 This schema draft is therefore not the final model. It is the first durable
 physical foothold for the future companion metadata layer.
 
-Recommended exact next feature branch:
+Practical current-state rule:
 
-- `feature/space-backend-thread-object-links`
+- later branches should treat the additive companion-table shape as settled
+  baseline unless a materially new product constraint appears
+- they should not reopen the first-pass `primary operational object ref only`
+  decision casually
+
+Recommended exact next feature branch from the current state:
+
+- `feature/space-policy-matrix`
 
 For the concrete read/write integration seams that should be used later, see:
 
