@@ -391,6 +391,10 @@ Recommended stance:
   seed are applied
 - treat the seeded flow as the first persisted end-to-end validation path for
   both reads and writes
+- use note-only updates on the seeded issue/task as the shared validation path
+  for any current TEST-home member
+- use newly created reviewer-owned issue/task records when validating status
+  changes under the current narrow RLS rules
 
 ## Explicit Non-Goals
 

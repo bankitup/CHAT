@@ -5,6 +5,9 @@
 -- - seed one room, one issue, one task, and minimal history only
 -- - avoid broad fixture libraries or preview-parity backfills
 -- - keep the seed idempotent and avoid overwriting existing local edits
+-- - keep this seed as the shared baseline proof path, not a reset script
+-- - allow reviewers to append fresh updates during validation without losing
+--   the canonical faucet/task story
 -- - keep the same canonical route slugs as the preview-backed shell:
 --   /rooms/kitchen
 --   /issues/kitchen-faucet-drip
