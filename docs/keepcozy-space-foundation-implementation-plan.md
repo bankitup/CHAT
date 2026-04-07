@@ -362,6 +362,17 @@ Branch ownership note:
 - later access/policy work should build on this event model rather than trying
   to redefine the timeline shape ad hoc
 
+Phase 5 guardrails:
+
+- it must not treat all chat messages as timeline rows by default
+- it must not mix operational state transitions with transport/UI/runtime
+  diagnostics
+- it must not fold thread-local system notices into committed space history
+- it must not ship notification fan-out or automation execution as part of the
+  first timeline pass
+- it must not widen current `dm | group` runtime semantics to make timeline
+  work
+
 ### Phase 6. Controlled user-facing KeepCozy thread experience
 
 Goal:

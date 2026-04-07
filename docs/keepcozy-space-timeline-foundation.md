@@ -415,7 +415,40 @@ This distinction matters:
 - metadata describes current state
 - timeline rows describe historical occurrences
 
-## 12. What This Foundation Intentionally Does Not Do
+## 12. Guardrails and Non-Goals
+
+The first timeline foundation is intentionally narrow.
+
+It exists to protect the future operational-history layer from becoming noisy,
+ambiguous, or prematurely coupled to the current chat runtime.
+
+### Guardrails
+
+- do not treat all chat messages as committed timeline events by default
+- do not mix operational state transitions with UI-only, transport, playback,
+  or diagnostics state
+- do not emit committed timeline rows for unstable or pre-commit actions
+- do not build notification fan-out or automation execution into this branch
+- do not collapse thread-local system notices and committed space history into
+  one model
+- do not change current `dm | group` conversation semantics in order to make
+  the timeline work
+
+### Practical interpretation
+
+- ordinary text, attachment, and voice messages stay in `public.messages`
+  unless a later product rule deliberately promotes a selected message-derived
+  event into the space timeline
+- optimistic sends, upload retries, playback state, read-state changes, and
+  presence remain out of committed space history
+- thread-local system rendering, if added later, should remain distinct from
+  committed `public.space_timeline_events`
+- timeline writes should happen only after the underlying operational change is
+  durable
+- the timeline layer must not become a back door for changing conversation
+  core fields, `messages.kind`, or DM/group meaning
+
+### Non-goals of this branch
 
 This branch does not:
 
@@ -427,6 +460,8 @@ This branch does not:
 - define final access-policy resolution
 - define final event deduplication/idempotency strategy
 - define final UI rendering for thread-local or space-wide timelines
+- redefine `public.conversations.kind`
+- attach timeline emission to ordinary message-send helpers
 
 ## 13. Current State vs Target State
 

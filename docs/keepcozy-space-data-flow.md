@@ -294,6 +294,15 @@ First-foundation note:
   - thread closed
   - thread reopened
 
+Guardrail:
+
+- this longer-term category list must not be read as a first-pass emission
+  checklist
+- the initial timeline branch should not mirror all message traffic, upload
+  state, or UI/system noise into committed space history
+- thread-local system notices and space-wide committed history should stay as
+  separate concepts
+
 Recommended target event fields:
 
 | Field | Why it matters |
