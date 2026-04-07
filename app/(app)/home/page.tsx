@@ -138,6 +138,51 @@ export default async function HomeDashboardPage({
                 </span>
               </div>
 
+              <div className="keepcozy-meta-row">
+                <span className="keepcozy-meta-pill">
+                  {t.homeDashboard.currentHomeLabel}: {activeSpace.name}
+                </span>
+                <span className="keepcozy-meta-pill">
+                  {t.homeDashboard.roomsTitle}: {primaryFlow.room.name}
+                </span>
+                <span className="keepcozy-meta-pill">
+                  {t.homeDashboard.historyTitle}: {primaryFlow.history.length}
+                </span>
+              </div>
+
+              <p className="keepcozy-detail-body">{t.homeDashboard.testFlowBody}</p>
+
+              <div className="keepcozy-card-actions">
+                <Link
+                  className="pill"
+                  href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.homeDashboard.openRooms}
+                </Link>
+                <Link
+                  className="button button-secondary"
+                  href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.homeDashboard.openIssues}
+                </Link>
+                <Link
+                  className="button button-secondary"
+                  href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.homeDashboard.openTasks}
+                </Link>
+                <Link
+                  className="button button-secondary"
+                  href={withSpaceParam('/activity', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.homeDashboard.openHistory}
+                </Link>
+              </div>
+
               <div className="keepcozy-stack-list keepcozy-flow-grid">
                 <section className="keepcozy-secondary-card">
                   <div className="stack keepcozy-link-copy">
@@ -204,20 +249,49 @@ export default async function HomeDashboardPage({
               </div>
             </article>
           ) : (
-            <section className="empty-card">
+            <section className="empty-card keepcozy-preview-card">
               <h3 className="card-title">{testFlowHomeHint}</h3>
               <p className="muted">
                 {showPrimaryFlow
                   ? t.homeDashboard.testFlowPendingBody
                   : t.homeDashboard.testFlowMismatchBody}
               </p>
-              <Link
-                className="button button-secondary"
-                href={withSpaceParam('/spaces', activeSpace.id)}
-                prefetch={false}
-              >
-                {t.homeDashboard.switchHome}
-              </Link>
+              <div className="keepcozy-meta-row">
+                <span className="keepcozy-meta-pill">
+                  {t.homeDashboard.currentHomeLabel}: {activeSpace.name}
+                </span>
+                <span className="keepcozy-meta-pill">{testFlowHomeHint} home</span>
+                <span className="keepcozy-meta-pill">Kitchen</span>
+                <span className="keepcozy-meta-pill">Kitchen faucet issue</span>
+                <span className="keepcozy-meta-pill">Capture faucet model task</span>
+              </div>
+              <div className="keepcozy-card-actions">
+                <Link
+                  className="button"
+                  href={withSpaceParam('/spaces', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.homeDashboard.switchHome}
+                </Link>
+                {showPrimaryFlow ? (
+                  <>
+                    <Link
+                      className="button button-secondary"
+                      href={withSpaceParam('/rooms', activeSpace.id)}
+                      prefetch={false}
+                    >
+                      {t.homeDashboard.openRooms}
+                    </Link>
+                    <Link
+                      className="button button-secondary"
+                      href={withSpaceParam('/activity', activeSpace.id)}
+                      prefetch={false}
+                    >
+                      {t.homeDashboard.openHistory}
+                    </Link>
+                  </>
+                ) : null}
+              </div>
             </section>
           )}
         </section>

@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
   getKeepCozyRoomDetailData,
+  isKeepCozyPrimaryTestHomeName,
+  isKeepCozyPrimaryTestIssueId,
+  isKeepCozyPrimaryTestRoomId,
+  isKeepCozyPrimaryTestTaskId,
   requireKeepCozyContext,
 } from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
@@ -34,6 +38,13 @@ export default async function RoomDetailPage({
     notFound();
   }
 
+  const showPrimaryFlow =
+    isKeepCozyPrimaryTestHomeName(activeSpace.name) && isKeepCozyPrimaryTestRoomId(room.id);
+  const primaryIssue =
+    roomIssues.find((candidate) => isKeepCozyPrimaryTestIssueId(candidate.id)) ?? null;
+  const primaryTask =
+    roomTasks.find((candidate) => isKeepCozyPrimaryTestTaskId(candidate.id)) ?? null;
+
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
       <section className="stack settings-hero keepcozy-hero">
@@ -59,16 +70,75 @@ export default async function RoomDetailPage({
             <span className="activity-focus-kicker">{t.rooms.detailTitle}</span>
             <h2 className="activity-focus-title">{room.name}</h2>
             <p className="muted activity-focus-body">{t.rooms.detailBody}</p>
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">
+                {t.rooms.issuesLabel}: {roomIssues.length}
+              </span>
+              <span className="keepcozy-meta-pill">
+                {t.rooms.tasksLabel}: {roomTasks.length}
+              </span>
+              {showPrimaryFlow ? (
+                <span className="keepcozy-meta-pill">{t.homeDashboard.testFlowTitle}</span>
+              ) : null}
+            </div>
           </div>
 
-          <Link
-            className="button button-secondary keepcozy-focus-action"
-            href={withSpaceParam(`/issues?room=${room.id}`, activeSpace.id)}
-            prefetch={false}
-          >
-            {t.rooms.viewIssues}
-          </Link>
+          <div className="keepcozy-card-actions keepcozy-focus-actions">
+            <Link
+              className="button button-secondary keepcozy-focus-action"
+              href={withSpaceParam(`/issues?room=${room.id}`, activeSpace.id)}
+              prefetch={false}
+            >
+              {t.rooms.viewIssues}
+            </Link>
+            <Link
+              className="button button-secondary keepcozy-focus-action"
+              href={withSpaceParam('/activity', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.homeDashboard.openHistory}
+            </Link>
+          </div>
         </section>
+
+        {showPrimaryFlow && primaryIssue && primaryTask ? (
+          <section className="empty-card keepcozy-preview-card">
+            <div className="keepcozy-preview-header">
+              <span className="summary-pill summary-pill-muted">{t.homeDashboard.testFlowTitle}</span>
+              <span className="keepcozy-context-label">{activeSpace.name}</span>
+            </div>
+            <h2 className="card-title">{room.name}</h2>
+            <p className="muted">{t.homeDashboard.testFlowBody}</p>
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">{room.name}</span>
+              <span className="keepcozy-meta-pill">{primaryIssue.title}</span>
+              <span className="keepcozy-meta-pill">{primaryTask.title}</span>
+            </div>
+            <div className="keepcozy-card-actions">
+              <Link
+                className="pill"
+                href={withSpaceParam(`/issues/${primaryIssue.id}`, activeSpace.id)}
+                prefetch={false}
+              >
+                {t.homeDashboard.openIssues}
+              </Link>
+              <Link
+                className="button button-secondary"
+                href={withSpaceParam(`/tasks/${primaryTask.id}`, activeSpace.id)}
+                prefetch={false}
+              >
+                {t.homeDashboard.openTasks}
+              </Link>
+              <Link
+                className="button button-secondary"
+                href={withSpaceParam('/activity', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.homeDashboard.openHistory}
+              </Link>
+            </div>
+          </section>
+        ) : null}
 
         <section className="stack settings-section keepcozy-section">
           <div className="stack keepcozy-section-copy">

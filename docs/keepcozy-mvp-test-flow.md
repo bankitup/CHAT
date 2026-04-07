@@ -144,15 +144,11 @@ The first proof path should be checked in this order:
    `body = Need one clear fixture photo before moving from identification to repair.`
 6. History
    Open `/activity` and confirm the `Primary test flow history` section shows
-<<<<<<< HEAD
    the same issue/task update path in one place.
    The surface should make the room -> issue -> task chain explicit and group
    the operational updates into issue history and task history instead of
    reading like a generic feed.
-=======
-   the same issue/task update path in one place, including the newly appended
-   persisted issue/task updates.
->>>>>>> 229ac35874fd9fea5f73c213ec37ebb8c117604f
+   It should also include the newly appended persisted issue/task updates.
    If another home is active, the screen should again prompt the reviewer back
    to `TEST`.
 7. Optional creator-owned extension
@@ -209,6 +205,9 @@ This branch keeps implementation support intentionally small:
   [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
 - the home dashboard explicitly exposes the first proof path in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
+- the canonical room, issue, and task detail routes now echo the same TEST-home
+  proof-path cues so reviewers can confirm they are still following the Kitchen
+  -> faucet issue -> linked task path
 - the issue create/detail routes now support persisted writes in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/issues/new/page.tsx)
   and

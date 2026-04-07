@@ -174,6 +174,24 @@ export function isKeepCozyPrimaryTestHomeName(
   );
 }
 
+export function isKeepCozyPrimaryTestRoomId(
+  value: string | null | undefined,
+) {
+  return (value ?? '').trim() === KEEP_COZY_PRIMARY_TEST_FLOW.roomId;
+}
+
+export function isKeepCozyPrimaryTestIssueId(
+  value: string | null | undefined,
+) {
+  return (value ?? '').trim() === KEEP_COZY_PRIMARY_TEST_FLOW.issueId;
+}
+
+export function isKeepCozyPrimaryTestTaskId(
+  value: string | null | undefined,
+) {
+  return (value ?? '').trim() === KEEP_COZY_PRIMARY_TEST_FLOW.taskId;
+}
+
 function getKeepCozyLocale(language: AppLanguage) {
   return language === 'ru' ? 'ru-RU' : 'en-US';
 }
