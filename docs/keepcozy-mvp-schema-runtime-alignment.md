@@ -66,28 +66,41 @@ Important rule:
   so the visible app flow no longer reads as chat-first
 - they are not proof that room/issue/task runtime already exists
 
-## 2. Current Pieces That Do Not Yet Match The MVP Slice
+## 2. Current Pieces That Do Not Yet Match The Live MVP Runtime
 
-The following first-class MVP entities still do not have active runtime schema
-or code in this repository:
+The repository now has a dedicated persistence plan and additive SQL for the
+first KeepCozy object slice:
 
-- `homes` as a dedicated physical table separate from shared `spaces`
-- `home_memberships` as a dedicated physical table separate from
-  `space_members`
+- [keepcozy-first-persistence-slice.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-first-persistence-slice.md)
+- [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql)
+
+However, the live app runtime is still not reading these records yet.
+
+The following MVP entities now have schema-level direction, but still do not
+have active route-level runtime integration in this repository:
+
 - `rooms`
 - `issues`
 - `issue_updates`
 - `tasks`
 - `task_updates`
 
+The following concepts still do not have dedicated physical tables by design in
+this shared-repo phase:
+
+- `homes` separate from shared `spaces`
+- `home_memberships` separate from shared `space_members`
+
 Practical interpretation:
 
-- the first MVP runtime should currently be read as:
-  - shared `space` foundation already exists
-  - dedicated room/issue/task schema slice does not exist yet
+- the first MVP should currently be read as:
+  - shared `space` foundation already exists and remains the home seam
+  - dedicated room/issue/task persistence now exists as additive SQL
+  - the visible KeepCozy routes still need a later read-path swap from preview
+    data to persisted records
 
-That means the next schema/runtime center of gravity should move toward those
-missing entities rather than toward broader future object families.
+That means the next runtime center of gravity should move into those persisted
+entities rather than toward broader future object families.
 
 ## 3. Current Pieces That Are Real But Future-Layer Only
 

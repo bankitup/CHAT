@@ -23,6 +23,8 @@ Related documents:
 - [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
 - [2026-04-06-message-assets-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-runtime-align.sql)
 - [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql)
+- [2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql)
+- [2026-04-07-keepcozy-first-persistence-slice-test-seed.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql)
 
 ## Decisions Locked By This Slice
 
@@ -269,27 +271,54 @@ Recommended first persisted records:
 | task update | `Task created` | canonical first task history row |
 | task update | `Scope held` | canonical second task history row |
 
-## Recommended Migration Sequence
+## Migration Files In This Branch
 
-1. Apply the table foundation in
-   [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql).
-2. Add one narrow seed/backfill for the canonical `TEST` home path.
-3. Add KeepCozy read helpers for:
+Apply these SQL files in order:
+
+1. Table foundation:
+   [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql)
+2. Conservative RLS and grants:
+   [2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql)
+3. Canonical TEST-home seed:
+   [2026-04-07-keepcozy-first-persistence-slice-test-seed.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql)
+
+## Intentional First-Pass Simplifications
+
+- `public.spaces` and `public.space_members` remain the only home/home-membership
+  truth in this slice.
+- `rooms` writes are limited to home `owner` and `admin` roles in the first RLS
+  pass.
+- `issues` and `tasks` allow authenticated inserts for any current home member,
+  while updates stay limited to the creator or a home `owner` / `admin`.
+- `issue_updates` and `task_updates` are append-only for authenticated users in
+  this pass: insert is allowed, update/delete is deferred.
+- dedicated attachment linkage is still deferred even though the broader MVP
+  boundary allows narrow attachments later.
+- no generic `updated_at` trigger helper is introduced in this slice; runtime
+  code or later migrations must update parent rows deliberately.
+- the canonical TEST-home seed only backfills the first `kitchen` issue/task
+  proof path and does not try to recreate the full preview dataset.
+- the canonical seed avoids overwriting existing matching records so local test
+  edits are preserved on re-run.
+
+## Recommended Runtime Sequence After Migration
+
+1. Add KeepCozy read helpers for:
    - rooms list/detail
    - issues list/detail
    - tasks list/detail
    - issue/task history
-4. Switch `/rooms` and the room detail route from preview reads to persisted
+2. Switch `/rooms` and the room detail route from preview reads to persisted
    reads.
-5. Switch `/issues` and `/tasks` to persisted reads.
-6. Switch the KeepCozy-first history section in `/activity` to persisted
+3. Switch `/issues` and `/tasks` to persisted reads.
+4. Switch the KeepCozy-first history section in `/activity` to persisted
    `issue_updates` and `task_updates`.
-7. Add minimal create/update write paths for:
+5. Add minimal create/update write paths for:
    - create issue
    - create task
    - append issue update
    - append task update
-8. Keep preview fallback only as a temporary guard while the read-path swap is
+6. Keep preview fallback only as a temporary guard while the read-path swap is
    in progress, then remove it from the canonical MVP proof.
 
 ## Deliberately Deferred After This Slice

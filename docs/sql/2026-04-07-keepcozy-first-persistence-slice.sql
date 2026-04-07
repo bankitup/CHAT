@@ -6,6 +6,7 @@
 -- - preserve current route slugs from the preview-backed KeepCozy shell
 -- - keep issue/task history append-oriented and audit-friendly
 -- - avoid deep chat coupling, attachment expansion, and broader future-domain scope
+-- - keep the first table set narrow enough to support the canonical TEST-home flow
 
 create extension if not exists pgcrypto;
 
@@ -148,6 +149,11 @@ create table if not exists public.issue_updates (
       status_after is null
       or kind in ('status_change', 'resolution')
     ),
+  constraint issue_updates_status_change_requires_status_after_check
+    check (
+      kind <> 'status_change'
+      or status_after is not null
+    ),
   constraint issue_updates_resolution_status_check
     check (
       kind <> 'resolution'
@@ -256,6 +262,11 @@ create table if not exists public.task_updates (
       status_after is null
       or kind in ('status_change', 'completion')
     ),
+  constraint task_updates_status_change_requires_status_after_check
+    check (
+      kind <> 'status_change'
+      or status_after is not null
+    ),
   constraint task_updates_completion_status_check
     check (
       kind <> 'completion'
@@ -275,9 +286,11 @@ create index if not exists task_updates_task_created_at_idx
 create index if not exists task_updates_space_created_at_idx
   on public.task_updates (space_id, created_at desc, id desc);
 
--- Intentionally deferred in this first persistence draft:
--- - canonical TEST-home seed/backfill rows
--- - grants and row-level security policies
+-- Intentionally deferred after this foundation migration:
+-- - canonical TEST-home seed/backfill rows are added in
+--   /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql
+-- - grants and row-level security policies are added in
+--   /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql
 -- - write-path integration in runtime code
 -- - updated_at triggers or generic timestamp helpers
 -- - attachment linkage tables for issue/task updates

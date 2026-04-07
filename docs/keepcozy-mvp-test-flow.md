@@ -34,11 +34,13 @@ current compatibility seams that already exist in this repository:
 
 Important clarification:
 
-- this is a runtime proof path, not a claim that `rooms`, `issues`,
-  `issue_updates`, `tasks`, or `task_updates` are already persisted in
-  Supabase
-- the first proof should still be representative of the real MVP loop, even
-  while the current data is scaffolded
+- this remains the current runtime proof path while the live screens are still
+  preview-backed
+- dedicated persistence migrations now exist for `rooms`, `issues`,
+  `issue_updates`, `tasks`, and `task_updates`, but the route layer has not
+  switched to those records yet
+- the first proof should still be representative of the real MVP loop during
+  that transition
 
 ## Canonical Test Home
 
@@ -151,8 +153,11 @@ dedicated MVP schema slice:
 
 That next lift is now defined in
 [keepcozy-first-persistence-slice.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-first-persistence-slice.md)
-and begins with
-[2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql).
+and begins with:
+
+- [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql)
+- [2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql)
+- [2026-04-07-keepcozy-first-persistence-slice-test-seed.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql)
 
 The test flow above should remain the same when that lift happens. Only the
 backing persistence layer should change.
