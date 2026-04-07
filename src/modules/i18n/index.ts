@@ -176,6 +176,8 @@ type LanguageDictionary = {
     subtitle: string;
     backToHome: string;
     create: string;
+    submitCreate: string;
+    submitUpdate: string;
     previewPill: string;
     previewBody: string;
     selectedHomeLabel: string;
@@ -194,17 +196,42 @@ type LanguageDictionary = {
     draftBody: string;
     fieldHome: string;
     fieldRoom: string;
+    fieldTitle: string;
     fieldSummary: string;
+    fieldNextStep: string;
     fieldFirstUpdate: string;
+    fieldUpdateLabel: string;
+    fieldUpdateBody: string;
+    fieldStatus: string;
     fieldAttachments: string;
     createNote: string;
     browseIssues: string;
+    appendTitle: string;
+    appendBody: string;
+    titleRequired: string;
+    firstUpdateRequired: string;
+    updateBodyRequired: string;
+    createSuccess: string;
+    updateSuccess: string;
+    createFailed: string;
+    updateFailed: string;
+    statusKeepCurrent: string;
+    statusOpen: string;
+    statusPlanned: string;
+    statusInReview: string;
+    statusResolved: string;
+    loggedLabel: string;
+    updateLabelDefault: string;
+    statusUpdatedLabel: string;
+    resolvedLabel: string;
   };
   tasks: {
     title: string;
     subtitle: string;
     backToHome: string;
     create: string;
+    submitCreate: string;
+    submitUpdate: string;
     previewPill: string;
     previewBody: string;
     selectedHomeLabel: string;
@@ -221,11 +248,37 @@ type LanguageDictionary = {
     draftBody: string;
     fieldHome: string;
     fieldIssue: string;
+    fieldSummary: string;
+    fieldNextStep: string;
     fieldTask: string;
     fieldFirstUpdate: string;
+    fieldUpdateLabel: string;
+    fieldUpdateBody: string;
+    fieldStatus: string;
     fieldAttachments: string;
     createNote: string;
     browseTasks: string;
+    appendTitle: string;
+    appendBody: string;
+    issueRequired: string;
+    titleRequired: string;
+    firstUpdateRequired: string;
+    updateBodyRequired: string;
+    createSuccess: string;
+    updateSuccess: string;
+    createFailed: string;
+    updateFailed: string;
+    statusKeepCurrent: string;
+    statusPlanned: string;
+    statusActive: string;
+    statusWaiting: string;
+    statusDone: string;
+    statusCancelled: string;
+    createdLabel: string;
+    updateLabelDefault: string;
+    statusUpdatedLabel: string;
+    completedLabel: string;
+    createIssueFirstBody: string;
   };
   activity: {
     title: string;
@@ -773,6 +826,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       subtitle: 'Keep problems structured, scoped to a home and room, and ready to turn into task work.',
       backToHome: 'Back to home',
       create: 'Create issue',
+      submitCreate: 'Save issue',
+      submitUpdate: 'Add update',
       previewPill: 'MVP slice',
       previewBody:
         'This is a focused issue lane for the MVP, now backed by the first persisted issue records. Supplier richness, recommendations, and automation stay out of the way.',
@@ -790,21 +845,46 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSubtitle: 'Keep capture narrow: home, room, issue summary, first update, then task follow-through.',
       draftTitle: 'First capture seam',
       draftBody:
-        'This route marks where issue creation belongs in the MVP flow. The form stays intentionally lightweight until the first issue tables are wired.',
+        'This route now creates real issue and issue_history records while staying intentionally lightweight for the MVP.',
       fieldHome: 'Home context',
       fieldRoom: 'Room',
+      fieldTitle: 'Issue title',
       fieldSummary: 'Issue summary',
+      fieldNextStep: 'Next step',
       fieldFirstUpdate: 'First update',
+      fieldUpdateLabel: 'Update label',
+      fieldUpdateBody: 'Update note',
+      fieldStatus: 'Status',
       fieldAttachments: 'Attachments',
       createNote:
         'Keep this screen practical: enough structure for issues and issue_updates, without growing into a full service workflow.',
       browseIssues: 'Back to issues',
+      appendTitle: 'Add issue update',
+      appendBody: 'Use one short update to capture what changed, and only change status when the issue really moved.',
+      titleRequired: 'Add a short title before saving the issue.',
+      firstUpdateRequired: 'Add the first issue update before saving.',
+      updateBodyRequired: 'Add a short update before saving history.',
+      createSuccess: 'Issue saved.',
+      updateSuccess: 'Issue update saved.',
+      createFailed: 'Unable to save this issue right now. Please try again.',
+      updateFailed: 'Unable to save this issue update right now. Please try again.',
+      statusKeepCurrent: 'Keep current status',
+      statusOpen: 'Needs attention',
+      statusPlanned: 'Planned',
+      statusInReview: 'In review',
+      statusResolved: 'Resolved',
+      loggedLabel: 'Issue logged',
+      updateLabelDefault: 'Update added',
+      statusUpdatedLabel: 'Status updated',
+      resolvedLabel: 'Issue resolved',
     },
     tasks: {
       title: 'Tasks',
       subtitle: 'Use tasks to move an issue forward with clear ownership, progress notes, and completion history.',
       backToHome: 'Back to home',
       create: 'Create task',
+      submitCreate: 'Save task',
+      submitUpdate: 'Add update',
       previewPill: 'MVP slice',
       previewBody:
         'The task lane stays intentionally narrow for the MVP and now reads from the first persisted task records: actionable work, linked issue context, and update history.',
@@ -820,15 +900,42 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSubtitle: 'Keep task creation tied to one issue, one next step, and one update trail.',
       draftTitle: 'First task capture seam',
       draftBody:
-        'This route holds the MVP task-create position without introducing broad new runtime behavior before the schema slice lands.',
+        'This route now creates real task and task_history records while staying intentionally lightweight for the MVP.',
       fieldHome: 'Home context',
       fieldIssue: 'Parent issue',
-      fieldTask: 'Task summary',
+      fieldSummary: 'Task summary',
+      fieldNextStep: 'Next step',
+      fieldTask: 'Task title',
       fieldFirstUpdate: 'First update',
+      fieldUpdateLabel: 'Update label',
+      fieldUpdateBody: 'Update note',
+      fieldStatus: 'Status',
       fieldAttachments: 'Attachments',
       createNote:
         'The MVP task surface should stay smaller than procurement, supplier assignment, or deep automation flows.',
       browseTasks: 'Back to tasks',
+      appendTitle: 'Add task update',
+      appendBody: 'Use short task updates to capture progress, blockers, or completion without turning this into a heavier workflow engine.',
+      issueRequired: 'Choose an issue before saving the task.',
+      titleRequired: 'Add a short task title before saving.',
+      firstUpdateRequired: 'Add the first task update before saving.',
+      updateBodyRequired: 'Add a short task update before saving history.',
+      createSuccess: 'Task saved.',
+      updateSuccess: 'Task update saved.',
+      createFailed: 'Unable to save this task right now. Please try again.',
+      updateFailed: 'Unable to save this task update right now. Please try again.',
+      statusKeepCurrent: 'Keep current status',
+      statusPlanned: 'Planned',
+      statusActive: 'Active',
+      statusWaiting: 'Waiting',
+      statusDone: 'Done',
+      statusCancelled: 'Cancelled',
+      createdLabel: 'Task created',
+      updateLabelDefault: 'Update added',
+      statusUpdatedLabel: 'Status updated',
+      completedLabel: 'Task completed',
+      createIssueFirstBody:
+        'Tasks stay linked through issues in the MVP. Create or open an issue first, then come back here.',
     },
     activity: {
       title: 'History',
@@ -1408,6 +1515,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Держите проблемы структурированными, привязанными к дому и комнате, и готовыми перейти в задачи.',
       backToHome: 'Назад к дому',
       create: 'Создать проблему',
+      submitCreate: 'Сохранить проблему',
+      submitUpdate: 'Добавить обновление',
       previewPill: 'MVP-срез',
       previewBody:
         'Это сфокусированная линия проблем для MVP, теперь опирающаяся на первый persisted-срез проблем. Богатые поставщики, рекомендации и автоматизация пока не мешают.',
@@ -1428,15 +1537,39 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Держите ввод узким: дом, комната, краткое описание проблемы, первое обновление, затем задачи.',
       draftTitle: 'Первый seam для ввода',
       draftBody:
-        'Этот маршрут показывает, где в MVP живет создание проблемы. Поверхность специально остается легкой, пока не подключены первые таблицы проблем.',
+        'Этот маршрут теперь создает реальные записи issue и issue_history, оставаясь намеренно легким для MVP.',
       fieldHome: 'Контекст дома',
       fieldRoom: 'Комната',
+      fieldTitle: 'Название проблемы',
       fieldSummary: 'Краткое описание проблемы',
+      fieldNextStep: 'Следующий шаг',
       fieldFirstUpdate: 'Первое обновление',
+      fieldUpdateLabel: 'Заголовок обновления',
+      fieldUpdateBody: 'Текст обновления',
+      fieldStatus: 'Статус',
       fieldAttachments: 'Вложения',
       createNote:
         'Экран должен оставаться практичным: достаточно структуры для issues и issue_updates, без разрастания в полный сервисный workflow.',
       browseIssues: 'Назад к проблемам',
+      appendTitle: 'Добавить обновление проблемы',
+      appendBody:
+        'Используйте одно короткое обновление, чтобы зафиксировать изменение, и меняйте статус только когда проблема действительно сдвинулась.',
+      titleRequired: 'Добавьте короткое название перед сохранением проблемы.',
+      firstUpdateRequired: 'Добавьте первое обновление перед сохранением проблемы.',
+      updateBodyRequired: 'Добавьте короткое обновление перед сохранением истории.',
+      createSuccess: 'Проблема сохранена.',
+      updateSuccess: 'Обновление проблемы сохранено.',
+      createFailed: 'Не удалось сохранить проблему. Попробуйте еще раз.',
+      updateFailed: 'Не удалось сохранить обновление проблемы. Попробуйте еще раз.',
+      statusKeepCurrent: 'Оставить текущий статус',
+      statusOpen: 'Требует внимания',
+      statusPlanned: 'Запланировано',
+      statusInReview: 'На разборе',
+      statusResolved: 'Решено',
+      loggedLabel: 'Проблема зафиксирована',
+      updateLabelDefault: 'Обновление добавлено',
+      statusUpdatedLabel: 'Статус обновлен',
+      resolvedLabel: 'Проблема решена',
     },
     tasks: {
       title: 'Задачи',
@@ -1444,6 +1577,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Используйте задачи, чтобы двигать проблему вперед с понятной ответственностью, заметками о прогрессе и историей завершения.',
       backToHome: 'Назад к дому',
       create: 'Создать задачу',
+      submitCreate: 'Сохранить задачу',
+      submitUpdate: 'Добавить обновление',
       previewPill: 'MVP-срез',
       previewBody:
         'Линия задач в MVP намеренно узкая и теперь читается из первого persisted-среза задач: конкретная работа, связанная проблема и история обновлений.',
@@ -1462,15 +1597,43 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Держите создание задачи привязанным к одной проблеме, одному следующему шагу и одной истории обновлений.',
       draftTitle: 'Первый seam для задачи',
       draftBody:
-        'Этот маршрут держит место создания задачи в MVP, не добавляя широкого нового runtime-поведения до появления первого среза схемы.',
+        'Этот маршрут теперь создает реальные записи task и task_history, оставаясь намеренно легким для MVP.',
       fieldHome: 'Контекст дома',
       fieldIssue: 'Родительская проблема',
-      fieldTask: 'Краткое описание задачи',
+      fieldSummary: 'Краткое описание задачи',
+      fieldNextStep: 'Следующий шаг',
+      fieldTask: 'Название задачи',
       fieldFirstUpdate: 'Первое обновление',
+      fieldUpdateLabel: 'Заголовок обновления',
+      fieldUpdateBody: 'Текст обновления',
+      fieldStatus: 'Статус',
       fieldAttachments: 'Вложения',
       createNote:
         'Поверхность задачи в MVP должна быть меньше, чем закупки, назначение подрядчиков или глубокая автоматизация.',
       browseTasks: 'Назад к задачам',
+      appendTitle: 'Добавить обновление задачи',
+      appendBody:
+        'Используйте короткие обновления задачи, чтобы фиксировать прогресс, блокеры или завершение, не превращая все в тяжелый workflow engine.',
+      issueRequired: 'Выберите проблему перед сохранением задачи.',
+      titleRequired: 'Добавьте короткое название задачи перед сохранением.',
+      firstUpdateRequired: 'Добавьте первое обновление задачи перед сохранением.',
+      updateBodyRequired: 'Добавьте короткое обновление задачи перед сохранением истории.',
+      createSuccess: 'Задача сохранена.',
+      updateSuccess: 'Обновление задачи сохранено.',
+      createFailed: 'Не удалось сохранить задачу. Попробуйте еще раз.',
+      updateFailed: 'Не удалось сохранить обновление задачи. Попробуйте еще раз.',
+      statusKeepCurrent: 'Оставить текущий статус',
+      statusPlanned: 'Запланирована',
+      statusActive: 'Активна',
+      statusWaiting: 'Ожидание',
+      statusDone: 'Завершена',
+      statusCancelled: 'Отменена',
+      createdLabel: 'Задача создана',
+      updateLabelDefault: 'Обновление добавлено',
+      statusUpdatedLabel: 'Статус обновлен',
+      completedLabel: 'Задача завершена',
+      createIssueFirstBody:
+        'В MVP задачи остаются привязанными к проблемам. Сначала создайте или откройте проблему, затем вернитесь сюда.',
     },
     activity: {
       title: 'История',

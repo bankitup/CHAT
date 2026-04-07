@@ -25,6 +25,10 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
     roomId: query.room,
     spaceId: activeSpace.id,
   });
+  const createTaskHref = withSpaceParam(
+    activeIssue ? `/tasks/new?issue=${encodeURIComponent(activeIssue.id)}` : '/tasks/new',
+    activeSpace.id,
+  );
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -40,7 +44,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           </Link>
           <Link
             className="pill pill-accent"
-            href={withSpaceParam('/tasks/new', activeSpace.id)}
+            href={createTaskHref}
             prefetch={false}
           >
             {t.tasks.create}

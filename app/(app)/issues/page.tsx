@@ -23,6 +23,10 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
     roomId: query.room,
     spaceId: activeSpace.id,
   });
+  const createIssueHref = withSpaceParam(
+    activeRoom ? `/issues/new?room=${encodeURIComponent(activeRoom.id)}` : '/issues/new',
+    activeSpace.id,
+  );
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -38,7 +42,7 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
           </Link>
           <Link
             className="pill pill-accent"
-            href={withSpaceParam('/issues/new', activeSpace.id)}
+            href={createIssueHref}
             prefetch={false}
           >
             {t.issues.create}

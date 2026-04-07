@@ -71,7 +71,8 @@ Important clarification:
   primary read source for the MVP loop
 - `mvp-preview.ts` remains only as a temporary fallback for environments where
   the first KeepCozy tables have not been applied yet
-- minimal create/update write paths are still the next narrow lift
+- narrow issue/task create and update paths now exist on top of that first
+  persisted slice
 
 ## What This Persistence Slice Must Achieve
 
@@ -323,17 +324,11 @@ The current branch now includes:
 3. Preview fallback only as a temporary guard for pre-migration environments
    where the KeepCozy MVP tables are not available.
 
-The next narrow runtime lift is still minimal create/update write paths for:
-
-1. create issue
-2. create task
-3. append issue update
-4. append task update
-
-That follow-up should keep preview fallback temporary and remove it from the
+The next narrow runtime lift should keep preview fallback temporary, continue
+hardening the new issue/task write paths, and remove fallback from the
 canonical MVP proof once all target environments have the first schema slice.
 
-That write-path lift is now scoped in
+That current write-path layer is scoped in
 [keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md).
 
 ## Deliberately Deferred After This Slice
