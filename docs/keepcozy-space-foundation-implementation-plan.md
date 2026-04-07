@@ -48,6 +48,47 @@ direction:
 - make `space` the operational memory unit, not just the chat filter
 - prefer first-class operational tables for major business records
 
+## Current Execution State
+
+The following foundation branches should now be treated as completed baseline
+work on `develop`:
+
+- `feature/space-model-foundation`
+- `feature/space-contract-types`
+- `feature/space-schema-companion-metadata`
+- `feature/space-backend-thread-object-links`
+- `feature/space-timeline-foundation`
+- `feature/space-access-mapping-prep`
+
+Current runtime intentionally remains unchanged across those branches:
+
+- `public.conversations.kind` still means only `dm | group`
+- current active space and conversation role enums remain generic
+- `public.messages` remains the durable user-message history shell
+- `conversation_members.hidden_at` remains per-user archive/hide state
+- current production RLS and DM privacy behavior remain untouched
+
+Later branches should not repeat the following already-completed foundation
+work:
+
+- re-arguing the companion-metadata pattern instead of overloading core
+  conversation fields
+- re-opening the first-pass decision to store only one primary object ref in
+  companion metadata
+- re-defining the separation between user messages, thread-local system events,
+  and committed space timeline events
+- re-collapsing global role, space role, and thread participation/moderation
+  role into one layer
+- re-inventing alternate visibility vocabulary outside the existing
+  access-mapping prep contracts and docs
+
+Recommended exact remaining branch order from the current state:
+
+1. `feature/space-policy-matrix`
+2. `feature/space-rls-hardening`
+3. `feature/space-first-operational-object`
+4. `feature/keepcozy-space-ui-shell`
+
 ## 1. Current State Summary
 
 The current CHAT codebase already provides a real foundation for space-scoped
@@ -452,19 +493,15 @@ Risk:
 
 ## 5. Suggested Order of Execution
 
-Recommended sequence:
+From the current state on `develop`, the remaining recommended sequence is:
 
-1. finish docs and terminology alignment
-2. add shared type and contract scaffolding for thread metadata, audience
-   modes, and role-layer translation
-3. add additive schema for companion metadata, invitations/assignments, and
-   timeline events
-4. add backend read/write helpers for space/thread/object linkage
-5. add non-user-facing event generation and object-link scaffolding
-6. prepare the role and audience resolution layer
-7. ship one narrow operational-object plus thread linkage path
-8. ship limited KeepCozy UI once backend contracts are stable
-9. only then start policy matrix and RLS hardening work
+1. freeze the formal policy matrix on top of the completed role-layer,
+   companion-metadata, backend-link, timeline, and access-mapping foundations
+2. translate that agreed matrix into review-heavy backend and RLS hardening
+3. implement one narrow operational-object plus thread linkage path on top of
+   the now-explicit policy and schema foundation
+4. ship limited KeepCozy UI only after backend contracts and enforcement are
+   stable
 
 Key rule:
 
@@ -544,17 +581,21 @@ Before shipping any KeepCozy-facing UI or workflow:
 Use smaller feature branches that each change one architectural layer at a
 time.
 
-Recommended next branches:
+Completed foundational branches:
 
+- `feature/space-model-foundation`
 - `feature/space-contract-types`
 - `feature/space-schema-companion-metadata`
 - `feature/space-backend-thread-object-links`
 - `feature/space-timeline-foundation`
 - `feature/space-access-mapping-prep`
-- `feature/space-first-operational-object`
-- `feature/keepcozy-space-ui-shell`
+
+Recommended remaining branches from the current state:
+
 - `feature/space-policy-matrix`
 - `feature/space-rls-hardening`
+- `feature/space-first-operational-object`
+- `feature/keepcozy-space-ui-shell`
 
 Recommended strategy:
 
@@ -566,17 +607,18 @@ Recommended strategy:
 
 ## 11. Quick Wins
 
-The fastest low-risk wins are:
+The fastest remaining low-risk wins are:
 
-- add shared TypeScript types for `thread_type`, `audience_mode`, and
-  operational object references
-- decide whether thread metadata belongs in a companion table or other
-  companion layer
-- add a draft `space_timeline_events` schema doc before implementation
-- add explicit backend helper boundaries for thread metadata and object links
-- document operator-visibility and private-thread exception assumptions before
-  policy work
+- freeze the first explicit policy matrix using the completed access-mapping
+  prep and timeline-visibility groundwork
+- enumerate audited exception cases for `platform_admin` and `support_staff`
+  before writing enforcement rules
+- choose the first operational object type that will exercise the companion
+  metadata and timeline foundations end-to-end
 - keep operational role semantics out of current conversation moderation enums
+  while policy work is being formalized
+- keep current conversation/message runtime stable until the policy matrix is
+  specific enough for review-heavy enforcement work
 
 ## 12. Highest-Risk Changes
 
@@ -593,9 +635,14 @@ The changes most likely to cause regressions are:
 
 The next practical step should be:
 
-- keep this branch documentation-only
-- open the next branch for type-level and contract-level metadata foundation
-- avoid user-facing KeepCozy UI until the metadata and event layers exist
+- open `feature/space-policy-matrix`
+- treat the docs, contracts, additive schema drafts, backend-link boundaries,
+  timeline foundation, and access-mapping prep as baseline inputs rather than
+  redoing them
+- keep `feature/space-rls-hardening` as a separate, review-heavy follow-on
+  branch once the matrix is frozen
+- avoid user-facing KeepCozy UI until the policy matrix and enforcement layers
+  are in place
 
 That gives the project the best chance of making KeepCozy reusable without
 breaking the restored CHAT runtime.

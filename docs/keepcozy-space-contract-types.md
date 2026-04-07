@@ -395,11 +395,18 @@ These contracts should be used with the following explicit constraints:
 
 ## Intended Next Use
 
-The intended immediate follow-on is:
+From the current state, the intended next use is:
 
-1. additive SQL for `public.conversation_companion_metadata`
-2. additive SQL for `public.space_timeline_events`
-3. later backend helper boundaries for reading and validating companion rows
-4. later event-writing and policy/RLS work after the policy matrix is ready
+1. use this shared vocabulary in `feature/space-policy-matrix`
+2. reuse the same vocabulary in `feature/space-rls-hardening`
+3. keep later operational-object and UI branches aligned to these same
+   contracts unless a new persisted concept truly requires an additive
+   extension
+
+Practical non-repeat rule:
+
+- do not create parallel enums or alternative naming for thread type,
+  audience mode, companion metadata, or timeline event categories in later
+  branches if the existing contracts already cover the case
 
 This file is meant to give those next steps one shared, reviewable language.

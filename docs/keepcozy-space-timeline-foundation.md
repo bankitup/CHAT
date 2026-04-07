@@ -488,12 +488,12 @@ This branch does not:
 
 ## 14. Practical Handoff to Later Branches
 
-### What `feature/space-access-mapping-prep` should own later
+### What the completed access-mapping prep foundation now provides
 
 - interpretation of internal-only vs restricted-external visibility
 - assignment-aware participant visibility
 - operator oversight rules
-- policy-aware filtering of timeline rows
+- policy-aware filtering vocabulary for timeline rows
 
 Visibility-prep note:
 
@@ -502,6 +502,21 @@ Visibility-prep note:
   [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
 - generic thread moderation role alone should not be treated as enough to
   decide committed timeline visibility
+
+### Exact next enforcement sequence from the current state
+
+The next branches should be:
+
+1. `feature/space-policy-matrix`
+2. `feature/space-rls-hardening`
+
+Important non-repeat rule:
+
+- later branches should use the current first-pass event taxonomy and commit
+  rules as the default foundation
+- they should not re-collapse space timeline events into ordinary chat
+  messages or restart the event vocabulary from scratch unless a concrete new
+  operational object flow requires an additive extension
 
 ### What later event-writing branches should own
 
