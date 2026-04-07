@@ -25,6 +25,7 @@ Related documents:
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
+- [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
 - [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
 - [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
@@ -39,6 +40,7 @@ The shared types file now defines future-facing contracts for:
 - KeepCozy space roles
 - thread participation and moderation roles
 - role-layer compatibility notes and draft translation shapes
+- access-mapping interpretation notes and draft visibility outcomes
 - operational thread types
 - audience modes
 - operational object kinds and stable object refs
@@ -54,6 +56,12 @@ Main exported names:
 - `KeepCozyCurrentRuntimeDmThreadParticipationRole`
 - `KeepCozyResolvedRoleLayers`
 - `KeepCozyRoleLayerTranslationDraft`
+- `KeepCozyAccessMappingInterpretationNote`
+- `KeepCozyThreadAccessMappingContextDraft`
+- `KeepCozyThreadAccessInterpretationOutcomeDraft`
+- `KeepCozyThreadAccessInterpretationDraft`
+- `KeepCozySpaceTimelineEventVisibilityBasisDraft`
+- `KeepCozySpaceTimelineEventAccessInterpretationDraft`
 - `KEEP_COZY_GLOBAL_PLATFORM_ROLES`
 - `KEEP_COZY_SPACE_ROLES`
 - `KeepCozyThreadType`
@@ -76,6 +84,10 @@ Main exported names:
 - `KEEP_COZY_THREAD_COMPANION_METADATA_TABLE_NAME_DRAFT`
 - `KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT`
 - `KEEP_COZY_THREAD_COMPANION_METADATA_DEFAULTS_DRAFT`
+- `KEEP_COZY_ACCESS_MAPPING_INTERPRETATION_NOTES`
+- `KEEP_COZY_THREAD_ACCESS_INTERPRETATION_OUTCOMES_DRAFT`
+- `KEEP_COZY_SPACE_TIMELINE_EVENT_VISIBILITY_BASES_DRAFT`
+- `KEEP_COZY_ACCESS_MAPPING_GUARDRAILS`
 - `KEEP_COZY_SPACE_TIMELINE_EVENTS_TABLE_NAME_DRAFT`
 - `KEEP_COZY_SPACE_TIMELINE_EVENT_TYPES`
 - `KEEP_COZY_SPACE_TIMELINE_DEFERRED_EVENT_TYPES_DRAFT`
@@ -152,6 +164,33 @@ Important boundary:
 
 The draft role-translation types are intentionally lossy and advisory. They
 exist to reduce future confusion, not to implement authorization behavior yet.
+
+## Access Mapping Prep Contracts
+
+The shared contract layer now also includes a narrow preparation vocabulary for
+later policy and RLS work:
+
+- `KeepCozyAccessMappingInterpretationNote`
+- `KeepCozyThreadAccessMappingContextDraft`
+- `KeepCozyThreadAccessInterpretationOutcomeDraft`
+- `KeepCozyThreadAccessInterpretationDraft`
+- `KeepCozySpaceTimelineEventVisibilityBasisDraft`
+- `KeepCozySpaceTimelineEventAccessInterpretationDraft`
+
+These contracts are meant to answer questions like:
+
+- what policy inputs should later backend helpers consider
+- which thread-audience cases require explicit assignment-aware interpretation
+- how operator visibility should stay separate from thread moderation
+- how timeline visibility should inherit from parent thread/object/space
+  boundaries
+
+Important boundaries:
+
+- these types are advisory and future-facing only
+- they must not be mistaken for active authorization behavior
+- they do not widen current `dm/group` runtime semantics
+- they do not make companion metadata or timeline rows self-authorizing
 
 ## Operational Thread and Object Contracts
 
