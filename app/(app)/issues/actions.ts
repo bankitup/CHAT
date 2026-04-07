@@ -188,6 +188,7 @@ export async function appendIssueUpdateAction(formData: FormData) {
       statusChangeLabelFallback: t.issues.statusUpdatedLabel,
     });
 
+    revalidatePath('/home');
     revalidatePath('/issues');
     revalidatePath('/activity');
     revalidatePath(`/issues/${updated.issueSlug}`);
