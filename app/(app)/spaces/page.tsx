@@ -85,7 +85,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
           </div>
         ) : null}
 
-        <p className="eyebrow">{t.shell.chats}</p>
+        <p className="eyebrow">{t.shell.home}</p>
         <h1 className="settings-hero-title">{t.spaces.title}</h1>
         <p className="muted settings-hero-note">{t.spaces.subtitle}</p>
       </section>
