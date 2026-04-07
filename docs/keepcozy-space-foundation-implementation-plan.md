@@ -62,6 +62,7 @@ work on `develop`:
 - `feature/space-timeline-foundation`
 - `feature/space-access-mapping-prep`
 - `feature/space-policy-matrix`
+- `feature/space-rls-hardening`
 
 Current runtime intentionally remains unchanged across those branches:
 
@@ -87,9 +88,8 @@ work:
 
 Recommended exact remaining branch order from the current state:
 
-1. `feature/space-rls-hardening`
-2. `feature/space-first-operational-object`
-3. `feature/keepcozy-space-ui-shell`
+1. `feature/space-first-operational-object`
+2. `feature/keepcozy-space-ui-shell`
 
 ## 1. Current State Summary
 
@@ -612,11 +612,11 @@ Completed foundational branches:
 - `feature/space-backend-thread-object-links`
 - `feature/space-timeline-foundation`
 - `feature/space-access-mapping-prep`
+- `feature/space-policy-matrix`
+- `feature/space-rls-hardening`
 
 Recommended remaining branches from the current state:
 
-- `feature/space-policy-matrix`
-- `feature/space-rls-hardening`
 - `feature/space-first-operational-object`
 - `feature/keepcozy-space-ui-shell`
 
@@ -632,16 +632,16 @@ Recommended strategy:
 
 The fastest remaining low-risk wins are:
 
-- freeze the first explicit policy matrix using the completed access-mapping
-  prep and timeline-visibility groundwork
+- keep the first explicit policy matrix and conservative RLS drafts stable while
+  introducing the first real operational object path
 - enumerate audited exception cases for `platform_admin` and `support_staff`
-  before writing enforcement rules
+  before widening beyond the current conservative enforcement drafts
 - choose the first operational object type that will exercise the companion
   metadata and timeline foundations end-to-end
 - keep operational role semantics out of current conversation moderation enums
-  while policy work is being formalized
-- keep current conversation/message runtime stable until the policy matrix is
-  specific enough for review-heavy enforcement work
+  while the first object and UI phases are being designed
+- keep current conversation/message runtime stable while runtime adoption of the
+  reviewed hardening pass is still selective
 
 ## 12. Highest-Risk Changes
 
@@ -656,29 +656,16 @@ The changes most likely to cause regressions are:
 
 ## 13. Recommended Immediate Next Step
 
-From the completed `feature/space-policy-matrix` branch, the next practical
-step should be:
-
-- open `feature/space-rls-hardening`
-- translate
-  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
-  into reviewed backend and SQL/RLS enforcement rather than redefining policy
-- do not reopen current `dm | group` semantics, role-layer separation, or the
-  companion-metadata-as-input model unless a concrete new product constraint
-  forces it
-- do not treat the policy matrix as already-enforced behavior; the hardening
-  branch still owns predicates, joins, redaction, and audited exception paths
-- avoid user-facing KeepCozy UI until the policy matrix and enforcement layers
-  are in place
-
-That keeps the next phase narrow:
-
-- this branch freezes semantic intent
-- the next branch translates that intent into reviewed enforcement
-
-If reading this plan from the completed `feature/space-rls-hardening` branch,
-the next practical step should become:
+From the completed `feature/space-rls-hardening` branch, the next practical
+step should now be:
 
 - open `feature/space-first-operational-object`
-- use the reviewed policy matrix plus conservative hardening drafts as the
-  enforcement baseline rather than reopening role or visibility semantics
+- use
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+  plus
+  [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
+  as the semantic and conservative enforcement baseline
+- add one real operational object path without reopening current `dm | group`
+  semantics, role-layer separation, or the companion-metadata-as-input model
+- keep user-facing KeepCozy UI selective until the first object path and its
+  audited visibility behavior are stable
