@@ -21,6 +21,7 @@ Related documents:
 - [keepcozy-space-model-spec.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-model-spec.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
+- [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
 - [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
@@ -184,7 +185,7 @@ space the full operational boundary around it.
 
 ### Product/process gaps
 
-- no agreed policy matrix yet
+- no enforced policy matrix in active runtime yet
 - no audited operator-visibility exception model
 - no defined branch sequence for introducing these capabilities safely
 
@@ -491,6 +492,16 @@ Risk:
 
 - high
 
+Current branch note:
+
+- the first full policy-definition layer now lives in
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+- this branch turns the completed role-layering, companion-metadata,
+  backend-link, timeline, and access-mapping groundwork into one explicit,
+  reviewable matrix
+- the exact next branch after this policy-definition pass should be
+  `feature/space-rls-hardening`
+
 ## 5. Suggested Order of Execution
 
 From the current state on `develop`, the remaining recommended sequence is:
@@ -549,7 +560,7 @@ Key rule:
 
 ## 8. What Should Happen Before Policy Matrix Work
 
-Before formal policy matrix work begins, the project should first decide:
+Before formal policy matrix work, the project first needed to decide:
 
 - the canonical KeepCozy space role set
 - the canonical split between space role and thread participation/moderation role
@@ -561,6 +572,13 @@ Before formal policy matrix work begins, the project should first decide:
 - how operator oversight interacts with future private-thread exceptions
 
 Policy matrix work should start only once those modeling choices are stable.
+
+Current branch note:
+
+- the first full policy matrix now exists in
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+- the remaining work is enforcement and operational-object implementation, not
+  reopening these prerequisite questions without a concrete new constraint
 
 ## 9. What Should Happen Before Shipping Any User-Facing KeepCozy Integration
 
@@ -633,7 +651,7 @@ The changes most likely to cause regressions are:
 
 ## 13. Recommended Immediate Next Step
 
-The next practical step should be:
+The next practical step from the current baseline should be:
 
 - open `feature/space-policy-matrix`
 - treat the docs, contracts, additive schema drafts, backend-link boundaries,
@@ -646,3 +664,11 @@ The next practical step should be:
 
 That gives the project the best chance of making KeepCozy reusable without
 breaking the restored CHAT runtime.
+
+If reading this plan from the completed `feature/space-policy-matrix` branch,
+the next practical step becomes:
+
+- open `feature/space-rls-hardening`
+- translate
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+  into reviewed backend and SQL/RLS enforcement rather than redefining policy
