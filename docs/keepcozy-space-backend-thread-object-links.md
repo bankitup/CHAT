@@ -45,6 +45,39 @@ Important design rule:
 
 - these helpers are backend boundaries, not active runtime behavior changes
 
+## Guardrails for This Branch
+
+This backend link layer is intentionally narrow.
+
+### Allowed on this branch
+
+This branch may:
+
+- read and normalize companion metadata through backend-only helpers
+- compose optional operational thread context beside an already
+  access-checked conversation shell
+- expose a nullable primary operational object ref as backend data only
+- verify local consistency between the conversation shell and companion row
+- document where later write, timeline, and access work should happen
+
+### Not allowed on this branch
+
+This branch must not:
+
+- redefine what `public.conversations.kind` means
+- make companion metadata required for ordinary `dm` or `group` conversations
+- add UI or page-level dependence on operational thread context
+- treat companion metadata as a source of authorization truth
+- emit timeline events
+- validate operational object existence against future domain tables
+- infer thread moderation authority from operational roles
+- blur private messaging trust assumptions with operational-thread visibility
+
+### Practical non-goal
+
+If a conversation has no companion row, current chat behavior should remain
+unchanged.
+
 ## Explicit Backend Boundary Map
 
 The current branch should be read as having one direct companion-metadata
@@ -111,6 +144,13 @@ Important naming rule:
 That suffix means the helper must not be treated as a final application-level
 policy boundary.
 
+Additional rule:
+
+- the access-checked read composition helper is still not a policy engine
+- it may expose metadata only after existing conversation access succeeds
+- it must not become the place where internal-only or restricted-external
+  resolution rules are invented ad hoc
+
 ## How These Helpers Should Be Used Later
 
 The next backend branch should wrap these low-level helpers inside existing
@@ -156,6 +196,7 @@ This keeps the first read integration explicit and narrow:
 - current message-history and UI payloads remain unchanged
 - higher layers can opt into operational thread context later through one
   backend seam
+- policy decisions still stay outside this helper
 
 ### Recommended next read expansion later
 
@@ -180,6 +221,36 @@ This backend foundation still does not:
 - change RLS or policy behavior
 
 That scope remains deferred on purpose.
+
+## What Must Wait for `feature/space-timeline-foundation`
+
+The following concerns belong to the later timeline branch, not this one:
+
+- committed `space_timeline_events` writes
+- event categories for thread open/close/object-link activity
+- fan-out from thread/object updates into space-level audit history
+- automation hooks triggered from committed operational events
+- any attempt to make thread-object linkage the same thing as timeline history
+
+Rule:
+
+- this backend link layer may expose thread context
+- it must not start acting like the durable event log
+
+## What Must Wait for `feature/space-access-mapping-prep`
+
+The following concerns belong to the later access-mapping branch, not this one:
+
+- translation from global role to space role to thread participation scope
+- internal-only or restricted-external participant resolution
+- assignment-aware access scoping for contractors, suppliers, or inspectors
+- operator-visibility exception handling
+- any policy layer that interprets companion metadata as permission state
+
+Rule:
+
+- this branch may expose `audienceMode` and policy-oriented metadata fields
+- it must not enforce or derive final audience policy from them yet
 
 ## What Stays Unchanged On This Branch
 
@@ -217,6 +288,14 @@ This branch keeps the distinction explicit:
 - operational thread metadata is additive and optional
 - object-link helpers do not redefine what a conversation is
 
+What must not leak from this branch into current runtime semantics:
+
+- `threadType` must not replace `dm` or `group`
+- `audienceMode` must not replace join-policy or membership checks
+- `status` must not replace archive/hide behavior
+- `primaryOperationalObjectRef` must not become required for ordinary chat
+- operator visibility assumptions must not be read as DM decrypt authority
+
 This is the core reason the helper layer lives beside the current messaging
 data service instead of replacing it.
 
@@ -251,6 +330,18 @@ The following belong to later branches:
 - timeline event emission
 - policy and RLS hardening
 
+## Misuse Checklist for Later Branches
+
+Before reusing this backend link layer, later branches should stop and check:
+
+- am I adding optional context, or silently changing the base conversation
+  contract?
+- am I reading companion metadata after an existing conversation access check,
+  or trying to use it to replace one?
+- am I keeping timeline writes out of this layer?
+- am I keeping operational-role semantics out of moderation fields?
+- am I preserving `dm | group` as the only current conversation shell meaning?
+
 ## Practical Handoff To The Next Phase
 
 The next backend branch should treat this helper file as the low-level adapter
@@ -263,3 +354,27 @@ layer and then add:
 
 That keeps the migration path additive and avoids coupling unfinished
 operational objects to current chat behavior too early.
+
+## Handoff To `feature/space-timeline-foundation`
+
+This branch is intended to hand off to:
+
+- `feature/space-timeline-foundation`
+
+That next branch should treat the current backend link layer as a supporting
+dependency, not as the place where timeline semantics live.
+
+Recommended reuse pattern:
+
+- use [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+  when timeline work needs optional conversation-level operational context
+- keep direct companion-table access inside
+  [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+- keep event creation, event taxonomy, and event-write rules in the later
+  timeline branch
+
+Important boundary:
+
+- this branch can tell later code what thread context exists
+- the timeline branch must decide how that context becomes durable space-level
+  history

@@ -270,8 +270,15 @@ Current branch note:
 
 - the first low-level backend helper boundary now exists in
   [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+  with a narrow read composition seam in
+  [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
   and is documented in
   [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
+
+Phase 3 guardrail:
+
+- this backend phase may expose optional operational thread context
+- it must not emit timeline history or enforce final audience/access policy yet
 
 ### Phase 4. Policy-prep and access-resolution groundwork
 
@@ -300,6 +307,14 @@ Work type:
 Risk:
 
 - medium to high if it touches active authorization paths
+
+Branch ownership note:
+
+- `feature/space-access-mapping-prep` should own role-layer resolution,
+  internal-only vs restricted-external interpretation, and assignment-aware
+  visibility rules
+- it should not widen the current backend link layer into a general-purpose
+  authorization shortcut
 
 ### Phase 5. Timeline and operational object foundation
 
