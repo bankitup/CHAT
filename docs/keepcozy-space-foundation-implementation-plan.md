@@ -339,6 +339,14 @@ Phase 4 guardrails:
 - it must not change current `dm | group` runtime semantics
 - it must not turn UI presentation assumptions into backend policy shortcuts
 
+Phase 4 handoff note:
+
+- the next branch after this prep work should be `feature/space-policy-matrix`
+- `feature/space-rls-hardening` should stay a separate follow-on branch once
+  the matrix is frozen
+- do not merge policy interpretation and RLS hardening into one large branch if
+  narrower review is still possible
+
 ### Phase 5. Timeline and operational object foundation
 
 Goal:

@@ -361,6 +361,33 @@ Not on this branch:
 - direct policy enforcement inside low-level companion-metadata helpers
 - any change to DM/group semantics
 
+## Handoff to the Final Policy/RLS Phase
+
+This branch should hand off to the final enforcement work in two controlled
+steps rather than one large authorization rewrite:
+
+1. `feature/space-policy-matrix`
+   freeze the practical allow/deny matrix for operational threads, companion
+   metadata, assignment-scoped external access, and timeline visibility
+2. `feature/space-rls-hardening`
+   translate that agreed matrix into review-heavy backend predicates, SQL/RLS
+   behavior, and test coverage
+
+Recommended rule:
+
+- do not start RLS hardening until the policy matrix is specific enough to say
+  which visibility cases are inherited, denied, assignment-scoped, or
+  operator-visible by exception
+
+That separation keeps this branch honest:
+
+- this branch names inputs and interpretation order
+- the next branch freezes policy meaning
+- the later RLS branch enforces that meaning
+
+It also keeps current runtime safer because the project does not have to guess
+policy intent while writing backend or SQL predicates.
+
 ## Guardrails and Non-Goals
 
 This branch is intentionally preparation work, not enforcement work.
