@@ -175,8 +175,9 @@ It is organized into narrow logical groups:
   workflow state such as open/active/resolved/closed
 - `primaryOperationalObjectRef`
   the main structured work record, if one exists
-- `operationalObjectLink`
-  optional richer cross-link shape for future related-object support
+- `relatedOperationalObjectLinks`
+  optional secondary or supporting object links without duplicating the primary
+  work record
 - `ownership`
   operator-side accountability metadata
 
@@ -222,6 +223,12 @@ This list is intentionally a draft.
 
 It is meant to guide additive schema work without pretending that the final
 table shape, column set, or nullability rules are already decided.
+
+Important scope note:
+
+- this first field-candidate draft covers the primary object link only
+- secondary or related object links are still represented in TypeScript
+  contracts, but can remain a later additive schema step
 
 ## Draft Translation Layer
 
@@ -317,7 +324,7 @@ foundation for that work.
 The object-linking draft is intentionally narrow:
 
 - one stable object ref shape
-- one optional thread-link metadata shape
+- one related-object link shape
 - one advisory mapping from thread type to likely object kinds
 
 That keeps future schema work open while still giving backend and UI scaffolds

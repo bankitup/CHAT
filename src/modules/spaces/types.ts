@@ -103,23 +103,21 @@ export type KeepCozyOperationalObjectRef = {
 };
 
 /**
- * Future-facing linkage metadata for a thread's primary or related operational
- * objects.
+ * Future-facing linkage metadata for one related operational object attached to
+ * a thread.
  *
  * This is a contract draft only. It does not imply current conversations
  * persist object links today.
  */
 export type KeepCozyThreadOperationalObjectLink = {
-  primaryObjectRef: KeepCozyOperationalObjectRef | null;
-  relatedObjectRefs: KeepCozyOperationalObjectRef[];
+  objectRef: KeepCozyOperationalObjectRef;
   linkReason:
-    | 'primary-work-record'
     | 'supporting-context'
     | 'assignment'
     | 'review-subject'
     | 'incident-anchor'
     | 'procurement-anchor'
-    | null;
+    | 'related-record';
 };
 
 /**
@@ -186,6 +184,9 @@ export type KeepCozyThreadOwnershipMetadata = {
  * This list is intentionally advisory. It is meant to help the next schema
  * branch stay aligned with the architecture docs without freezing the final
  * table shape too early.
+ *
+ * This first draft intentionally covers only the primary object link fields.
+ * Secondary/related object links can remain a later additive step.
  */
 export const KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT = [
   'conversation_id',
@@ -457,6 +458,6 @@ export type KeepCozyThreadCompanionMetadata = {
   visibility: KeepCozyThreadVisibilityMetadata;
   lifecycle: KeepCozyThreadLifecycleMetadata;
   primaryOperationalObjectRef: KeepCozyOperationalObjectRef | null;
-  operationalObjectLink: KeepCozyThreadOperationalObjectLink | null;
+  relatedOperationalObjectLinks: readonly KeepCozyThreadOperationalObjectLink[];
   ownership: KeepCozyThreadOwnershipMetadata;
 };
