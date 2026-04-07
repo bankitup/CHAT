@@ -23,6 +23,7 @@ Related documents:
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
+- [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
 - [keepcozy-space-schema-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-runtime-boundaries.md)
 - [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
@@ -338,20 +339,22 @@ Risk:
 
 - medium
 
+Current branch note:
+
+- the first structured timeline foundation now has a concrete doc and SQL
+  draft in
+  [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
+  and
+  [2026-04-07-space-timeline-events-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-space-timeline-events-foundation.sql)
+- this branch defines additive event vocabulary and schema direction without
+  changing chat runtime behavior
+
 Branch ownership note:
 
-- `feature/space-timeline-foundation` should own durable event-writing,
-  timeline categorization, and audit-log shaping
-- it should build on thread/object linkage helpers rather than pushing event
-  semantics down into the companion-metadata read layer
-
-Immediate handoff note:
-
-- after `feature/space-backend-thread-object-links`, the exact next branch
-  should be `feature/space-timeline-foundation`
-- that branch should consume companion metadata and conversation thread context
-  as optional backend inputs, while keeping timeline/event persistence in its
-  own layer
+- `feature/space-timeline-foundation` should own structured event vocabulary,
+  additive timeline schema direction, and later durable event-writing seams
+- later access/policy work should build on this event model rather than trying
+  to redefine the timeline shape ad hoc
 
 ### Phase 6. Controlled user-facing KeepCozy thread experience
 

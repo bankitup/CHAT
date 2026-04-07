@@ -16,6 +16,7 @@ Related documents:
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
+- [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
 - [space-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-model.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
@@ -293,6 +294,13 @@ Recommended target direction:
 - add a separate structured event concept later, either as:
   - a dedicated event table tied to conversation timeline rendering, or
   - a future non-user message layer if the product needs timeline co-rendering
+
+Current foundation direction:
+
+- the first structured event foundation should live in a separate space-level
+  timeline layer
+- later thread-local system-event rendering, if needed, should build on that
+  structured event model rather than changing `messages.kind`
 
 Guardrail:
 
