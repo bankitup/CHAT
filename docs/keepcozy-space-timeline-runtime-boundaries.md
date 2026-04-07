@@ -11,6 +11,7 @@ later branches do not scatter event commits across unrelated messaging flows.
 Related documents:
 
 - [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
+- [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
 - [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
@@ -179,6 +180,13 @@ This later branch should own:
 - assignment-aware visibility rules
 
 The timeline helper must not become a policy engine before that work lands.
+
+Visibility boundary:
+
+- this runtime-boundary doc explains where rows may later be emitted
+- timeline visibility interpretation is documented separately in
+  [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
+- emission location and visibility scope must stay separate concerns
 
 ### Later event-writing branches
 
