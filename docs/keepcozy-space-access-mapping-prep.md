@@ -18,6 +18,7 @@ Related documents:
 
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
+- [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
 - [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
@@ -57,6 +58,13 @@ Recommended exact next branch:
 Recommended follow-on after that:
 
 - `feature/space-rls-hardening`
+
+Practical handoff note:
+
+- the formal follow-on to this prep document now lives in
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+- later enforcement work should use that matrix rather than treating this prep
+  document as the final source of allow/deny rules
 
 ## Current Runtime Inputs vs Future Policy Inputs
 
