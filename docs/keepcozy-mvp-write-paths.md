@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This document defines the first real write-path plan for the KeepCozy MVP loop
+This document defines the first real write-path layer for the KeepCozy MVP loop
 inside the shared CHAT repository.
 
-It builds on the completed persisted read slice and keeps the next
-implementation lift narrow:
+It builds on the completed persisted read slice and keeps the MVP mutation
+layer narrow:
 
 - create issue
 - append issue update
@@ -14,8 +14,8 @@ implementation lift narrow:
 - append task update
 - change issue and task status through append-oriented history
 
-This is a write-path plan for the next implementation branch, not a broad
-workflow redesign.
+This is the source of truth for the first narrow KeepCozy write layer, not a
+broad workflow redesign.
 
 Related documents:
 
@@ -422,9 +422,9 @@ Recommended stance:
 8. Verify the canonical TEST-home flow with the existing persisted seed and
    `/activity` history.
 
-## Definition Of Success For The Next Implementation Branch
+## Definition Of Success For This Write Slice
 
-The next write implementation branch succeeds when:
+This write slice succeeds when:
 
 - a user can create an issue in one home
 - a user can add a first issue update at creation time
