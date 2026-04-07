@@ -1,5 +1,8 @@
 node_modules
 .next
+.turbo
+*.tsbuildinfo
+.eslintcache
 .env.local
 .DS_Store
 .codex
