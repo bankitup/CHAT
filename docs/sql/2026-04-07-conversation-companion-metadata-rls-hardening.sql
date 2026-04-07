@@ -5,6 +5,8 @@
 -- - keep current dm/group runtime behavior unchanged
 -- - make companion metadata readable only to users already inside the
 --   parent space and parent conversation boundary
+-- - keep internal-only/restricted-external semantics stored without
+--   pretending they already override parent conversation membership
 -- - treat operator/assignment flags as policy inputs, not first-pass bypasses
 -- - keep ordinary authenticated writes deferred until reviewed operational
 --   write paths exist
@@ -63,13 +65,17 @@ using (
 
 comment on policy conversation_companion_metadata_select_space_and_active_members
 on public.conversation_companion_metadata is
-'First-pass conservative authenticated read policy for additive KeepCozy companion metadata. Requires both explicit space membership and active parent-conversation membership. Does not widen access from operator visibility or assignment flags yet.';
+'First-pass conservative authenticated read policy for additive KeepCozy companion metadata. Requires both explicit space membership and active parent-conversation membership. Keeps internal-only, restricted-external, operator-visible, and assignment-scoped semantics stored as policy inputs without widening or revoking parent-thread access on their own.';
 
 notify pgrst, 'reload schema';
 
 -- Intentionally deferred in this first hardening pass:
 -- - authenticated insert/update/delete policies
+-- - role-aware denial for already-present non-internal members on internal-only
+--   threads
 -- - operator-visibility widening beyond current conversation membership
 -- - assignment-aware external widening beyond current conversation membership
+-- - owner/resident/internal-staff visibility widening beyond current
+--   conversation membership
 -- - object-policy-aware redaction for companion metadata projections
 -- - audited support/compliance exception paths

@@ -1,10 +1,12 @@
 -- First conservative RLS hardening pass for public.space_timeline_events.
 --
 -- Goals:
--- - keep timeline rows from becoming broader than the parent resource
+-- - keep timeline rows from becoming broader than the strongest parent resource
 -- - allow authenticated reads only for the safest first-pass visibility basis:
---   conversation-linked, non-object-linked, non-manual-admin rows
--- - keep object-linked, object-only, space-only, and manual-admin cases
+--   conversation-derived, non-object-linked, non-manual-admin rows
+-- - keep internal-only/restricted-external meaning bounded by existing parent
+--   conversation membership until real role and assignment truth exists
+-- - keep object-derived, object-only, space-only, and manual-admin cases
 --   deferred until real policy truth exists
 -- - keep ordinary authenticated writes deferred until reviewed emitters exist
 
@@ -66,14 +68,17 @@ using (
 
 comment on policy space_timeline_events_select_safe_conversation_scope
 on public.space_timeline_events is
-'First-pass conservative authenticated read policy for KeepCozy timeline rows. Allows only conversation-linked, non-object-linked, non-manual-admin rows to already-authorized space and conversation members. Keeps object-only, space-only, and audited-exception rows deferred.';
+'First-pass conservative authenticated read policy for KeepCozy timeline rows. Allows only conversation-derived, non-object-linked, non-manual-admin rows to already-authorized space and conversation members. Keeps timeline visibility aligned to the parent conversation ceiling for those safe rows, while deferring object-derived, space-derived, assignment-aware, operator-widened, and audited-exception cases until later policy truth exists.';
 
 notify pgrst, 'reload schema';
 
 -- Intentionally deferred in this first hardening pass:
 -- - authenticated insert/update/delete policies
--- - object-linked timeline visibility for authenticated users
+-- - object-derived timeline visibility for authenticated users
 -- - space-only timeline visibility for authenticated users
 -- - manual_admin/audited exception handling
 -- - assignment-aware or operator-visibility widening
+-- - role-aware timeline filtering beyond existing parent conversation
+--   membership
+-- - basis-aware read projections or optimization-oriented denormalization
 -- - final redaction logic for object-sensitive summary payloads

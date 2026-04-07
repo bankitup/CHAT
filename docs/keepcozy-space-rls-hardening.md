@@ -88,6 +88,27 @@ Practical consequence:
 
 ## First-Pass Enforcement Rules
 
+### Enforcement reading order in this pass
+
+The first hardening pass should evaluate the new KeepCozy layers in this
+order:
+
+1. preserve the current `dm | group` runtime contract
+2. require explicit `space_members` membership
+3. require active `conversation_members` membership when the resource is
+   conversation-scoped
+4. expose companion metadata and timeline rows only inside that already-valid
+   parent boundary
+5. treat `audience_mode`, `operator_visible_by_policy`, and
+   `external_access_requires_assignment` as stored policy inputs, not
+   first-pass bypasses or revocations
+
+Hard rule:
+
+- the first hardening pass may prevent new additive tables from widening access
+- it must not silently reinterpret existing parent conversation membership on
+  its own
+
 ### 1. Companion metadata read boundary
 
 Authenticated read access to `public.conversation_companion_metadata` should
@@ -135,6 +156,26 @@ It is acceptable because:
 - later branches still need real KeepCozy role truth and assignment truth
   before widening beyond current conversation membership
 
+### 2A. Operational visibility cases in this pass
+
+The table below makes the first-pass enforcement stance explicit.
+
+| Policy case | Final policy intent | First-pass enforcement result | Why this stays conservative |
+| --- | --- | --- | --- |
+| `internal-only` thread | operator/internal visibility by default; deny owner/resident/external roles by default | no metadata-only widening and no metadata-only revocation; companion metadata remains visible only to already-authorized active conversation members in the same space | current runtime does not yet carry real KeepCozy role truth that can safely override parent conversation membership |
+| `restricted-external` thread | external visibility should stay narrower than ordinary client-facing threads | no widening from metadata; authenticated visibility still requires explicit active conversation membership | the repo does not yet have enough role truth to widen or narrow beyond the parent thread boundary safely |
+| `restricted-external` plus `external_access_requires_assignment = true` | contractors/suppliers/inspectors should require durable assignment-aware access | no assignment-based allow rule yet; no metadata-only revocation of existing members either | the repo has no assignment table yet, so the flag cannot act as real assignment truth |
+| `operator_visible_by_policy = true` | operator oversight should later widen beyond creator/admin semantics | persist and expose the flag only to already-authorized readers; no standalone read bypass | later branches still need a reviewed operator-overview enforcement mechanism |
+| `owner` / `resident` in client-facing operational threads | may later see intended client-facing work without broad browse-all | no audience-mode-only browse rule; first pass still relies on explicit thread membership | owner/resident policy is not yet derivable from current generic runtime roles alone |
+| `internal_staff` visibility | later narrower than full operator oversight by default | no standalone internal-staff bypass in this pass | the repo cannot yet distinguish `internal_staff` from other generic runtime roles in enforceable SQL |
+
+Practical rule:
+
+- first-pass enforcement is allowed to be narrower than the final KeepCozy
+  policy
+- it is not allowed to invent broader or differently-targeted visibility
+  without the schema truth to support it
+
 ### 3. Operator visibility semantics
 
 The matrix freezes `operator_visible_by_policy` as a first-class policy fact,
@@ -167,6 +208,8 @@ First-pass rule:
 - do not widen visibility for external participants from this flag
 - do not infer assignment truth from conversation membership alone
 - keep authenticated read access bounded by current conversation membership
+- treat the flag as future policy input even when the thread is
+  `restricted-external`
 
 Why this is safer:
 
@@ -179,8 +222,47 @@ Why this is safer:
 The first timeline hardening pass should stay more conservative than the final
 matrix.
 
-Authenticated timeline reads should be allowed only when all of the following
-are true:
+The main rule is:
+
+- timeline visibility must be derived from the row's strongest real parent
+  policy context
+- generic thread participation role alone is not enough
+- if the parent policy context cannot yet be enforced safely, the row should
+  stay out of ordinary authenticated reads
+
+### 5A. Timeline visibility basis in this pass
+
+Later KeepCozy enforcement will need to distinguish at least three visibility
+bases:
+
+| Visibility basis | Typical row shape | Final policy source | First-pass hardening result |
+| --- | --- | --- | --- |
+| Conversation-derived | `conversation_id` present and no object parent | parent thread policy plus space boundary | allowed if the viewer is an explicit space member and active conversation member |
+| Object-derived | `operational_object_type` and `operational_object_id` present | parent object policy, possibly narrower than thread policy | deferred from authenticated reads |
+| Space-derived | no conversation parent and no object parent | space-level operational policy | deferred from authenticated reads |
+
+This first pass hardens only the first basis directly.
+
+That is intentional.
+
+It keeps the first SQL policy traceable to real schema truth instead of
+guessing at object or space policy before those layers exist.
+
+### 5B. When timeline visibility should follow thread visibility
+
+Timeline visibility should follow thread visibility only when the row is
+clearly conversation-derived and does not depend on a narrower object policy.
+
+Safe first-pass examples:
+
+- `thread_created`
+- `thread_metadata_attached`
+- `status_changed`
+- `thread_closed`
+- `thread_reopened`
+
+For those rows, authenticated timeline reads should be allowed only when all
+of the following are true:
 
 - the row is linked to `conversation_id`
 - the viewer is an explicit `space_members` member for `space_id`
@@ -190,15 +272,66 @@ are true:
 - the row is not yet object-sensitive in a way the repo cannot safely enforce
 
 In practice, the first SQL draft enforces this by keeping authenticated reads
-limited to conversation-linked, non-object-linked, non-`manual_admin` rows.
+limited to conversation-derived, non-object-linked, non-`manual_admin` rows.
+
+### 5C. When timeline visibility should remain more restricted
+
+Timeline visibility should remain narrower than ordinary parent-thread access
+whenever the row depends on a policy context the repo cannot yet enforce
+safely.
 
 This intentionally defers:
 
 - object-only timeline rows
 - space-only timeline rows
-- object-linked timeline rows whose visibility would require a real object
+- object-derived timeline rows whose visibility would require a real object
   policy
 - audited support/admin review rows
+
+The restriction is deliberate for three reasons:
+
+1. a visible thread shell does not prove that every linked object detail is
+   equally visible
+2. some committed timeline rows may later derive from object-only or
+   space-level transitions rather than one conversation shell
+3. audited exception rows should never be exposed by accident through a broad
+   conversation-membership rule
+
+### 5D. Why generic thread participation role alone is insufficient
+
+Generic `conversation_members.role` is still part of the safe first-pass
+baseline, but it is not enough to decide final timeline visibility by itself.
+
+It does not encode:
+
+- whether the viewer is still inside the outer `space_members` boundary
+- which `audience_mode` applies to the parent operational thread
+- whether `operator_visible_by_policy` should later widen oversight
+- whether `external_access_requires_assignment` should later narrow external
+  access
+- whether the row is conversation-derived, object-derived, or space-derived
+- whether the linked operational object should later redact or hide the row
+
+That is why the first SQL draft treats active conversation membership as a
+safe ceiling for conversation-derived rows, not as a complete final policy
+system.
+
+### 5E. What stays deferred after this draft
+
+Even after the first hardening pass, later branches still need to add:
+
+- object-aware visibility predicates
+- space-only timeline visibility predicates
+- redaction rules for object-sensitive `summary_payload` data
+- audited exception handling for `manual_admin` or support/compliance review
+- service-side emitters that classify rows by visibility basis before insert
+- read-side helpers or projections optimized for timeline feeds once the
+  policy predicates are stable
+
+Important rule:
+
+- runtime integration and read optimization should follow reviewed visibility
+  semantics, not invent a looser shortcut for performance first
 
 That restriction is deliberate.
 
@@ -246,10 +379,14 @@ The timeline SQL draft should do the following:
 - enable RLS on `public.space_timeline_events`
 - grant authenticated users `select` only
 - keep insert/update/delete on a service-side path for now
-- allow authenticated reads only for conversation-linked,
+- allow authenticated reads only for conversation-derived,
   non-object-linked, non-`manual_admin` rows
 - require both space membership and active conversation membership for those
   reads
+- make the deferred visibility bases explicit in comments:
+  - object-derived rows
+  - space-derived rows
+  - audited exception rows
 
 ## Backend Alignment
 
@@ -295,11 +432,18 @@ Important rule:
 
 This branch still defers:
 
+- role-aware denial of already-present non-internal members on an
+  `internal-only` thread
 - operator visibility widening beyond current thread membership
 - assignment-aware external visibility beyond current thread membership
+- owner/resident client-facing browse rules beyond current thread membership
+- internal-staff delegated visibility beyond current thread membership
 - object-policy-aware visibility for object-linked thread details
 - object-only timeline visibility
 - space-only timeline visibility
+- basis-aware timeline projections or materialized read models
+- optimization-oriented denormalization before the allow/deny semantics are
+  frozen
 - audited support/compliance exception workflows
 - authenticated insert/update/delete policies for the new KeepCozy tables
 - conversation/message RLS rewrites for the active CHAT runtime
@@ -311,9 +455,11 @@ This branch still defers:
 | --- | --- | --- | --- |
 | Companion metadata read access | table exists only as additive foundation | authenticated reads require explicit space membership plus active conversation membership | policy-aware widening/narrowing can use KeepCozy role truth and assignment truth |
 | Companion metadata writes | deferred | service-side only in practice; no ordinary authenticated write policy yet | reviewed operational-thread wrappers own authenticated or privileged write path |
+| `internal-only` / `restricted-external` semantics | policy intent only | stored and readable inside the already-authorized parent thread boundary; no standalone SQL bypass or deny override yet | audience-mode-aware enforcement can narrow or widen only once real KeepCozy role truth exists |
 | Operator visibility | policy intent only | no standalone read bypass | audited operator oversight can be implemented once real role truth exists |
 | Assignment-scoped external access | policy intent only | no standalone read bypass | explicit assignment truth can narrow/widen external access intentionally |
-| Timeline visibility | additive table only | authenticated reads limited to safe conversation-linked rows | thread/object/space-aware filtering can align to full matrix |
+| Owner/resident/internal-staff boundaries | policy intent only | no standalone audience-mode or role-based browse rule | role-aware enforcement can land once real KeepCozy role truth exists |
+| Timeline visibility | additive table only | authenticated reads limited to safe conversation-derived rows with explicit space membership plus active conversation membership | thread/object/space-aware filtering can align to full matrix |
 | DM semantics | current runtime | unchanged | unchanged unless a later private-message branch reviews them separately |
 
 ## Review Guardrails
@@ -322,6 +468,8 @@ This branch still defers:
   this branch
 - do not treat the companion tables as proof that KeepCozy role enforcement is
   already complete
+- do not mistake stored `internal-only`, `restricted-external`, or
+  assignment-scoped metadata for fully-enforced runtime access truth
 - do not widen object-linked visibility before object policy is real
 - do not use `operator_visible_by_policy` as a silent admin/support bypass
 - do not use `external_access_requires_assignment` as a substitute for real
