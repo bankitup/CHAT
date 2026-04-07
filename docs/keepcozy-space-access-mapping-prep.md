@@ -65,6 +65,8 @@ Practical handoff note:
   [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - later enforcement work should use that matrix rather than treating this prep
   document as the final source of allow/deny rules
+- from the completed policy-definition state, the exact next enforcement branch
+  should be `feature/space-rls-hardening`
 
 ## Current Runtime Inputs vs Future Policy Inputs
 
@@ -449,6 +451,8 @@ This branch must not:
   access behavior
 - mix UI policy assumptions into backend preparation too early
 - define final allow/deny behavior for backend paths or RLS predicates
+- treat the later policy matrix as if it were already-enforced runtime behavior
+  before reviewed backend and SQL/RLS work lands
 
 ### Interpretation safety rules
 

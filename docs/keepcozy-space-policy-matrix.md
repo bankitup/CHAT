@@ -42,6 +42,13 @@ Recommended exact next branch after this one:
 
 - `feature/space-rls-hardening`
 
+Practical status note:
+
+- this branch should now be treated as the semantic source of truth for later
+  enforcement work
+- the next branch should translate this matrix into reviewed backend and SQL/RLS
+  behavior rather than redefining policy intent
+
 Current runtime intentionally remains unchanged while this matrix is being
 defined:
 
@@ -324,7 +331,32 @@ Practical implementation rule:
 
 - when thread policy and object policy differ, the narrower one wins
 
-### Object-link cases
+### 8A. Primary object-link interpretation
+
+Primary object linkage changes visibility interpretation in a narrow way.
+
+It does not create a second thread shell and it does not widen who can see a
+conversation.
+
+Instead, it introduces a second policy parent for object-derived context.
+
+Consistency rules:
+
+- thread policy controls whether the thread shell is visible at all
+- object policy controls whether object-derived details are visible
+- primary object linkage may narrow visible context
+- primary object linkage must never widen hidden context
+- if the same viewer can see both parents, thread context and object context
+  may be shown together
+- if the viewer can see the thread but not the object, the thread may remain
+  visible while object-derived details are redacted
+
+Practical effect:
+
+- a primary object link is a narrowing input for operational detail
+- it is not a bypass around thread audience rules
+
+### 8B. Object-link cases
 
 | Case | Policy result |
 | --- | --- |
@@ -343,7 +375,50 @@ Important rule:
 Timeline rows are visibility-dependent projections, not a separate permission
 system.
 
-### 9A. Visibility-basis matrix
+### 9A. When thread and timeline visibility should match
+
+Thread visibility and timeline visibility should match when the timeline row is
+acting as a stable projection of the same visible operational lane.
+
+Default match cases:
+
+- a timeline row linked to `conversation_id` and based on
+  `conversation_audience`
+- a `thread_created`, `thread_closed`, or `thread_reopened` event whose
+  meaningful parent is the thread itself
+- a thread-scoped `status_changed` row when no narrower object policy applies
+
+Practical rule:
+
+- if the timeline row is fundamentally describing thread lifecycle or thread
+  metadata, and there is no narrower object-parent rule, the row should use
+  the same visibility ceiling as the parent thread
+
+### 9B. When thread and timeline visibility should differ
+
+Thread visibility and timeline visibility should differ when the committed
+event is actually narrower than the visible conversation shell, or when the
+event belongs to a different parent resource.
+
+Default differ cases:
+
+- a visible thread linked to a hidden primary object:
+  the thread shell may remain visible, while object-derived timeline detail is
+  hidden or redacted
+- a row linked only to `operational_object_*`:
+  the row follows object policy even if the viewer is a generic thread member
+- a row linked only to durable `space_id` state:
+  the row follows conservative space-level policy, not generic thread
+  participation
+- an audited support/compliance review row:
+  the row follows the audited exception model, not ordinary thread visibility
+
+Important rule:
+
+- timeline visibility may be narrower than thread visibility
+- it must never be broader than the strongest parent resource it depends on
+
+### 9C. Visibility-basis matrix
 
 | Timeline visibility basis | Default policy |
 | --- | --- |
@@ -352,7 +427,7 @@ system.
 | `space_policy` | use conservative space-role policy; do not assume broad visibility for all members |
 | `manual_admin_review` | visible only through explicit audited exception |
 
-### 9B. Timeline audience rules
+### 9D. Timeline audience rules
 
 | Timeline case | Default policy result |
 | --- | --- |
@@ -369,6 +444,25 @@ Timeline rules:
 - timeline visibility must remain separate from per-user archive/hide state
 - generic thread moderation role is not enough to decide committed timeline
   visibility by itself
+
+### 9E. Why generic thread role is not enough
+
+Later enforcement must not infer timeline visibility from generic thread role
+alone.
+
+That role layer is still useful for conversation membership and moderation, but
+it does not answer:
+
+- whether the thread is `internal-only`, `restricted-external`, or `mixed`
+- whether external visibility is assignment-scoped
+- whether operator oversight applies by policy
+- whether the row depends on a hidden primary operational object
+- whether the row is a thread-scoped event or a space-scoped event
+
+Practical rule:
+
+- generic thread role may contribute to the final answer
+- it must not become the only parent policy input for committed timeline rows
 
 ## 10. Closure and Archive Policy
 
@@ -489,23 +583,53 @@ The later `feature/space-rls-hardening` branch should still decide:
 - whether operator oversight is implemented through policy joins,
   materialized membership, or another audited server-side mechanism
 - how assignment truth is stored and joined
+- how object-derived redaction works when thread shell visibility and object
+  visibility diverge
+- how conversation-linked vs object-linked vs space-linked timeline rows are
+  filtered in one consistent predicate set
 - how exceptional support/compliance access is logged and reviewed
 - how batched reads, summaries, and indexes expose policy-filtered results
 - how storage policies align with thread/object visibility without leaking data
 
 ## 15. Guardrails for Later Branches
 
+- do not treat this branch as final RLS or backend enforcement
 - do not mutate current `dm | group` shell semantics in order to fit this
   matrix
 - do not write operational job-function roles into current moderation enums
 - do not treat companion metadata as standalone authorization truth
 - do not let timeline rows become their own permission system
+- do not assume timeline visibility is always identical to parent thread
+  visibility when object-linked or space-scoped policy is narrower
 - do not let archive/hide become a substitute for lifecycle policy
 - do not widen external participant visibility without assignment-aware truth
+- do not invent broad `platform_admin` or `support_staff` overrides without
+  explicit audited reasoning
 - do not let policy-matrix work silently become RLS hardening without separate
   review
 
-## 16. Practical Handoff
+## 16. Non-Goals Of This Branch
+
+This branch must not:
+
+- define the final SQL/RLS predicates that enforce these policies
+- change active production `dm` or `group` behavior while freezing policy
+  meaning
+- collapse business-role semantics into current moderation-role fields
+- treat companion metadata as the only source of access truth without space
+  boundary, runtime membership, and parent-resource context
+- flatten all committed timeline visibility into simple thread visibility when
+  object-linked or space-scoped policy is narrower
+- create a general platform-admin or support bypass model without case-based
+  audit reasoning
+
+Practical reading rule:
+
+- this document defines policy intent and semantic targets
+- the later RLS branch must still decide how that intent becomes reviewed
+  predicates, joins, redaction behavior, and audited exception handling
+
+## 17. Practical Handoff
 
 This document should be the direct policy input for:
 
