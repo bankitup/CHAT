@@ -252,6 +252,127 @@ export const KEEP_COZY_THREAD_AUDIENCE_MODES = [
 ] as const satisfies readonly KeepCozyThreadAudienceMode[];
 
 /**
+ * Draft interpretation notes for future KeepCozy access-mapping work.
+ *
+ * These are not final authorization outcomes. They exist so later backend,
+ * policy, and RLS branches can discuss the same boundary rules without
+ * inventing new wording each time.
+ */
+export type KeepCozyAccessMappingInterpretationNote =
+  | 'global-role-does-not-bypass-space-membership'
+  | 'space-membership-is-outer-boundary'
+  | 'current-thread-membership-remains-runtime-allowlist'
+  | 'thread-audience-is-future-policy-input'
+  | 'internal-only-requires-explicit-policy'
+  | 'restricted-external-requires-assignment'
+  | 'operator-visibility-is-policy-not-thread-admin'
+  | 'timeline-visibility-follows-parent-resource'
+  | 'archive-remains-user-scoped'
+  | 'dm-trust-mode-remains-separate';
+
+export const KEEP_COZY_ACCESS_MAPPING_INTERPRETATION_NOTES = [
+  'global-role-does-not-bypass-space-membership',
+  'space-membership-is-outer-boundary',
+  'current-thread-membership-remains-runtime-allowlist',
+  'thread-audience-is-future-policy-input',
+  'internal-only-requires-explicit-policy',
+  'restricted-external-requires-assignment',
+  'operator-visibility-is-policy-not-thread-admin',
+  'timeline-visibility-follows-parent-resource',
+  'archive-remains-user-scoped',
+  'dm-trust-mode-remains-separate',
+] as const satisfies readonly KeepCozyAccessMappingInterpretationNote[];
+
+/**
+ * Future-facing input shape for access-mapping interpretation around one
+ * operational thread.
+ *
+ * Important:
+ *
+ * - this is scaffolding only; it does not enforce authorization
+ * - `hasCurrentRuntimeThreadMembership` reflects the active runtime allowlist,
+ *   not the later policy model
+ * - `isAssignedExternalParticipant` is nullable because assignment truth does
+ *   not exist in active schema yet
+ */
+export type KeepCozyThreadAccessMappingContextDraft = {
+  resolvedRoleLayers: KeepCozyResolvedRoleLayers;
+  audienceMode: KeepCozyThreadAudienceMode | null;
+  operatorVisibleByPolicy: boolean | null;
+  externalAccessRequiresAssignment: boolean | null;
+  hasCompanionMetadata: boolean;
+  hasCurrentRuntimeThreadMembership: boolean;
+  isAssignedExternalParticipant: boolean | null;
+};
+
+/**
+ * Draft interpretation outcome for future thread-access mapping.
+ *
+ * These are deliberately advisory. Later policy work can refine them into real
+ * backend or RLS decisions once assignment tables, audience policy, and
+ * operator oversight semantics are settled.
+ */
+export type KeepCozyThreadAccessInterpretationOutcomeDraft =
+  | 'allow_by_current_runtime_membership'
+  | 'allow_internal_only'
+  | 'allow_operator_visibility'
+  | 'require_explicit_external_assignment'
+  | 'defer_to_future_policy'
+  | 'deny_by_default';
+
+export const KEEP_COZY_THREAD_ACCESS_INTERPRETATION_OUTCOMES_DRAFT = [
+  'allow_by_current_runtime_membership',
+  'allow_internal_only',
+  'allow_operator_visibility',
+  'require_explicit_external_assignment',
+  'defer_to_future_policy',
+  'deny_by_default',
+] as const satisfies readonly KeepCozyThreadAccessInterpretationOutcomeDraft[];
+
+export type KeepCozyThreadAccessInterpretationDraft = {
+  outcome: KeepCozyThreadAccessInterpretationOutcomeDraft;
+  canRelyOnCurrentRuntimeMembership: boolean;
+  requiresExternalAssignment: boolean;
+  operatorVisibilityExpectedByPolicy: boolean;
+  notes: readonly KeepCozyAccessMappingInterpretationNote[];
+};
+
+/**
+ * Draft basis for later timeline-row visibility filtering.
+ *
+ * Timeline rows must not become their own authorization truth. Later policy
+ * work should resolve their visibility from the parent thread, object, or
+ * space policy boundary.
+ */
+export type KeepCozySpaceTimelineEventVisibilityBasisDraft =
+  | 'conversation_audience'
+  | 'operational_object_policy'
+  | 'space_policy'
+  | 'manual_admin_review';
+
+export const KEEP_COZY_SPACE_TIMELINE_EVENT_VISIBILITY_BASES_DRAFT = [
+  'conversation_audience',
+  'operational_object_policy',
+  'space_policy',
+  'manual_admin_review',
+] as const satisfies readonly KeepCozySpaceTimelineEventVisibilityBasisDraft[];
+
+export type KeepCozySpaceTimelineEventAccessInterpretationDraft = {
+  visibilityBasis: KeepCozySpaceTimelineEventVisibilityBasisDraft;
+  requiresParentResourceVisibility: boolean;
+  notes: readonly KeepCozyAccessMappingInterpretationNote[];
+};
+
+export const KEEP_COZY_ACCESS_MAPPING_GUARDRAILS = [
+  'Do not let global platform roles bypass explicit space membership.',
+  'Do not treat companion metadata as final authorization truth by itself.',
+  'Do not let audience_mode widen current dm/group behavior directly.',
+  'Do not treat operator_visible_by_policy as DM plaintext authority.',
+  'Do not let timeline rows bypass parent thread or object visibility.',
+  'Do not collapse per-user archive state into operational audience policy.',
+] as const;
+
+/**
  * Future-facing operational workflow status for typed KeepCozy threads.
  *
  * `archived` is intentionally excluded because archive remains a per-user
