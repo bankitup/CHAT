@@ -180,6 +180,52 @@ Important rule:
 - this flag does not create assignment truth by itself
 - later schema and backend branches still need a real assignment model
 
+## First Practical Interpretation Matrix
+
+The matrix below is not final enforcement.
+
+It is the first practical reference point for later backend and RLS work when
+interpreting thread visibility around space role, audience metadata, operator
+visibility, and assignment scoping.
+
+Recommended reading rule:
+
+- start with space membership and current runtime thread membership
+- then interpret the companion metadata hints
+- if the case cannot be answered safely from those layers, defer it to the
+  later policy matrix instead of inventing local behavior
+
+### Thread visibility matrix
+
+| Case | Role(s) in question | First-pass interpretation guidance | Draft outcome alignment | What remains deferred |
+| --- | --- | --- | --- | --- |
+| `internal-only` thread | `operator`, `internal_staff` | treat as later visible by policy inside the space if the parent space boundary is satisfied; do not require current thread-admin semantics to represent this | `allow_internal_only` | whether visibility is implemented by materialized membership, policy join, or another backend path |
+| `internal-only` thread | `owner`, `resident`, `contractor`, `supplier`, `inspector` | treat as not visible by default even if they are client-facing or temporary participants elsewhere in the space | `deny_by_default` | whether rare product exceptions ever exist |
+| `restricted-external` thread with `external_access_requires_assignment = true` | `contractor`, `supplier`, `inspector` | treat as requiring explicit assignment-aware visibility; current runtime membership may still matter, but space membership alone is not enough | `require_explicit_external_assignment` | what the real assignment record looks like and whether membership is materialized or derived |
+| `restricted-external` thread with `external_access_requires_assignment = true` | `operator`, `internal_staff` | treat as still potentially visible because they are internal roles, but do not derive final scope from thread moderation fields alone | `defer_to_future_policy` or `allow_operator_visibility` depending on final policy | whether `internal_staff` matches full operator oversight or narrower delegated visibility |
+| `standard` or `external-facing` thread | `owner`, `resident` | treat as potentially visible when the thread is meant to be client-facing and the user is inside the intended space boundary; do not turn this into automatic browse-all behavior | `defer_to_future_policy` | whether later policy uses audience plus membership, audience plus object linkage, or another client-facing rule |
+| `standard` or `external-facing` thread | `operator` | treat as later visible by policy for normal operational oversight when the thread belongs to the operator-managed space | `allow_operator_visibility` | whether oversight requires explicit membership materialization |
+| `standard` or `external-facing` thread | `contractor`, `supplier`, `inspector` | do not assume visibility without assignment or explicit membership just because the audience is externally collaborative | `require_explicit_external_assignment` or `deny_by_default` | which external-facing thread types permit external browsing vs explicit assignment only |
+| any audience mode with `operator_visible_by_policy = true` | `operator` | treat as a strong future signal for operator oversight inside the space, but not as thread-admin authority and not as DM plaintext authority | `allow_operator_visibility` | whether visibility is always-on, exception-based, or audited per thread/object type |
+| any audience mode with `operator_visible_by_policy = true` | `internal_staff` | treat as a possible but narrower internal-visibility candidate; do not assume parity with `operator` unless later policy says so | `defer_to_future_policy` | whether `internal_staff` inherits full oversight or delegated slices only |
+| any audience mode without companion metadata | any role | keep relying on the current runtime shell and membership boundaries; do not invent audience policy from absence | `allow_by_current_runtime_membership` or `deny_by_default` | how older conversations are upgraded into richer policy interpretation |
+
+### Timeline visibility matrix
+
+| Timeline case | First-pass interpretation guidance | Draft visibility basis |
+| --- | --- | --- |
+| timeline row linked to `conversation_id` | inherit from the parent thread audience and access policy; the timeline row must not widen visibility by itself | `conversation_audience` |
+| timeline row linked only to an operational object | inherit from the object's future policy boundary | `operational_object_policy` |
+| timeline row linked only to `space_id` state | use conservative space-role policy later; do not assume broad visibility for all space members | `space_policy` |
+| exceptional support/admin review case | require explicit audited handling later, not implicit platform-role bypass | `manual_admin_review` |
+
+Practical rule:
+
+- if the parent thread or object should be hidden, the derived timeline row
+  should also be hidden
+- timeline visibility must never become easier to grant than the visibility of
+  the resource that produced the event
+
 ## Timeline Event Visibility
 
 Timeline rows should not become their own authorization authority.
@@ -200,6 +246,13 @@ Important rules:
 - timeline visibility must remain separate from per-user archive state
 - later timeline filtering belongs to policy-aware backend work, not this
   branch's helper scaffolding
+
+Matrix note:
+
+- the interpretation matrix above is the intended first reference point for
+  later thread and timeline visibility work
+- it is deliberately narrower than a final policy matrix and must not be read
+  as active runtime enforcement
 
 ## Safe Backend Boundaries for Later Work
 

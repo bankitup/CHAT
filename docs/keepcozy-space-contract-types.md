@@ -192,6 +192,12 @@ Important boundaries:
 - they do not widen current `dm/group` runtime semantics
 - they do not make companion metadata or timeline rows self-authorizing
 
+Reference note:
+
+- the first practical interpretation matrix that uses these draft outcomes is
+  documented in
+  [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
+
 ## Operational Thread and Object Contracts
 
 The metadata and object contracts are shaped around the KeepCozy docs:
