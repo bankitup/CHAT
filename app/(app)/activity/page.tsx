@@ -458,13 +458,16 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                 </p>
                 <div className="keepcozy-meta-row">
                   <span className="keepcozy-meta-pill">
+                    {t.homeDashboard.currentHomeLabel}: {activeSpace.name}
+                  </span>
+                  <span className="keepcozy-meta-pill">
                     {t.homeDashboard.roomsTitle}: Kitchen
                   </span>
                   <span className="keepcozy-meta-pill">
-                    {t.homeDashboard.issuesTitle}: Kitchen faucet keeps dripping after shutoff
+                    {t.homeDashboard.issuesTitle}: Kitchen faucet issue
                   </span>
                   <span className="keepcozy-meta-pill">
-                    {t.homeDashboard.tasksTitle}: Capture faucet model and cartridge type
+                    {t.homeDashboard.tasksTitle}: Capture faucet model task
                   </span>
                 </div>
                 <div className="keepcozy-card-actions">
