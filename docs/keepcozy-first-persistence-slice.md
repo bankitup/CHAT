@@ -345,11 +345,11 @@ That current write-path layer is scoped in
 
 ## Narrow Follow-Up Work After This Slice
 
-Once this table slice is approved, the next implementation branch should stay
-small:
+Once this table slice and the first narrow write layer are approved, the next
+implementation branch should stay small:
 
-1. apply the SQL foundation
-2. seed the canonical `TEST` records
-3. keep read repositories as the primary runtime path
-4. add write paths one route group at a time
-5. leave future-domain layers untouched
+1. keep preview fallback temporary until every target environment has the first
+   KeepCozy schema slice
+2. harden creator/member write behavior without widening the model
+3. keep read repositories and current route slugs as the primary runtime path
+4. leave future-domain layers untouched
