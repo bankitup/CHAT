@@ -78,6 +78,15 @@ Why:
 - they can decide whether a change is eligible for committed history before
   calling the low-level timeline helper
 
+Important boundary:
+
+- do not emit directly from `createConversationWithMembers(...)` itself;
+  emit only from a later operational-thread wrapper that intentionally owns
+  the richer KeepCozy semantics
+- do not emit directly from
+  `conversation-companion-metadata.ts`; let a later access-checked wrapper
+  decide whether a metadata write is timeline-worthy first
+
 ### Likely operational-object emitters later
 
 These are good candidates for later branches once real object tables exist:
