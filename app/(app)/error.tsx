@@ -30,7 +30,7 @@ export default function AppRouteErrorBoundary({
         <div className="stack route-error-copy">
           <h1 className="section-title">Couldn&apos;t load this screen</h1>
           <p className="muted">
-            Please try again. If it keeps happening, go back to Chats or Home.
+            Please try again. If it keeps happening, go back to Home or choose a different home.
           </p>
         </div>
 
@@ -40,13 +40,13 @@ export default function AppRouteErrorBoundary({
           </button>
           <Link
             className="button button-secondary"
-            href={withSpaceParam('/inbox', spaceId)}
+            href={withSpaceParam('/home', spaceId)}
             prefetch={false}
           >
-            Chats
-          </Link>
-          <Link className="pill" href="/settings" prefetch={false}>
             Home
+          </Link>
+          <Link className="pill" href="/spaces" prefetch={false}>
+            Choose home
           </Link>
         </div>
       </section>

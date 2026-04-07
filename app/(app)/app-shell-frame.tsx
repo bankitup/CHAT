@@ -29,17 +29,27 @@ export function AppShellFrame({
   const isSpacesRoute = pathname.startsWith('/spaces');
   const isActivityRoute = pathname.startsWith('/activity');
   const isSettingsRoute = pathname.startsWith('/settings');
+  const isHomeRoute = pathname.startsWith('/home');
+  const isRoomsRoute = pathname.startsWith('/rooms');
+  const isIssuesRoute = pathname.startsWith('/issues');
+  const isTasksRoute = pathname.startsWith('/tasks');
   const activeSpaceId = searchParams.get('space');
   const navSpaceHref = (pathname: string) =>
     activeSpaceId ? withSpaceParam(pathname, activeSpaceId) : pathname;
   const showBottomNav = !isChatRoute && !isSpacesRoute;
-  const activeTab = isActivityRoute
-    ? 'activity'
-    : isSettingsRoute
-      ? 'home'
-      : pathname.startsWith('/inbox')
-        ? 'chats'
-        : null;
+  let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
+
+  if (isActivityRoute) {
+    activeTab = 'activity';
+  } else if (isTasksRoute) {
+    activeTab = 'tasks';
+  } else if (isIssuesRoute) {
+    activeTab = 'issues';
+  } else if (isRoomsRoute) {
+    activeTab = 'rooms';
+  } else if (isHomeRoute || isSettingsRoute) {
+    activeTab = 'home';
+  }
 
   return (
     <main
@@ -67,23 +77,49 @@ export function AppShellFrame({
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href={navSpaceHref('/settings')}
+              href={navSpaceHref('/home')}
               prefetch={false}
             >
               <span className="app-bottom-nav-label">{t.shell.home}</span>
             </Link>
 
             <Link
-              aria-label={t.shell.openChats}
+              aria-label={t.shell.openRooms}
               className={
-                activeTab === 'chats'
+                activeTab === 'rooms'
                   ? 'app-bottom-nav-link app-bottom-nav-link-active'
                   : 'app-bottom-nav-link'
               }
-              href={navSpaceHref('/inbox')}
+              href={navSpaceHref('/rooms')}
               prefetch={false}
             >
-              <span className="app-bottom-nav-label">{t.shell.chats}</span>
+              <span className="app-bottom-nav-label">{t.shell.rooms}</span>
+            </Link>
+
+            <Link
+              aria-label={t.shell.openIssues}
+              className={
+                activeTab === 'issues'
+                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                  : 'app-bottom-nav-link'
+              }
+              href={navSpaceHref('/issues')}
+              prefetch={false}
+            >
+              <span className="app-bottom-nav-label">{t.shell.issues}</span>
+            </Link>
+
+            <Link
+              aria-label={t.shell.openTasks}
+              className={
+                activeTab === 'tasks'
+                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                  : 'app-bottom-nav-link'
+              }
+              href={navSpaceHref('/tasks')}
+              prefetch={false}
+            >
+              <span className="app-bottom-nav-label">{t.shell.tasks}</span>
             </Link>
 
             <Link

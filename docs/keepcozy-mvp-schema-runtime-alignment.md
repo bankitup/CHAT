@@ -34,7 +34,10 @@ Related documents:
   missing first-class MVP schema slice
 - keep `conversation_companion_metadata` and `space_timeline_events` as future
   support layers, not the center of the first runtime proof
-- keep current chat-shell routes as transitional shell surfaces rather than the
+- keep KeepCozy-first routes (`/home`, `/rooms`, `/issues`, `/tasks`,
+  `/activity`) as the visible shell center while dedicated MVP tables are still
+  missing
+- keep chat and settings routes as secondary support surfaces rather than the
   product definition of KeepCozy
 - do not let service requests, work orders, inspections, supplier/procurement
   flows, or intelligence-heavy domains define the current MVP
@@ -49,6 +52,7 @@ they still use shared CHAT foundation naming under the hood.
 | outer container boundary | `public.spaces` and `public.space_members` from [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql) | current compatibility layer for `home` and `home_membership` |
 | active space resolution | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts) and [url.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/url.ts) | current home-selection and home-routing seam |
 | home selector screen | [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx) | current product-facing entry for choosing a home context |
+| KeepCozy-first route scaffolding | [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx), [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/rooms/page.tsx), [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/issues/page.tsx), [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/tasks/page.tsx), [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx) | current UI focus layer for home / room / issue / task / history |
 | current home summary | [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/settings/page.tsx) | current product-facing surface for the selected home context |
 | minimal committed attachment foundation | `public.message_assets` and `public.message_asset_links` from [2026-04-06-message-assets-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-runtime-align.sql) | reusable narrow attachment pattern for future MVP history surfaces |
 
@@ -56,6 +60,8 @@ Important rule:
 
 - these pieces are aligned because they support the outer home context and
   minimal asset/history needs
+- the new KeepCozy-first routes intentionally use focused preview scaffolding
+  so the visible app flow no longer reads as chat-first
 - they are not proof that room/issue/task runtime already exists
 
 ## 2. Current Pieces That Do Not Yet Match The MVP Slice

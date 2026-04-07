@@ -78,7 +78,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
             <Link
               aria-label={t.spaces.backToChats}
               className="back-arrow-link spaces-back-link"
-              href={withSpaceParam('/inbox', currentSpaceId)}
+              href={withSpaceParam('/home', currentSpaceId)}
             >
               <span aria-hidden="true">←</span>
             </Link>
@@ -106,7 +106,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
                     ? 'space-card space-card-current'
                     : 'space-card'
                 }
-                href={withSpaceParam('/inbox', space.id)}
+                href={withSpaceParam('/home', space.id)}
               >
                 <div className="stack space-card-copy">
                   <div className="space-card-title-row">

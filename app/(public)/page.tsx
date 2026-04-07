@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCookieLanguage } from '@/modules/i18n/server';
 import { PublicHomeScreen } from './public-home-screen';
-import { resolveChatsHrefForUser } from '@/modules/spaces/server';
+import { resolveHomeHrefForUser } from '@/modules/spaces/server';
 
 export default async function HomePage() {
   const supabase = await createSupabaseServerClient();
@@ -10,7 +10,7 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
   const language = await getCookieLanguage();
   const authenticatedHomeHref = user?.id
-    ? await resolveChatsHrefForUser({
+    ? await resolveHomeHrefForUser({
         userId: user.id,
         source: 'public-home',
       })
