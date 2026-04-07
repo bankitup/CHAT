@@ -5,11 +5,12 @@
 This document defines the first real persistence slice for KeepCozy inside the
 shared CHAT repository.
 
-Its job is to replace the current preview-backed MVP entities with narrow,
+Its job is to replace the original preview-backed MVP entities with narrow,
 production-shaped persisted records while preserving the route structure and
 the current shared `space` home boundary.
 
-This is an implementation plan for the next schema/runtime lift, not a broad
+This started as the implementation plan for the first schema/runtime lift and
+now also records the current persisted read-path shape. It is still not a broad
 product redesign.
 
 Related documents:
@@ -51,18 +52,25 @@ Related documents:
 
 ## Current Starting Point
 
-The current KeepCozy shell is already shaped around the right user flow, but
-the runtime records are still preview-backed:
+The current KeepCozy shell is already shaped around the right user flow, and
+the core MVP read paths now resolve through dedicated persisted KeepCozy
+records:
 
 - [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
 - [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/rooms/page.tsx)
 - [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/issues/page.tsx)
 - [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/tasks/page.tsx)
 - [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/server.ts)
 - [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
 
-That means the current app direction is correct, but the persistence center of
-gravity still needs to move into real KeepCozy tables.
+Important clarification:
+
+- `rooms`, `issues`, `issue_updates`, `tasks`, and `task_updates` are now the
+  primary read source for the MVP loop
+- `mvp-preview.ts` remains only as a temporary fallback for environments where
+  the first KeepCozy tables have not been applied yet
+- minimal create/update write paths are still the next narrow lift
 
 ## What This Persistence Slice Must Achieve
 
@@ -205,17 +213,16 @@ Reason:
 
 ### `/home`
 
-The home dashboard should move from preview counts to persisted counts by
-active `space_id`:
+The home dashboard now reads persisted KeepCozy counts by active `space_id`:
 
 - total rooms
-- total open issues
-- total open tasks
+- total issues
+- total tasks
 - canonical test flow pointers
 
 ### `/rooms`
 
-The room list and room detail views should read:
+The room list and room detail views now read:
 
 - rooms by `space_id`
 - room detail by `(space_id, slug)`
@@ -223,7 +230,7 @@ The room list and room detail views should read:
 
 ### `/issues`
 
-The issue list and detail views should read:
+The issue list and detail views now read:
 
 - issues by `space_id`
 - optional room-filtered issues by `room_id`
@@ -233,7 +240,7 @@ The issue list and detail views should read:
 
 ### `/tasks`
 
-The task list and detail views should read:
+The task list and detail views now read:
 
 - tasks by `space_id`
 - optional issue-filtered tasks by `issue_id`
@@ -243,7 +250,7 @@ The task list and detail views should read:
 
 ### `/activity`
 
-The KeepCozy-first history section should move from preview arrays to a merged
+The KeepCozy-first history section now reads from a merged
 space-scoped operational history feed built from:
 
 - `issue_updates`
@@ -301,25 +308,29 @@ Apply these SQL files in order:
 - the canonical seed avoids overwriting existing matching records so local test
   edits are preserved on re-run.
 
-## Recommended Runtime Sequence After Migration
+## Runtime Status After Migration
 
-1. Add KeepCozy read helpers for:
+The current branch now includes:
+
+1. KeepCozy read helpers for:
    - rooms list/detail
    - issues list/detail
    - tasks list/detail
    - issue/task history
-2. Switch `/rooms` and the room detail route from preview reads to persisted
-   reads.
-3. Switch `/issues` and `/tasks` to persisted reads.
-4. Switch the KeepCozy-first history section in `/activity` to persisted
-   `issue_updates` and `task_updates`.
-5. Add minimal create/update write paths for:
-   - create issue
-   - create task
-   - append issue update
-   - append task update
-6. Keep preview fallback only as a temporary guard while the read-path swap is
-   in progress, then remove it from the canonical MVP proof.
+2. Persisted read-path swaps for `/home`, `/rooms`, `/issues`, `/tasks`, and
+   the KeepCozy-first section of `/activity`.
+3. Preview fallback only as a temporary guard for pre-migration environments
+   where the KeepCozy MVP tables are not available.
+
+The next narrow runtime lift is still minimal create/update write paths for:
+
+1. create issue
+2. create task
+3. append issue update
+4. append task update
+
+That follow-up should keep preview fallback temporary and remove it from the
+canonical MVP proof once all target environments have the first schema slice.
 
 ## Deliberately Deferred After This Slice
 
@@ -333,13 +344,13 @@ Apply these SQL files in order:
   recommendation logic
 - broader policy and marketplace richness
 
-## Narrow Follow-Up Work After This Plan
+## Narrow Follow-Up Work After This Slice
 
 Once this table slice is approved, the next implementation branch should stay
 small:
 
 1. apply the SQL foundation
 2. seed the canonical `TEST` records
-3. add read repositories
-4. swap one route group at a time from preview to persisted data
+3. keep read repositories as the primary runtime path
+4. add write paths one route group at a time
 5. leave future-domain layers untouched

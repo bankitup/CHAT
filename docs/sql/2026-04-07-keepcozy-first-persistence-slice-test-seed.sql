@@ -5,6 +5,10 @@
 -- - seed one room, one issue, one task, and minimal history only
 -- - avoid broad fixture libraries or preview-parity backfills
 -- - keep the seed idempotent and avoid overwriting existing local edits
+-- - keep the same canonical route slugs as the preview-backed shell:
+--   /rooms/kitchen
+--   /issues/kitchen-faucet-drip
+--   /tasks/capture-faucet-model
 
 do $$
 declare
@@ -14,9 +18,13 @@ declare
   v_issue_id uuid;
   v_task_id uuid;
 begin
-  if to_regclass('public.rooms') is null then
+  if to_regclass('public.rooms') is null
+    or to_regclass('public.issues') is null
+    or to_regclass('public.issue_updates') is null
+    or to_regclass('public.tasks') is null
+    or to_regclass('public.task_updates') is null then
     raise exception
-      'Missing public.rooms. Apply /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql first.';
+      'Missing KeepCozy MVP persistence tables. Apply /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql first.';
   end if;
 
   select spaces.id, spaces.created_by
@@ -29,6 +37,11 @@ begin
   if v_test_space_id is null then
     raise exception
       'Missing TEST space. Apply /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql first.';
+  end if;
+
+  if v_actor_id is null then
+    raise exception
+      'TEST space is missing created_by. Recreate the TEST home through the documented shared space seed path before applying this KeepCozy seed.';
   end if;
 
   insert into public.rooms (

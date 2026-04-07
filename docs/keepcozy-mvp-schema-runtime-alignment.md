@@ -33,12 +33,12 @@ Related documents:
 - treat shared `space` and `space_members` as the current `home` and
   `home_membership` compatibility seam
 - treat `room`, `issue`, `issue_update`, `task`, and `task_update` as the first
-  missing first-class MVP schema slice
+  dedicated first-class MVP schema slice
 - keep `conversation_companion_metadata` and `space_timeline_events` as future
   support layers, not the center of the first runtime proof
 - keep KeepCozy-first routes (`/home`, `/rooms`, `/issues`, `/tasks`,
-  `/activity`) as the visible shell center while dedicated MVP tables are still
-  missing
+  `/activity`) as the visible shell center now that the first dedicated MVP
+  tables exist and back the main read paths
 - keep chat and settings routes as secondary support surfaces rather than the
   product definition of KeepCozy
 - do not let service requests, work orders, inspections, supplier/procurement
@@ -62,11 +62,12 @@ Important rule:
 
 - these pieces are aligned because they support the outer home context and
   minimal asset/history needs
-- the new KeepCozy-first routes intentionally use focused preview scaffolding
-  so the visible app flow no longer reads as chat-first
-- they are not proof that room/issue/task runtime already exists
+- the new KeepCozy-first routes now read dedicated persisted MVP records
+  through [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/server.ts)
+- preview scaffolding remains only as a temporary fallback for environments
+  where the first KeepCozy tables are not available yet
 
-## 2. Current Pieces That Do Not Yet Match The Live MVP Runtime
+## 2. Current Pieces That Still Need Follow-Up
 
 The repository now has a dedicated persistence plan and additive SQL for the
 first KeepCozy object slice:
@@ -74,10 +75,8 @@ first KeepCozy object slice:
 - [keepcozy-first-persistence-slice.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-first-persistence-slice.md)
 - [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql)
 
-However, the live app runtime is still not reading these records yet.
-
-The following MVP entities now have schema-level direction, but still do not
-have active route-level runtime integration in this repository:
+The following MVP entities now have both schema-level direction and active
+route-level read integration in this repository:
 
 - `rooms`
 - `issues`
@@ -95,12 +94,13 @@ Practical interpretation:
 
 - the first MVP should currently be read as:
   - shared `space` foundation already exists and remains the home seam
-  - dedicated room/issue/task persistence now exists as additive SQL
-  - the visible KeepCozy routes still need a later read-path swap from preview
-    data to persisted records
+  - dedicated room/issue/task persistence now exists as additive SQL and live
+    route-level reads
+  - preview fallback exists only to keep pre-migration environments usable
+  - minimal write paths are still the next narrow implementation gap
 
 That means the next runtime center of gravity should move into those persisted
-entities rather than toward broader future object families.
+entities rather than back toward preview data or broader future object families.
 
 ## 3. Current Pieces That Are Real But Future-Layer Only
 
@@ -191,29 +191,32 @@ Alignment rule:
 
 ## 5. Current Runtime Drift
 
-The biggest current runtime drift is not future-domain logic in the UI.
+The biggest current runtime drift is no longer the top-level shell.
 
-The biggest drift is that the visible app shell still presents the product as a
-chat-first shell:
+The visible app focus is already centered on KeepCozy's MVP loop. The current
+remaining drift is narrower:
 
-- [public-home-screen.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(public)/public-home-screen.tsx)
-- [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
-- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx)
-- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/settings/page.tsx)
-- [README.md](/Users/danya/IOS%20-%20Apps/CHAT/README.md)
+- create and update write paths are still not fully backed by the first
+  persisted MVP tables
+- [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+  still includes a secondary chat/messaging lane below the KeepCozy-first
+  history section
+- [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
+  still exists as a temporary fallback for environments where the first
+  persistence slice has not been applied
 
 Current interpretation after this pass:
 
 - `/spaces` should be treated as the current home selector over the shared
   `space` foundation
 - `/settings` currently includes the visible selected-home summary
-- `/inbox` and `/activity` remain transitional communication/history surfaces
-  until room/issue/task UI exists
+- `/activity` now has a KeepCozy-first persisted history section, with
+  messaging remaining secondary
 - current chat routes must not be mistaken for the full KeepCozy product model
 
 ## 6. Schema Slice Guidance For The Next Real MVP Runtime
 
-The first real KeepCozy schema/runtime slice should be centered on:
+The current real KeepCozy schema/runtime slice should stay centered on:
 
 - shared `space` / `space_members` as current home compatibility layer
 - `rooms`
@@ -241,7 +244,7 @@ Recommended non-goals for the next slice:
 
 ## 7. Runtime Guidance For The Current Shell
 
-Until dedicated room/issue/task screens land:
+With dedicated room/issue/task screens and persisted read paths now in place:
 
 - visible product copy should prefer `home` where the user is choosing or
   reviewing the shared `space` container
@@ -251,7 +254,8 @@ Until dedicated room/issue/task screens land:
 
 Important rule:
 
-- changing product-facing copy is acceptable where it clarifies MVP direction
+- the next runtime lift should add narrow write paths, not undo the current
+  persisted read center of gravity
 - changing shared schema or forcing a route redesign is not required for this
   pass
 

@@ -1,10 +1,8 @@
 import Link from 'next/link';
 import {
-  getKeepCozyPreview,
-  getKeepCozyPreviewIssue,
-  getKeepCozyPreviewRoom,
-} from '@/modules/keepcozy/mvp-preview';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+  getKeepCozyTasksPageData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type TasksPageProps = {
@@ -21,18 +19,12 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
     requestedSpaceId: query.space,
     source: 'keepcozy-tasks-page',
   });
-  const preview = getKeepCozyPreview(language);
-  const activeIssue = query.issue ? getKeepCozyPreviewIssue(language, query.issue) : null;
-  const activeRoom =
-    !activeIssue && query.room ? getKeepCozyPreviewRoom(language, query.room) : null;
-  const tasks = activeIssue
-    ? preview.tasks.filter((task) => task.issueId === activeIssue.id)
-    : activeRoom
-      ? preview.tasks.filter((task) => {
-          const issue = getKeepCozyPreviewIssue(language, task.issueId);
-          return issue?.roomId === activeRoom.id;
-        })
-      : preview.tasks;
+  const { activeIssue, activeRoom, tasks } = await getKeepCozyTasksPageData({
+    issueId: query.issue,
+    language,
+    roomId: query.room,
+    spaceId: activeSpace.id,
+  });
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -98,12 +90,9 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           ) : null}
         </section>
 
-        <div className="keepcozy-stack-list">
-          {tasks.map((task) => {
-            const issue = getKeepCozyPreviewIssue(language, task.issueId);
-            const room = issue ? getKeepCozyPreviewRoom(language, issue.roomId) : null;
-
-            return (
+        {tasks.length > 0 ? (
+          <div className="keepcozy-stack-list">
+            {tasks.map((task) => (
               <article key={task.id} className="keepcozy-detail-card">
                 <Link
                   className="stack keepcozy-detail-copy"
@@ -113,32 +102,36 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                   <div className="keepcozy-detail-header">
                     <div className="stack keepcozy-detail-heading">
                       <h2 className="card-title">{task.title}</h2>
-                      <p className="muted">{task.summary}</p>
+                      <p className="muted">{task.summary || t.tasks.detailBody}</p>
                     </div>
                     <span className="summary-pill summary-pill-muted">{task.status}</span>
                   </div>
-                  <p className="keepcozy-detail-body">{task.nextStep}</p>
+                  <p className="keepcozy-detail-body">{task.nextStep || t.tasks.updatesBody}</p>
                 </Link>
 
                 <div className="keepcozy-meta-row">
-                  {issue ? <span className="keepcozy-meta-pill">{issue.title}</span> : null}
-                  {room ? <span className="keepcozy-meta-pill">{room.name}</span> : null}
+                  {task.issueTitle ? (
+                    <span className="keepcozy-meta-pill">{task.issueTitle}</span>
+                  ) : null}
+                  {task.roomName ? (
+                    <span className="keepcozy-meta-pill">{task.roomName}</span>
+                  ) : null}
                 </div>
 
                 <div className="keepcozy-card-actions">
-                  {issue ? (
+                  {task.issueId ? (
                     <Link
                       className="pill"
-                      href={withSpaceParam(`/issues/${issue.id}`, activeSpace.id)}
+                      href={withSpaceParam(`/issues/${task.issueId}`, activeSpace.id)}
                       prefetch={false}
                     >
                       {t.tasks.viewIssue}
                     </Link>
                   ) : null}
-                  {room ? (
+                  {task.roomId ? (
                     <Link
                       className="button button-secondary"
-                      href={withSpaceParam(`/rooms/${room.id}`, activeSpace.id)}
+                      href={withSpaceParam(`/rooms/${task.roomId}`, activeSpace.id)}
                       prefetch={false}
                     >
                       {t.tasks.viewRoom}
@@ -146,9 +139,14 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
                   ) : null}
                 </div>
               </article>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <section className="empty-card">
+            <h2 className="card-title">{t.tasks.title}</h2>
+            <p className="muted">{t.tasks.previewBody}</p>
+          </section>
+        )}
       </section>
     </section>
   );

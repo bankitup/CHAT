@@ -1,11 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  getKeepCozyPreview,
-  getKeepCozyPreviewIssue,
-  getKeepCozyPreviewRoom,
-} from '@/modules/keepcozy/mvp-preview';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+  getKeepCozyIssueDetailData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type IssueDetailPageProps = {
@@ -26,15 +24,15 @@ export default async function IssueDetailPage({
     requestedSpaceId: query.space,
     source: 'keepcozy-issue-detail-page',
   });
-  const preview = getKeepCozyPreview(language);
-  const issue = getKeepCozyPreviewIssue(language, issueId);
+  const { issue, room, tasks } = await getKeepCozyIssueDetailData({
+    issueId,
+    language,
+    spaceId: activeSpace.id,
+  });
 
   if (!issue) {
     notFound();
   }
-
-  const room = getKeepCozyPreviewRoom(language, issue.roomId);
-  const tasks = preview.tasks.filter((task) => task.issueId === issue.id);
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -59,7 +57,7 @@ export default async function IssueDetailPage({
 
         <p className="eyebrow">{t.issues.title}</p>
         <h1 className="settings-hero-title">{issue.title}</h1>
-        <p className="muted settings-hero-note">{issue.summary}</p>
+        <p className="muted settings-hero-note">{issue.summary || t.issues.detailBody}</p>
       </section>
 
       <section className="card stack settings-surface keepcozy-surface">
@@ -88,15 +86,21 @@ export default async function IssueDetailPage({
           </div>
 
           <div className="keepcozy-timeline">
-            {issue.updates.map((update) => (
-              <article key={update.id} className="keepcozy-timeline-item">
-                <div className="keepcozy-timeline-topline">
-                  <h3 className="card-title">{update.label}</h3>
-                  <span className="keepcozy-timestamp">{update.timestamp}</span>
-                </div>
-                <p className="muted">{update.note}</p>
-              </article>
-            ))}
+            {issue.updates.length > 0 ? (
+              issue.updates.map((update) => (
+                <article key={update.id} className="keepcozy-timeline-item">
+                  <div className="keepcozy-timeline-topline">
+                    <h3 className="card-title">{update.label}</h3>
+                    <span className="keepcozy-timestamp">{update.timestamp}</span>
+                  </div>
+                  <p className="muted">{update.note}</p>
+                </article>
+              ))
+            ) : (
+              <section className="empty-card">
+                <p className="muted">{t.issues.updatesBody}</p>
+              </section>
+            )}
           </div>
         </section>
 
@@ -107,20 +111,26 @@ export default async function IssueDetailPage({
           </div>
 
           <div className="keepcozy-stack-list">
-            {tasks.map((task) => (
-              <Link
-                key={task.id}
-                className="keepcozy-secondary-card"
-                href={withSpaceParam(`/tasks/${task.id}`, activeSpace.id)}
-                prefetch={false}
-              >
-                <div className="stack keepcozy-link-copy">
-                  <h3 className="card-title">{task.title}</h3>
-                  <p className="muted">{task.summary}</p>
-                </div>
-                <span className="summary-pill summary-pill-muted">{task.status}</span>
-              </Link>
-            ))}
+            {tasks.length > 0 ? (
+              tasks.map((task) => (
+                <Link
+                  key={task.id}
+                  className="keepcozy-secondary-card"
+                  href={withSpaceParam(`/tasks/${task.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  <div className="stack keepcozy-link-copy">
+                    <h3 className="card-title">{task.title}</h3>
+                    <p className="muted">{task.summary || t.tasks.detailBody}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">{task.status}</span>
+                </Link>
+              ))
+            ) : (
+              <section className="empty-card">
+                <p className="muted">{t.issues.tasksBody}</p>
+              </section>
+            )}
           </div>
         </section>
       </section>

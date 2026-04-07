@@ -1,6 +1,8 @@
 import Link from 'next/link';
-import { getKeepCozyPreview, getKeepCozyPreviewRoom } from '@/modules/keepcozy/mvp-preview';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+import {
+  getKeepCozyIssuesPageData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type IssuesPageProps = {
@@ -16,11 +18,11 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
     requestedSpaceId: query.space,
     source: 'keepcozy-issues-page',
   });
-  const preview = getKeepCozyPreview(language);
-  const activeRoom = query.room ? getKeepCozyPreviewRoom(language, query.room) : null;
-  const issues = activeRoom
-    ? preview.issues.filter((issue) => issue.roomId === activeRoom.id)
-    : preview.issues;
+  const { activeRoom, issues } = await getKeepCozyIssuesPageData({
+    language,
+    roomId: query.room,
+    spaceId: activeSpace.id,
+  });
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -73,12 +75,9 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
           ) : null}
         </section>
 
-        <div className="keepcozy-stack-list">
-          {issues.map((issue) => {
-            const room = getKeepCozyPreviewRoom(language, issue.roomId);
-            const taskCount = preview.tasks.filter((task) => task.issueId === issue.id).length;
-
-            return (
+        {issues.length > 0 ? (
+          <div className="keepcozy-stack-list">
+            {issues.map((issue) => (
               <article key={issue.id} className="keepcozy-detail-card">
                 <Link
                   className="stack keepcozy-detail-copy"
@@ -88,27 +87,27 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
                   <div className="keepcozy-detail-header">
                     <div className="stack keepcozy-detail-heading">
                       <h2 className="card-title">{issue.title}</h2>
-                      <p className="muted">{issue.summary}</p>
+                      <p className="muted">{issue.summary || t.issues.detailBody}</p>
                     </div>
                     <span className="summary-pill summary-pill-muted">{issue.status}</span>
                   </div>
-                  <p className="keepcozy-detail-body">{issue.nextStep}</p>
+                  <p className="keepcozy-detail-body">{issue.nextStep || t.issues.tasksBody}</p>
                 </Link>
 
                 <div className="keepcozy-meta-row">
-                  {room ? (
-                    <span className="keepcozy-meta-pill">{room.name}</span>
+                  {issue.roomName ? (
+                    <span className="keepcozy-meta-pill">{issue.roomName}</span>
                   ) : null}
                   <span className="keepcozy-meta-pill">
-                    {t.tasks.title}: {taskCount}
+                    {t.tasks.title}: {issue.taskCount}
                   </span>
                 </div>
 
                 <div className="keepcozy-card-actions">
-                  {room ? (
+                  {issue.roomId ? (
                     <Link
                       className="pill"
-                      href={withSpaceParam(`/rooms/${room.id}`, activeSpace.id)}
+                      href={withSpaceParam(`/rooms/${issue.roomId}`, activeSpace.id)}
                       prefetch={false}
                     >
                       {t.issues.viewRoom}
@@ -123,9 +122,14 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
                   </Link>
                 </div>
               </article>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <section className="empty-card">
+            <h2 className="card-title">{t.issues.title}</h2>
+            <p className="muted">{t.issues.previewBody}</p>
+          </section>
+        )}
       </section>
     </section>
   );
