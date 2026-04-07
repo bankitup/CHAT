@@ -22,6 +22,7 @@ Related documents:
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+- [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
 - [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
@@ -501,6 +502,10 @@ Current branch note:
   reviewable matrix
 - the exact next branch after this policy-definition pass should be
   `feature/space-rls-hardening`
+- the first conservative SQL/RLS translation layer for that matrix now lives
+  in
+  [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
+  and its related SQL drafts
 
 ## 5. Suggested Order of Execution
 
@@ -670,3 +675,10 @@ That keeps the next phase narrow:
 
 - this branch freezes semantic intent
 - the next branch translates that intent into reviewed enforcement
+
+If reading this plan from the completed `feature/space-rls-hardening` branch,
+the next practical step should become:
+
+- open `feature/space-first-operational-object`
+- use the reviewed policy matrix plus conservative hardening drafts as the
+  enforcement baseline rather than reopening role or visibility semantics

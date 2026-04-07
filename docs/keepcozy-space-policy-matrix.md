@@ -16,6 +16,7 @@ It must not change current production behavior by itself.
 Related documents:
 
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
+- [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
@@ -644,3 +645,8 @@ That later branch should translate this matrix into:
 
 The matrix should be treated as the product-policy source of truth until a
 later reviewed branch intentionally revises it.
+
+Practical follow-on note:
+
+- the first conservative translation layer from this matrix now lives in
+  [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
