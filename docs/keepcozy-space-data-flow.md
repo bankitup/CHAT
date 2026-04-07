@@ -286,6 +286,13 @@ First-foundation note:
 - the longer-term timeline may include selected message-derived events
 - the first structured timeline foundation should start with operational/system
   events and leave broad message mirroring for a later branch
+- the first committed event subset should stay even narrower:
+  - thread created
+  - thread metadata attached
+  - primary object linked
+  - meaningful status changed
+  - thread closed
+  - thread reopened
 
 Recommended target event fields:
 

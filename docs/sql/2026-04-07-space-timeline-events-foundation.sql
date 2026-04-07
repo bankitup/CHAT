@@ -4,6 +4,7 @@
 -- - keep user-authored messages in public.messages
 -- - introduce a separate structured space-scoped event layer
 -- - keep the table append-oriented and audit-friendly
+-- - include only stable first-pass operational transitions, not broad chat mirroring
 -- - allow optional linkage to conversation, message, and primary object refs
 -- - use compact summary payloads for event-local render details only
 -- - defer RLS, grants, and write-path integration until later branches
@@ -48,17 +49,9 @@ create table if not exists public.space_timeline_events (
         'thread_created',
         'thread_metadata_attached',
         'primary_object_linked',
-        'thread_closed',
-        'thread_reopened',
-        'operator_joined',
-        'contractor_assigned',
-        'supplier_attached',
         'status_changed',
-        'document_attached',
-        'media_attached',
-        'quality_review_opened',
-        'issue_opened',
-        'issue_resolved'
+        'thread_closed',
+        'thread_reopened'
       )
     ),
   source_kind text not null
@@ -120,7 +113,7 @@ comment on column public.space_timeline_events.actor_user_id is
 'Optional acting user for auditability. Nullable for system-emitted or integration-emitted events.';
 
 comment on column public.space_timeline_events.event_type is
-'Structured operational event category used for timeline rendering, routing, and later automation.';
+'Structured operational event category used for timeline rendering, routing, and later automation. The first pass is intentionally limited to stable thread/object state transitions.';
 
 comment on column public.space_timeline_events.source_kind is
 'Emitter/source classification for the event row. This is separate from authorization and separate from business-record ownership.';
@@ -160,6 +153,7 @@ create index if not exists space_timeline_events_actor_occurred_at_idx
 -- - RLS and grants
 -- - write-path integration in current runtime code
 -- - dedupe or idempotency keys
+-- - automatic mirroring of ordinary user messages into space history
 -- - message- or asset-specific foreign keys beyond optional message_id
 -- - assignment/invitation enforcement
 -- - notification and automation fan-out

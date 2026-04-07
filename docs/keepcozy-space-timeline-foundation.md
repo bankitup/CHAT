@@ -30,6 +30,7 @@ Related documents:
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
 - [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
+- [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 
 ## Design Decisions Locked by This Pass
@@ -165,33 +166,86 @@ Design rule:
 - it must not replace first-class operational object state
 - it must not become a hidden copy of message bodies
 
-## 4. First-Pass Event Categories
+## 4. First-Pass Committed Event Taxonomy
 
-The first structured event vocabulary for this branch is:
+The first committed timeline pass should stay narrow.
 
-| Event type | Intended meaning | Typical source |
-| --- | --- | --- |
-| `thread_created` | an operational thread shell was created | conversation creation flow |
-| `thread_metadata_attached` | companion metadata was first attached to a thread | conversation companion metadata write |
-| `primary_object_linked` | a primary operational object was linked to a thread | conversation companion metadata or object flow |
-| `thread_closed` | an operational thread was marked closed/resolved | companion metadata or object workflow |
-| `thread_reopened` | a previously closed thread became active again | companion metadata or object workflow |
-| `operator_joined` | an operator became materially involved in the thread/workflow | policy-aware backend flow later |
-| `contractor_assigned` | a contractor assignment became part of the workflow | future operational object/service layer |
-| `supplier_attached` | a supplier/vendor became linked to the workflow | future operational object/service layer |
-| `status_changed` | operational workflow status changed | companion metadata or object workflow |
-| `document_attached` | a structured document was attached to the work record | future document/object layer |
-| `media_attached` | a media asset became part of the operational record | future asset/object layer |
-| `quality_review_opened` | a quality-review workflow started | future quality-review object flow |
-| `issue_opened` | a durable issue/case record was opened | future incident/service object flow |
-| `issue_resolved` | a durable issue/case record was resolved | future incident/service object flow |
+Only durable, operationally meaningful state transitions should create
+committed space timeline rows.
+
+### First-pass committed event types
+
+These belong in the first committed pass:
+
+| Event type | Intended meaning | Typical source | Why it is safe first-pass history |
+| --- | --- | --- | --- |
+| `thread_created` | an operational thread shell was created as a real work lane | operational thread creation flow | creation of the work lane is a durable operational fact |
+| `thread_metadata_attached` | companion metadata was first attached to an existing thread shell | conversation companion metadata write | marks the moment a generic thread became explicitly operational |
+| `primary_object_linked` | a primary operational object was linked or re-linked | companion metadata or future object flow | links communication to a durable business record |
+| `status_changed` | operational state changed in a meaningful way without being a close/reopen transition | companion metadata or object workflow | captures meaningful workflow movement without duplicating lifecycle-specialized events |
+| `thread_closed` | the operational thread moved into a resolved/closed state | companion metadata or object workflow | closure is a durable business-history event |
+| `thread_reopened` | a closed/resolved thread returned to active work | companion metadata or object workflow | reopening is a durable business-history event |
+
+### Deferred event types
+
+The following categories are intentionally deferred from the first committed
+pass:
+
+| Deferred type | Why it is deferred |
+| --- | --- |
+| `operator_joined` | depends on later access/policy interpretation of meaningful operator participation |
+| `contractor_assigned` | needs assignment-aware backend truth, not just thread membership changes |
+| `supplier_attached` | needs supplier/vendor workflow truth, not just thread metadata |
+| `document_attached` | needs a more mature document/object linkage layer to avoid noisy attachment history |
+| `media_attached` | needs clearer distinction between chat media and operational media linkage |
+| `quality_review_opened` | should wait for a real quality-review object/workflow |
+| `issue_opened` | should wait for a real issue/service object/workflow |
+| `issue_resolved` | should wait for a real issue/service object/workflow |
 
 Important first-pass boundary:
 
-- this branch defines the categories and table shape
-- it does not yet implement the write emitters for all categories
+- this branch defines the committed event vocabulary and schema direction
+- it intentionally does not claim that every useful future category belongs in
+  the first emitted set
 
-## 5. Event Sources In Scope Now vs Deferred
+## 5. Which Events Stay Thread-Local or Deferred
+
+Some events may eventually matter inside a thread timeline or audit surface,
+but they should not become committed space timeline rows in the first pass.
+
+### Thread-local or later-co-render candidates
+
+These should stay thread-local or deferred until later rendering/policy work
+exists:
+
+- participant joined/left chatter that does not change operational assignment
+- internal-only visibility annotations that are only diagnostic
+- thread-level system notices that are useful in one thread but not meaningful
+  as space-wide history
+- selected message-derived system markers if later product work needs them
+
+### Events that should not be emitted automatically yet
+
+These should not auto-create committed timeline rows in the first pass:
+
+- ordinary user message posted
+- message edited
+- message deleted
+- reactions added or removed
+- read receipts or unread-state changes
+- typing or presence
+- DM E2EE device/bootstrap/bundle events
+- RTC/call/session events
+- upload started/completed/failed diagnostics
+- playback, buffering, or media runtime state
+- retry/failure state for optimistic UI flows
+
+Rule:
+
+- if an event is primarily transport, UI, or diagnostics state, it does not
+  belong in committed space history yet
+
+## 6. Event Sources In Scope Now vs Deferred
 
 ### In scope for the foundation pass
 
@@ -231,7 +285,66 @@ Why this is the current preference:
 - it avoids turning the space timeline into a noisy duplicate of chat transport
 - it keeps message history and operational history distinct
 
-## 6. Why Raw Chat Mirroring Is Deferred
+## 7. Commit Rules for Space Timeline Events
+
+An event should be eligible for committed space history only if all of the
+following are true:
+
+1. it represents a durable operational fact rather than transient UI state
+2. it is attributable to exactly one `space_id`
+3. it is emitted only after the underlying write/transition has committed
+4. it has a stable event category that later search/notifications can rely on
+5. it can be summarized without depending on full message-body replay
+
+Recommended commit rule:
+
+- a timeline row should describe a meaningful operational transition, linkage,
+  or lifecycle change
+- it should not describe every intermediate step taken to get there
+
+### Examples of eligible first-pass events
+
+- an operational thread is intentionally created
+- companion metadata is first attached to an existing thread shell
+- a primary operational object ref is linked to the thread
+- workflow status changes from `open` to `active`
+- workflow status changes from `blocked` to `active`
+- workflow status changes into a closed/resolved state
+- a closed/resolved thread is reopened
+
+### Examples that are not eligible yet
+
+- user sent a normal message saying "I’m on my way"
+- a voice message upload started or retried
+- a UI filter changed
+- a participant briefly opened the thread
+- an optimistic thread patch temporarily showed `uploading`
+
+## 8. Duplicate and Noise-Avoidance Rules
+
+The first pass should prefer one committed timeline row per logical business
+change.
+
+Recommended rules:
+
+- do not emit both `status_changed` and `thread_closed` for the same closing
+  transition
+- do not emit both `status_changed` and `thread_reopened` for the same
+  reopening transition
+- do not emit `thread_metadata_attached` repeatedly if the same metadata row is
+  merely edited later
+- do not emit `primary_object_linked` if the same object ref is rewritten
+  without changing the logical link
+- do not emit document/media events for low-level storage retries, upload
+  phases, or attachment-metadata churn
+
+Recommended interpretation:
+
+- `status_changed` is for meaningful non-close/non-reopen workflow movement
+- `thread_closed` and `thread_reopened` are specialized lifecycle events and
+  should win over generic status-change mirroring for those transitions
+
+## 9. Why Raw Chat Mirroring Is Deferred
 
 The longer-term product may still choose to surface selected message-derived
 events in a space-wide activity view.
@@ -250,7 +363,7 @@ Recommended rule:
 - add selected message-derived timeline events later only when there is a
   clear product reason
 
-## 7. Schema Direction for the First Pass
+## 10. Schema Direction for the First Pass
 
 The first SQL draft introduces:
 
@@ -271,8 +384,18 @@ Important first-pass choices:
 - no attempt to model every possible event payload as first-class columns
 - no RLS or grants yet
 - no write integration yet
+- no automatic message-to-timeline mirroring yet
+- no explicit idempotency key in the first draft; later write paths must choose
+  a dedupe strategy deliberately
 
-## 8. Relationship to Companion Metadata and Thread-Object Linkage
+Runtime boundary note:
+
+- later backend event-emission seams are documented in
+  [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
+- this branch defines the timeline model before wiring emitters into existing
+  `server.ts` flows
+
+## 11. Relationship to Companion Metadata and Thread-Object Linkage
 
 The timeline layer builds on the already-established boundaries:
 
@@ -292,7 +415,7 @@ This distinction matters:
 - metadata describes current state
 - timeline rows describe historical occurrences
 
-## 9. What This Foundation Intentionally Does Not Do
+## 12. What This Foundation Intentionally Does Not Do
 
 This branch does not:
 
@@ -305,7 +428,7 @@ This branch does not:
 - define final event deduplication/idempotency strategy
 - define final UI rendering for thread-local or space-wide timelines
 
-## 10. Current State vs Target State
+## 13. Current State vs Target State
 
 ### Current state
 
@@ -325,7 +448,7 @@ This branch does not:
   - thread-local system events
   - space-level operational history
 
-## 11. Practical Handoff to Later Branches
+## 14. Practical Handoff to Later Branches
 
 ### What `feature/space-access-mapping-prep` should own later
 
@@ -340,6 +463,7 @@ This branch does not:
 - when an operational object change emits a timeline row
 - when message-asset or document linkage deserves a timeline row
 - deduplication and transactional/event-commit strategy
+- whether and when selected message-derived events ever join the space timeline
 
 Practical rule:
 

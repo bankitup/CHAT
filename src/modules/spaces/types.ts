@@ -455,40 +455,45 @@ export const KEEP_COZY_SPACE_TIMELINE_EVENTS_TABLE_NAME_DRAFT =
 /**
  * First-pass structured event categories for the future space timeline.
  *
- * These are operational/system events, not user-authored message kinds.
+ * These are the first committed, space-wide operational/system event kinds.
+ * They intentionally focus on stable thread/object state transitions rather
+ * than transient UI actions or broad chat mirroring.
  */
 export type KeepCozySpaceTimelineEventType =
   | 'thread_created'
   | 'thread_metadata_attached'
   | 'primary_object_linked'
-  | 'thread_closed'
-  | 'thread_reopened'
-  | 'operator_joined'
-  | 'contractor_assigned'
-  | 'supplier_attached'
   | 'status_changed'
-  | 'document_attached'
-  | 'media_attached'
-  | 'quality_review_opened'
-  | 'issue_opened'
-  | 'issue_resolved';
+  | 'thread_closed'
+  | 'thread_reopened';
 
 export const KEEP_COZY_SPACE_TIMELINE_EVENT_TYPES = [
   'thread_created',
   'thread_metadata_attached',
   'primary_object_linked',
+  'status_changed',
   'thread_closed',
   'thread_reopened',
+] as const satisfies readonly KeepCozySpaceTimelineEventType[];
+
+/**
+ * Deferred event categories that are intentionally not part of the first
+ * committed space-timeline pass.
+ *
+ * These remain useful design vocabulary, but later branches should not assume
+ * they are safe to emit until the related assignment, document/media, or
+ * first-class operational-object flows exist.
+ */
+export const KEEP_COZY_SPACE_TIMELINE_DEFERRED_EVENT_TYPES_DRAFT = [
   'operator_joined',
   'contractor_assigned',
   'supplier_attached',
-  'status_changed',
   'document_attached',
   'media_attached',
   'quality_review_opened',
   'issue_opened',
   'issue_resolved',
-] as const satisfies readonly KeepCozySpaceTimelineEventType[];
+] as const;
 
 /**
  * Future-facing source classification for structured timeline events.
@@ -519,7 +524,7 @@ export const KEEP_COZY_SPACE_TIMELINE_EVENT_SOURCE_KINDS = [
  * This payload is intentionally small and additive. It is not meant to replace
  * first-class operational objects or the message body/history model.
  */
-export type KeepCozySpaceTimelineSummaryPayloadDraft = Readonly<
+export type KeepCozySpaceTimelineEventSummaryPayloadDraft = Readonly<
   Record<string, unknown>
 >;
 
@@ -542,7 +547,7 @@ export type KeepCozySpaceTimelineEventRowDraft = {
   event_type: KeepCozySpaceTimelineEventType;
   source_kind: KeepCozySpaceTimelineEventSourceKind;
   occurred_at: string;
-  summary_payload: KeepCozySpaceTimelineSummaryPayloadDraft;
+  summary_payload: KeepCozySpaceTimelineEventSummaryPayloadDraft;
   created_at: string;
 };
 
@@ -567,7 +572,7 @@ export type KeepCozySpaceTimelineEvent = {
   eventType: KeepCozySpaceTimelineEventType;
   sourceKind: KeepCozySpaceTimelineEventSourceKind;
   occurredAt: string;
-  summaryPayload: KeepCozySpaceTimelineSummaryPayloadDraft;
+  summaryPayload: KeepCozySpaceTimelineEventSummaryPayloadDraft;
   createdAt: string;
 };
 
