@@ -20,11 +20,33 @@ current CHAT product shell.
 
 Related current documents:
 
+- [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
+- [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
+- [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
 - [space-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-model.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
 - [client-strategy.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/client-strategy.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
+- [security/e2ee-security-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/e2ee-security-model.md)
+
+## Design Decisions Locked by This Pass
+
+These decisions should be treated as stable unless later review produces a
+strong reason to change them:
+
+- `space` is the operational memory boundary
+- `public.conversations.kind` should remain the shell discriminator for `dm`
+  and `group`
+- richer operational thread semantics should prefer a future companion metadata
+  layer keyed by `conversation_id`, not a risky overload of current
+  conversation core fields
+- operational threads are intended to be auditable and operator-visible by
+  policy, not full E2EE-by-default
+- private messaging may follow a different trust mode and must not become the
+  sole operational system of record for a space
+- chat is a major contributor to space memory, but not the only durable source
+  of truth
 
 ## Definition of a Space
 
@@ -200,6 +222,8 @@ Target responsibility:
 
 - represent communication containers within a space
 - remain subordinate to the parent space boundary
+- preserve the current shell contract of `kind = 'dm' | 'group'`
+- defer richer operational thread meaning to a future companion metadata layer
 
 ### 4. `public.conversation_members`
 
@@ -246,6 +270,47 @@ The target model should support additional space-scoped records later, such as:
 
 These should attach to the space as first-class operational records rather than
 trying to overload threads to carry all non-message meaning.
+
+Preferred evolution path:
+
+- major operational records should later use first-class tables
+- helper reference or search layers may still exist, but they should not become
+  the only durable model for operational objects
+
+## Trust Modes Inside a Space
+
+KeepCozy should distinguish between two trust modes even if the same messaging
+core supports both.
+
+### Operational thread trust mode
+
+This is the default KeepCozy model for service requests, contractor
+coordination, inspections, supplier orders, and internal operator work.
+
+Characteristics:
+
+- auditable by design
+- operator-visible by policy
+- optimized for continuity when participants change
+- not intended to hide operational state from the operating side
+
+### Private messaging trust mode
+
+This is a narrower mode for person-to-person privacy, including current
+space-scoped DMs and existing DM E2EE work.
+
+Characteristics:
+
+- may use `dm` shell conversations
+- may use `content_mode = 'dm_e2ee_v1'`
+- should not be treated as the authoritative operational memory for a space
+
+Important boundary:
+
+- space membership controls who may enter the space
+- it does not itself grant DM plaintext access
+- operator oversight for operational threads must not be misread as a general
+  decrypt-rights model for private messaging
 
 ## Space Lifecycle States
 
@@ -294,8 +359,9 @@ Important distinction:
 
 - space access is not the same thing as plaintext access for encrypted DMs
 - role in a space must not imply decryption rights for private DM content
-- for KeepCozy operational threads, auditability may be more important than
-  E2EE, but the access boundary still belongs at the space layer
+- for KeepCozy operational threads, auditability and operator visibility are
+  the default product posture, but the access boundary still belongs at the
+  space layer
 
 ## Relationship Between Space and Threads
 
@@ -371,6 +437,8 @@ Recommended future convention:
 
 - space-aware storage paths and/or policy checks should make the parent space
   relationship obvious, even when message id remains part of the path
+- future object/document storage should align to the same `space` boundary even
+  when it is no longer message-linked
 
 ## Future Extensibility Requirements
 
@@ -382,6 +450,7 @@ It should support:
 - multiple spaces per user
 - many threads per space
 - richer role types later without breaking current owner/admin/member semantics
+- a companion metadata layer for operational thread meaning
 - future operational objects beyond messaging
 - policy differences between private chats and operational group threads
 - storage/media controls that remain aligned with the parent space
@@ -404,6 +473,10 @@ The current codebase already has a real v1 space foundation:
 - `public.conversations.space_id`
 - selected-space routing for inbox/activity/chat entry
 - space-scoped DM lookup and conversation creation
+- generic current role models in `space_members` and `conversation_members`
+- no separate operational thread metadata layer yet
+- no first-class operational object tables yet
+- no unified space timeline event layer yet
 
 Current rollout shape:
 
@@ -420,6 +493,10 @@ The target KeepCozy model is stronger than the current CHAT rollout:
 - operational records live alongside threads inside the same space boundary
 - access control and audit semantics are defined first at the space level
 - storage/media tenancy becomes visibly aligned with the same parent container
+- operational thread meaning is carried by a companion metadata layer rather
+  than by overloading `conversation.kind`
+- private messaging can continue to exist, but it is not the primary
+  operational memory path
 
 ### Gap to keep explicit
 
@@ -442,9 +519,16 @@ Guardrails:
 
 - do not treat space as only a UI filter
 - do not let thread membership bypass space membership
+- do not overload `public.conversations.kind` beyond `dm` and `group` in the
+  current runtime
+- do not force operational thread semantics into current conversation
+  moderation fields
 - do not let operational objects live only as chat-message fragments
 - do not let media/storage bypass the parent space boundary
 - do not let space-level admin rights automatically imply DM plaintext access
+- do not treat user-authored messages as a substitute for structured
+  operational events
+- do not equate archive/hide behavior with operational closure
 - do not mix RTC/call transport into space/thread/history contracts
 
 Non-goals for this spec:

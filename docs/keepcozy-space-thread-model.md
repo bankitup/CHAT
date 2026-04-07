@@ -14,9 +14,22 @@ Related documents:
 
 - [keepcozy-space-model-spec.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-model-spec.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
+- [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
+- [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
 - [space-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-model.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
+- [security/e2ee-security-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/e2ee-security-model.md)
+
+## Design Decisions Locked by This Pass
+
+- keep `public.conversations.kind` as the shell discriminator for `dm` and
+  `group`
+- model richer KeepCozy thread meaning in a future companion metadata layer
+  keyed by `conversation_id`
+- keep operational system events distinct from user-authored messages
+- keep archive separate from closure
+- treat operational threads and private messaging as different trust modes
 
 ## 1. Why Space-Scoped Threads Are Needed
 
@@ -44,6 +57,41 @@ The right model is:
 - many threads live inside that space
 - each thread has a specific purpose, audience, and lifecycle
 
+## 1A. Operational Threads vs Private Messaging
+
+KeepCozy should not treat every thread as the same kind of trust boundary.
+
+### Operational threads
+
+Operational threads are the default KeepCozy mode for:
+
+- service requests
+- contractor coordination
+- supplier work
+- inspections
+- incident handling
+- internal operator coordination
+
+They should be:
+
+- auditable
+- operator-visible within policy
+- non-E2EE by default
+- suitable for structured object and timeline linkage
+
+### Private messaging
+
+Private messaging may continue to exist in the broader platform, including
+current space-scoped DMs and DM E2EE work, but it should be treated as a
+separate trust mode.
+
+Important rule:
+
+- private messaging must not become the only durable operational record for a
+  space
+- operator visibility over operational threads must not be misread as a general
+  DM decrypt-rights model
+
 ## 2. Recommended Thread Types
 
 Current runtime should continue to treat threads as `public.conversations`.
@@ -69,6 +117,8 @@ Guidance:
 - most important operational activity should happen in typed threads
 - thread type should be a first-class metadata field later, not inferred from
   title text
+- the preferred next step is a companion metadata layer, not overloading
+  `public.conversations.kind`
 
 ## 3. Which Thread Types Are External-Facing vs Internal-Only
 
@@ -207,6 +257,8 @@ Recommended design rule:
 
 - keep `public.conversations.kind` as the shell discriminator for `dm` vs `group`
 - add operational thread classification separately
+- prefer a companion metadata layer keyed by `conversation_id` rather than
+  assuming all new fields belong directly on `public.conversations`
 
 ## 8. System Events vs User Messages
 
@@ -241,6 +293,11 @@ Recommended target direction:
 - add a separate structured event concept later, either as:
   - a dedicated event table tied to conversation timeline rendering, or
   - a future non-user message layer if the product needs timeline co-rendering
+
+Guardrail:
+
+- do not add broad operational meaning to `messages.kind` in the current
+  runtime just to simulate a missing event model
 
 Do not fake durable operational events as ordinary user-authored text long term.
 
@@ -317,9 +374,13 @@ Current active thread model is intentionally simple:
 - threads are `public.conversations`
 - `public.conversations.kind` is only `dm` or `group`
 - thread membership is `public.conversation_members`
+- current thread participation and moderation roles remain generic
+  `owner/admin/member`
 - message kinds are `text`, `attachment`, and `voice`
 - inbox/activity are summary-driven from `last_message_*` projections
 - group audience control is limited to `join_policy = open | closed`
+- there is no current companion metadata layer for thread type, audience mode,
+  or object linkage
 
 This is enough for a messaging product shell, but not yet enough for full
 KeepCozy operational threading.
@@ -334,6 +395,10 @@ KeepCozy needs a richer thread layer inside a space:
 - explicit relationship to operational objects
 - structured system events
 - clear closure semantics beyond personal archive/hide
+- operational threads that are operator-visible by policy and auditable by
+  default
+- private messaging that may remain separate and should not be the primary
+  operational system of record
 
 ### Key design constraint
 
@@ -343,6 +408,8 @@ Recommended approach:
 
 - keep `conversation.kind` for shell-level `dm` vs `group`
 - add operational thread metadata separately
+- prefer a companion metadata layer first, then decide later which fields, if
+  any, should be promoted onto `public.conversations`
 - keep inbox summary architecture lightweight
 - keep thread timeline rendering centered on committed thread/message/event data
 
@@ -354,7 +421,8 @@ steps:
 1. shell kind
    `dm` or `group`
 2. operational thread type and audience
-   `service_request`, `job_coordination`, `internal_ops`, and so on
+   `service_request`, `job_coordination`, `internal_ops`, and so on, carried by
+   the future companion metadata layer
 
 If a future proposal tries to put all operational meaning into `title`,
 participant guesswork, or message text alone, it is not modeling threads at the

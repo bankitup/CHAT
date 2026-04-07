@@ -18,6 +18,8 @@ This document does not change current production authorization behavior.
 Related documents:
 
 - [keepcozy-space-model-spec.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-model-spec.md)
+- [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
+- [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [space-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-model.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
@@ -31,14 +33,48 @@ KeepCozy access should be modeled in three layers:
    platform-level or workforce-level identity outside any one space
 2. Space role
    operational role inside one managed property/home/object
-3. Thread participation role
+3. Thread participation and moderation role
    per-conversation role used for membership and moderation inside one thread
 
 Design principle:
 
 - global roles should stay minimal
 - space roles should carry the real operational meaning
-- thread roles should stay generic and subordinate to space access
+- thread participation and moderation roles should stay generic and subordinate
+  to space access
+
+Current-runtime note:
+
+- [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+  currently supports only `SpaceRole = 'owner' | 'admin' | 'member'`
+- [group-policy.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/group-policy.ts)
+  currently supports only generic conversation moderation roles
+- this document therefore describes the target access model, not active runtime
+  authorization behavior
+
+## Operational Trust Modes
+
+KeepCozy needs a clear distinction between operational visibility and private
+message confidentiality.
+
+### Operational threads
+
+Default KeepCozy operational threads should be:
+
+- operator-visible by policy
+- auditable
+- suitable for internal-only and restricted-external visibility rules
+- non-E2EE by default unless a later product requirement proves otherwise
+
+### Private messaging
+
+Private messaging may continue to exist in the broader platform, including
+current DM E2EE work, but it should be treated as a different trust mode.
+
+Important rule:
+
+- operator oversight for operational threads does not imply DM plaintext access
+- `space` access policy and DM decryption policy must stay separate
 
 ## 1. Global Roles vs Space Roles
 
@@ -81,6 +117,13 @@ Recommended initial space roles:
 These roles should be stored or derived at the space boundary, not only inside
 conversation membership.
 
+Preferred evolution path:
+
+- do not assume these roles should be written directly into current
+  `conversation_members.role`
+- prefer a later mapping layer from space role to thread audience and generic
+  thread participation behavior
+
 ## 2. Recommended Initial Space Roles
 
 | Space role | Kind | Default intent | Typical duration |
@@ -96,7 +139,8 @@ conversation membership.
 Implementation guidance:
 
 - the first practical expansion should happen at the space-role level
-- thread-level `owner/admin/member` should remain generic moderation roles
+- thread-level `owner/admin/member` should remain generic thread participation
+  and moderation roles
 - do not overload conversation role enums with job-function semantics like
   `contractor` or `supplier`
 
@@ -249,6 +293,8 @@ Important boundary:
 - it must not become a hidden support bypass for encrypted DM plaintext
 - if some future thread type is intentionally private from operator oversight,
   that exception must be explicit in policy, not accidental
+- operator visibility should be modeled as policy and audience scope, not by
+  reusing conversation moderation fields as a proxy for operational role
 
 ## 10. Internal-Only Visibility Rules
 
@@ -288,12 +334,15 @@ The following guardrails should remain true as schema and policy evolve.
 - global role must not imply automatic space access
 - space membership is the outer allowlist
 - conversation membership must not exceed the parent space boundary
-- thread role is not the same thing as operational job role
+- thread participation/moderation role is not the same thing as operational job
+  role
 - external roles should default to least privilege
 - internal-only access must be modeled explicitly
 - operator visibility must be deliberate and auditable
 - media/storage access must follow the same space/thread boundary as thread access
 - owner/admin/operator concepts must not imply DM plaintext access in encrypted flows
+- do not map `operator` or `internal_staff` directly to `conversation_members.role`
+  without a formal compatibility layer
 
 ## 12. Open Questions for Future Policy Matrix
 
@@ -319,10 +368,13 @@ The following guardrails should remain true as schema and policy evolve.
 Current active primitives are simpler than the target KeepCozy model:
 
 - `public.space_members.role` supports only `owner`, `admin`, `member`
-- `public.conversation_members.role` supports generic thread roles
+- `public.conversation_members.role` supports only generic thread
+  participation/moderation roles
 - group membership rules are driven by `owner/admin/member`
 - group invite behavior is driven by `public.conversations.join_policy`
 - DMs are restricted to two active `member` participants
+- there is no current assignment layer for contractor/supplier/inspector scope
+- there is no explicit internal-only audience class in active schema
 
 ### Target state for KeepCozy
 
@@ -333,18 +385,21 @@ KeepCozy needs richer operational meaning at the space layer:
 - explicit internal-only visibility
 - explicit assignment rules for external participants
 - policy-driven operator oversight
+- a clear separation between operational-thread visibility and private-message
+  confidentiality
 
 Recommended translation rule:
 
 - keep thread roles generic
 - expand the space role model
 - add thread/object audience policy later where needed
+- prefer a role-mapping layer before changing current core role enums
 
 ## Practical Guidance for Later Schema Work
 
 When schema and policy work begins, prefer this order:
 
-1. expand or map the space-role model
+1. define the role-layering and mapping contract
 2. define invitation and assignment records
 3. add thread/object audience policy for internal-only and restricted-external use
 4. align RLS with the same outer-space then inner-thread boundary

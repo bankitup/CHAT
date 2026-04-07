@@ -17,12 +17,28 @@ Related documents:
 
 - [keepcozy-space-model-spec.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-model-spec.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
+- [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
 - [voice-message-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-message-foundation.md)
 - [encrypted-voice-asset-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/encrypted-voice-asset-contract.md)
+- [security/e2ee-security-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/e2ee-security-model.md)
+
+## Design Decisions Locked by This Pass
+
+- `space` is the operational memory unit
+- chat is one contributor to operational history, not the only durable source
+  of truth
+- richer operational thread meaning should prefer a future companion metadata
+  layer instead of overloading `public.conversations.kind`
+- operational threads are intended to be auditable and operator-visible by
+  default
+- private messaging may follow a different trust mode and should not become the
+  main operational history system for a space
+- major operational records should prefer first-class tables over a premature
+  generic reference abstraction
 
 ## 1. Why Space Is the Operational Memory Unit
 
@@ -89,8 +105,6 @@ Current role of these entities:
 KeepCozy should later add explicit structured records beside the chat layer.
 Recommended categories:
 
-- `space_objects`
-  logical umbrella for durable operational records
 - `service_requests`
 - `work_orders`
 - `supplier_orders`
@@ -104,8 +118,10 @@ Recommended categories:
 Implementation note:
 
 - these do not all need to be introduced at once
-- a generic reference pattern is acceptable first if domain tables are not yet
-  ready
+- major operational records should prefer first-class tables, even if a shared
+  linking helper or search projection exists later
+- a generic reference layer may still be useful for cross-linking and search,
+  but it should not replace real domain tables as the architecture target
 - the important architectural rule is that operational records must become
   first-class entities, not remain hidden in message text
 
@@ -118,6 +134,39 @@ Implementation note:
 - one message may optionally reference an operational object or event
 - one media asset may belong to a message, an operational object, or both over
   time through explicit link layers
+
+## 2A. Trust Modes Inside Space Memory
+
+KeepCozy operational memory should recognize two different trust modes.
+
+### Operational history trust mode
+
+This is the default mode for space operations.
+
+Characteristics:
+
+- operator-visible by policy
+- auditable
+- suitable for structured object and timeline linkage
+- not dependent on end-to-end encrypted message bodies
+
+### Private messaging trust mode
+
+This is the separate mode for person-to-person privacy, including current DM
+E2EE work.
+
+Characteristics:
+
+- may still be space-scoped in the current CHAT runtime
+- may use encrypted message envelopes
+- should not become the only authoritative operational record for a space
+
+Important rule:
+
+- the space timeline should be able to represent that private communication
+  happened when needed
+- it should not depend on decryptable private message content to model
+  operational truth
 
 ## 3. Space-Scoped Storage Namespace Strategy
 
@@ -198,7 +247,8 @@ Recommended design rule:
 
 Practical mapping options:
 
-- add `operational_object_type` and `operational_object_id` to thread metadata
+- add `operational_object_type` and `operational_object_id` to a future thread
+  companion metadata layer
 - add optional object references on selected messages when a single message
   represents a structured action or resolution
 - use timeline events to represent cross-links cleanly instead of forcing every
@@ -333,11 +383,13 @@ This keeps future automation compatible with:
 | --- | --- | --- |
 | Outer boundary | `spaces` already scope conversations | `spaces` become the full operational memory boundary |
 | Communication shell | `conversations` and `messages` carry most durable history | chat remains a communication layer inside broader operational memory |
+| Thread semantics | most operational meaning is implicit | a companion metadata layer carries thread type, audience mode, and object linkage |
 | Media model | `message_assets` and `message_asset_links` support committed voice/media | the same asset layer extends to space documents and object-linked media |
 | Storage pathing | active media is conversation-first inside `message-media` | new storage becomes space-aware and object-aware |
 | Activity model | inbox/activity use conversation summary projections | space timeline adds structured operational events beside message summaries |
 | Search | largely message/list oriented | search spans threads, objects, events, and media metadata |
 | Automation | mostly absent as a durable event layer | automation hooks attach to committed events and object transitions |
+| Trust mode | current DM E2EE exists only for private DMs | operational threads stay auditable; private messaging remains a separate trust mode |
 
 ## 9. Risks of Making Chat the Only Source of Truth
 
@@ -369,7 +421,7 @@ Recommended sequence:
    shell
 2. continue using `message_assets` and `message_asset_links` as the committed
    media foundation
-3. add explicit operational metadata beside existing entities instead of
+3. add a thread companion metadata layer beside existing entities instead of
    overloading `conversation.kind` or `messages.kind`
 4. introduce a unified `space_timeline_events` layer before attempting broad
    search or automation
@@ -395,8 +447,8 @@ Most important gaps:
 
 - no first-class operational object tables
 - no unified `space_timeline_events` table
-- no explicit thread audience field such as `audience_mode`
-- no explicit operational thread field such as `thread_type`
+- no thread companion metadata layer for `thread_type`, `audience_mode`, and
+  object linkage
 - no direct `space_id` on current committed media rows
 - no space-native storage namespace convention yet
 - no durable automation subscription/trigger model

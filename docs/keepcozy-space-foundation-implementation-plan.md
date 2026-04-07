@@ -20,11 +20,27 @@ Related documents:
 
 - [keepcozy-space-model-spec.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-model-spec.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
+- [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
+- [security/e2ee-security-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/e2ee-security-model.md)
+
+## Architecture Decisions Locked by This Docs Pass
+
+The following decisions should now be treated as the default implementation
+direction:
+
+- keep `public.conversations.kind` limited to `dm` and `group`
+- prefer a future companion metadata layer keyed by `conversation_id` for
+  `thread_type`, `audience_mode`, and object linkage
+- keep operational roles separate from thread participation and moderation roles
+- treat operational threads as auditable and operator-visible by policy
+- treat private messaging as a separate trust mode, including current DM E2EE
+- make `space` the operational memory unit, not just the chat filter
+- prefer first-class operational tables for major business records
 
 ## 1. Current State Summary
 
@@ -44,12 +60,15 @@ messaging, but it is still fundamentally a chat-first architecture.
 - `public.message_assets` and `public.message_asset_links` now provide the
   committed media foundation for voice/media work
 - inbox and activity are summary-driven from conversation projection fields
+- current active role enums are still generic at both the space and
+  conversation layer
 
 ### What the current architecture does not yet provide
 
 - no operational thread-type model beyond `dm` and `group`
 - no explicit thread audience model such as `internal-only` or
   `restricted-external`
+- no companion metadata layer for operational thread semantics
 - no first-class operational objects such as service requests or work orders
 - no unified space timeline or event log
 - no invitation or assignment model
@@ -66,12 +85,17 @@ space the full operational boundary around it.
 - `space` is the durable access, storage, and operational memory boundary
 - `conversations` remain the communication shell inside a space
 - operational thread purpose is modeled separately from `conversation.kind`
+- operational thread semantics prefer a companion metadata layer over direct
+  mutation of current shell fields
 - space roles carry the real operational meaning
 - operational objects become first-class records beside chat
 - timeline events become the durable bridge between chat history and
   operational history
 - storage evolves from conversation-first naming toward space-aware naming
 - automation and notifications hook into committed events, not only message text
+- operational threads stay operator-visible and auditable by default
+- private messaging remains a separate trust mode and not the main operational
+  source of truth
 
 ### Target product behavior
 
@@ -88,8 +112,8 @@ space the full operational boundary around it.
 
 - `space_members.role` is still generic and does not represent KeepCozy roles
 - no invitation or assignment entities
-- no `thread_type`, `audience_mode`, or operational-object reference fields on
-  thread shells
+- no companion metadata layer for `thread_type`, `audience_mode`, or
+  operational-object references
 - no first-class operational object tables
 - no `space_timeline_events` or equivalent event layer
 - no direct `space_id` attribution for all future space-searchable media and
@@ -127,10 +151,12 @@ Goal:
 
 Outputs:
 
-- finalize the four space architecture docs
+- finalize the five space architecture docs
+- add the dedicated role-layering document
 - finalize this implementation plan
 - agree on canonical terms for:
   - space role
+  - thread participation and moderation role
   - thread type
   - audience mode
   - operational object
@@ -144,7 +170,37 @@ Risk:
 
 - low
 
-### Phase 1. Additive schema foundations for KeepCozy metadata
+Status:
+
+- complete on `feature/space-model-foundation`
+
+### Phase 1. Companion metadata and contract scaffolding
+
+Goal:
+
+- define low-risk contracts before additive schema rollout
+
+Recommended scope:
+
+- add shared TypeScript contract shapes for:
+  - `thread_type`
+  - `audience_mode`
+  - operational object references
+  - role-layer translation
+- decide whether thread metadata should live in a companion table or a narrowly
+  scoped companion layer abstraction
+- document initial timeline event categories and event payload boundaries
+
+Work type:
+
+- docs
+- backend types
+
+Risk:
+
+- low
+
+### Phase 2. Additive schema foundations for KeepCozy metadata
 
 Goal:
 
@@ -172,7 +228,7 @@ Risk:
 
 - medium, if additive only
 
-### Phase 2. Backend boundaries for space-aware reads and writes
+### Phase 3. Backend boundaries for space-aware reads and writes
 
 Goal:
 
@@ -196,7 +252,7 @@ Risk:
 
 - medium
 
-### Phase 3. Policy-prep and access-resolution groundwork
+### Phase 4. Policy-prep and access-resolution groundwork
 
 Goal:
 
@@ -224,7 +280,7 @@ Risk:
 
 - medium to high if it touches active authorization paths
 
-### Phase 4. Timeline and operational object foundation
+### Phase 5. Timeline and operational object foundation
 
 Goal:
 
@@ -247,7 +303,7 @@ Risk:
 
 - medium
 
-### Phase 5. Controlled user-facing KeepCozy thread experience
+### Phase 6. Controlled user-facing KeepCozy thread experience
 
 Goal:
 
@@ -270,7 +326,7 @@ Risk:
 
 - medium to high
 
-### Phase 6. Policy matrix, RLS hardening, and shipping review
+### Phase 7. Policy matrix, RLS hardening, and shipping review
 
 Goal:
 
@@ -299,19 +355,22 @@ Risk:
 Recommended sequence:
 
 1. finish docs and terminology alignment
-2. add additive schema for thread metadata, invitations/assignments, and
+2. add shared type and contract scaffolding for thread metadata, audience
+   modes, and role-layer translation
+3. add additive schema for companion metadata, invitations/assignments, and
    timeline events
-3. add backend read/write helpers for space/thread/object linkage
-4. add non-user-facing event generation and object-link scaffolding
-5. prepare the role and audience resolution layer
-6. ship one narrow operational-object plus thread linkage path
-7. only then start policy matrix and RLS hardening work
+4. add backend read/write helpers for space/thread/object linkage
+5. add non-user-facing event generation and object-link scaffolding
+6. prepare the role and audience resolution layer
+7. ship one narrow operational-object plus thread linkage path
 8. ship limited KeepCozy UI once backend contracts are stable
+9. only then start policy matrix and RLS hardening work
 
 Key rule:
 
 - do not start with user-facing KeepCozy UI
 - start with additive data model and backend boundaries first
+- do not start by rewriting active authorization or active shell enums
 
 ## 6. Task Classification by Work Type
 
@@ -356,11 +415,11 @@ Key rule:
 Before formal policy matrix work begins, the project should first decide:
 
 - the canonical KeepCozy space role set
+- the canonical split between space role and thread participation/moderation role
 - the canonical audience modes for threads and objects
 - whether role expansion happens in `space_members.role` directly or through a
   mapping layer
-- whether thread metadata lives on `public.conversations` or in a companion
-  table
+- whether thread metadata lives in a companion table or another companion layer
 - what the first operational object type will be
 - how operator oversight interacts with future private-thread exceptions
 
@@ -370,6 +429,7 @@ Policy matrix work should start only once those modeling choices are stable.
 
 Before shipping any KeepCozy-facing UI or workflow:
 
+- the role-layering and companion-metadata direction should be frozen
 - additive schema for thread metadata and object linkage should exist
 - one operational object path should be implemented end-to-end
 - backend access checks should understand thread audience and assignment scope
@@ -386,16 +446,19 @@ time.
 
 Recommended next branches:
 
-- `feature/space-schema-metadata-foundation`
-- `feature/space-thread-metadata-contracts`
-- `feature/space-object-link-foundation`
+- `feature/space-contract-types`
+- `feature/space-schema-companion-metadata`
+- `feature/space-backend-thread-object-links`
 - `feature/space-timeline-foundation`
-- `feature/space-access-policy-prep`
+- `feature/space-access-mapping-prep`
+- `feature/space-first-operational-object`
 - `feature/keepcozy-space-ui-shell`
+- `feature/space-policy-matrix`
+- `feature/space-rls-hardening`
 
 Recommended strategy:
 
-- start with schema and backend foundation branches
+- start with non-user-facing contract, schema, and backend foundation branches
 - merge non-user-facing branches before UI work
 - keep policy/RLS work in its own review-heavy branch
 - treat any branch that changes active visibility or authorization as a
@@ -407,12 +470,13 @@ The fastest low-risk wins are:
 
 - add shared TypeScript types for `thread_type`, `audience_mode`, and
   operational object references
-- decide whether thread metadata belongs on `conversations` or in a companion
-  table
+- decide whether thread metadata belongs in a companion table or other
+  companion layer
 - add a draft `space_timeline_events` schema doc before implementation
 - add explicit backend helper boundaries for thread metadata and object links
 - document operator-visibility and private-thread exception assumptions before
   policy work
+- keep operational role semantics out of current conversation moderation enums
 
 ## 12. Highest-Risk Changes
 
@@ -430,7 +494,7 @@ The changes most likely to cause regressions are:
 The next practical step should be:
 
 - keep this branch documentation-only
-- open the next branch for additive schema and type-level metadata foundation
+- open the next branch for type-level and contract-level metadata foundation
 - avoid user-facing KeepCozy UI until the metadata and event layers exist
 
 That gives the project the best chance of making KeepCozy reusable without
