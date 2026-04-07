@@ -78,6 +78,7 @@ Main exported names:
 - `KEEP_COZY_THREAD_COMPANION_METADATA_DEFAULTS_DRAFT`
 - `KEEP_COZY_SPACE_TIMELINE_EVENTS_TABLE_NAME_DRAFT`
 - `KEEP_COZY_SPACE_TIMELINE_EVENT_TYPES`
+- `KEEP_COZY_SPACE_TIMELINE_DEFERRED_EVENT_TYPES_DRAFT`
 - `KEEP_COZY_SPACE_TIMELINE_EVENT_SOURCE_KINDS`
 - `KEEP_COZY_SPACE_TIMELINE_EVENT_FIELD_CANDIDATES_DRAFT`
 
@@ -198,8 +199,25 @@ Important boundaries:
   message model
 - timeline events may point to a primary operational object ref, but they do
   not replace first-class operational object tables
-- the first timeline pass focuses on structured operational/system events,
-  not on mirroring every chat event into a space feed
+- the first committed timeline pass focuses on stable operational/system state
+  transitions, not on mirroring every chat event into a space feed
+
+First-pass committed event vocabulary:
+
+- `thread_created`
+- `thread_metadata_attached`
+- `primary_object_linked`
+- `status_changed`
+- `thread_closed`
+- `thread_reopened`
+
+Deferred event vocabulary draft:
+
+- `KEEP_COZY_SPACE_TIMELINE_DEFERRED_EVENT_TYPES_DRAFT`
+
+Those deferred categories intentionally stay out of the first committed pass
+until later branches define the related assignment, document/media, or
+first-class object flows well enough to avoid noisy or ambiguous history.
 
 The event contracts are designed to support:
 
@@ -208,11 +226,14 @@ The event contracts are designed to support:
 - future thread-local system-event rendering without changing
   `messages.kind`
 
-## First Schema Alignment On This Branch
+## First Schema Alignment On These Branches
 
-This schema branch chooses a first draft table name:
+The current contract layer now aligns with two additive schema directions:
 
 - `public.conversation_companion_metadata`
+- `public.space_timeline_events`
+
+### Companion metadata alignment
 
 The corresponding contract constants are:
 
@@ -223,7 +244,7 @@ The corresponding contract constants are:
 - `KEEP_COZY_THREAD_STATUSES`
 - `KEEP_COZY_OPERATIONAL_OBJECT_KINDS`
 
-The first schema-aligned field candidates are:
+The companion-metadata field candidates are:
 
 - `conversation_id`
 - `space_id`
@@ -240,6 +261,38 @@ The first schema-aligned field candidates are:
 - `visibility_scope_notes`
 - `created_at`
 - `updated_at`
+
+### Space timeline alignment
+
+The corresponding contract constants are:
+
+- `KEEP_COZY_SPACE_TIMELINE_EVENTS_TABLE_NAME_DRAFT`
+- `KEEP_COZY_SPACE_TIMELINE_EVENT_TYPES`
+- `KEEP_COZY_SPACE_TIMELINE_DEFERRED_EVENT_TYPES_DRAFT`
+- `KEEP_COZY_SPACE_TIMELINE_EVENT_SOURCE_KINDS`
+- `KEEP_COZY_SPACE_TIMELINE_EVENT_FIELD_CANDIDATES_DRAFT`
+
+The first committed space-timeline field candidates are:
+
+- `id`
+- `space_id`
+- `conversation_id`
+- `message_id`
+- `operational_object_type`
+- `operational_object_id`
+- `actor_user_id`
+- `event_type`
+- `source_kind`
+- `occurred_at`
+- `summary_payload`
+- `created_at`
+
+Timeline-alignment note:
+
+- the first committed event set is intentionally narrower than the full
+  long-term event vocabulary the product may eventually need
+- the deferred event constant exists so later branches can see what has been
+  intentionally held back from automatic emission
 
 Important scope note:
 
