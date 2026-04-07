@@ -363,15 +363,44 @@ Not on this branch:
 
 ## Guardrails and Non-Goals
 
-Keep these guardrails explicit:
+This branch is intentionally preparation work, not enforcement work.
 
+### Guardrails
+
+- do not treat this branch as final authorization enforcement
 - do not overload current runtime role fields with business-role semantics
 - do not treat `join_policy` as a future audience model
 - do not treat `hidden_at` as a future audience or lifecycle model
 - do not let global platform roles bypass explicit space membership
 - do not let `operator_visible_by_policy` imply DM plaintext access
 - do not let timeline rows bypass parent thread/object visibility
-- do not implement final authorization behavior in this branch
+- do not let UI badges, hiding, or presentation conventions become backend
+  policy truth
+
+### Practical non-goals
+
+This branch must not:
+
+- collapse operational role semantics into current moderation roles such as
+  `owner | admin | member`
+- use companion metadata as the only source of access truth without the outer
+  space boundary and current runtime membership context
+- assume timeline visibility is always identical to thread visibility in every
+  case
+- change current `dm | group` production semantics in order to model later
+  access behavior
+- mix UI policy assumptions into backend preparation too early
+- define final allow/deny behavior for backend paths or RLS predicates
+
+### Interpretation safety rules
+
+- companion metadata is future policy input, not self-authorizing truth
+- generic thread role is still generic moderation/member state, not operational
+  job meaning
+- timeline rows may inherit from thread, object, or conservative space policy
+  later, so the branch must not flatten all visibility into one shortcut rule
+- if a later proposal cannot explain the outer space boundary, it is probably
+  trying to skip too directly to metadata-driven policy
 
 ## Current State vs Target State
 
