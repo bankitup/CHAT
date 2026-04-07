@@ -16,6 +16,7 @@ product redesign.
 Related documents:
 
 - [keepcozy-mvp-boundary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-boundary.md)
+- [keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md)
 - [keepcozy-mvp-schema-runtime-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-schema-runtime-alignment.md)
 - [keepcozy-mvp-test-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-test-flow.md)
 - [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
@@ -331,6 +332,9 @@ The next narrow runtime lift is still minimal create/update write paths for:
 
 That follow-up should keep preview fallback temporary and remove it from the
 canonical MVP proof once all target environments have the first schema slice.
+
+That write-path lift is now scoped in
+[keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md).
 
 ## Deliberately Deferred After This Slice
 

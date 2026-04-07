@@ -15,6 +15,7 @@ Related documents:
 
 - [keepcozy-mvp-schema-runtime-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-schema-runtime-alignment.md)
 - [keepcozy-first-persistence-slice.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-first-persistence-slice.md)
+- [keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md)
 - [keepcozy-mvp-test-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-test-flow.md)
 - [keepcozy-chat-shared-vocabulary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-shared-vocabulary.md)
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
@@ -42,10 +43,13 @@ reuse:
   - companion metadata row builders and optional conversation thread context
     helpers
 
-The current repository does not yet have an active KeepCozy runtime for:
+The current repository does not yet have separate physical runtime layers for:
 
 - `homes`
 - `home_memberships`
+
+The current repository now does have an active first-pass KeepCozy runtime for:
+
 - `rooms`
 - `issues`
 - `issue_updates`
@@ -65,15 +69,16 @@ The current app shell now exposes a KeepCozy-first route layer:
 
 Important clarification:
 
-- the KeepCozy-first routes currently act as focused MVP scaffolding around the
-  shared `space` home context
-- they make the intended runtime center of gravity visible now
-- they do not mean dedicated `rooms`, `issues`, `issue_updates`, `tasks`, or
-  `task_updates` tables already exist
+- the KeepCozy-first routes now read the first dedicated persisted MVP entity
+  slice around the shared `space` home context
+- preview support remains only as a temporary fallback for environments where
+  the first KeepCozy tables have not been applied yet
+- the next narrow gap is write behavior, now scoped in
+  [keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md)
 
 That means the first KeepCozy MVP boundary should still be defined
-deliberately, and the route layer should not be mistaken for completed schema
-delivery.
+deliberately, and the persisted MVP slice should not be mistaken for the full
+future home-ops platform.
 
 ## MVP Objective
 

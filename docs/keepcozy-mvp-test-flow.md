@@ -15,6 +15,7 @@ Related documents:
 
 - [keepcozy-mvp-boundary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-boundary.md)
 - [keepcozy-first-persistence-slice.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-first-persistence-slice.md)
+- [keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md)
 - [keepcozy-mvp-schema-runtime-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-schema-runtime-alignment.md)
 - [space-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-model.md)
 - [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
@@ -189,6 +190,9 @@ slice:
 - create task
 - append issue update
 - append task update
+
+That next lift is defined in
+[keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md).
 
 That first persistence slice is defined in
 [keepcozy-first-persistence-slice.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-first-persistence-slice.md)
