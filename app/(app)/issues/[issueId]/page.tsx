@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { appendIssueUpdateAction } from '../actions';
 import {
   getKeepCozyIssueDetailData,
   requireKeepCozyContext,
 } from '@/modules/keepcozy/server';
+import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type IssueDetailPageProps = {
@@ -11,6 +13,8 @@ type IssueDetailPageProps = {
     issueId: string;
   }>;
   searchParams: Promise<{
+    error?: string;
+    message?: string;
     space?: string;
   }>;
 };
@@ -34,6 +38,19 @@ export default async function IssueDetailPage({
     notFound();
   }
 
+  const visibleError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: t.issues.updateFailed,
+        language,
+        rawMessage: query.error,
+      })
+    : null;
+  const visibleMessage = query.message?.trim() || null;
+  const createTaskHref = withSpaceParam(
+    `/tasks/new?issue=${encodeURIComponent(issue.id)}`,
+    activeSpace.id,
+  );
+
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
       <section className="stack settings-hero keepcozy-hero">
@@ -48,7 +65,7 @@ export default async function IssueDetailPage({
           </Link>
           <Link
             className="pill pill-accent"
-            href={withSpaceParam('/tasks/new', activeSpace.id)}
+            href={createTaskHref}
             prefetch={false}
           >
             {t.tasks.create}
@@ -59,6 +76,16 @@ export default async function IssueDetailPage({
         <h1 className="settings-hero-title">{issue.title}</h1>
         <p className="muted settings-hero-note">{issue.summary || t.issues.detailBody}</p>
       </section>
+
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
 
       <section className="card stack settings-surface keepcozy-surface">
         <section className="keepcozy-focus-card">
@@ -77,6 +104,43 @@ export default async function IssueDetailPage({
               {t.issues.viewRoom}
             </Link>
           ) : null}
+        </section>
+
+        <section className="stack settings-section keepcozy-section">
+          <div className="stack keepcozy-section-copy">
+            <h2 className="card-title">{t.issues.appendTitle}</h2>
+            <p className="muted">{t.issues.appendBody}</p>
+          </div>
+
+          <form action={appendIssueUpdateAction} className="stack">
+            <input name="spaceId" type="hidden" value={activeSpace.id} />
+            <input name="issueId" type="hidden" value={issue.id} />
+
+            <label className="field">
+              <span>{t.issues.fieldUpdateLabel}</span>
+              <input className="input" name="label" />
+            </label>
+
+            <label className="field">
+              <span>{t.issues.fieldStatus}</span>
+              <select className="input" defaultValue="" name="status">
+                <option value="">{t.issues.statusKeepCurrent}</option>
+                <option value="open">{t.issues.statusOpen}</option>
+                <option value="planned">{t.issues.statusPlanned}</option>
+                <option value="in_review">{t.issues.statusInReview}</option>
+                <option value="resolved">{t.issues.statusResolved}</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>{t.issues.fieldUpdateBody}</span>
+              <textarea className="input textarea" name="body" required />
+            </label>
+
+            <button className="button" type="submit">
+              {t.issues.submitUpdate}
+            </button>
+          </form>
         </section>
 
         <section className="stack settings-section keepcozy-section">

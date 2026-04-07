@@ -70,7 +70,15 @@ write plan:
 - `/activity` already reads a merged KeepCozy-first history view from issue and
   task updates
 
-What is still missing is write behavior, not route structure or object shape.
+Current branch status:
+
+- `/issues/new` now creates real `issues` and first `issue_updates` rows
+- `/issues/[issueId]` now appends real `issue_updates` rows, including status
+  changes and resolution history
+- task write paths remain the next narrow lift
+
+What is still missing is the first task write behavior, not route structure or
+object shape.
 
 ## Scope Of The First Write Slice
 

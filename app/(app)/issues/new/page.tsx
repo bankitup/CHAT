@@ -1,19 +1,42 @@
 import Link from 'next/link';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+import { createIssueAction } from '../actions';
+import {
+  getKeepCozyRoomsPageData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
+import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type NewIssuePageProps = {
   searchParams: Promise<{
+    error?: string;
+    message?: string;
+    room?: string;
     space?: string;
   }>;
 };
 
 export default async function NewIssuePage({ searchParams }: NewIssuePageProps) {
   const query = await searchParams;
-  const { activeSpace, t } = await requireKeepCozyContext({
+  const { activeSpace, language, t } = await requireKeepCozyContext({
     requestedSpaceId: query.space,
     source: 'keepcozy-new-issue-page',
   });
+  const { rooms } = await getKeepCozyRoomsPageData({
+    language,
+    spaceId: activeSpace.id,
+  });
+  const selectedRoom = query.room
+    ? rooms.find((candidate) => candidate.id === query.room) ?? null
+    : null;
+  const visibleError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: t.issues.createFailed,
+        language,
+        rawMessage: query.error,
+      })
+    : null;
+  const visibleMessage = query.message?.trim() || null;
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -34,6 +57,16 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
         <p className="muted settings-hero-note">{t.issues.createSubtitle}</p>
       </section>
 
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
+
       <section className="card stack settings-surface keepcozy-surface">
         <section className="empty-card keepcozy-preview-card">
           <div className="keepcozy-preview-header">
@@ -46,42 +79,62 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
           <p className="muted">{t.issues.draftBody}</p>
         </section>
 
-        <div className="keepcozy-stack-list">
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.issues.fieldHome}</h3>
-              <p className="muted">{activeSpace.name}</p>
-            </div>
-          </section>
+        <form action={createIssueAction} className="stack settings-section keepcozy-section">
+          <input name="spaceId" type="hidden" value={activeSpace.id} />
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.issues.fieldRoom}</h3>
-              <p className="muted">{t.rooms.title}</p>
-            </div>
-          </section>
+          <label className="field">
+            <span>{t.issues.fieldHome}</span>
+            <input className="input" readOnly value={activeSpace.name} />
+          </label>
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.issues.fieldSummary}</h3>
-              <p className="muted">{t.issues.detailBody}</p>
-            </div>
-          </section>
+          <label className="field">
+            <span>{t.issues.fieldRoom}</span>
+            <select
+              className="input"
+              defaultValue={selectedRoom?.id ?? ''}
+              name="roomSlug"
+            >
+              <option value="">{t.issues.allRooms}</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.issues.fieldFirstUpdate}</h3>
-              <p className="muted">{t.issues.updatesBody}</p>
-            </div>
-          </section>
+          <label className="field">
+            <span>{t.issues.fieldTitle}</span>
+            <input
+              autoComplete="off"
+              className="input"
+              name="title"
+              placeholder={selectedRoom ? `${selectedRoom.name}: ` : ''}
+              required
+            />
+          </label>
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.issues.fieldAttachments}</h3>
-              <p className="muted">{t.issues.createNote}</p>
-            </div>
-          </section>
-        </div>
+          <label className="field">
+            <span>{t.issues.fieldSummary}</span>
+            <textarea className="input textarea" name="summary" />
+          </label>
+
+          <label className="field">
+            <span>{t.issues.fieldNextStep}</span>
+            <input className="input" name="nextStep" />
+          </label>
+
+          <label className="field">
+            <span>{t.issues.fieldFirstUpdate}</span>
+            <textarea className="input textarea" name="firstUpdateBody" required />
+          </label>
+
+          <p className="muted">{t.issues.createNote}</p>
+
+          <button className="button" type="submit">
+            {t.issues.submitCreate}
+          </button>
+        </form>
       </section>
     </section>
   );

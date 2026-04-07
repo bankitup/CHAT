@@ -176,6 +176,8 @@ type LanguageDictionary = {
     subtitle: string;
     backToHome: string;
     create: string;
+    submitCreate: string;
+    submitUpdate: string;
     previewPill: string;
     previewBody: string;
     selectedHomeLabel: string;
@@ -194,11 +196,34 @@ type LanguageDictionary = {
     draftBody: string;
     fieldHome: string;
     fieldRoom: string;
+    fieldTitle: string;
     fieldSummary: string;
+    fieldNextStep: string;
     fieldFirstUpdate: string;
+    fieldUpdateLabel: string;
+    fieldUpdateBody: string;
+    fieldStatus: string;
     fieldAttachments: string;
     createNote: string;
     browseIssues: string;
+    appendTitle: string;
+    appendBody: string;
+    titleRequired: string;
+    firstUpdateRequired: string;
+    updateBodyRequired: string;
+    createSuccess: string;
+    updateSuccess: string;
+    createFailed: string;
+    updateFailed: string;
+    statusKeepCurrent: string;
+    statusOpen: string;
+    statusPlanned: string;
+    statusInReview: string;
+    statusResolved: string;
+    loggedLabel: string;
+    updateLabelDefault: string;
+    statusUpdatedLabel: string;
+    resolvedLabel: string;
   };
   tasks: {
     title: string;
@@ -773,6 +798,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       subtitle: 'Keep problems structured, scoped to a home and room, and ready to turn into task work.',
       backToHome: 'Back to home',
       create: 'Create issue',
+      submitCreate: 'Save issue',
+      submitUpdate: 'Add update',
       previewPill: 'MVP slice',
       previewBody:
         'This is a focused issue lane for the MVP, now backed by the first persisted issue records. Supplier richness, recommendations, and automation stay out of the way.',
@@ -790,15 +817,38 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSubtitle: 'Keep capture narrow: home, room, issue summary, first update, then task follow-through.',
       draftTitle: 'First capture seam',
       draftBody:
-        'This route marks where issue creation belongs in the MVP flow. The form stays intentionally lightweight until the first issue tables are wired.',
+        'This route now creates real issue and issue_history records while staying intentionally lightweight for the MVP.',
       fieldHome: 'Home context',
       fieldRoom: 'Room',
+      fieldTitle: 'Issue title',
       fieldSummary: 'Issue summary',
+      fieldNextStep: 'Next step',
       fieldFirstUpdate: 'First update',
+      fieldUpdateLabel: 'Update label',
+      fieldUpdateBody: 'Update note',
+      fieldStatus: 'Status',
       fieldAttachments: 'Attachments',
       createNote:
         'Keep this screen practical: enough structure for issues and issue_updates, without growing into a full service workflow.',
       browseIssues: 'Back to issues',
+      appendTitle: 'Add issue update',
+      appendBody: 'Use one short update to capture what changed, and only change status when the issue really moved.',
+      titleRequired: 'Add a short title before saving the issue.',
+      firstUpdateRequired: 'Add the first issue update before saving.',
+      updateBodyRequired: 'Add a short update before saving history.',
+      createSuccess: 'Issue saved.',
+      updateSuccess: 'Issue update saved.',
+      createFailed: 'Unable to save this issue right now. Please try again.',
+      updateFailed: 'Unable to save this issue update right now. Please try again.',
+      statusKeepCurrent: 'Keep current status',
+      statusOpen: 'Needs attention',
+      statusPlanned: 'Planned',
+      statusInReview: 'In review',
+      statusResolved: 'Resolved',
+      loggedLabel: 'Issue logged',
+      updateLabelDefault: 'Update added',
+      statusUpdatedLabel: 'Status updated',
+      resolvedLabel: 'Issue resolved',
     },
     tasks: {
       title: 'Tasks',
@@ -1408,6 +1458,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Держите проблемы структурированными, привязанными к дому и комнате, и готовыми перейти в задачи.',
       backToHome: 'Назад к дому',
       create: 'Создать проблему',
+      submitCreate: 'Сохранить проблему',
+      submitUpdate: 'Добавить обновление',
       previewPill: 'MVP-срез',
       previewBody:
         'Это сфокусированная линия проблем для MVP, теперь опирающаяся на первый persisted-срез проблем. Богатые поставщики, рекомендации и автоматизация пока не мешают.',
@@ -1428,15 +1480,39 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Держите ввод узким: дом, комната, краткое описание проблемы, первое обновление, затем задачи.',
       draftTitle: 'Первый seam для ввода',
       draftBody:
-        'Этот маршрут показывает, где в MVP живет создание проблемы. Поверхность специально остается легкой, пока не подключены первые таблицы проблем.',
+        'Этот маршрут теперь создает реальные записи issue и issue_history, оставаясь намеренно легким для MVP.',
       fieldHome: 'Контекст дома',
       fieldRoom: 'Комната',
+      fieldTitle: 'Название проблемы',
       fieldSummary: 'Краткое описание проблемы',
+      fieldNextStep: 'Следующий шаг',
       fieldFirstUpdate: 'Первое обновление',
+      fieldUpdateLabel: 'Заголовок обновления',
+      fieldUpdateBody: 'Текст обновления',
+      fieldStatus: 'Статус',
       fieldAttachments: 'Вложения',
       createNote:
         'Экран должен оставаться практичным: достаточно структуры для issues и issue_updates, без разрастания в полный сервисный workflow.',
       browseIssues: 'Назад к проблемам',
+      appendTitle: 'Добавить обновление проблемы',
+      appendBody:
+        'Используйте одно короткое обновление, чтобы зафиксировать изменение, и меняйте статус только когда проблема действительно сдвинулась.',
+      titleRequired: 'Добавьте короткое название перед сохранением проблемы.',
+      firstUpdateRequired: 'Добавьте первое обновление перед сохранением проблемы.',
+      updateBodyRequired: 'Добавьте короткое обновление перед сохранением истории.',
+      createSuccess: 'Проблема сохранена.',
+      updateSuccess: 'Обновление проблемы сохранено.',
+      createFailed: 'Не удалось сохранить проблему. Попробуйте еще раз.',
+      updateFailed: 'Не удалось сохранить обновление проблемы. Попробуйте еще раз.',
+      statusKeepCurrent: 'Оставить текущий статус',
+      statusOpen: 'Требует внимания',
+      statusPlanned: 'Запланировано',
+      statusInReview: 'На разборе',
+      statusResolved: 'Решено',
+      loggedLabel: 'Проблема зафиксирована',
+      updateLabelDefault: 'Обновление добавлено',
+      statusUpdatedLabel: 'Статус обновлен',
+      resolvedLabel: 'Проблема решена',
     },
     tasks: {
       title: 'Задачи',
