@@ -15,6 +15,7 @@ import {
 } from '@/modules/messaging/data/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { getKeepCozyPrimaryTestFlow } from '@/modules/keepcozy/mvp-preview';
 import {
   resolveV1TestSpaceFallback,
   resolveActiveSpaceForUser,
@@ -131,6 +132,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   }
 
   const t = getTranslations(language);
+  const primaryFlow = getKeepCozyPrimaryTestFlow(language);
   const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
@@ -302,6 +304,79 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               </div>
             </section>
           </div>
+
+          <section className="stack activity-section keepcozy-section">
+            <div className="stack activity-section-copy">
+              <h2 className="card-title">{t.activity.testFlowTitle}</h2>
+              <p className="muted">{t.activity.testFlowBody}</p>
+            </div>
+
+            <article className="keepcozy-detail-card">
+              <div className="keepcozy-detail-header">
+                <div className="stack keepcozy-detail-heading">
+                  <h3 className="card-title">{primaryFlow.issue.title}</h3>
+                  <p className="muted">{primaryFlow.task.title}</p>
+                </div>
+                <span className="summary-pill summary-pill-muted">
+                  {primaryFlow.homeNameHint}
+                </span>
+              </div>
+
+              <div className="keepcozy-meta-row">
+                <Link
+                  className="keepcozy-meta-pill"
+                  href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpaceId)}
+                  prefetch={false}
+                >
+                  {primaryFlow.room.name}
+                </Link>
+                <Link
+                  className="keepcozy-meta-pill"
+                  href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpaceId)}
+                  prefetch={false}
+                >
+                  {t.shell.issues}
+                </Link>
+                <Link
+                  className="keepcozy-meta-pill"
+                  href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpaceId)}
+                  prefetch={false}
+                >
+                  {t.shell.tasks}
+                </Link>
+              </div>
+
+              <div className="keepcozy-timeline">
+                {primaryFlow.history.map((entry) => (
+                  <article key={entry.id} className="keepcozy-timeline-item">
+                    <div className="keepcozy-timeline-topline">
+                      <h3 className="card-title">
+                        {entry.stage === 'issue' ? t.shell.issues : t.shell.tasks}
+                      </h3>
+                      <span className="keepcozy-timestamp">{entry.timestamp}</span>
+                    </div>
+                    <p className="muted">
+                      <strong>{entry.label}.</strong> {entry.note}
+                    </p>
+                    <div className="keepcozy-card-actions">
+                      <Link
+                        className="pill"
+                        href={withSpaceParam(
+                          entry.href.kind === 'issue'
+                            ? `/issues/${entry.href.targetId}`
+                            : `/tasks/${entry.href.targetId}`,
+                          activeSpaceId,
+                        )}
+                        prefetch={false}
+                      >
+                        {entry.href.kind === 'issue' ? t.tasks.viewIssue : t.homeDashboard.openTasks}
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </section>
 
           <section className="empty-card activity-future-card">
             <h2 className="card-title">{t.activity.messagingTitle}</h2>
