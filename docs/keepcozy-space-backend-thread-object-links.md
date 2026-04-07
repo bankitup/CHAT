@@ -39,6 +39,28 @@ Important design rule:
 
 - these helpers are backend boundaries, not active runtime behavior changes
 
+## Explicit Backend Boundary Map
+
+The current branch should be read as having one direct companion-metadata
+adapter file and several future wrapper seams around it.
+
+| Path | Current role on this branch | Status |
+| --- | --- | --- |
+| [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts) | direct low-level adapter for `public.conversation_companion_metadata` | active on this branch |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `createConversationWithMembers(...)` | future access-checked write wrapper seam | unchanged in this branch |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationForUser(...)` | future access-checked conversation-level read seam | unchanged in this branch |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationSummaryForUser(...)` | future access-checked summary read seam | unchanged in this branch |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationHistorySnapshot(...)` | message-history loader that should stay free of early companion-metadata coupling | intentionally unchanged |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts) | space-boundary resolution layer | intentionally unchanged |
+| [actions.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/inbox/actions.ts) | UI/server-action entrypoints that should stay thin | intentionally unchanged |
+
+Practical rule:
+
+- only `conversation-companion-metadata.ts` should touch the companion table
+  directly in the current branch
+- all later access-checked usage should flow through messaging data service
+  wrappers, not directly from UI or page code
+
 ## Why The Helper Is Low-Level
 
 The helper intentionally does not try to become the final application service.
@@ -129,6 +151,27 @@ This backend foundation still does not:
 - change RLS or policy behavior
 
 That scope remains deferred on purpose.
+
+## What Stays Unchanged On This Branch
+
+These paths are intentionally stable in this branch:
+
+- conversation creation behavior in
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `createConversationWithMembers(...)`
+- conversation detail/summary behavior in
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `getConversationForUser(...)` and `getConversationSummaryForUser(...)`
+- message-history behavior in
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+  `getConversationHistorySnapshot(...)`
+- active space resolution in
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+- inbox/chat server actions in
+  [actions.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/inbox/actions.ts)
+
+This is intentional. The branch adds low-level capability, not product-facing
+integration.
 
 ## How Plain Runtime Behavior Stays Separate
 

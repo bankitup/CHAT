@@ -1770,6 +1770,9 @@ export async function getArchivedConversations(
   return getConversationsByVisibility(userId, true, options);
 }
 
+// Conversation-level read seam. Future access-checked companion metadata reads
+// should layer here or in wrappers around it, not inside message history
+// loaders.
 export async function getConversationForUser(
   conversationId: string,
   userId: string,
@@ -1920,6 +1923,9 @@ export async function getConversationForUser(
   };
 }
 
+// Conversation-summary read seam. Future nullable companion metadata reads can
+// layer here once conversation-level access and visibility checks are already
+// resolved.
 export async function getConversationSummaryForUser(
   conversationId: string,
   userId: string,
@@ -5221,6 +5227,9 @@ export async function findExistingActiveDmConversation(
   });
 }
 
+// Conversation shell creation seam. Future operational-thread creation should
+// wrap this helper rather than widening it with companion metadata writes
+// directly in place.
 export async function createConversationWithMembers(input: {
   kind: 'dm' | 'group';
   creatorUserId: string;
@@ -6054,6 +6063,9 @@ export async function getConversationHistoryWindowSizeForMessageTargets(input: {
   return countLookup.count ?? null;
 }
 
+// Message-history seam. Keep thread-level companion metadata out of this loader
+// during early backend integration phases; add it at conversation-level read
+// boundaries first.
 export async function getConversationHistorySnapshot(input: {
   afterSeqExclusive?: number | null;
   beforeSeqExclusive?: number | null;
