@@ -10,9 +10,13 @@ import { withSpaceParam } from '@/modules/spaces/url';
 type NewIssuePageProps = {
   searchParams: Promise<{
     error?: string;
+    firstUpdateBody?: string;
     message?: string;
+    nextStep?: string;
     room?: string;
     space?: string;
+    summary?: string;
+    title?: string;
   }>;
 };
 
@@ -29,6 +33,13 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
   const selectedRoom = query.room
     ? rooms.find((candidate) => candidate.id === query.room) ?? null
     : null;
+  const draft = {
+    firstUpdateBody: query.firstUpdateBody ?? '',
+    nextStep: query.nextStep ?? '',
+    summary: query.summary ?? '',
+    title: query.title ?? '',
+  };
+  const missingSelectedRoom = Boolean(query.room?.trim()) && !selectedRoom;
   const visibleError = query.error
     ? sanitizeUserFacingErrorMessage({
         fallback: t.issues.createFailed,
@@ -58,6 +69,9 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
       </section>
 
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+      {missingSelectedRoom ? (
+        <p className="notice notice-error">{t.issues.roomMissing}</p>
+      ) : null}
       {visibleMessage ? (
         <div aria-live="polite" className="notice notice-success notice-inline">
           <span aria-hidden="true" className="notice-check">
@@ -78,6 +92,17 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
           <h2 className="card-title">{t.issues.draftTitle}</h2>
           <p className="muted">{t.issues.draftBody}</p>
         </section>
+
+        {selectedRoom ? (
+          <section className="empty-card keepcozy-preview-card">
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">
+                {t.issues.fieldRoom}: {selectedRoom.name}
+              </span>
+            </div>
+            <p className="muted keepcozy-field-note">{t.issues.roomOptionalNote}</p>
+          </section>
+        ) : null}
 
         <form action={createIssueAction} className="stack settings-section keepcozy-section">
           <input name="spaceId" type="hidden" value={activeSpace.id} />
@@ -101,6 +126,7 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
                 </option>
               ))}
             </select>
+            <p className="muted keepcozy-field-note">{t.issues.roomOptionalNote}</p>
           </label>
 
           <label className="field">
@@ -108,6 +134,7 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
             <input
               autoComplete="off"
               className="input"
+              defaultValue={draft.title}
               name="title"
               placeholder={selectedRoom ? `${selectedRoom.name}: ` : ''}
               required
@@ -116,22 +143,28 @@ export default async function NewIssuePage({ searchParams }: NewIssuePageProps) 
 
           <label className="field">
             <span>{t.issues.fieldSummary}</span>
-            <textarea className="input textarea" name="summary" />
+            <textarea className="input textarea" defaultValue={draft.summary} name="summary" />
           </label>
 
           <label className="field">
             <span>{t.issues.fieldNextStep}</span>
-            <input className="input" name="nextStep" />
+            <input className="input" defaultValue={draft.nextStep} name="nextStep" />
           </label>
 
           <label className="field">
             <span>{t.issues.fieldFirstUpdate}</span>
-            <textarea className="input textarea" name="firstUpdateBody" required />
+            <textarea
+              className="input textarea"
+              defaultValue={draft.firstUpdateBody}
+              name="firstUpdateBody"
+              required
+            />
+            <p className="muted keepcozy-field-note">{t.issues.firstUpdateHint}</p>
           </label>
 
           <p className="muted">{t.issues.createNote}</p>
 
-          <button className="button" type="submit">
+          <button className="button keepcozy-form-submit" type="submit">
             {t.issues.submitCreate}
           </button>
         </form>

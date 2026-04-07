@@ -20,45 +20,54 @@ function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
 }
 
+function setTextParam(params: URLSearchParams, key: string, value?: string | null) {
+  const normalized = value?.trim() ?? '';
+
+  if (normalized) {
+    params.set(key, normalized);
+  }
+}
+
 function redirectToNewIssueSurface(input: {
   error?: string | null;
+  firstUpdateBody?: string | null;
   message?: string | null;
+  nextStep?: string | null;
   roomSlug?: string | null;
   spaceId?: string | null;
+  summary?: string | null;
+  title?: string | null;
 }): never {
   const params = new URLSearchParams();
 
-  if (input.roomSlug?.trim()) {
-    params.set('room', input.roomSlug.trim());
-  }
-
-  if (input.error?.trim()) {
-    params.set('error', input.error.trim());
-  }
-
-  if (input.message?.trim()) {
-    params.set('message', input.message.trim());
-  }
+  setTextParam(params, 'room', input.roomSlug);
+  setTextParam(params, 'title', input.title);
+  setTextParam(params, 'summary', input.summary);
+  setTextParam(params, 'nextStep', input.nextStep);
+  setTextParam(params, 'firstUpdateBody', input.firstUpdateBody);
+  setTextParam(params, 'error', input.error);
+  setTextParam(params, 'message', input.message);
 
   const href = params.toString() ? `/issues/new?${params}` : '/issues/new';
   redirect(withSpaceParam(href, input.spaceId));
 }
 
 function redirectToIssueDetailSurface(input: {
+  body?: string | null;
   error?: string | null;
   issueSlug: string;
+  label?: string | null;
   message?: string | null;
   spaceId?: string | null;
+  status?: string | null;
 }): never {
   const params = new URLSearchParams();
 
-  if (input.error?.trim()) {
-    params.set('error', input.error.trim());
-  }
-
-  if (input.message?.trim()) {
-    params.set('message', input.message.trim());
-  }
+  setTextParam(params, 'label', input.label);
+  setTextParam(params, 'body', input.body);
+  setTextParam(params, 'status', input.status);
+  setTextParam(params, 'error', input.error);
+  setTextParam(params, 'message', input.message);
 
   const baseHref = params.toString()
     ? `/issues/${input.issueSlug}?${params.toString()}`
@@ -98,20 +107,27 @@ export async function createIssueAction(formData: FormData) {
   const summary = readText(formData, 'summary');
   const nextStep = readText(formData, 'nextStep');
   const firstUpdateBody = readText(formData, 'firstUpdateBody');
+  const draft = {
+    firstUpdateBody,
+    nextStep,
+    roomSlug,
+    summary,
+    title,
+  };
 
   if (!title) {
     redirectToNewIssueSurface({
       error: t.issues.titleRequired,
-      roomSlug,
       spaceId,
+      ...draft,
     });
   }
 
   if (!firstUpdateBody) {
     redirectToNewIssueSurface({
       error: t.issues.firstUpdateRequired,
-      roomSlug,
       spaceId,
+      ...draft,
     });
   }
 
@@ -153,8 +169,8 @@ export async function createIssueAction(formData: FormData) {
         language,
         surface: 'keepcozy:create-issue',
       }),
-      roomSlug,
       spaceId,
+      ...draft,
     });
   }
 }
@@ -166,13 +182,29 @@ export async function appendIssueUpdateAction(formData: FormData) {
   const issueSlug = readText(formData, 'issueId');
   const label = readText(formData, 'label');
   const body = readText(formData, 'body');
-  const requestedStatus = normalizeKeepCozyIssueStatus(readText(formData, 'status'));
+  const requestedStatusRaw = readText(formData, 'status');
+  const requestedStatus = normalizeKeepCozyIssueStatus(requestedStatusRaw);
+  const draft = {
+    body,
+    label,
+    status: requestedStatusRaw,
+  };
+
+  if (requestedStatusRaw && !requestedStatus) {
+    redirectToIssueDetailSurface({
+      error: t.issues.statusInvalid,
+      issueSlug,
+      spaceId,
+      ...draft,
+    });
+  }
 
   if (!body) {
     redirectToIssueDetailSurface({
       error: t.issues.updateBodyRequired,
       issueSlug,
       spaceId,
+      ...draft,
     });
   }
 
@@ -188,6 +220,13 @@ export async function appendIssueUpdateAction(formData: FormData) {
       statusChangeLabelFallback: t.issues.statusUpdatedLabel,
     });
 
+    const successMessage =
+      updated.updateKind === 'resolution'
+        ? t.issues.updateSuccessResolved
+        : updated.updateKind === 'status_change'
+          ? t.issues.updateSuccessStatus
+          : t.issues.updateSuccess;
+
     revalidatePath('/home');
     revalidatePath('/issues');
     revalidatePath('/activity');
@@ -199,7 +238,7 @@ export async function appendIssueUpdateAction(formData: FormData) {
 
     redirectToIssueDetailSurface({
       issueSlug: updated.issueSlug,
-      message: t.issues.updateSuccess,
+      message: successMessage,
       spaceId,
     });
   } catch (error) {
@@ -216,6 +255,7 @@ export async function appendIssueUpdateAction(formData: FormData) {
       }),
       issueSlug,
       spaceId,
+      ...draft,
     });
   }
 }

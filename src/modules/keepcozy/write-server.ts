@@ -422,6 +422,7 @@ export async function appendKeepCozyIssueUpdate(input: {
     return {
       issueSlug: issue.slug,
       roomSlug: room?.slug ?? null,
+      updateKind: 'note' as const,
     };
   }
 
@@ -480,6 +481,7 @@ export async function appendKeepCozyIssueUpdate(input: {
   return {
     issueSlug: issue.slug,
     roomSlug: room?.slug ?? null,
+    updateKind: requestedStatus === 'resolved' ? ('resolution' as const) : ('status_change' as const),
   };
 }
 
@@ -665,6 +667,7 @@ export async function appendKeepCozyTaskUpdate(input: {
       issueSlug: issue.slug,
       roomSlug: room?.slug ?? null,
       taskSlug: task.slug,
+      updateKind: 'note' as const,
     };
   }
 
@@ -724,5 +727,6 @@ export async function appendKeepCozyTaskUpdate(input: {
     issueSlug: issue.slug,
     roomSlug: room?.slug ?? null,
     taskSlug: task.slug,
+    updateKind: requestedStatus === 'done' ? ('completion' as const) : ('status_change' as const),
   };
 }

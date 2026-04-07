@@ -13,9 +13,12 @@ type TaskDetailPageProps = {
     taskId: string;
   }>;
   searchParams: Promise<{
+    body?: string;
     error?: string;
+    label?: string;
     message?: string;
     space?: string;
+    status?: string;
   }>;
 };
 
@@ -46,6 +49,11 @@ export default async function TaskDetailPage({
       })
     : null;
   const visibleMessage = query.message?.trim() || null;
+  const draft = {
+    body: query.body ?? '',
+    label: query.label ?? '',
+    status: query.status ?? '',
+  };
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -91,6 +99,21 @@ export default async function TaskDetailPage({
             <span className="activity-focus-kicker">{task.status}</span>
             <h2 className="activity-focus-title">{t.tasks.updatesTitle}</h2>
             <p className="muted activity-focus-body">{t.tasks.detailBody}</p>
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">
+                {t.tasks.currentStatusLabel}: {task.status}
+              </span>
+              {issue ? (
+                <span className="keepcozy-meta-pill">
+                  {t.tasks.fieldIssue}: {issue.title}
+                </span>
+              ) : null}
+              {room ? (
+                <span className="keepcozy-meta-pill">
+                  {t.tasks.viewRoom}: {room.name}
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {room ? (
@@ -116,12 +139,13 @@ export default async function TaskDetailPage({
 
             <label className="field">
               <span>{t.tasks.fieldUpdateLabel}</span>
-              <input className="input" name="label" />
+              <input className="input" defaultValue={draft.label} name="label" />
+              <p className="muted keepcozy-field-note">{t.tasks.labelOptionalHint}</p>
             </label>
 
             <label className="field">
               <span>{t.tasks.fieldStatus}</span>
-              <select className="input" defaultValue="" name="status">
+              <select className="input" defaultValue={draft.status} name="status">
                 <option value="">{t.tasks.statusKeepCurrent}</option>
                 <option value="planned">{t.tasks.statusPlanned}</option>
                 <option value="active">{t.tasks.statusActive}</option>
@@ -129,14 +153,20 @@ export default async function TaskDetailPage({
                 <option value="done">{t.tasks.statusDone}</option>
                 <option value="cancelled">{t.tasks.statusCancelled}</option>
               </select>
+              <p className="muted keepcozy-field-note">{t.tasks.statusIntentHint}</p>
             </label>
 
             <label className="field">
               <span>{t.tasks.fieldUpdateBody}</span>
-              <textarea className="input textarea" name="body" required />
+              <textarea
+                className="input textarea"
+                defaultValue={draft.body}
+                name="body"
+                required
+              />
             </label>
 
-            <button className="button" type="submit">
+            <button className="button keepcozy-form-submit" type="submit">
               {t.tasks.submitUpdate}
             </button>
           </form>

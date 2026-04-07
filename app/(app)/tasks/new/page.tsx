@@ -10,9 +10,13 @@ import { withSpaceParam } from '@/modules/spaces/url';
 type NewTaskPageProps = {
   searchParams: Promise<{
     error?: string;
+    firstUpdateBody?: string;
     issue?: string;
     message?: string;
+    nextStep?: string;
     space?: string;
+    summary?: string;
+    title?: string;
   }>;
 };
 
@@ -29,6 +33,13 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
   const selectedIssue = query.issue
     ? issues.find((candidate) => candidate.id === query.issue) ?? null
     : null;
+  const draft = {
+    firstUpdateBody: query.firstUpdateBody ?? '',
+    nextStep: query.nextStep ?? '',
+    summary: query.summary ?? '',
+    title: query.title ?? '',
+  };
+  const missingSelectedIssue = Boolean(query.issue?.trim()) && !selectedIssue;
   const visibleError = query.error
     ? sanitizeUserFacingErrorMessage({
         fallback: t.tasks.createFailed,
@@ -58,6 +69,9 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
       </section>
 
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+      {missingSelectedIssue ? (
+        <p className="notice notice-error">{t.tasks.issueMissing}</p>
+      ) : null}
       {visibleMessage ? (
         <div aria-live="polite" className="notice notice-success notice-inline">
           <span aria-hidden="true" className="notice-check">
@@ -79,6 +93,22 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
           <p className="muted">{t.tasks.draftBody}</p>
         </section>
 
+        {selectedIssue ? (
+          <section className="empty-card keepcozy-preview-card">
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">
+                {t.tasks.fieldIssue}: {selectedIssue.title}
+              </span>
+              {selectedIssue.roomName ? (
+                <span className="keepcozy-meta-pill">
+                  {t.tasks.viewRoom}: {selectedIssue.roomName}
+                </span>
+              ) : null}
+            </div>
+            <p className="muted keepcozy-field-note">{t.tasks.issueLinkNote}</p>
+          </section>
+        ) : null}
+
         {issues.length > 0 ? (
           <form action={createTaskAction} className="stack settings-section keepcozy-section">
             <input name="spaceId" type="hidden" value={activeSpace.id} />
@@ -94,6 +124,7 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
                 className="input"
                 defaultValue={selectedIssue?.id ?? ''}
                 name="issueSlug"
+                required
               >
                 <option value="">{t.tasks.allIssues}</option>
                 {issues.map((issue) => (
@@ -102,6 +133,7 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
                   </option>
                 ))}
               </select>
+              <p className="muted keepcozy-field-note">{t.tasks.issueLinkNote}</p>
             </label>
 
             <label className="field">
@@ -109,6 +141,7 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
               <input
                 autoComplete="off"
                 className="input"
+                defaultValue={draft.title}
                 name="title"
                 placeholder={selectedIssue ? `${selectedIssue.title}: ` : ''}
                 required
@@ -117,22 +150,28 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
 
             <label className="field">
               <span>{t.tasks.fieldSummary}</span>
-              <textarea className="input textarea" name="summary" />
+              <textarea className="input textarea" defaultValue={draft.summary} name="summary" />
             </label>
 
             <label className="field">
               <span>{t.tasks.fieldNextStep}</span>
-              <input className="input" name="nextStep" />
+              <input className="input" defaultValue={draft.nextStep} name="nextStep" />
             </label>
 
             <label className="field">
               <span>{t.tasks.fieldFirstUpdate}</span>
-              <textarea className="input textarea" name="firstUpdateBody" required />
+              <textarea
+                className="input textarea"
+                defaultValue={draft.firstUpdateBody}
+                name="firstUpdateBody"
+                required
+              />
+              <p className="muted keepcozy-field-note">{t.tasks.firstUpdateHint}</p>
             </label>
 
             <p className="muted">{t.tasks.createNote}</p>
 
-            <button className="button" type="submit">
+            <button className="button keepcozy-form-submit" type="submit">
               {t.tasks.submitCreate}
             </button>
           </form>

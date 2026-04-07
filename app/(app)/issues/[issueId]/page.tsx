@@ -13,9 +13,12 @@ type IssueDetailPageProps = {
     issueId: string;
   }>;
   searchParams: Promise<{
+    body?: string;
     error?: string;
+    label?: string;
     message?: string;
     space?: string;
+    status?: string;
   }>;
 };
 
@@ -46,6 +49,11 @@ export default async function IssueDetailPage({
       })
     : null;
   const visibleMessage = query.message?.trim() || null;
+  const draft = {
+    body: query.body ?? '',
+    label: query.label ?? '',
+    status: query.status ?? '',
+  };
   const createTaskHref = withSpaceParam(
     `/tasks/new?issue=${encodeURIComponent(issue.id)}`,
     activeSpace.id,
@@ -93,6 +101,19 @@ export default async function IssueDetailPage({
             <span className="activity-focus-kicker">{issue.status}</span>
             <h2 className="activity-focus-title">{t.issues.updatesTitle}</h2>
             <p className="muted activity-focus-body">{t.issues.detailBody}</p>
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">
+                {t.issues.currentStatusLabel}: {issue.status}
+              </span>
+              {room ? (
+                <span className="keepcozy-meta-pill">
+                  {t.issues.fieldRoom}: {room.name}
+                </span>
+              ) : null}
+              <span className="keepcozy-meta-pill">
+                {t.tasks.title}: {tasks.length}
+              </span>
+            </div>
           </div>
 
           {room ? (
@@ -118,26 +139,33 @@ export default async function IssueDetailPage({
 
             <label className="field">
               <span>{t.issues.fieldUpdateLabel}</span>
-              <input className="input" name="label" />
+              <input className="input" defaultValue={draft.label} name="label" />
+              <p className="muted keepcozy-field-note">{t.issues.labelOptionalHint}</p>
             </label>
 
             <label className="field">
               <span>{t.issues.fieldStatus}</span>
-              <select className="input" defaultValue="" name="status">
+              <select className="input" defaultValue={draft.status} name="status">
                 <option value="">{t.issues.statusKeepCurrent}</option>
                 <option value="open">{t.issues.statusOpen}</option>
                 <option value="planned">{t.issues.statusPlanned}</option>
                 <option value="in_review">{t.issues.statusInReview}</option>
                 <option value="resolved">{t.issues.statusResolved}</option>
               </select>
+              <p className="muted keepcozy-field-note">{t.issues.statusIntentHint}</p>
             </label>
 
             <label className="field">
               <span>{t.issues.fieldUpdateBody}</span>
-              <textarea className="input textarea" name="body" required />
+              <textarea
+                className="input textarea"
+                defaultValue={draft.body}
+                name="body"
+                required
+              />
             </label>
 
-            <button className="button" type="submit">
+            <button className="button keepcozy-form-submit" type="submit">
               {t.issues.submitUpdate}
             </button>
           </form>

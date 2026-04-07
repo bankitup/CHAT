@@ -2790,6 +2790,16 @@ main {
   gap: 10px;
 }
 
+.keepcozy-field-note {
+  margin: -2px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.keepcozy-form-submit {
+  width: 100%;
+}
+
 .keepcozy-context-label {
   color: rgba(91, 100, 112, 0.86);
   font-size: 0.72rem;
