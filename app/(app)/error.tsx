@@ -28,9 +28,15 @@ export default function AppRouteErrorBoundary({
     <section className="page page-mobile">
       <section className="card stack route-error-card">
         <div className="stack route-error-copy">
-          <h1 className="section-title">Couldn&apos;t load this screen</h1>
+          <p className="eyebrow">KeepCozy shell</p>
+          <h1 className="section-title">Couldn&apos;t load this home view</h1>
           <p className="muted">
-            Please try again. If it keeps happening, go back to Home or choose a different home.
+            Try again first. If this still fails, go back to Home or choose a different home
+            context before reopening the current section.
+          </p>
+          <p className="muted route-error-note">
+            If you&apos;re validating the canonical TEST-home proof path, choose <code>TEST</code>{' '}
+            again from the home picker before retrying.
           </p>
         </div>
 
@@ -45,7 +51,7 @@ export default function AppRouteErrorBoundary({
           >
             Home
           </Link>
-          <Link className="pill" href="/spaces" prefetch={false}>
+          <Link className="pill" href={withSpaceParam('/spaces', spaceId)} prefetch={false}>
             Choose home
           </Link>
         </div>

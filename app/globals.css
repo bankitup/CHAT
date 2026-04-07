@@ -302,6 +302,30 @@ main {
   gap: 14px;
 }
 
+.keepcozy-loading-screen {
+  width: min(100%, 720px);
+  margin: 0 auto;
+}
+
+.keepcozy-loading-context,
+.keepcozy-loading-hero {
+  padding: 16px;
+}
+
+.keepcozy-loading-context-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.keepcozy-loading-hero {
+  display: grid;
+  gap: 12px;
+}
+
+.keepcozy-loading-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .route-loading-hero,
 .route-loading-row,
 .route-loading-chat-header {
@@ -516,6 +540,62 @@ main {
   padding-bottom: calc(18px + env(safe-area-inset-bottom));
 }
 
+.app-shell-context {
+  width: min(100%, 720px);
+  margin: 0 auto 12px;
+}
+
+.app-shell-context-shell {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(221, 228, 238, 0.9);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 249, 253, 0.94));
+  box-shadow: var(--shadow-soft);
+}
+
+.app-shell-context-block {
+  gap: 6px;
+}
+
+.app-shell-context-kicker {
+  color: rgba(91, 100, 112, 0.86);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.app-shell-context-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app-shell-context-title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.app-shell-context-body {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.app-shell-context-link,
+.app-shell-context-button {
+  flex-shrink: 0;
+}
+
 .app-bottom-nav {
   position: fixed;
   left: 50%;
@@ -562,6 +642,13 @@ main {
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.05;
+}
+
+@media (min-width: 700px) {
+  .app-shell-context-shell {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
 }
 
 .auth-page {
@@ -7166,9 +7253,20 @@ main {
   gap: 8px;
 }
 
+.route-error-note {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .route-error-actions {
   gap: 10px;
   flex-wrap: wrap;
+}
+
+@media (min-width: 700px) {
+  .keepcozy-loading-context-shell {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @keyframes chat-typing-pulse {

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
   getKeepCozyIssuesPageData,
+  isKeepCozyPrimaryTestHomeName,
   requireKeepCozyContext,
 } from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
@@ -27,6 +28,12 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
     activeRoom ? `/issues/new?room=${encodeURIComponent(activeRoom.id)}` : '/issues/new',
     activeSpace.id,
   );
+  const isPrimaryTestHome = isKeepCozyPrimaryTestHomeName(activeSpace.name);
+  const emptyBody = activeRoom
+    ? t.issues.emptyFilteredBody
+    : isPrimaryTestHome
+      ? t.issues.emptyTestBody
+      : t.issues.emptyBody;
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -57,12 +64,28 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
       <section className="card stack settings-surface keepcozy-surface">
         <section className="empty-card keepcozy-preview-card">
           <div className="keepcozy-preview-header">
-            <span className="summary-pill summary-pill-muted">{t.issues.previewPill}</span>
-            <span className="keepcozy-context-label">
-              {t.issues.selectedHomeLabel}: {activeSpace.name}
+            <span className="summary-pill summary-pill-muted">
+              {t.homeDashboard.currentHomeLabel}
             </span>
+            <span className="keepcozy-context-label">{activeSpace.name}</span>
           </div>
           <p className="muted">{t.issues.previewBody}</p>
+          <div className="keepcozy-card-actions">
+            <Link
+              className="pill"
+              href={withSpaceParam('/home', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.shell.openHome}
+            </Link>
+            <Link
+              className="button button-secondary"
+              href={withSpaceParam('/tasks', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.shell.openTasks}
+            </Link>
+          </div>
           {activeRoom ? (
             <div className="keepcozy-meta-row">
               <span className="keepcozy-meta-pill">
@@ -129,9 +152,55 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
             ))}
           </div>
         ) : (
-          <section className="empty-card">
-            <h2 className="card-title">{t.issues.title}</h2>
-            <p className="muted">{t.issues.previewBody}</p>
+          <section className="empty-card keepcozy-preview-card">
+            <div className="keepcozy-preview-header">
+              <span className="summary-pill summary-pill-muted">{t.issues.emptyTitle}</span>
+              <span className="keepcozy-context-label">{activeSpace.name}</span>
+            </div>
+            <p className="muted">{emptyBody}</p>
+            <div className="keepcozy-meta-row">
+              {activeRoom ? (
+                <span className="keepcozy-meta-pill">
+                  {t.issues.filteredByRoom}: {activeRoom.name}
+                </span>
+              ) : null}
+              {isPrimaryTestHome ? (
+                <>
+                  <span className="keepcozy-meta-pill">TEST</span>
+                  <span className="keepcozy-meta-pill">Kitchen</span>
+                  <span className="keepcozy-meta-pill">Kitchen faucet issue</span>
+                </>
+              ) : null}
+            </div>
+            <div className="keepcozy-card-actions">
+              <Link className="button" href={createIssueHref} prefetch={false}>
+                {t.issues.create}
+              </Link>
+              <Link
+                className="button button-secondary"
+                href={withSpaceParam('/home', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.shell.openHome}
+              </Link>
+              {activeRoom ? (
+                <Link
+                  className="pill"
+                  href={withSpaceParam('/issues', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.issues.browseIssues}
+                </Link>
+              ) : (
+                <Link
+                  className="pill"
+                  href={withSpaceParam('/rooms', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.shell.openRooms}
+                </Link>
+              )}
+            </div>
           </section>
         )}
       </section>

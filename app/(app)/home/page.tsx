@@ -290,7 +290,15 @@ export default async function HomeDashboardPage({
                       {t.homeDashboard.openHistory}
                     </Link>
                   </>
-                ) : null}
+                ) : (
+                  <Link
+                    className="button button-secondary"
+                    href={withSpaceParam('/issues', activeSpace.id)}
+                    prefetch={false}
+                  >
+                    {t.homeDashboard.openIssues}
+                  </Link>
+                )}
               </div>
             </section>
           )}
