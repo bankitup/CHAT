@@ -20,45 +20,54 @@ function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
 }
 
+function setTextParam(params: URLSearchParams, key: string, value?: string | null) {
+  const normalized = value?.trim() ?? '';
+
+  if (normalized) {
+    params.set(key, normalized);
+  }
+}
+
 function redirectToNewTaskSurface(input: {
   error?: string | null;
+  firstUpdateBody?: string | null;
   issueSlug?: string | null;
   message?: string | null;
+  nextStep?: string | null;
   spaceId?: string | null;
+  summary?: string | null;
+  title?: string | null;
 }): never {
   const params = new URLSearchParams();
 
-  if (input.issueSlug?.trim()) {
-    params.set('issue', input.issueSlug.trim());
-  }
-
-  if (input.error?.trim()) {
-    params.set('error', input.error.trim());
-  }
-
-  if (input.message?.trim()) {
-    params.set('message', input.message.trim());
-  }
+  setTextParam(params, 'issue', input.issueSlug);
+  setTextParam(params, 'title', input.title);
+  setTextParam(params, 'summary', input.summary);
+  setTextParam(params, 'nextStep', input.nextStep);
+  setTextParam(params, 'firstUpdateBody', input.firstUpdateBody);
+  setTextParam(params, 'error', input.error);
+  setTextParam(params, 'message', input.message);
 
   const href = params.toString() ? `/tasks/new?${params.toString()}` : '/tasks/new';
   redirect(withSpaceParam(href, input.spaceId));
 }
 
 function redirectToTaskDetailSurface(input: {
+  body?: string | null;
   error?: string | null;
+  label?: string | null;
   message?: string | null;
   spaceId?: string | null;
+  status?: string | null;
   taskSlug: string;
 }): never {
   const params = new URLSearchParams();
 
-  if (input.error?.trim()) {
-    params.set('error', input.error.trim());
-  }
-
-  if (input.message?.trim()) {
-    params.set('message', input.message.trim());
-  }
+  setTextParam(params, 'label', input.label);
+  setTextParam(params, 'body', input.body);
+  setTextParam(params, 'status', input.status);
+  setTextParam(params, 'error', input.error);
+  setTextParam(params, 'message', input.message);
 
   const baseHref = params.toString()
     ? `/tasks/${input.taskSlug}?${params.toString()}`
@@ -98,28 +107,35 @@ export async function createTaskAction(formData: FormData) {
   const summary = readText(formData, 'summary');
   const nextStep = readText(formData, 'nextStep');
   const firstUpdateBody = readText(formData, 'firstUpdateBody');
+  const draft = {
+    firstUpdateBody,
+    issueSlug,
+    nextStep,
+    summary,
+    title,
+  };
 
   if (!issueSlug) {
     redirectToNewTaskSurface({
       error: t.tasks.issueRequired,
-      issueSlug,
       spaceId,
+      ...draft,
     });
   }
 
   if (!title) {
     redirectToNewTaskSurface({
       error: t.tasks.titleRequired,
-      issueSlug,
       spaceId,
+      ...draft,
     });
   }
 
   if (!firstUpdateBody) {
     redirectToNewTaskSurface({
       error: t.tasks.firstUpdateRequired,
-      issueSlug,
       spaceId,
+      ...draft,
     });
   }
 
@@ -163,8 +179,8 @@ export async function createTaskAction(formData: FormData) {
         language,
         surface: 'keepcozy:create-task',
       }),
-      issueSlug,
       spaceId,
+      ...draft,
     });
   }
 }
@@ -176,13 +192,29 @@ export async function appendTaskUpdateAction(formData: FormData) {
   const taskSlug = readText(formData, 'taskId');
   const label = readText(formData, 'label');
   const body = readText(formData, 'body');
-  const requestedStatus = normalizeKeepCozyTaskStatus(readText(formData, 'status'));
+  const requestedStatusRaw = readText(formData, 'status');
+  const requestedStatus = normalizeKeepCozyTaskStatus(requestedStatusRaw);
+  const draft = {
+    body,
+    label,
+    status: requestedStatusRaw,
+  };
+
+  if (requestedStatusRaw && !requestedStatus) {
+    redirectToTaskDetailSurface({
+      error: t.tasks.statusInvalid,
+      spaceId,
+      taskSlug,
+      ...draft,
+    });
+  }
 
   if (!body) {
     redirectToTaskDetailSurface({
       error: t.tasks.updateBodyRequired,
       spaceId,
       taskSlug,
+      ...draft,
     });
   }
 
@@ -198,6 +230,13 @@ export async function appendTaskUpdateAction(formData: FormData) {
       taskSlug,
     });
 
+    const successMessage =
+      updated.updateKind === 'completion'
+        ? t.tasks.updateSuccessCompleted
+        : updated.updateKind === 'status_change'
+          ? t.tasks.updateSuccessStatus
+          : t.tasks.updateSuccess;
+
     revalidatePath('/home');
     revalidatePath('/issues');
     revalidatePath('/tasks');
@@ -210,7 +249,7 @@ export async function appendTaskUpdateAction(formData: FormData) {
     }
 
     redirectToTaskDetailSurface({
-      message: t.tasks.updateSuccess,
+      message: successMessage,
       spaceId,
       taskSlug: updated.taskSlug,
     });
@@ -228,6 +267,7 @@ export async function appendTaskUpdateAction(formData: FormData) {
       }),
       spaceId,
       taskSlug,
+      ...draft,
     });
   }
 }

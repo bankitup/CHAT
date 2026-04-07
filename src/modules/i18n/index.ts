@@ -196,13 +196,19 @@ type LanguageDictionary = {
     draftBody: string;
     fieldHome: string;
     fieldRoom: string;
+    roomOptionalNote: string;
+    roomMissing: string;
     fieldTitle: string;
     fieldSummary: string;
     fieldNextStep: string;
     fieldFirstUpdate: string;
+    firstUpdateHint: string;
     fieldUpdateLabel: string;
+    labelOptionalHint: string;
     fieldUpdateBody: string;
     fieldStatus: string;
+    currentStatusLabel: string;
+    statusIntentHint: string;
     fieldAttachments: string;
     createNote: string;
     browseIssues: string;
@@ -213,8 +219,11 @@ type LanguageDictionary = {
     updateBodyRequired: string;
     createSuccess: string;
     updateSuccess: string;
+    updateSuccessStatus: string;
+    updateSuccessResolved: string;
     createFailed: string;
     updateFailed: string;
+    statusInvalid: string;
     statusKeepCurrent: string;
     statusOpen: string;
     statusPlanned: string;
@@ -248,13 +257,19 @@ type LanguageDictionary = {
     draftBody: string;
     fieldHome: string;
     fieldIssue: string;
+    issueLinkNote: string;
+    issueMissing: string;
     fieldSummary: string;
     fieldNextStep: string;
     fieldTask: string;
     fieldFirstUpdate: string;
+    firstUpdateHint: string;
     fieldUpdateLabel: string;
+    labelOptionalHint: string;
     fieldUpdateBody: string;
     fieldStatus: string;
+    currentStatusLabel: string;
+    statusIntentHint: string;
     fieldAttachments: string;
     createNote: string;
     browseTasks: string;
@@ -266,8 +281,11 @@ type LanguageDictionary = {
     updateBodyRequired: string;
     createSuccess: string;
     updateSuccess: string;
+    updateSuccessStatus: string;
+    updateSuccessCompleted: string;
     createFailed: string;
     updateFailed: string;
+    statusInvalid: string;
     statusKeepCurrent: string;
     statusPlanned: string;
     statusActive: string;
@@ -848,13 +866,23 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'This route now creates real issue and issue_history records while staying intentionally lightweight for the MVP.',
       fieldHome: 'Home context',
       fieldRoom: 'Room',
+      roomOptionalNote: 'Optional. Leave this empty when the issue belongs to the home overall rather than one room.',
+      roomMissing:
+        'The selected room is no longer available in this home. Pick another room or keep the issue at the home level.',
       fieldTitle: 'Issue title',
       fieldSummary: 'Issue summary',
       fieldNextStep: 'Next step',
       fieldFirstUpdate: 'First update',
+      firstUpdateHint:
+        'Use the first update to capture what you saw, what changed, or what needs attention right now.',
       fieldUpdateLabel: 'Update label',
+      labelOptionalHint:
+        'Optional. Leave this empty to use the default issue history label.',
       fieldUpdateBody: 'Update note',
       fieldStatus: 'Status',
+      currentStatusLabel: 'Current status',
+      statusIntentHint:
+        'Leave status unchanged to add a note only. Change it only when the issue actually moved.',
       fieldAttachments: 'Attachments',
       createNote:
         'Keep this screen practical: enough structure for issues and issue_updates, without growing into a full service workflow.',
@@ -866,8 +894,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       updateBodyRequired: 'Add a short update before saving history.',
       createSuccess: 'Issue saved.',
       updateSuccess: 'Issue update saved.',
+      updateSuccessStatus: 'Issue status updated.',
+      updateSuccessResolved: 'Issue resolved and history saved.',
       createFailed: 'Unable to save this issue right now. Please try again.',
       updateFailed: 'Unable to save this issue update right now. Please try again.',
+      statusInvalid: 'Choose a valid issue status or leave it unchanged.',
       statusKeepCurrent: 'Keep current status',
       statusOpen: 'Needs attention',
       statusPlanned: 'Planned',
@@ -903,13 +934,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'This route now creates real task and task_history records while staying intentionally lightweight for the MVP.',
       fieldHome: 'Home context',
       fieldIssue: 'Parent issue',
+      issueLinkNote:
+        'Tasks stay linked through one issue in the MVP. Pick the issue first so the task history stays anchored to the right problem.',
+      issueMissing:
+        'The selected issue is no longer available in this home. Choose another issue before saving the task.',
       fieldSummary: 'Task summary',
       fieldNextStep: 'Next step',
       fieldTask: 'Task title',
       fieldFirstUpdate: 'First update',
+      firstUpdateHint:
+        'Use the first update to capture the next move, blocker, or handoff that makes this task real.',
       fieldUpdateLabel: 'Update label',
+      labelOptionalHint:
+        'Optional. Leave this empty to use the default task history label.',
       fieldUpdateBody: 'Update note',
       fieldStatus: 'Status',
+      currentStatusLabel: 'Current status',
+      statusIntentHint:
+        'Leave status unchanged to add a progress note only. Change it only when the task actually moved.',
       fieldAttachments: 'Attachments',
       createNote:
         'The MVP task surface should stay smaller than procurement, supplier assignment, or deep automation flows.',
@@ -922,8 +964,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       updateBodyRequired: 'Add a short task update before saving history.',
       createSuccess: 'Task saved.',
       updateSuccess: 'Task update saved.',
+      updateSuccessStatus: 'Task status updated.',
+      updateSuccessCompleted: 'Task completed and history saved.',
       createFailed: 'Unable to save this task right now. Please try again.',
       updateFailed: 'Unable to save this task update right now. Please try again.',
+      statusInvalid: 'Choose a valid task status or leave it unchanged.',
       statusKeepCurrent: 'Keep current status',
       statusPlanned: 'Planned',
       statusActive: 'Active',
@@ -1540,13 +1585,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Этот маршрут теперь создает реальные записи issue и issue_history, оставаясь намеренно легким для MVP.',
       fieldHome: 'Контекст дома',
       fieldRoom: 'Комната',
+      roomOptionalNote:
+        'Необязательно. Оставьте пустым, если проблема относится ко всему дому, а не к одной комнате.',
+      roomMissing:
+        'Выбранная комната больше недоступна в этом доме. Выберите другую комнату или оставьте проблему на уровне дома.',
       fieldTitle: 'Название проблемы',
       fieldSummary: 'Краткое описание проблемы',
       fieldNextStep: 'Следующий шаг',
       fieldFirstUpdate: 'Первое обновление',
+      firstUpdateHint:
+        'Используйте первое обновление, чтобы зафиксировать, что вы увидели, что изменилось или что сейчас требует внимания.',
       fieldUpdateLabel: 'Заголовок обновления',
+      labelOptionalHint:
+        'Необязательно. Оставьте пустым, чтобы использовать стандартный заголовок истории проблемы.',
       fieldUpdateBody: 'Текст обновления',
       fieldStatus: 'Статус',
+      currentStatusLabel: 'Текущий статус',
+      statusIntentHint:
+        'Оставьте статус без изменений, если хотите добавить только заметку. Меняйте его только когда проблема действительно сдвинулась.',
       fieldAttachments: 'Вложения',
       createNote:
         'Экран должен оставаться практичным: достаточно структуры для issues и issue_updates, без разрастания в полный сервисный workflow.',
@@ -1559,8 +1615,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       updateBodyRequired: 'Добавьте короткое обновление перед сохранением истории.',
       createSuccess: 'Проблема сохранена.',
       updateSuccess: 'Обновление проблемы сохранено.',
+      updateSuccessStatus: 'Статус проблемы обновлен.',
+      updateSuccessResolved: 'Проблема решена, история сохранена.',
       createFailed: 'Не удалось сохранить проблему. Попробуйте еще раз.',
       updateFailed: 'Не удалось сохранить обновление проблемы. Попробуйте еще раз.',
+      statusInvalid: 'Выберите корректный статус проблемы или оставьте текущий.',
       statusKeepCurrent: 'Оставить текущий статус',
       statusOpen: 'Требует внимания',
       statusPlanned: 'Запланировано',
@@ -1600,13 +1659,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Этот маршрут теперь создает реальные записи task и task_history, оставаясь намеренно легким для MVP.',
       fieldHome: 'Контекст дома',
       fieldIssue: 'Родительская проблема',
+      issueLinkNote:
+        'В MVP задачи всегда остаются привязанными к одной проблеме. Сначала выберите проблему, чтобы история задачи оставалась связанной с нужной проблемой.',
+      issueMissing:
+        'Выбранная проблема больше недоступна в этом доме. Выберите другую проблему перед сохранением задачи.',
       fieldSummary: 'Краткое описание задачи',
       fieldNextStep: 'Следующий шаг',
       fieldTask: 'Название задачи',
       fieldFirstUpdate: 'Первое обновление',
+      firstUpdateHint:
+        'Используйте первое обновление, чтобы зафиксировать следующий шаг, блокер или передачу работы, которая делает задачу реальной.',
       fieldUpdateLabel: 'Заголовок обновления',
+      labelOptionalHint:
+        'Необязательно. Оставьте пустым, чтобы использовать стандартный заголовок истории задачи.',
       fieldUpdateBody: 'Текст обновления',
       fieldStatus: 'Статус',
+      currentStatusLabel: 'Текущий статус',
+      statusIntentHint:
+        'Оставьте статус без изменений, если хотите добавить только заметку о прогрессе. Меняйте его только когда задача действительно сдвинулась.',
       fieldAttachments: 'Вложения',
       createNote:
         'Поверхность задачи в MVP должна быть меньше, чем закупки, назначение подрядчиков или глубокая автоматизация.',
@@ -1620,8 +1690,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       updateBodyRequired: 'Добавьте короткое обновление задачи перед сохранением истории.',
       createSuccess: 'Задача сохранена.',
       updateSuccess: 'Обновление задачи сохранено.',
+      updateSuccessStatus: 'Статус задачи обновлен.',
+      updateSuccessCompleted: 'Задача завершена, история сохранена.',
       createFailed: 'Не удалось сохранить задачу. Попробуйте еще раз.',
       updateFailed: 'Не удалось сохранить обновление задачи. Попробуйте еще раз.',
+      statusInvalid: 'Выберите корректный статус задачи или оставьте текущий.',
       statusKeepCurrent: 'Оставить текущий статус',
       statusPlanned: 'Запланирована',
       statusActive: 'Активна',
