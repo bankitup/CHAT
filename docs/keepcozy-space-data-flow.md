@@ -19,6 +19,7 @@ Related documents:
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
+- [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
@@ -280,6 +281,12 @@ Recommended timeline event categories:
 - thread opened, archived, or closed
 - participant invited, joined, removed, or reassigned
 
+First-foundation note:
+
+- the longer-term timeline may include selected message-derived events
+- the first structured timeline foundation should start with operational/system
+  events and leave broad message mirroring for a later branch
+
 Recommended target event fields:
 
 | Field | Why it matters |
@@ -296,6 +303,22 @@ Recommended target event fields:
 | `audience_mode` | internal-only vs external-visible control |
 | `summary_payload` | compact renderable details |
 | `search_text` or equivalent derived index input | future search support |
+
+First-foundation note:
+
+- the initial timeline foundation may start narrower than this full target
+  field set
+- the first additive SQL pass can reasonably focus on:
+  - `space_id`
+  - optional `conversation_id`
+  - optional `message_id`
+  - optional primary object ref
+  - `event_type`
+  - `source_kind`
+  - `occurred_at`
+  - `summary_payload`
+- audience/search derivations can be added later once access policy and search
+  strategy are clearer
 
 Recommended design rule:
 

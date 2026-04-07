@@ -26,6 +26,7 @@ Related documents:
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
+- [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
 - [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
@@ -42,6 +43,7 @@ The shared types file now defines future-facing contracts for:
 - audience modes
 - operational object kinds and stable object refs
 - a future companion metadata row shape
+- a future space timeline event vocabulary and row shape
 - a draft table name and draft field candidates for the first schema pass
 
 Main exported names:
@@ -62,6 +64,11 @@ Main exported names:
 - `KeepCozyThreadRelatedOperationalObjectLinkDraft`
 - `KeepCozyThreadCompanionMetadataRowDraft`
 - `KeepCozyThreadCompanionMetadata`
+- `KeepCozySpaceTimelineEventType`
+- `KeepCozySpaceTimelineEventSourceKind`
+- `KeepCozySpaceTimelineEventSummaryPayloadDraft`
+- `KeepCozySpaceTimelineEventRowDraft`
+- `KeepCozySpaceTimelineEvent`
 - `KEEP_COZY_THREAD_TYPES`
 - `KEEP_COZY_THREAD_AUDIENCE_MODES`
 - `KEEP_COZY_THREAD_STATUSES`
@@ -69,6 +76,10 @@ Main exported names:
 - `KEEP_COZY_THREAD_COMPANION_METADATA_TABLE_NAME_DRAFT`
 - `KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT`
 - `KEEP_COZY_THREAD_COMPANION_METADATA_DEFAULTS_DRAFT`
+- `KEEP_COZY_SPACE_TIMELINE_EVENTS_TABLE_NAME_DRAFT`
+- `KEEP_COZY_SPACE_TIMELINE_EVENT_TYPES`
+- `KEEP_COZY_SPACE_TIMELINE_EVENT_SOURCE_KINDS`
+- `KEEP_COZY_SPACE_TIMELINE_EVENT_FIELD_CANDIDATES_DRAFT`
 
 ## What Is Future-Facing Only
 
@@ -83,6 +94,7 @@ including:
 - `operational_object_type`
 - `operational_object_id`
 - policy-oriented visibility flags
+- structured space timeline event categories and sources
 - KeepCozy-specific operational roles such as `operator` and `contractor`
 
 They do not mean:
@@ -169,6 +181,33 @@ Why this is the current preference:
 - it matches the current architecture guidance that one thread usually centers
   on one primary operational record
 
+## Space Timeline Event Contracts
+
+The shared contract layer now also defines the first structured timeline-event
+vocabulary for future KeepCozy operational history:
+
+- `KeepCozySpaceTimelineEventType`
+- `KeepCozySpaceTimelineEventSourceKind`
+- `KeepCozySpaceTimelineEventRowDraft`
+- `KeepCozySpaceTimelineEvent`
+
+Important boundaries:
+
+- timeline events are not user-authored `public.messages`
+- timeline events may correlate to a `message_id`, but they do not replace the
+  message model
+- timeline events may point to a primary operational object ref, but they do
+  not replace first-class operational object tables
+- the first timeline pass focuses on structured operational/system events,
+  not on mirroring every chat event into a space feed
+
+The event contracts are designed to support:
+
+- append-oriented operational history
+- later audit and automation work
+- future thread-local system-event rendering without changing
+  `messages.kind`
+
 ## First Schema Alignment On This Branch
 
 This schema branch chooses a first draft table name:
@@ -229,6 +268,9 @@ The contract layer directly supports the polished architecture set:
   ownership expectations
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
   defines object linkage, additive metadata, and space-scoped querying needs
+- [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
+  defines the first structured event layer for future space-wide operational
+  history
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
   defines the separation between operational roles and moderation roles
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
@@ -250,13 +292,16 @@ These contracts should be used with the following explicit constraints:
   authority
 - do not treat the draft table name or field list as proof that schema/RLS
   work is fully complete
+- do not turn the timeline-event vocabulary into a second message-kind system
+- do not mirror all chat transport events into the timeline by default
 
 ## Intended Next Use
 
 The intended immediate follow-on is:
 
 1. additive SQL for `public.conversation_companion_metadata`
-2. later backend helper boundaries for reading and validating companion rows
-3. later policy/RLS work after the policy matrix is ready
+2. additive SQL for `public.space_timeline_events`
+3. later backend helper boundaries for reading and validating companion rows
+4. later event-writing and policy/RLS work after the policy matrix is ready
 
 This file is meant to give those next steps one shared, reviewable language.

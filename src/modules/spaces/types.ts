@@ -442,3 +442,152 @@ export const KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT = [
   'created_at',
   'updated_at',
 ] as const;
+
+/**
+ * Draft table name for future additive space-wide operational timeline events.
+ *
+ * This is timeline scaffolding only. It must not be treated as proof that the
+ * current runtime already writes or reads a unified event stream.
+ */
+export const KEEP_COZY_SPACE_TIMELINE_EVENTS_TABLE_NAME_DRAFT =
+  'space_timeline_events';
+
+/**
+ * First-pass structured event categories for the future space timeline.
+ *
+ * These are operational/system events, not user-authored message kinds.
+ */
+export type KeepCozySpaceTimelineEventType =
+  | 'thread_created'
+  | 'thread_metadata_attached'
+  | 'primary_object_linked'
+  | 'thread_closed'
+  | 'thread_reopened'
+  | 'operator_joined'
+  | 'contractor_assigned'
+  | 'supplier_attached'
+  | 'status_changed'
+  | 'document_attached'
+  | 'media_attached'
+  | 'quality_review_opened'
+  | 'issue_opened'
+  | 'issue_resolved';
+
+export const KEEP_COZY_SPACE_TIMELINE_EVENT_TYPES = [
+  'thread_created',
+  'thread_metadata_attached',
+  'primary_object_linked',
+  'thread_closed',
+  'thread_reopened',
+  'operator_joined',
+  'contractor_assigned',
+  'supplier_attached',
+  'status_changed',
+  'document_attached',
+  'media_attached',
+  'quality_review_opened',
+  'issue_opened',
+  'issue_resolved',
+] as const satisfies readonly KeepCozySpaceTimelineEventType[];
+
+/**
+ * Future-facing source classification for structured timeline events.
+ *
+ * This records which backend layer emitted the event without implying that the
+ * emitter owns authorization, object truth, or UI rendering semantics.
+ */
+export type KeepCozySpaceTimelineEventSourceKind =
+  | 'conversation'
+  | 'conversation_companion_metadata'
+  | 'operational_object'
+  | 'message_asset'
+  | 'system_process'
+  | 'manual_admin';
+
+export const KEEP_COZY_SPACE_TIMELINE_EVENT_SOURCE_KINDS = [
+  'conversation',
+  'conversation_companion_metadata',
+  'operational_object',
+  'message_asset',
+  'system_process',
+  'manual_admin',
+] as const satisfies readonly KeepCozySpaceTimelineEventSourceKind[];
+
+/**
+ * Compact renderable/event-local details for one space timeline row.
+ *
+ * This payload is intentionally small and additive. It is not meant to replace
+ * first-class operational objects or the message body/history model.
+ */
+export type KeepCozySpaceTimelineSummaryPayloadDraft = Readonly<
+  Record<string, unknown>
+>;
+
+/**
+ * Flat row shape that mirrors the first SQL draft for unified space timeline
+ * events directly.
+ *
+ * This row is append-oriented and separate from user-authored messages. It may
+ * optionally point at a conversation shell, a message shell, or a primary
+ * operational object reference.
+ */
+export type KeepCozySpaceTimelineEventRowDraft = {
+  id: string;
+  space_id: string;
+  conversation_id: string | null;
+  message_id: string | null;
+  operational_object_type: KeepCozyOperationalObjectKind | null;
+  operational_object_id: string | null;
+  actor_user_id: string | null;
+  event_type: KeepCozySpaceTimelineEventType;
+  source_kind: KeepCozySpaceTimelineEventSourceKind;
+  occurred_at: string;
+  summary_payload: KeepCozySpaceTimelineSummaryPayloadDraft;
+  created_at: string;
+};
+
+/**
+ * Logical future-facing space timeline event contract.
+ *
+ * Important:
+ *
+ * - this is a structured event layer, not a replacement for `public.messages`
+ * - `messageId` is optional correlation only and must not turn the timeline
+ *   into a mirror of chat history
+ * - `primaryOperationalObjectRef` remains optional because not every timeline
+ *   event will anchor to a structured work record in the first pass
+ */
+export type KeepCozySpaceTimelineEvent = {
+  id: string;
+  spaceId: string;
+  conversationId: string | null;
+  messageId: string | null;
+  primaryOperationalObjectRef: KeepCozyOperationalObjectRef | null;
+  actorUserId: string | null;
+  eventType: KeepCozySpaceTimelineEventType;
+  sourceKind: KeepCozySpaceTimelineEventSourceKind;
+  occurredAt: string;
+  summaryPayload: KeepCozySpaceTimelineSummaryPayloadDraft;
+  createdAt: string;
+};
+
+/**
+ * Advisory field list for the first additive space timeline schema pass.
+ *
+ * This guides the first schema draft without forcing current runtime code to
+ * depend on the table yet.
+ */
+export const KEEP_COZY_SPACE_TIMELINE_EVENT_FIELD_CANDIDATES_DRAFT = [
+  'id',
+  'space_id',
+  'conversation_id',
+  'message_id',
+  'operational_object_type',
+  'operational_object_id',
+  'actor_user_id',
+  'event_type',
+  'source_kind',
+  'occurred_at',
+  'summary_payload',
+  'created_at',
+] as const;
