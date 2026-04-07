@@ -42,10 +42,14 @@ reuse:
   - companion metadata row builders and optional conversation thread context
     helpers
 
-The current repository does not yet have an active KeepCozy runtime for:
+The current repository still does not have separate physical runtime layers
+for:
 
 - `homes`
 - `home_memberships`
+
+The current repository now does have an active first-pass KeepCozy runtime for:
+
 - `rooms`
 - `issues`
 - `issue_updates`
@@ -65,15 +69,16 @@ The current app shell now exposes a KeepCozy-first route layer:
 
 Important clarification:
 
-- the KeepCozy-first routes currently act as focused MVP scaffolding around the
-  shared `space` home context
-- they make the intended runtime center of gravity visible now
-- they do not mean dedicated `rooms`, `issues`, `issue_updates`, `tasks`, or
-  `task_updates` tables already exist
+- the KeepCozy-first routes now read the first dedicated persisted MVP entity
+  slice around the shared `space` home context
+- preview support remains only as a temporary fallback for environments where
+  the first KeepCozy tables have not been applied yet
+- `home` and `home_membership` still intentionally align to shared `space` and
+  `space_members` rather than separate physical tables
 
 That means the first KeepCozy MVP boundary should still be defined
-deliberately, and the route layer should not be mistaken for completed schema
-delivery.
+deliberately, and the persisted MVP slice should not be mistaken for the full
+future home-ops platform.
 
 ## MVP Objective
 
