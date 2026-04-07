@@ -71,8 +71,11 @@ Current branch note:
 
 - the first low-level backend helper now exists in
   [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
-- the remaining work is to wrap that helper in access-checked conversation
-  flows rather than adding a brand-new helper style
+- the next backend branch now adds a first access-checked conversation-level
+  read composition helper in
+  [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+- broader summary reads, creation writes, and policy-aware wrappers remain
+  later work
 
 ## Future Write Boundary
 

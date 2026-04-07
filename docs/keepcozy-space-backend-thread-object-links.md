@@ -12,6 +12,7 @@ changing current DM/group behavior or introducing UI-first coupling.
 Primary backend helper:
 
 - [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+- [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
 
 Related documents:
 
@@ -25,7 +26,9 @@ Related documents:
 ## What This Branch Adds
 
 This branch adds a small server-only helper layer for future conversation-level
-companion metadata work.
+companion metadata work, plus one narrow access-checked fetch composition path
+that can expose optional operational thread context without widening current
+chat payloads.
 
 Current helper categories:
 
@@ -33,6 +36,8 @@ Current helper categories:
 - row-to-contract normalization
 - low-level reads by one or many `conversation_id` values
 - low-level upsert for one companion metadata row
+- access-checked conversation-level fetch composition for optional operational
+  thread context
 - schema-missing error detection for the additive companion table
 
 Important design rule:
@@ -47,8 +52,9 @@ adapter file and several future wrapper seams around it.
 | Path | Current role on this branch | Status |
 | --- | --- | --- |
 | [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts) | direct low-level adapter for `public.conversation_companion_metadata` | active on this branch |
+| [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts) | access-checked conversation-level read composition helper for optional operational thread context | active on this branch |
 | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `createConversationWithMembers(...)` | future access-checked write wrapper seam | unchanged in this branch |
-| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationForUser(...)` | future access-checked conversation-level read seam | unchanged in this branch |
+| [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationForUser(...)` | access-checked base conversation read seam used by the composition helper | unchanged in this branch |
 | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationSummaryForUser(...)` | future access-checked summary read seam | unchanged in this branch |
 | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationHistorySnapshot(...)` | message-history loader that should stay free of early companion-metadata coupling | intentionally unchanged |
 | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts) | space-boundary resolution layer | intentionally unchanged |
@@ -59,7 +65,7 @@ Practical rule:
 - only `conversation-companion-metadata.ts` should touch the companion table
   directly in the current branch
 - all later access-checked usage should flow through messaging data service
-  wrappers, not directly from UI or page code
+  wrappers or composition helpers, not directly from UI or page code
 
 ## Why The Helper Is Low-Level
 
@@ -91,6 +97,7 @@ The helper currently introduces these backend seams:
 
 - `getConversationCompanionMetadataWithoutAccessCheck(...)`
 - `getConversationCompanionMetadataByConversationIdsWithoutAccessCheck(...)`
+- `getConversationOperationalThreadContextForUser(...)`
 
 ### Contract/schema boundary
 
@@ -122,28 +129,49 @@ Preferred direction:
   - or `createOperationalConversationWithMembers(...)`
 - only operational thread flows should write companion metadata
 
-### Recommended first read wrapper later
+### First read wrapper now in place
 
-Add nullable companion-metadata reads at conversation-level loaders in:
+This branch now adds one nullable, access-checked conversation-level fetch
+wrapper in:
 
-- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+- [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+  `getConversationOperationalThreadContextForUser(...)`
+
+That helper currently:
+
+- delegates access checking and base conversation loading to
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
   `getConversationForUser(...)`
-- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
+- delegates direct companion-row access to
+  [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+- returns a future-facing, optional context shape with:
+  - the existing conversation shell
+  - nullable companion metadata
+  - nullable primary operational object ref
+
+This keeps the first read integration explicit and narrow:
+
+- current callers of `getConversationForUser(...)` remain unchanged
+- current message-history and UI payloads remain unchanged
+- higher layers can opt into operational thread context later through one
+  backend seam
+
+### Recommended next read expansion later
+
+If later branches need broader coverage, the next safe additions are still:
+
+- nullable companion-aware summary composition near
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
   `getConversationSummaryForUser(...)`
-
-The current helper is intentionally ready for that later step because it
-already supports:
-
-- single-conversation reads
-- batched reads by `conversation_id`
-- row normalization into the logical contract shape
+- batched access-checked wrappers that build on the existing low-level
+  batch-read helper
 
 ## What This Branch Intentionally Does Not Do
 
 This backend foundation still does not:
 
 - change current conversation creation behavior
-- change current inbox/chat loading behavior
+- change current inbox/chat loading behavior by default
 - attach companion metadata to message-history payloads
 - validate object references against real operational tables
 - add related-object join-table behavior
@@ -172,6 +200,12 @@ These paths are intentionally stable in this branch:
 
 This is intentional. The branch adds low-level capability, not product-facing
 integration.
+
+The new read composition helper does not change that principle because it is:
+
+- server-only
+- opt-in
+- not wired into existing page or action callers yet
 
 ## How Plain Runtime Behavior Stays Separate
 
@@ -223,7 +257,8 @@ layer and then add:
 
 1. access-checked wrappers in the messaging data service
 2. one controlled operational thread creation path
-3. one controlled conversation-level read path
+3. expand from the current single-conversation read composition helper only if
+   summary or batched read needs become concrete
 
 That keeps the migration path additive and avoids coupling unfinished
 operational objects to current chat behavior too early.
