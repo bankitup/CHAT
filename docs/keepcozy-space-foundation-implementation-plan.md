@@ -345,6 +345,14 @@ Branch ownership note:
 - it should build on thread/object linkage helpers rather than pushing event
   semantics down into the companion-metadata read layer
 
+Immediate handoff note:
+
+- after `feature/space-backend-thread-object-links`, the exact next branch
+  should be `feature/space-timeline-foundation`
+- that branch should consume companion metadata and conversation thread context
+  as optional backend inputs, while keeping timeline/event persistence in its
+  own layer
+
 ### Phase 6. Controlled user-facing KeepCozy thread experience
 
 Goal:

@@ -353,3 +353,27 @@ layer and then add:
 
 That keeps the migration path additive and avoids coupling unfinished
 operational objects to current chat behavior too early.
+
+## Handoff To `feature/space-timeline-foundation`
+
+This branch is intended to hand off to:
+
+- `feature/space-timeline-foundation`
+
+That next branch should treat the current backend link layer as a supporting
+dependency, not as the place where timeline semantics live.
+
+Recommended reuse pattern:
+
+- use [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+  when timeline work needs optional conversation-level operational context
+- keep direct companion-table access inside
+  [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+- keep event creation, event taxonomy, and event-write rules in the later
+  timeline branch
+
+Important boundary:
+
+- this branch can tell later code what thread context exists
+- the timeline branch must decide how that context becomes durable space-level
+  history
