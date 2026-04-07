@@ -328,6 +328,17 @@ Current branch note:
 - this prep work names policy inputs and interpretation order without changing
   current runtime authorization behavior
 
+Phase 4 guardrails:
+
+- it must not be treated as final authorization enforcement
+- it must not collapse operational role semantics into current
+  `owner/admin/member` moderation fields
+- it must not treat companion metadata as the only access truth
+- it must not assume timeline visibility is always identical to parent thread
+  visibility
+- it must not change current `dm | group` runtime semantics
+- it must not turn UI presentation assumptions into backend policy shortcuts
+
 ### Phase 5. Timeline and operational object foundation
 
 Goal:
