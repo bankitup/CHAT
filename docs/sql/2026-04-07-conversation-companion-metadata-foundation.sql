@@ -6,6 +6,7 @@
 -- - make the row optional and 1:1 by conversation_id
 -- - duplicate space_id intentionally for future space-scoped queries/policy work
 -- - cover only the primary operational object ref in this first schema pass
+-- - do not introduce secondary related-object link tables yet
 -- - defer RLS/policies until the policy matrix and read/write paths are ready
 
 do $$
@@ -170,6 +171,7 @@ create index if not exists conversation_companion_metadata_thread_owner_user_id_
 -- Intentionally deferred in this first pass:
 -- - RLS and grants
 -- - triggers to auto-maintain updated_at
+-- - repeated or secondary object-ref columns on the companion row
 -- - related-object link tables
 -- - invitation/assignment tables
 -- - timeline event tables

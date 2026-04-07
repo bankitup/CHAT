@@ -54,6 +54,28 @@ Core fields in this first pass:
 - `created_at`
 - `updated_at`
 
+## First-Pass Object Ref Decision
+
+The chosen first-pass strategy is:
+
+- store only one primary operational object ref on
+  `public.conversation_companion_metadata`
+- defer secondary or related-object links to a later additive branch
+
+In practice, that means the first physical schema pass includes only:
+
+- `operational_object_type`
+- `operational_object_id`
+
+and does not add:
+
+- a related-object join table
+- repeated object-ref columns
+- JSON object-link payloads
+
+This is the narrowest migration-friendly shape that still gives operational
+threads a durable link to their main business record.
+
 ## Why This Is Additive
 
 This table does not replace or mutate the current conversation shell.
@@ -126,6 +148,26 @@ What is intentionally deferred:
 The TypeScript contract layer still leaves room for related-object links later,
 but the first physical schema pass does not need to solve that yet.
 
+### Tradeoff
+
+What we gain by keeping only the primary object ref now:
+
+- simpler rollout and easier review
+- no second table to backfill or secure yet
+- easier future read/write helper boundaries
+- clearer separation between the communication shell and the main business
+  record
+
+What we defer on purpose:
+
+- threads that need many linked records immediately
+- secondary/supporting object-link semantics
+- per-link reasons, ordering, or relationship metadata
+
+This tradeoff is acceptable for the first schema pass because the current docs
+already assume that one thread usually centers on one primary operational
+object, even if richer cross-linking is expected later.
+
 ## Why `operator_visible_by_policy` Is Persisted
 
 This field is included directly because the KeepCozy docs repeatedly treat
@@ -178,6 +220,21 @@ This first schema pass intentionally does not add:
 
 These deferrals are deliberate. They keep this branch reviewable and minimize
 risk to current production behavior.
+
+## What A Later Related-Object Branch Can Add
+
+If later product needs justify it, a follow-on additive branch can introduce:
+
+- a `conversation_related_operational_objects` style join table
+- per-link metadata such as `link_reason`
+- optional ordering or primary/secondary flags
+- object-link validation once real operational tables exist
+
+That later step is safer once:
+
+- at least one operational object table is real
+- companion metadata read/write paths exist
+- policy expectations for external and internal visibility are clearer
 
 ## Current State vs Target State
 
