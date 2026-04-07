@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import {
+  getKeepCozyPrimaryTestFlowHints,
   getKeepCozyHomeDashboardData,
   isKeepCozyPrimaryTestHomeName,
   requireKeepCozyContext,
@@ -24,6 +25,7 @@ export default async function HomeDashboardPage({
     language,
     spaceId: activeSpace.id,
   });
+  const primaryFlowHints = getKeepCozyPrimaryTestFlowHints();
   const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpace.name);
   const testFlowHomeHint = primaryFlow?.homeNameHint ?? 'TEST';
 
@@ -260,10 +262,12 @@ export default async function HomeDashboardPage({
                 <span className="keepcozy-meta-pill">
                   {t.homeDashboard.currentHomeLabel}: {activeSpace.name}
                 </span>
-                <span className="keepcozy-meta-pill">{testFlowHomeHint} home</span>
-                <span className="keepcozy-meta-pill">Kitchen</span>
-                <span className="keepcozy-meta-pill">Kitchen faucet issue</span>
-                <span className="keepcozy-meta-pill">Capture faucet model task</span>
+                <span className="keepcozy-meta-pill">
+                  {testFlowHomeHint}
+                </span>
+                <span className="keepcozy-meta-pill">{primaryFlowHints.roomNameHint}</span>
+                <span className="keepcozy-meta-pill">{primaryFlowHints.issueTitleHint}</span>
+                <span className="keepcozy-meta-pill">{primaryFlowHints.taskTitleHint}</span>
               </div>
               <div className="keepcozy-card-actions">
                 <Link

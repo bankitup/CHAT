@@ -119,11 +119,16 @@ The first proof path should be checked in this order:
    history.
    If another home is active, the app should ask the reviewer to switch to
    `TEST` instead of pretending the canonical proof path applies there.
+   The mismatch state should still show the expected canonical TEST -> Kitchen
+   -> faucet issue -> linked task anchors before asking the reviewer to switch.
    If the card is missing while `TEST` is active, confirm the persisted
    KeepCozy seed has been applied before changing the flow.
 3. Room
    Open `/rooms/kitchen` and confirm the room presents the issue/task context as
    room-scoped operational work.
+   The room screen should also make it obvious that the shared proof path
+   continues into the faucet issue, the linked task, and the home-level history
+   surface.
 4. Issue
    Open `/issues/kitchen-faucet-drip` and confirm:
    - the issue is room-linked
