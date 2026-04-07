@@ -63,6 +63,8 @@ function assertConversationOperationalThreadContextConsistency(input: {
  *   `conversation-companion-metadata.ts`
  * - this helper is additive and optional; it does not change current inbox,
  *   chat history, or message payload shapes
+ * - this helper must not become a policy engine or timeline/event writer;
+ *   later branches own access mapping and timeline semantics
  */
 export async function getConversationOperationalThreadContextForUser(
   conversationId: string,
