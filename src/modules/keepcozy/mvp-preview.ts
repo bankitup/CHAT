@@ -64,6 +64,10 @@ const KEEP_COZY_PRIMARY_TEST_FLOW = {
   taskId: 'capture-faucet-model',
 } as const;
 
+export function isKeepCozyPrimaryTestHomeName(name: string | null | undefined) {
+  return (name ?? '').trim().toUpperCase() === KEEP_COZY_PRIMARY_TEST_FLOW.homeNameHint;
+}
+
 const previewByLanguage: Record<AppLanguage, KeepCozyPreviewDataset> = {
   en: {
     rooms: [

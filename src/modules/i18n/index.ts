@@ -150,6 +150,7 @@ type LanguageDictionary = {
     secondarySettingsBody: string;
     testFlowTitle: string;
     testFlowBody: string;
+    testFlowMismatchBody: string;
     openChats: string;
     openSettings: string;
   };
@@ -259,6 +260,7 @@ type LanguageDictionary = {
     recentMessagingBody: string;
     testFlowTitle: string;
     testFlowBody: string;
+    testFlowMismatchBody: string;
   };
   inboxSettings: {
     title: string;
@@ -740,6 +742,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'Primary test flow',
       testFlowBody:
         'Use one representative kitchen issue to validate the full MVP path from home to room to issue to task to history.',
+      testFlowMismatchBody:
+        'This branch uses the seeded TEST home as the canonical MVP proof path. Switch homes before validating the flow.',
       openChats: 'Open chats',
       openSettings: 'Open profile',
     },
@@ -857,6 +861,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'Primary test flow history',
       testFlowBody:
         'This list is the first end-to-end MVP proof path: one room, one issue, one linked task, and the updates that move the work forward.',
+      testFlowMismatchBody:
+        'Open the seeded TEST home first so the canonical MVP proof path and history stay aligned.',
     },
     inboxSettings: {
       title: 'Chats settings',
@@ -1364,6 +1370,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'Основной тестовый путь',
       testFlowBody:
         'Используйте одну показательную проблему на кухне, чтобы проверить полный MVP-путь: дом -> комната -> проблема -> задача -> история.',
+      testFlowMismatchBody:
+        'В этой ветке канонический MVP-путь проверяется через seeded-дом TEST. Переключите дом перед проверкой сценария.',
       openChats: 'Открыть чаты',
       openSettings: 'Открыть профиль',
     },
@@ -1497,6 +1505,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'История основного тестового пути',
       testFlowBody:
         'Этот список служит первым сквозным MVP-доказательством: одна комната, одна проблема, одна связанная задача и обновления, которые двигают работу вперед.',
+      testFlowMismatchBody:
+        'Сначала откройте seeded-дом TEST, чтобы канонический MVP-сценарий и его история оставались согласованными.',
     },
     inboxSettings: {
       title: 'Настройки чатов',

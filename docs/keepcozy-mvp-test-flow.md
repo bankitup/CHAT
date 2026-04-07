@@ -79,6 +79,8 @@ The first proof path should be checked in this order:
    [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx) and
    confirm the flow points to `Kitchen`, the faucet issue, the linked task, and
    history.
+   If another home is active, the app should ask the reviewer to switch to
+   `TEST` instead of pretending the canonical proof path applies there.
 3. Room
    Open `/rooms/kitchen` and confirm the room presents the issue/task context as
    room-scoped operational work.
@@ -95,6 +97,8 @@ The first proof path should be checked in this order:
 6. History
    Open `/activity` and confirm the `Primary test flow history` section shows
    the same issue/task update path in one place.
+   If another home is active, the screen should again prompt the reviewer back
+   to `TEST`.
 
 ## What Counts As A Pass
 

@@ -15,7 +15,10 @@ import {
 } from '@/modules/messaging/data/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
-import { getKeepCozyPrimaryTestFlow } from '@/modules/keepcozy/mvp-preview';
+import {
+  getKeepCozyPrimaryTestFlow,
+  isKeepCozyPrimaryTestHomeName,
+} from '@/modules/keepcozy/mvp-preview';
 import {
   resolveV1TestSpaceFallback,
   resolveActiveSpaceForUser,
@@ -76,6 +79,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   }
 
   let activeSpaceId: string | null = null;
+  let activeSpaceName: string | null = null;
   const explicitV1TestSpace = await resolveV1TestSpaceFallback({
     requestedSpaceId: query.space,
     source: 'activity-page-explicit-v1-test-bypass',
@@ -85,6 +89,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
     // Remove once membership resolution via space_members is stable again.
     activeSpaceId = explicitV1TestSpace.id;
+    activeSpaceName = explicitV1TestSpace.name;
   } else {
     let activeSpaceState: Awaited<
       ReturnType<typeof resolveActiveSpaceForUser>
@@ -109,6 +114,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         }
 
         activeSpaceId = fallbackSpace.id;
+        activeSpaceName = fallbackSpace.name;
       } else {
         throw error;
       }
@@ -124,6 +130,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
       }
 
       activeSpaceId = activeSpaceState.activeSpace.id;
+      activeSpaceName = activeSpaceState.activeSpace.name;
     }
   }
 
@@ -133,6 +140,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
   const t = getTranslations(language);
   const primaryFlow = getKeepCozyPrimaryTestFlow(language);
+  const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpaceName);
   const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
@@ -311,71 +319,87 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               <p className="muted">{t.activity.testFlowBody}</p>
             </div>
 
-            <article className="keepcozy-detail-card">
-              <div className="keepcozy-detail-header">
-                <div className="stack keepcozy-detail-heading">
-                  <h3 className="card-title">{primaryFlow.issue.title}</h3>
-                  <p className="muted">{primaryFlow.task.title}</p>
+            {showPrimaryFlow ? (
+              <article className="keepcozy-detail-card">
+                <div className="keepcozy-detail-header">
+                  <div className="stack keepcozy-detail-heading">
+                    <h3 className="card-title">{primaryFlow.issue.title}</h3>
+                    <p className="muted">{primaryFlow.task.title}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">
+                    {primaryFlow.homeNameHint}
+                  </span>
                 </div>
-                <span className="summary-pill summary-pill-muted">
-                  {primaryFlow.homeNameHint}
-                </span>
-              </div>
 
-              <div className="keepcozy-meta-row">
-                <Link
-                  className="keepcozy-meta-pill"
-                  href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpaceId)}
-                  prefetch={false}
-                >
-                  {primaryFlow.room.name}
-                </Link>
-                <Link
-                  className="keepcozy-meta-pill"
-                  href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpaceId)}
-                  prefetch={false}
-                >
-                  {t.shell.issues}
-                </Link>
-                <Link
-                  className="keepcozy-meta-pill"
-                  href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpaceId)}
-                  prefetch={false}
-                >
-                  {t.shell.tasks}
-                </Link>
-              </div>
+                <div className="keepcozy-meta-row">
+                  <Link
+                    className="keepcozy-meta-pill"
+                    href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpaceId)}
+                    prefetch={false}
+                  >
+                    {primaryFlow.room.name}
+                  </Link>
+                  <Link
+                    className="keepcozy-meta-pill"
+                    href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpaceId)}
+                    prefetch={false}
+                  >
+                    {t.shell.issues}
+                  </Link>
+                  <Link
+                    className="keepcozy-meta-pill"
+                    href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpaceId)}
+                    prefetch={false}
+                  >
+                    {t.shell.tasks}
+                  </Link>
+                </div>
 
-              <div className="keepcozy-timeline">
-                {primaryFlow.history.map((entry) => (
-                  <article key={entry.id} className="keepcozy-timeline-item">
-                    <div className="keepcozy-timeline-topline">
-                      <h3 className="card-title">
-                        {entry.stage === 'issue' ? t.shell.issues : t.shell.tasks}
-                      </h3>
-                      <span className="keepcozy-timestamp">{entry.timestamp}</span>
-                    </div>
-                    <p className="muted">
-                      <strong>{entry.label}.</strong> {entry.note}
-                    </p>
-                    <div className="keepcozy-card-actions">
-                      <Link
-                        className="pill"
-                        href={withSpaceParam(
-                          entry.href.kind === 'issue'
-                            ? `/issues/${entry.href.targetId}`
-                            : `/tasks/${entry.href.targetId}`,
-                          activeSpaceId,
-                        )}
-                        prefetch={false}
-                      >
-                        {entry.href.kind === 'issue' ? t.tasks.viewIssue : t.homeDashboard.openTasks}
-                      </Link>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </article>
+                <div className="keepcozy-timeline">
+                  {primaryFlow.history.map((entry) => (
+                    <article key={entry.id} className="keepcozy-timeline-item">
+                      <div className="keepcozy-timeline-topline">
+                        <h3 className="card-title">
+                          {entry.stage === 'issue' ? t.shell.issues : t.shell.tasks}
+                        </h3>
+                        <span className="keepcozy-timestamp">{entry.timestamp}</span>
+                      </div>
+                      <p className="muted">
+                        <strong>{entry.label}.</strong> {entry.note}
+                      </p>
+                      <div className="keepcozy-card-actions">
+                        <Link
+                          className="pill"
+                          href={withSpaceParam(
+                            entry.href.kind === 'issue'
+                              ? `/issues/${entry.href.targetId}`
+                              : `/tasks/${entry.href.targetId}`,
+                            activeSpaceId,
+                          )}
+                          prefetch={false}
+                        >
+                          {entry.href.kind === 'issue'
+                            ? t.tasks.viewIssue
+                            : t.homeDashboard.openTasks}
+                        </Link>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </article>
+            ) : (
+              <section className="empty-card">
+                <h3 className="card-title">{primaryFlow.homeNameHint}</h3>
+                <p className="muted">{t.activity.testFlowMismatchBody}</p>
+                <Link
+                  className="button button-secondary"
+                  href={withSpaceParam('/spaces', activeSpaceId)}
+                  prefetch={false}
+                >
+                  {t.homeDashboard.switchHome}
+                </Link>
+              </section>
+            )}
           </section>
 
           <section className="empty-card activity-future-card">
