@@ -315,3 +315,27 @@ export async function resolveChatsHrefForUser(input: {
     throw error;
   }
 }
+
+export async function resolveHomeHrefForUser(input: {
+  userId: string;
+  requestedSpaceId?: string | null;
+  source?: string;
+}) {
+  try {
+    const { activeSpace } = await resolveActiveSpaceForUser(input);
+
+    if (!activeSpace) {
+      return '/spaces';
+    }
+
+    return withSpaceParam('/home', activeSpace.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+      return '/spaces';
+    }
+
+    throw error;
+  }
+}

@@ -50,15 +50,28 @@ The current repository does not yet have an active KeepCozy runtime for:
 - `tasks`
 - `task_updates`
 
-The current app shell also remains chat-shaped:
+The current app shell now exposes a KeepCozy-first route layer:
 
 - `/spaces`
-- `/inbox`
+- `/home`
+- `/rooms`
+- `/issues`
+- `/tasks`
 - `/activity`
-- `/settings`
+- secondary `/inbox`
+- secondary `/settings`
 
-That means the first KeepCozy MVP boundary should be defined deliberately
-rather than inferred from the existing chat routes.
+Important clarification:
+
+- the KeepCozy-first routes currently act as focused MVP scaffolding around the
+  shared `space` home context
+- they make the intended runtime center of gravity visible now
+- they do not mean dedicated `rooms`, `issues`, `issue_updates`, `tasks`, or
+  `task_updates` tables already exist
+
+That means the first KeepCozy MVP boundary should still be defined
+deliberately, and the route layer should not be mistaken for completed schema
+delivery.
 
 ## MVP Objective
 

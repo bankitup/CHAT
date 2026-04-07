@@ -20,6 +20,7 @@ import {
   resolveActiveSpaceForUser,
   isSpaceMembersSchemaCacheErrorMessage,
 } from '@/modules/spaces/server';
+import { withSpaceParam } from '@/modules/spaces/url';
 import { notFound, redirect } from 'next/navigation';
 import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
@@ -256,25 +257,58 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         <section className="activity-focus-card">
           <div className="stack activity-focus-copy">
             <span className="activity-focus-kicker">{t.activity.overviewTitle}</span>
-            <h2 className="activity-focus-title">
-              {unreadChatCount > 0 ? t.activity.unreadSectionTitle : t.activity.quietTitle}
-            </h2>
-            <p className="muted activity-focus-body">
-              {unreadChatCount > 0 ? t.activity.overviewBody : t.activity.quietBody}
-            </p>
+            <h2 className="activity-focus-title">{t.activity.operationsTitle}</h2>
+            <p className="muted activity-focus-body">{t.activity.overviewBody}</p>
           </div>
 
           <Link
             className="activity-focus-action button button-secondary"
-            href={buildInboxHref({ spaceId: activeSpaceId })}
+            href={withSpaceParam('/tasks', activeSpaceId)}
             prefetch={false}
           >
-            {t.activity.openChats}
+            {t.activity.openTasks}
           </Link>
         </section>
       </section>
 
       <section className="card stack settings-surface activity-surface">
+        <section className="stack settings-section">
+          <div className="activity-section-header">
+            <div className="stack activity-section-copy">
+              <h2 className="card-title">{t.activity.operationsTitle}</h2>
+              <p className="muted">{t.activity.operationsBody}</p>
+            </div>
+          </div>
+
+          <div className="keepcozy-secondary-grid">
+            <section className="keepcozy-secondary-card">
+              <div className="stack keepcozy-link-copy">
+                <h3 className="card-title">{t.activity.operationsIssues}</h3>
+                <p className="muted">{t.issues.updatesBody}</p>
+              </div>
+            </section>
+
+            <section className="keepcozy-secondary-card">
+              <div className="stack keepcozy-link-copy">
+                <h3 className="card-title">{t.activity.operationsTasks}</h3>
+                <p className="muted">{t.tasks.updatesBody}</p>
+              </div>
+            </section>
+
+            <section className="keepcozy-secondary-card">
+              <div className="stack keepcozy-link-copy">
+                <h3 className="card-title">{t.activity.operationsResolutions}</h3>
+                <p className="muted">{t.activity.digestBody}</p>
+              </div>
+            </section>
+          </div>
+
+          <section className="empty-card activity-future-card">
+            <h2 className="card-title">{t.activity.messagingTitle}</h2>
+            <p className="muted activity-future-copy">{t.activity.messagingBody}</p>
+          </section>
+        </section>
+
         <section className="stack settings-section">
           <div className="activity-summary-grid">
             <div className="activity-summary-card">
@@ -374,8 +408,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         <section className="stack settings-section activity-section">
           <div className="activity-section-header">
             <div className="stack activity-section-copy">
-              <h2 className="card-title">{t.activity.recentTitle}</h2>
-              <p className="muted">{t.activity.recentBody}</p>
+              <h2 className="card-title">{t.activity.recentMessagingTitle}</h2>
+              <p className="muted">{t.activity.recentMessagingBody}</p>
             </div>
             <div className="activity-section-actions">
               <span className="activity-section-count">{recentItems.length}</span>

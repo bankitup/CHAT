@@ -34,9 +34,15 @@ type LanguageDictionary = {
   shell: {
     label: string;
     home: string;
+    rooms: string;
+    issues: string;
+    tasks: string;
     chats: string;
     activity: string;
     openHome: string;
+    openRooms: string;
+    openIssues: string;
+    openTasks: string;
     openChats: string;
     openActivity: string;
   };
@@ -115,6 +121,108 @@ type LanguageDictionary = {
     profileUpdated: string;
     languageUpdated: string;
   };
+  homeDashboard: {
+    eyebrow: string;
+    subtitle: string;
+    previewPill: string;
+    previewBody: string;
+    currentHomeLabel: string;
+    switchHome: string;
+    loopTitle: string;
+    loopBody: string;
+    roomsTitle: string;
+    roomsBody: string;
+    issuesTitle: string;
+    issuesBody: string;
+    tasksTitle: string;
+    tasksBody: string;
+    historyTitle: string;
+    historyBody: string;
+    openRooms: string;
+    openIssues: string;
+    openTasks: string;
+    openHistory: string;
+    supportTitle: string;
+    supportBody: string;
+    secondaryChatsTitle: string;
+    secondaryChatsBody: string;
+    secondarySettingsTitle: string;
+    secondarySettingsBody: string;
+    openChats: string;
+    openSettings: string;
+  };
+  rooms: {
+    title: string;
+    subtitle: string;
+    backToHome: string;
+    previewPill: string;
+    previewBody: string;
+    selectedHomeLabel: string;
+    issuesLabel: string;
+    tasksLabel: string;
+    historyLabel: string;
+    viewIssues: string;
+    viewTasks: string;
+    detailTitle: string;
+    detailBody: string;
+    detailHistoryTitle: string;
+  };
+  issues: {
+    title: string;
+    subtitle: string;
+    backToHome: string;
+    create: string;
+    previewPill: string;
+    previewBody: string;
+    selectedHomeLabel: string;
+    filteredByRoom: string;
+    allRooms: string;
+    viewRoom: string;
+    viewTasks: string;
+    updatesTitle: string;
+    updatesBody: string;
+    tasksTitle: string;
+    tasksBody: string;
+    detailBody: string;
+    createTitle: string;
+    createSubtitle: string;
+    draftTitle: string;
+    draftBody: string;
+    fieldHome: string;
+    fieldRoom: string;
+    fieldSummary: string;
+    fieldFirstUpdate: string;
+    fieldAttachments: string;
+    createNote: string;
+    browseIssues: string;
+  };
+  tasks: {
+    title: string;
+    subtitle: string;
+    backToHome: string;
+    create: string;
+    previewPill: string;
+    previewBody: string;
+    selectedHomeLabel: string;
+    filteredByIssue: string;
+    allIssues: string;
+    viewIssue: string;
+    viewRoom: string;
+    updatesTitle: string;
+    updatesBody: string;
+    detailBody: string;
+    createTitle: string;
+    createSubtitle: string;
+    draftTitle: string;
+    draftBody: string;
+    fieldHome: string;
+    fieldIssue: string;
+    fieldTask: string;
+    fieldFirstUpdate: string;
+    fieldAttachments: string;
+    createNote: string;
+    browseTasks: string;
+  };
   activity: {
     title: string;
     subtitle: string;
@@ -137,6 +245,16 @@ type LanguageDictionary = {
     digestBody: string;
     quietTitle: string;
     quietBody: string;
+    openTasks: string;
+    operationsTitle: string;
+    operationsBody: string;
+    operationsIssues: string;
+    operationsTasks: string;
+    operationsResolutions: string;
+    messagingTitle: string;
+    messagingBody: string;
+    recentMessagingTitle: string;
+    recentMessagingBody: string;
   };
   inboxSettings: {
     title: string;
@@ -499,19 +617,25 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     shell: {
       label: 'Primary navigation',
       home: 'Home',
+      rooms: 'Rooms',
+      issues: 'Issues',
+      tasks: 'Tasks',
       chats: 'Chats',
-      activity: 'Activity',
+      activity: 'History',
       openHome: 'Open home',
+      openRooms: 'Open rooms',
+      openIssues: 'Open issues',
+      openTasks: 'Open tasks',
       openChats: 'Open chats',
-      openActivity: 'Open activity',
+      openActivity: 'Open history',
     },
     spaces: {
       title: 'Choose a home',
       subtitle: 'Pick the home context you want to open first.',
-      backToChats: 'Back to chats',
+      backToChats: 'Back to home',
       currentSpace: 'Current home',
       openSpace: 'Open home',
-      currentActivityNote: 'Current activity for this home is available here for now.',
+      currentActivityNote: 'Open the home dashboard, rooms, issues, tasks, and history from here.',
       emptyTitle: 'No homes yet',
       emptyBody: 'Ask the operator to add you to a home first.',
       unavailableTitle: 'Homes are temporarily unavailable',
@@ -580,28 +704,149 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileUpdated: 'Profile updated.',
       languageUpdated: 'Language updated.',
     },
+    homeDashboard: {
+      eyebrow: 'Home dashboard',
+      subtitle: 'Keep the first MVP loop grounded in one home, then move through rooms, issues, tasks, and history.',
+      previewPill: 'MVP focus scaffold',
+      previewBody:
+        'This dashboard intentionally centers the first KeepCozy runtime slice. The richer home-ops layers stay secondary for now.',
+      currentHomeLabel: 'Current home',
+      switchHome: 'Choose another home',
+      loopTitle: 'First proven loop',
+      loopBody:
+        'Use this home as the starting point for room-level issues, task follow-through, and update history.',
+      roomsTitle: 'Rooms',
+      roomsBody: 'Anchor operational work to a real room before it turns into vague activity.',
+      issuesTitle: 'Issues',
+      issuesBody: 'Capture the problem as a structured record, not just a conversation.',
+      tasksTitle: 'Tasks',
+      tasksBody: 'Break the issue into work that can move and leave a clean history behind.',
+      historyTitle: 'History',
+      historyBody: 'Keep updates and resolution visible without making chat the primary workflow.',
+      openRooms: 'Open rooms',
+      openIssues: 'Open issues',
+      openTasks: 'Open tasks',
+      openHistory: 'Open history',
+      supportTitle: 'Supporting surfaces',
+      supportBody: 'Profile and chat remain available, but they no longer define the product flow.',
+      secondaryChatsTitle: 'Chats',
+      secondaryChatsBody: 'Optional communication lane for coordination around the work.',
+      secondarySettingsTitle: 'Profile',
+      secondarySettingsBody: 'Language, account details, and home switching still live here.',
+      openChats: 'Open chats',
+      openSettings: 'Open profile',
+    },
+    rooms: {
+      title: 'Rooms',
+      subtitle: 'Treat rooms as the place where issues and task history begin to make sense.',
+      backToHome: 'Back to home',
+      previewPill: 'Preview structure',
+      previewBody:
+        'These room cards show the intended MVP center of gravity while the first schema slice is still being wired.',
+      selectedHomeLabel: 'Selected home',
+      issuesLabel: 'Issues',
+      tasksLabel: 'Tasks',
+      historyLabel: 'History note',
+      viewIssues: 'View issues',
+      viewTasks: 'View tasks',
+      detailTitle: 'Room detail',
+      detailBody: 'A room should gather related issues, tasks, and history without turning into a broad portfolio surface.',
+      detailHistoryTitle: 'Why history matters here',
+    },
+    issues: {
+      title: 'Issues',
+      subtitle: 'Keep problems structured, scoped to a home and room, and ready to turn into task work.',
+      backToHome: 'Back to home',
+      create: 'Create issue',
+      previewPill: 'Preview structure',
+      previewBody:
+        'This is a focused issue lane for the MVP. Supplier richness, recommendations, and automation stay out of the way for now.',
+      selectedHomeLabel: 'Selected home',
+      filteredByRoom: 'Filtered room',
+      allRooms: 'All rooms',
+      viewRoom: 'Open room',
+      viewTasks: 'Open tasks',
+      updatesTitle: 'Issue history',
+      updatesBody: 'Issue updates should capture what changed, not disappear into general chat traffic.',
+      tasksTitle: 'Tasks linked to this issue',
+      tasksBody: 'Tasks are how the issue moves forward and eventually resolves.',
+      detailBody: 'Issue detail should keep the problem, next step, and updates visible in one place.',
+      createTitle: 'Create issue',
+      createSubtitle: 'Keep capture narrow: home, room, issue summary, first update, then task follow-through.',
+      draftTitle: 'First capture seam',
+      draftBody:
+        'This route marks where issue creation belongs in the MVP flow. The form stays intentionally lightweight until the first issue tables are wired.',
+      fieldHome: 'Home context',
+      fieldRoom: 'Room',
+      fieldSummary: 'Issue summary',
+      fieldFirstUpdate: 'First update',
+      fieldAttachments: 'Attachments',
+      createNote:
+        'Keep this screen practical: enough structure for issues and issue_updates, without growing into a full service workflow.',
+      browseIssues: 'Back to issues',
+    },
+    tasks: {
+      title: 'Tasks',
+      subtitle: 'Use tasks to move an issue forward with clear ownership, progress notes, and completion history.',
+      backToHome: 'Back to home',
+      create: 'Create task',
+      previewPill: 'Preview structure',
+      previewBody:
+        'The task lane stays intentionally narrow for the MVP: actionable work, linked issue context, and update history.',
+      selectedHomeLabel: 'Selected home',
+      filteredByIssue: 'Filtered issue',
+      allIssues: 'All issues',
+      viewIssue: 'Open issue',
+      viewRoom: 'Open room',
+      updatesTitle: 'Task history',
+      updatesBody: 'Task updates should show progress, blockers, and completion without needing a heavier work-order model.',
+      detailBody: 'Task detail should keep the next step obvious and the update trail easy to scan on mobile.',
+      createTitle: 'Create task',
+      createSubtitle: 'Keep task creation tied to one issue, one next step, and one update trail.',
+      draftTitle: 'First task capture seam',
+      draftBody:
+        'This route holds the MVP task-create position without introducing broad new runtime behavior before the schema slice lands.',
+      fieldHome: 'Home context',
+      fieldIssue: 'Parent issue',
+      fieldTask: 'Task summary',
+      fieldFirstUpdate: 'First update',
+      fieldAttachments: 'Attachments',
+      createNote:
+        'The MVP task surface should stay smaller than procurement, supplier assignment, or deep automation flows.',
+      browseTasks: 'Back to tasks',
+    },
     activity: {
-      title: 'Activity',
-      subtitle: 'Notifications, unread chats, and recent updates in one place.',
-      overviewTitle: 'Overview',
-      overviewBody: 'A quick read on what needs attention right now.',
+      title: 'History',
+      subtitle: 'A home-level place for updates, follow-through, and the secondary messaging lane.',
+      overviewTitle: 'History first',
+      overviewBody: 'Use this space for issue and task updates first, with chat activity supporting the loop instead of defining it.',
       unreadChats: 'Unread chats',
       unreadDms: 'Unread DMs',
       archivedChats: 'Archived chats',
       openChats: 'Open chats',
       openArchived: 'Archived',
-      unreadSectionTitle: 'Unread now',
-      unreadSectionBody: 'Conversations that still need your attention.',
-      recentTitle: 'Recent activity',
-      recentBody: 'Latest message updates across your chats.',
+      unreadSectionTitle: 'Messaging lane',
+      unreadSectionBody: 'Optional communication follow-up while issue and task history becomes the main record.',
+      recentTitle: 'Recent message activity',
+      recentBody: 'Latest chat traffic stays here as a secondary layer around the work.',
       recentEmptyTitle: 'No recent messages yet',
-      recentEmptyBody: 'New message activity will appear here once chats pick up.',
+      recentEmptyBody: 'Message activity will appear here when the communication lane is active.',
       alertsTitle: 'Alerts',
       alertsBody: 'Notification readiness and device-level messaging alerts.',
-      digestTitle: 'Summaries later',
-      digestBody: 'This space is reserved for smart recaps and digests when they are ready.',
-      quietTitle: 'All quiet',
-      quietBody: 'Nothing unread right now.',
+      digestTitle: 'Future layers later',
+      digestBody: 'Recommendations, intelligence, and automation can land later without changing the first loop.',
+      quietTitle: 'History is quiet',
+      quietBody: 'Nothing in the secondary messaging lane needs attention right now.',
+      openTasks: 'Open tasks',
+      operationsTitle: 'Operational history',
+      operationsBody: 'The first MVP history surface should revolve around these layers.',
+      operationsIssues: 'Issue updates',
+      operationsTasks: 'Task updates',
+      operationsResolutions: 'Resolution notes',
+      messagingTitle: 'Messaging stays secondary',
+      messagingBody: 'Chat remains useful for coordination, but it should not define the main KeepCozy workflow.',
+      recentMessagingTitle: 'Recent message traffic',
+      recentMessagingBody: 'Use this lane when conversation context matters around the work.',
     },
     inboxSettings: {
       title: 'Chats settings',
@@ -983,19 +1228,26 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     shell: {
       label: 'Основная навигация',
       home: 'Главная',
+      rooms: 'Комнаты',
+      issues: 'Проблемы',
+      tasks: 'Задачи',
       chats: 'Чаты',
-      activity: 'Активность',
+      activity: 'История',
       openHome: 'Открыть главную',
+      openRooms: 'Открыть комнаты',
+      openIssues: 'Открыть проблемы',
+      openTasks: 'Открыть задачи',
       openChats: 'Открыть чаты',
-      openActivity: 'Открыть активность',
+      openActivity: 'Открыть историю',
     },
     spaces: {
       title: 'Выберите дом',
       subtitle: 'Сначала откройте нужный дом.',
-      backToChats: 'Назад к чатам',
+      backToChats: 'Назад к дому',
       currentSpace: 'Текущий дом',
       openSpace: 'Открыть дом',
-      currentActivityNote: 'Текущая активность по этому дому пока доступна здесь.',
+      currentActivityNote:
+        'Отсюда открываются главная, комнаты, проблемы, задачи и история этого дома.',
       emptyTitle: 'Пока нет домов',
       emptyBody: 'Попросите оператора добавить вас в дом.',
       unavailableTitle: 'Дома временно недоступны',
@@ -1064,28 +1316,171 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileUpdated: 'Профиль обновлён.',
       languageUpdated: 'Язык обновлён.',
     },
+    homeDashboard: {
+      eyebrow: 'Главная дома',
+      subtitle:
+        'Держите первый MVP-цикл в одном доме, а затем двигайтесь через комнаты, проблемы, задачи и историю.',
+      previewPill: 'MVP-фокус',
+      previewBody:
+        'Эта главная намеренно держит в центре первый runtime-срез KeepCozy. Более широкие home-ops слои пока остаются вторичными.',
+      currentHomeLabel: 'Текущий дом',
+      switchHome: 'Выбрать другой дом',
+      loopTitle: 'Первый доказанный цикл',
+      loopBody:
+        'Используйте этот дом как стартовую точку для комнатных проблем, задач и истории обновлений.',
+      roomsTitle: 'Комнаты',
+      roomsBody:
+        'Привязывайте работу к реальной комнате, прежде чем она расплывется в общую активность.',
+      issuesTitle: 'Проблемы',
+      issuesBody:
+        'Фиксируйте проблему как структурированную запись, а не как просто разговор.',
+      tasksTitle: 'Задачи',
+      tasksBody:
+        'Разбивайте проблему на работу, которая может двигаться и оставлять чистую историю.',
+      historyTitle: 'История',
+      historyBody:
+        'Держите обновления и решение на виду, не делая чат главным рабочим потоком.',
+      openRooms: 'Открыть комнаты',
+      openIssues: 'Открыть проблемы',
+      openTasks: 'Открыть задачи',
+      openHistory: 'Открыть историю',
+      supportTitle: 'Поддерживающие поверхности',
+      supportBody:
+        'Профиль и чат остаются доступными, но больше не определяют основной путь продукта.',
+      secondaryChatsTitle: 'Чаты',
+      secondaryChatsBody: 'Дополнительный канал координации вокруг работы.',
+      secondarySettingsTitle: 'Профиль',
+      secondarySettingsBody: 'Язык, аккаунт и смена дома по-прежнему живут здесь.',
+      openChats: 'Открыть чаты',
+      openSettings: 'Открыть профиль',
+    },
+    rooms: {
+      title: 'Комнаты',
+      subtitle:
+        'Комнаты должны быть местом, где проблемы и история задач начинают складываться в понятную картину.',
+      backToHome: 'Назад к дому',
+      previewPill: 'Предпросмотр структуры',
+      previewBody:
+        'Эти карточки комнат показывают задуманный центр тяжести MVP, пока первый срез схемы еще подключается.',
+      selectedHomeLabel: 'Выбранный дом',
+      issuesLabel: 'Проблемы',
+      tasksLabel: 'Задачи',
+      historyLabel: 'Заметка по истории',
+      viewIssues: 'Открыть проблемы',
+      viewTasks: 'Открыть задачи',
+      detailTitle: 'Детали комнаты',
+      detailBody:
+        'Комната должна собирать связанные проблемы, задачи и историю, не превращаясь в широкую портфельную поверхность.',
+      detailHistoryTitle: 'Почему здесь важна история',
+    },
+    issues: {
+      title: 'Проблемы',
+      subtitle:
+        'Держите проблемы структурированными, привязанными к дому и комнате, и готовыми перейти в задачи.',
+      backToHome: 'Назад к дому',
+      create: 'Создать проблему',
+      previewPill: 'Предпросмотр структуры',
+      previewBody:
+        'Это сфокусированная линия проблем для MVP. Богатые поставщики, рекомендации и автоматизация пока не мешают.',
+      selectedHomeLabel: 'Выбранный дом',
+      filteredByRoom: 'Фильтр по комнате',
+      allRooms: 'Все комнаты',
+      viewRoom: 'Открыть комнату',
+      viewTasks: 'Открыть задачи',
+      updatesTitle: 'История проблемы',
+      updatesBody:
+        'Обновления проблемы должны фиксировать изменения, а не теряться в общем чате.',
+      tasksTitle: 'Задачи по этой проблеме',
+      tasksBody: 'Именно задачи двигают проблему вперед и доводят ее до решения.',
+      detailBody:
+        'В деталях проблемы должны быть вместе сама проблема, следующий шаг и история обновлений.',
+      createTitle: 'Создать проблему',
+      createSubtitle:
+        'Держите ввод узким: дом, комната, краткое описание проблемы, первое обновление, затем задачи.',
+      draftTitle: 'Первый seam для ввода',
+      draftBody:
+        'Этот маршрут показывает, где в MVP живет создание проблемы. Поверхность специально остается легкой, пока не подключены первые таблицы проблем.',
+      fieldHome: 'Контекст дома',
+      fieldRoom: 'Комната',
+      fieldSummary: 'Краткое описание проблемы',
+      fieldFirstUpdate: 'Первое обновление',
+      fieldAttachments: 'Вложения',
+      createNote:
+        'Экран должен оставаться практичным: достаточно структуры для issues и issue_updates, без разрастания в полный сервисный workflow.',
+      browseIssues: 'Назад к проблемам',
+    },
+    tasks: {
+      title: 'Задачи',
+      subtitle:
+        'Используйте задачи, чтобы двигать проблему вперед с понятной ответственностью, заметками о прогрессе и историей завершения.',
+      backToHome: 'Назад к дому',
+      create: 'Создать задачу',
+      previewPill: 'Предпросмотр структуры',
+      previewBody:
+        'Линия задач в MVP намеренно узкая: конкретная работа, связанная проблема и история обновлений.',
+      selectedHomeLabel: 'Выбранный дом',
+      filteredByIssue: 'Фильтр по проблеме',
+      allIssues: 'Все проблемы',
+      viewIssue: 'Открыть проблему',
+      viewRoom: 'Открыть комнату',
+      updatesTitle: 'История задачи',
+      updatesBody:
+        'Обновления задачи должны показывать прогресс, блокеры и завершение без тяжелой модели work order.',
+      detailBody:
+        'В деталях задачи следующий шаг должен быть очевиден, а цепочка обновлений легко читаться с телефона.',
+      createTitle: 'Создать задачу',
+      createSubtitle:
+        'Держите создание задачи привязанным к одной проблеме, одному следующему шагу и одной истории обновлений.',
+      draftTitle: 'Первый seam для задачи',
+      draftBody:
+        'Этот маршрут держит место создания задачи в MVP, не добавляя широкого нового runtime-поведения до появления первого среза схемы.',
+      fieldHome: 'Контекст дома',
+      fieldIssue: 'Родительская проблема',
+      fieldTask: 'Краткое описание задачи',
+      fieldFirstUpdate: 'Первое обновление',
+      fieldAttachments: 'Вложения',
+      createNote:
+        'Поверхность задачи в MVP должна быть меньше, чем закупки, назначение подрядчиков или глубокая автоматизация.',
+      browseTasks: 'Назад к задачам',
+    },
     activity: {
-      title: 'Активность',
-      subtitle: 'Уведомления, непрочитанные чаты и недавние обновления в одном месте.',
-      overviewTitle: 'Обзор',
-      overviewBody: 'Быстрый срез того, что сейчас требует внимания.',
+      title: 'История',
+      subtitle:
+        'Поверхность уровня дома для обновлений, движения работы и вторичного коммуникационного слоя.',
+      overviewTitle: 'Сначала история',
+      overviewBody:
+        'Используйте это место прежде всего для обновлений по проблемам и задачам. Чат должен поддерживать цикл, а не определять его.',
       unreadChats: 'Непрочитанные чаты',
       unreadDms: 'Непрочитанные личные',
       archivedChats: 'Архивные чаты',
       openChats: 'Открыть чаты',
       openArchived: 'Архив',
-      unreadSectionTitle: 'Нужно прочитать',
-      unreadSectionBody: 'Чаты, которые все еще ждут вашего внимания.',
-      recentTitle: 'Недавно',
-      recentBody: 'Последние обновления сообщений в ваших чатах.',
+      unreadSectionTitle: 'Коммуникационный слой',
+      unreadSectionBody:
+        'Дополнительные разговоры, пока история проблем и задач становится основным источником правды.',
+      recentTitle: 'Недавняя активность сообщений',
+      recentBody: 'Последний чат-трафик остается здесь как вторичный слой вокруг работы.',
       recentEmptyTitle: 'Пока нет недавних сообщений',
-      recentEmptyBody: 'Новая активность появится здесь, когда чаты оживут.',
+      recentEmptyBody: 'Когда коммуникационный слой оживет, сообщения появятся здесь.',
       alertsTitle: 'Оповещения',
       alertsBody: 'Готовность уведомлений и сигналы сообщений на этом устройстве.',
-      digestTitle: 'Сводки позже',
-      digestBody: 'Это место зарезервировано под умные сводки и дайджесты, когда они будут готовы.',
-      quietTitle: 'Пока тихо',
-      quietBody: 'Сейчас нет непрочитанного.',
+      digestTitle: 'Будущие слои позже',
+      digestBody:
+        'Рекомендации, интеллект и автоматизация могут появиться позже, не меняя первый цикл.',
+      quietTitle: 'История спокойна',
+      quietBody: 'Во вторичном коммуникационном слое сейчас ничего не требует внимания.',
+      openTasks: 'Открыть задачи',
+      operationsTitle: 'Операционная история',
+      operationsBody: 'Первая MVP-поверхность истории должна крутиться вокруг этих слоев.',
+      operationsIssues: 'Обновления проблем',
+      operationsTasks: 'Обновления задач',
+      operationsResolutions: 'Заметки о решении',
+      messagingTitle: 'Сообщения остаются вторичными',
+      messagingBody:
+        'Чат остается полезным для координации, но не должен определять основной путь KeepCozy.',
+      recentMessagingTitle: 'Недавний трафик сообщений',
+      recentMessagingBody:
+        'Используйте этот слой, когда вокруг работы действительно важен разговорный контекст.',
     },
     inboxSettings: {
       title: 'Настройки чатов',
