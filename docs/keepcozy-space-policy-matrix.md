@@ -16,6 +16,7 @@ It must not change current production behavior by itself.
 Related documents:
 
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
+- [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
@@ -38,16 +39,16 @@ comes after:
 - space timeline foundation
 - access-mapping preparation
 
-Recommended exact next branch after this one:
-
-- `feature/space-rls-hardening`
-
 Practical status note:
 
 - this branch should now be treated as the semantic source of truth for later
   enforcement work
-- the next branch should translate this matrix into reviewed backend and SQL/RLS
-  behavior rather than redefining policy intent
+- the immediate enforcement follow-on is
+  `feature/space-rls-hardening`
+- the first conservative translation of this matrix now lives in
+  [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
+- later branches should build on that reviewed translation rather than
+  redefining policy intent
 
 Current runtime intentionally remains unchanged while this matrix is being
 defined:
@@ -635,7 +636,12 @@ This document should be the direct policy input for:
 
 - `feature/space-rls-hardening`
 
-That later branch should translate this matrix into:
+That translation branch now provides the first conservative enforcement pass
+through:
+
+- [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
+
+That enforcement pass is expected to own:
 
 - backend enforcement seams
 - SQL/RLS predicates
@@ -644,3 +650,8 @@ That later branch should translate this matrix into:
 
 The matrix should be treated as the product-policy source of truth until a
 later reviewed branch intentionally revises it.
+
+Practical follow-on note:
+
+- the first conservative translation layer from this matrix now lives in
+  [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
