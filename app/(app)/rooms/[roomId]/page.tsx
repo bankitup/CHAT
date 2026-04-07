@@ -200,8 +200,28 @@ export default async function RoomDetailPage({
 
         <section className="stack settings-section keepcozy-section">
           <h2 className="card-title">{t.rooms.detailHistoryTitle}</h2>
-          <section className="empty-card">
-            <p className="muted">{t.rooms.detailBody}</p>
+          <section className="empty-card keepcozy-preview-card">
+            <p className="muted">
+              {showPrimaryFlow && primaryIssue && primaryTask
+                ? t.activity.testFlowBody
+                : t.homeDashboard.historyBody}
+            </p>
+            {showPrimaryFlow && primaryIssue && primaryTask ? (
+              <div className="keepcozy-meta-row">
+                <span className="keepcozy-meta-pill">{room.name}</span>
+                <span className="keepcozy-meta-pill">{primaryIssue.title}</span>
+                <span className="keepcozy-meta-pill">{primaryTask.title}</span>
+              </div>
+            ) : null}
+            <div className="keepcozy-card-actions">
+              <Link
+                className="button button-secondary"
+                href={withSpaceParam('/activity', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.homeDashboard.openHistory}
+              </Link>
+            </div>
           </section>
         </section>
       </section>

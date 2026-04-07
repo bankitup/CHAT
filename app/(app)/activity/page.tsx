@@ -11,6 +11,7 @@ import {
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
+  getKeepCozyPrimaryTestFlowHints,
   getKeepCozyActivityData,
   isKeepCozyPrimaryTestHomeName,
   requireKeepCozyContext,
@@ -67,6 +68,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     language,
     spaceId: activeSpace.id,
   });
+  const primaryFlowHints = getKeepCozyPrimaryTestFlowHints();
   const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpace.name);
   const testFlowHomeHint = primaryFlow?.homeNameHint ?? 'TEST';
   const primaryIssueUpdates = primaryFlow?.issue.updates ?? [];
@@ -461,13 +463,13 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     {t.homeDashboard.currentHomeLabel}: {activeSpace.name}
                   </span>
                   <span className="keepcozy-meta-pill">
-                    {t.homeDashboard.roomsTitle}: Kitchen
+                    {t.homeDashboard.roomsTitle}: {primaryFlowHints.roomNameHint}
                   </span>
                   <span className="keepcozy-meta-pill">
-                    {t.homeDashboard.issuesTitle}: Kitchen faucet issue
+                    {t.homeDashboard.issuesTitle}: {primaryFlowHints.issueTitleHint}
                   </span>
                   <span className="keepcozy-meta-pill">
-                    {t.homeDashboard.tasksTitle}: Capture faucet model task
+                    {t.homeDashboard.tasksTitle}: {primaryFlowHints.taskTitleHint}
                   </span>
                 </div>
                 <div className="keepcozy-card-actions">

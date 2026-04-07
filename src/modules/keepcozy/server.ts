@@ -162,8 +162,11 @@ type KeepCozySpaceSnapshot = {
 const KEEP_COZY_PRIMARY_TEST_FLOW = {
   homeNameHint: 'TEST',
   issueId: 'kitchen-faucet-drip',
+  issueTitleHint: 'Kitchen faucet keeps dripping after shutoff',
   roomId: 'kitchen',
+  roomNameHint: 'Kitchen',
   taskId: 'capture-faucet-model',
+  taskTitleHint: 'Capture faucet model and cartridge type',
 } as const;
 
 export function isKeepCozyPrimaryTestHomeName(
@@ -190,6 +193,10 @@ export function isKeepCozyPrimaryTestTaskId(
   value: string | null | undefined,
 ) {
   return (value ?? '').trim() === KEEP_COZY_PRIMARY_TEST_FLOW.taskId;
+}
+
+export function getKeepCozyPrimaryTestFlowHints() {
+  return KEEP_COZY_PRIMARY_TEST_FLOW;
 }
 
 function getKeepCozyLocale(language: AppLanguage) {
