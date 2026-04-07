@@ -144,6 +144,65 @@ export const KEEP_COZY_THREAD_TYPE_TO_OPERATIONAL_OBJECT_KINDS_DRAFT: Record<
 };
 
 /**
+ * Future-facing visibility metadata for an operational thread companion layer.
+ *
+ * `audienceMode` remains the main classification field. The other properties
+ * make policy-relevant intent explicit without changing current authorization
+ * behavior.
+ */
+export type KeepCozyThreadVisibilityMetadata = {
+  audienceMode: KeepCozyThreadAudienceMode;
+  operatorVisibleByPolicy: boolean;
+  externalAccessRequiresAssignment: boolean;
+  visibilityScopeNotes: string | null;
+};
+
+/**
+ * Future-facing lifecycle metadata for an operational thread companion layer.
+ *
+ * Archive is intentionally excluded here because personal archive/hide remains
+ * a per-member visibility concern in `conversation_members.hidden_at`, not a
+ * thread-level workflow state.
+ */
+export type KeepCozyThreadLifecycleMetadata = {
+  status: KeepCozyThreadStatus | null;
+  openedAt: string | null;
+  closedAt: string | null;
+};
+
+/**
+ * Future-facing ownership metadata for one operational thread.
+ *
+ * This stays narrow on purpose. It captures operator-side accountability
+ * without implying a full assignment model already exists.
+ */
+export type KeepCozyThreadOwnershipMetadata = {
+  threadOwnerUserId: string | null;
+};
+
+/**
+ * Draft candidate field names for a future thread companion metadata schema.
+ *
+ * This list is intentionally advisory. It is meant to help the next schema
+ * branch stay aligned with the architecture docs without freezing the final
+ * table shape too early.
+ */
+export const KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT = [
+  'conversation_id',
+  'thread_type',
+  'audience_mode',
+  'status',
+  'operational_object_type',
+  'operational_object_id',
+  'thread_owner_user_id',
+  'opened_at',
+  'closed_at',
+  'operator_visible_by_policy',
+  'external_access_requires_assignment',
+  'visibility_scope_notes',
+] as const;
+
+/**
  * Thread-local participation and moderation role.
  *
  * This intentionally reuses the current generic conversation role vocabulary
@@ -385,18 +444,19 @@ export function getCandidateKeepCozySpaceRolesForRuntimeSpaceRole(
 /**
  * Future-facing companion metadata shape for a KeepCozy operational thread.
  *
- * The active runtime does not yet persist this shape directly. It exists so
- * later schema, backend, and UI work can share one low-risk vocabulary.
+ * This is the logical contract shape for a future companion layer keyed by
+ * `conversation_id`.
+ *
+ * The active runtime does not yet persist this shape directly. The nested
+ * groups are meant to keep responsibilities explicit for later schema/backend
+ * work; they do not require the eventual physical schema to use JSON columns.
  */
 export type KeepCozyThreadCompanionMetadata = {
   conversationId: string;
   threadType: KeepCozyThreadType;
-  audienceMode: KeepCozyThreadAudienceMode;
-  status: KeepCozyThreadStatus | null;
-  operationalObjectRef: KeepCozyOperationalObjectRef | null;
+  visibility: KeepCozyThreadVisibilityMetadata;
+  lifecycle: KeepCozyThreadLifecycleMetadata;
+  primaryOperationalObjectRef: KeepCozyOperationalObjectRef | null;
   operationalObjectLink: KeepCozyThreadOperationalObjectLink | null;
-  threadOwnerUserId: string | null;
-  openedAt: string | null;
-  closedAt: string | null;
-  visibilityScopeNotes: string | null;
+  ownership: KeepCozyThreadOwnershipMetadata;
 };

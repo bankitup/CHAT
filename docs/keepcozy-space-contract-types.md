@@ -47,6 +47,9 @@ The main exported names are:
 - `KeepCozyOperationalObjectKind`
 - `KeepCozyOperationalObjectRef`
 - `KeepCozyThreadOperationalObjectLink`
+- `KeepCozyThreadVisibilityMetadata`
+- `KeepCozyThreadLifecycleMetadata`
+- `KeepCozyThreadOwnershipMetadata`
 - `KeepCozyResolvedRoleLayers`
 - `KeepCozyRoleLayerCompatibilityNote`
 - `KeepCozyRoleLayerTranslation`
@@ -58,6 +61,7 @@ The main exported names are:
 - `KEEP_COZY_ROLE_LAYER_TRANSLATION_DRAFT`
 - `KEEP_COZY_ROLE_LAYER_GUARDRAILS`
 - `KEEP_COZY_THREAD_TYPE_TO_OPERATIONAL_OBJECT_KINDS_DRAFT`
+- `KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT`
 
 ## What Is Future-Facing Only
 
@@ -152,6 +156,73 @@ The new contracts keep that distinction explicit through:
 - `KeepCozyThreadOperationalObjectLink`
 - `KEEP_COZY_THREAD_TYPE_TO_OPERATIONAL_OBJECT_KINDS_DRAFT`
 
+## Future Companion Metadata Shape
+
+The contract file now defines a more precise logical shape for future
+companion metadata keyed by `conversation_id`.
+
+The top-level contract is:
+
+- `KeepCozyThreadCompanionMetadata`
+
+It is organized into narrow logical groups:
+
+- `threadType`
+  operational purpose without overloading `public.conversations.kind`
+- `visibility`
+  thread visibility classification and policy-relevant intent
+- `lifecycle`
+  workflow state such as open/active/resolved/closed
+- `primaryOperationalObjectRef`
+  the main structured work record, if one exists
+- `operationalObjectLink`
+  optional richer cross-link shape for future related-object support
+- `ownership`
+  operator-side accountability metadata
+
+Supporting contracts:
+
+- `KeepCozyThreadVisibilityMetadata`
+- `KeepCozyThreadLifecycleMetadata`
+- `KeepCozyThreadOwnershipMetadata`
+
+Important boundary:
+
+- archive is still not part of the companion metadata contract
+- personal archive/hide remains a per-member visibility concern
+- closure remains thread/object lifecycle state
+
+This keeps the docs-aligned rule explicit:
+
+- archive is not the same thing as closure
+
+## Draft Field Candidates for the Next Schema Branch
+
+The contract layer now also includes an advisory field list:
+
+- `KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT`
+
+It currently points the next schema branch toward likely companion fields such
+as:
+
+- `conversation_id`
+- `thread_type`
+- `audience_mode`
+- `status`
+- `operational_object_type`
+- `operational_object_id`
+- `thread_owner_user_id`
+- `opened_at`
+- `closed_at`
+- `operator_visible_by_policy`
+- `external_access_requires_assignment`
+- `visibility_scope_notes`
+
+This list is intentionally a draft.
+
+It is meant to guide additive schema work without pretending that the final
+table shape, column set, or nullability rules are already decided.
+
 ## Draft Translation Layer
 
 The new compatibility draft is intentionally small and explicit.
@@ -230,6 +301,9 @@ contracts mirror that vocabulary directly:
 - `KeepCozyThreadStatus`
 - `KeepCozyOperationalObjectRef`
 - `KeepCozyThreadOperationalObjectLink`
+- `KeepCozyThreadVisibilityMetadata`
+- `KeepCozyThreadLifecycleMetadata`
+- `KeepCozyThreadOwnershipMetadata`
 - `KeepCozyThreadCompanionMetadata`
 
 ### Data flow and implementation plan
@@ -249,6 +323,12 @@ The object-linking draft is intentionally narrow:
 That keeps future schema work open while still giving backend and UI scaffolds
 one shared language.
 
+The companion-metadata draft follows the same rule:
+
+- one logical contract shape
+- one draft field-candidate list for schema planning
+- no mutation of current `public.conversations` core fields
+
 ## Guardrails
 
 These types should be used with the following explicit constraints:
@@ -261,6 +341,9 @@ These types should be used with the following explicit constraints:
 - do not assume one thread type maps to exactly one object kind
 - do not treat the current object-kind union as a frozen database naming
   decision
+- do not treat the logical companion metadata grouping as a forced physical
+  table layout
+- do not put per-user archive state into thread-level companion metadata
 - do not infer thread moderation from KeepCozy business role by default
 - do not treat runtime `admin` as identical to `operator`
 - do not treat runtime `member` as sufficient to distinguish resident vs
