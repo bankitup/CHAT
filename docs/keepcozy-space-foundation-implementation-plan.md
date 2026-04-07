@@ -672,3 +672,8 @@ the next practical step becomes:
 - translate
   [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
   into reviewed backend and SQL/RLS enforcement rather than redefining policy
+- do not reopen current `dm | group` semantics, role-layer separation, or the
+  companion-metadata-as-input model unless a concrete new product constraint
+  forces it
+- do not treat the policy matrix as already-enforced behavior; the hardening
+  branch still owns predicates, joins, redaction, and audited exception paths

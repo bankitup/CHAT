@@ -586,17 +586,43 @@ The later `feature/space-rls-hardening` branch should still decide:
 
 ## 15. Guardrails for Later Branches
 
+- do not treat this branch as final RLS or backend enforcement
 - do not mutate current `dm | group` shell semantics in order to fit this
   matrix
 - do not write operational job-function roles into current moderation enums
 - do not treat companion metadata as standalone authorization truth
 - do not let timeline rows become their own permission system
+- do not assume timeline visibility is always identical to parent thread
+  visibility when object-linked or space-scoped policy is narrower
 - do not let archive/hide become a substitute for lifecycle policy
 - do not widen external participant visibility without assignment-aware truth
+- do not invent broad `platform_admin` or `support_staff` overrides without
+  explicit audited reasoning
 - do not let policy-matrix work silently become RLS hardening without separate
   review
 
-## 16. Practical Handoff
+## 16. Non-Goals Of This Branch
+
+This branch must not:
+
+- define the final SQL/RLS predicates that enforce these policies
+- change active production `dm` or `group` behavior while freezing policy
+  meaning
+- collapse business-role semantics into current moderation-role fields
+- treat companion metadata as the only source of access truth without space
+  boundary, runtime membership, and parent-resource context
+- flatten all committed timeline visibility into simple thread visibility when
+  object-linked or space-scoped policy is narrower
+- create a general platform-admin or support bypass model without case-based
+  audit reasoning
+
+Practical reading rule:
+
+- this document defines policy intent and semantic targets
+- the later RLS branch must still decide how that intent becomes reviewed
+  predicates, joins, redaction behavior, and audited exception handling
+
+## 17. Practical Handoff
 
 This document should be the direct policy input for:
 

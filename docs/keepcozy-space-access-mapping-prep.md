@@ -449,6 +449,8 @@ This branch must not:
   access behavior
 - mix UI policy assumptions into backend preparation too early
 - define final allow/deny behavior for backend paths or RLS predicates
+- treat the later policy matrix as if it were already-enforced runtime behavior
+  before reviewed backend and SQL/RLS work lands
 
 ### Interpretation safety rules
 
