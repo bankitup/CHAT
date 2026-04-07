@@ -166,6 +166,15 @@ This document uses the following implementation-oriented outcomes.
 
 The following rules apply across the whole policy system.
 
+### Defaults do most of the work
+
+- ordinary visibility should come from explicit defaults tied to space
+  boundary, role layer, audience mode, assignment scope, and parent resource
+  linkage
+- exceptions should be rare, narrow, and auditable
+- no later branch should treat “exception” as a shortcut for missing product
+  policy
+
 ### Space boundary first
 
 - no thread, object, or timeline visibility without satisfying the outer space
@@ -217,7 +226,7 @@ Practical rule:
 
 This is the main matrix for future companion-metadata-aware thread policy.
 
-### 7A. Audience-mode matrix
+### 7A. Default audience-mode matrix
 
 | Audience mode | `operator` | `internal_staff` | `owner` / `resident` | `contractor` / `supplier` / `inspector` | `platform_admin` / `support_staff` |
 | --- | --- | --- | --- | --- | --- |
@@ -237,13 +246,30 @@ Interpretation notes:
 - external service roles never gain space-wide browsing through audience mode
   alone
 
-### 7B. Operator visibility rules
+### 7B. Default rule for each audience mode
+
+The table above is the normative default. In plain language:
+
+| Audience mode | Default visibility rule | Default excluded audience |
+| --- | --- | --- |
+| `standard` | operator-visible by policy; client-facing viewers need to be the relevant party or explicit member; external service roles stay assignment-scoped | no broad browse-all for external roles |
+| `external-facing` | operator-visible by policy; owner/resident are the intended client-facing audience; external service roles still need explicit participation or assignment | no space-wide external browsing |
+| `restricted-external` | operator-visible by policy; external service roles require explicit assignment; client-facing visibility exists only when the workflow is intentionally client-visible | no unassigned external access |
+| `internal-only` | operator and internal-staff only by default | owner, resident, contractor, supplier, inspector |
+| `mixed` | operator-visible by policy; everyone else needs explicit client-facing or assignment-based fit | no assumption that mixed means open to all stakeholders |
+
+Hard default rule:
+
+- if audience mode and assignment scope point in different directions, the
+  narrower rule wins
+
+### 7C. Operator visibility: default vs exceptional
 
 | Condition | Policy result |
 | --- | --- |
-| operational thread in same space | `operator` may be visible by policy unless an explicit future exception exists |
-| `operator_visible_by_policy = true` | strengthens operator oversight signal; does not grant moderation authority |
-| `operator_visible_by_policy = false` | does not automatically hide a thread from all operators; later policy must explain why the exception exists |
+| operational thread in same space | default to operator-visible by policy |
+| `operator_visible_by_policy = true` | confirms the default oversight expectation for the thread |
+| `operator_visible_by_policy = false` | treat as a future explicit exception candidate; do not assume it creates a private operational context by itself |
 | DM or private trust mode | operator visibility does not imply decrypt or plaintext rights |
 
 Operator guardrails:
@@ -252,7 +278,16 @@ Operator guardrails:
   business roles
 - do not let operator visibility become a hidden support/admin bypass
 
-### 7C. Assignment-scoped external access
+Operator exception rule:
+
+- no ordinary operational thread should become operator-hidden by accident
+- any later operator-hidden exception must be:
+  - explicit in policy
+  - tied to a clearly defined thread or object category
+  - auditable
+  - still separate from DM/private-message trust mode
+
+### 7D. Assignment-scoped external access
 
 | External role | Default policy |
 | --- | --- |
@@ -267,6 +302,13 @@ Assignment rules:
   should still require durable assignment truth
 - assignment scope should later limit both thread visibility and linked-object
   visibility
+
+Assignment effect on defaults:
+
+- assignment-scoped access narrows audience-mode defaults for external service
+  roles
+- it does not widen client-facing roles into internal-only work
+- it does not create a support/admin exception path
 
 ## 8. Object-Linked Thread Visibility
 
@@ -393,18 +435,44 @@ Exceptions must be rare, explicit, and auditable.
   - audited
   - time-bounded where possible
   - narrower than a blanket policy bypass
+  - read-oriented by default unless a separately reviewed write path is
+    justified later
 
-### Future private operational exceptions
+Allowed shape:
+
+- case-specific operational support or compliance review may later exist
+- there is no general emergency override model defined by this matrix
+- urgency alone is not an exception mechanism
+
+### Private-thread or private-context exceptions
 
 - if a future operational thread type is intentionally hidden from ordinary
   operator oversight, that exception must be explicit in policy
 - it must not be created accidentally through missing metadata or UI hiding
+- no general private operational thread category is allowed by default in this
+  matrix
+- until a later reviewed product rule exists, true private contexts remain DM
+  or private-message trust modes, not ordinary operational threads
 
 ### Legacy conversations without companion metadata
 
 - absence of companion metadata is not itself an exception
 - later enforcement should fall back to the current runtime shell rather than
   inventing audience semantics from missing rows
+
+### What is not an exception mechanism yet
+
+The following must not be treated as policy exceptions by later branches:
+
+- `join_policy`
+- `conversation_members.hidden_at`
+- current moderation role alone
+- missing companion metadata
+- storage bucket or object path
+- UI-only hiding or labeling
+- operator visibility assumptions carried over from DM/private-message trust
+  mode
+- urgency or support need without explicit audited review
 
 ## 14. What Must Wait for Final RLS Hardening
 
