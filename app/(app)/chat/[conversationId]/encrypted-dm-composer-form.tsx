@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import type {
   DmE2eeApiErrorCode,
@@ -39,6 +39,25 @@ import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
 import { sendMessageMutationAction } from './actions';
 import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
+
+const DM_E2EE_RECIPIENT_BUNDLE_SOFT_FAILURE_COOLDOWN_MS = 10_000;
+
+type DmE2eeRecipientSoftFailureCode = Extract<
+  DmE2eeApiErrorCode,
+  'dm_e2ee_recipient_device_missing' | 'dm_e2ee_recipient_unavailable'
+>;
+
+type RecipientBundleSoftFailureEntry = {
+  code: DmE2eeRecipientSoftFailureCode;
+  debugState: DmE2eeRecipientReadinessDebugState;
+  errorMessage: string;
+  expiresAt: number;
+};
+
+const recipientBundleSoftFailureByConversationKey = new Map<
+  string,
+  RecipientBundleSoftFailureEntry
+>();
 
 type MentionParticipant = {
   userId: string;
@@ -82,10 +101,160 @@ type EncryptedDmComposerFormProps = {
   replyToMessageId?: string | null;
 };
 
+function getRecipientBundleSoftFailureKey(
+  conversationId: string,
+  recipientUserId?: string | null,
+) {
+  return `${conversationId.trim()}::${recipientUserId?.trim() || ''}`;
+}
+
+function isRecipientBundleSoftFailureCode(
+  code: DmE2eeApiErrorCode | null | undefined,
+): code is DmE2eeRecipientSoftFailureCode {
+  return (
+    code === 'dm_e2ee_recipient_device_missing' ||
+    code === 'dm_e2ee_recipient_unavailable'
+  );
+}
+
+function getActiveRecipientBundleSoftFailure(
+  conversationId: string,
+  recipientUserId?: string | null,
+) {
+  const key = getRecipientBundleSoftFailureKey(conversationId, recipientUserId);
+  const entry = recipientBundleSoftFailureByConversationKey.get(key) ?? null;
+
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAt <= Date.now()) {
+    recipientBundleSoftFailureByConversationKey.delete(key);
+    return null;
+  }
+
+  return entry;
+}
+
+function clearRecipientBundleSoftFailure(
+  conversationId: string,
+  recipientUserId?: string | null,
+) {
+  recipientBundleSoftFailureByConversationKey.delete(
+    getRecipientBundleSoftFailureKey(conversationId, recipientUserId),
+  );
+}
+
+function setRecipientBundleSoftFailure(input: {
+  code: DmE2eeRecipientSoftFailureCode;
+  conversationId: string;
+  debugState: DmE2eeRecipientReadinessDebugState;
+  errorMessage: string;
+  recipientUserId?: string | null;
+}) {
+  recipientBundleSoftFailureByConversationKey.set(
+    getRecipientBundleSoftFailureKey(
+      input.conversationId,
+      input.recipientUserId,
+    ),
+    {
+      code: input.code,
+      debugState: input.debugState,
+      errorMessage: input.errorMessage,
+      expiresAt: Date.now() + DM_E2EE_RECIPIENT_BUNDLE_SOFT_FAILURE_COOLDOWN_MS,
+    },
+  );
+}
+
+function buildRecipientBundleError(input: {
+  code: DmE2eeApiErrorCode | null | undefined;
+  debugState?: DmE2eeRecipientReadinessDebugState | null;
+  errorMessage: string;
+  recipientUserId?: string | null;
+  stage: string;
+}) {
+  const error = new Error(input.errorMessage) as Error &
+    DmE2eeRecipientReadinessDebugState & {
+      code?: DmE2eeApiErrorCode | null;
+    };
+
+  error.code = input.code ?? null;
+  error.recipientBundleQueryStage =
+    input.debugState?.recipientBundleQueryStage ?? input.stage;
+  error.recipientConversationIdChecked =
+    input.debugState?.recipientConversationIdChecked ?? null;
+  error.recipientRequestedUserId =
+    input.debugState?.recipientRequestedUserId ?? input.recipientUserId ?? null;
+  error.recipientUserIdChecked =
+    input.debugState?.recipientUserIdChecked ?? null;
+  error.recipientDeviceRowsFound =
+    input.debugState?.recipientDeviceRowsFound ?? null;
+  error.recipientActiveDeviceRowsFound =
+    input.debugState?.recipientActiveDeviceRowsFound ?? null;
+  error.recipientSelectedDeviceRowId =
+    input.debugState?.recipientSelectedDeviceRowId ?? null;
+  error.recipientSelectedDeviceLogicalId =
+    input.debugState?.recipientSelectedDeviceLogicalId ?? null;
+  error.recipientSelectedDeviceRetiredAt =
+    input.debugState?.recipientSelectedDeviceRetiredAt ?? null;
+  error.recipientSelectedDeviceIdentityKeyPresent =
+    input.debugState?.recipientSelectedDeviceIdentityKeyPresent ?? null;
+  error.recipientSelectedDeviceSignedPrekeyPresent =
+    input.debugState?.recipientSelectedDeviceSignedPrekeyPresent ?? null;
+  error.recipientSelectedDeviceSignaturePresent =
+    input.debugState?.recipientSelectedDeviceSignaturePresent ?? null;
+  error.recipientSelectedDeviceAvailablePrekeyCount =
+    input.debugState?.recipientSelectedDeviceAvailablePrekeyCount ?? null;
+  error.recipientPrekeyQueryDeviceRef =
+    input.debugState?.recipientPrekeyQueryDeviceRef ?? null;
+  error.recipientBundleQueryErrorMessage =
+    input.debugState?.recipientBundleQueryErrorMessage ?? null;
+  error.recipientBundleQueryErrorCode =
+    input.debugState?.recipientBundleQueryErrorCode ?? null;
+  error.recipientBundleQueryErrorDetails =
+    input.debugState?.recipientBundleQueryErrorDetails ?? null;
+  error.recipientMismatchLeft = input.debugState?.recipientMismatchLeft ?? null;
+  error.recipientMismatchRight =
+    input.debugState?.recipientMismatchRight ?? null;
+  error.recipientReadinessFailedReason =
+    input.debugState?.recipientReadinessFailedReason ??
+    (input.stage === 'bundle:client-soft-failure-cooldown'
+      ? 'client-soft-failure-cooldown'
+      : null);
+
+  return error;
+}
+
 async function fetchRecipientBundle(
   conversationId: string,
   recipientUserId?: string | null,
 ) {
+  const activeSoftFailure = getActiveRecipientBundleSoftFailure(
+    conversationId,
+    recipientUserId,
+  );
+
+  if (activeSoftFailure) {
+    if (
+      process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
+      typeof window !== 'undefined'
+    ) {
+      console.info('[dm-e2ee-bundle-client]', 'request:cooldown-hit', {
+        code: activeSoftFailure.code,
+        conversationId,
+        recipientUserId: recipientUserId?.trim() || null,
+      });
+    }
+
+    throw buildRecipientBundleError({
+      code: activeSoftFailure.code,
+      debugState: activeSoftFailure.debugState,
+      errorMessage: activeSoftFailure.errorMessage,
+      recipientUserId,
+      stage: 'bundle:client-soft-failure-cooldown',
+    });
+  }
+
   const params = new URLSearchParams({ conversationId });
 
   if (recipientUserId?.trim()) {
@@ -131,14 +300,53 @@ async function fetchRecipientBundle(
         recipientUserIdChecked: errorPayload.recipientUserIdChecked ?? null,
       });
     }
-    const error = new Error(
-      errorPayload.error || 'Unable to load DM encryption material.',
-    ) as Error &
+    const error = buildRecipientBundleError({
+      code: errorPayload.code ?? null,
+      debugState: {
+        recipientBundleQueryStage: errorPayload.recipientBundleQueryStage ?? null,
+        recipientConversationIdChecked:
+          errorPayload.recipientConversationIdChecked ?? null,
+        recipientRequestedUserId: errorPayload.recipientRequestedUserId ?? null,
+        recipientUserIdChecked: errorPayload.recipientUserIdChecked ?? null,
+        recipientDeviceRowsFound: errorPayload.recipientDeviceRowsFound ?? null,
+        recipientActiveDeviceRowsFound:
+          errorPayload.recipientActiveDeviceRowsFound ?? null,
+        recipientSelectedDeviceRowId:
+          errorPayload.recipientSelectedDeviceRowId ?? null,
+        recipientSelectedDeviceLogicalId:
+          errorPayload.recipientSelectedDeviceLogicalId ?? null,
+        recipientSelectedDeviceRetiredAt:
+          errorPayload.recipientSelectedDeviceRetiredAt ?? null,
+        recipientSelectedDeviceIdentityKeyPresent:
+          errorPayload.recipientSelectedDeviceIdentityKeyPresent ?? null,
+        recipientSelectedDeviceSignedPrekeyPresent:
+          errorPayload.recipientSelectedDeviceSignedPrekeyPresent ?? null,
+        recipientSelectedDeviceSignaturePresent:
+          errorPayload.recipientSelectedDeviceSignaturePresent ?? null,
+        recipientSelectedDeviceAvailablePrekeyCount:
+          errorPayload.recipientSelectedDeviceAvailablePrekeyCount ?? null,
+        recipientPrekeyQueryDeviceRef:
+          errorPayload.recipientPrekeyQueryDeviceRef ?? null,
+        recipientBundleQueryErrorMessage:
+          errorPayload.recipientBundleQueryErrorMessage ?? null,
+        recipientBundleQueryErrorCode:
+          errorPayload.recipientBundleQueryErrorCode ?? null,
+        recipientBundleQueryErrorDetails:
+          errorPayload.recipientBundleQueryErrorDetails ?? null,
+        recipientMismatchLeft: errorPayload.recipientMismatchLeft ?? null,
+        recipientMismatchRight: errorPayload.recipientMismatchRight ?? null,
+        recipientReadinessFailedReason:
+          errorPayload.recipientReadinessFailedReason ?? null,
+      },
+      errorMessage:
+        errorPayload.error || 'Unable to load DM encryption material.',
+      recipientUserId,
+      stage: 'bundle:request:error',
+    }) as Error &
       DmE2eeBootstrapDebugState &
       DmE2eeRecipientReadinessDebugState & {
         code?: DmE2eeApiErrorCode | null;
       };
-    error.code = errorPayload.code ?? null;
     error.authRetireAttempted = errorPayload.authRetireAttempted ?? null;
     error.authRetireFailed = errorPayload.authRetireFailed ?? null;
     error.serviceRetireAvailable = errorPayload.serviceRetireAvailable ?? null;
@@ -153,44 +361,56 @@ async function fetchRecipientBundle(
       errorPayload.serviceRetireErrorStatus ?? null;
     error.currentDeviceRowId = errorPayload.currentDeviceRowId ?? null;
     error.retireTargetIds = errorPayload.retireTargetIds ?? null;
-    error.recipientBundleQueryStage =
-      errorPayload.recipientBundleQueryStage ?? null;
-    error.recipientConversationIdChecked =
-      errorPayload.recipientConversationIdChecked ?? null;
-    error.recipientRequestedUserId =
-      errorPayload.recipientRequestedUserId ?? null;
-    error.recipientUserIdChecked = errorPayload.recipientUserIdChecked ?? null;
-    error.recipientDeviceRowsFound = errorPayload.recipientDeviceRowsFound ?? null;
-    error.recipientActiveDeviceRowsFound =
-      errorPayload.recipientActiveDeviceRowsFound ?? null;
-    error.recipientSelectedDeviceRowId =
-      errorPayload.recipientSelectedDeviceRowId ?? null;
-    error.recipientSelectedDeviceLogicalId =
-      errorPayload.recipientSelectedDeviceLogicalId ?? null;
-    error.recipientSelectedDeviceRetiredAt =
-      errorPayload.recipientSelectedDeviceRetiredAt ?? null;
-    error.recipientSelectedDeviceIdentityKeyPresent =
-      errorPayload.recipientSelectedDeviceIdentityKeyPresent ?? null;
-    error.recipientSelectedDeviceSignedPrekeyPresent =
-      errorPayload.recipientSelectedDeviceSignedPrekeyPresent ?? null;
-    error.recipientSelectedDeviceSignaturePresent =
-      errorPayload.recipientSelectedDeviceSignaturePresent ?? null;
-    error.recipientSelectedDeviceAvailablePrekeyCount =
-      errorPayload.recipientSelectedDeviceAvailablePrekeyCount ?? null;
-    error.recipientPrekeyQueryDeviceRef =
-      errorPayload.recipientPrekeyQueryDeviceRef ?? null;
-    error.recipientBundleQueryErrorMessage =
-      errorPayload.recipientBundleQueryErrorMessage ?? null;
-    error.recipientBundleQueryErrorCode =
-      errorPayload.recipientBundleQueryErrorCode ?? null;
-    error.recipientBundleQueryErrorDetails =
-      errorPayload.recipientBundleQueryErrorDetails ?? null;
-    error.recipientMismatchLeft = errorPayload.recipientMismatchLeft ?? null;
-    error.recipientMismatchRight = errorPayload.recipientMismatchRight ?? null;
-    error.recipientReadinessFailedReason =
-      errorPayload.recipientReadinessFailedReason ?? null;
+
+    if (isRecipientBundleSoftFailureCode(error.code)) {
+      setRecipientBundleSoftFailure({
+        code: error.code,
+        conversationId,
+        debugState: {
+          recipientBundleQueryStage: error.recipientBundleQueryStage ?? null,
+          recipientConversationIdChecked:
+            error.recipientConversationIdChecked ?? null,
+          recipientRequestedUserId: error.recipientRequestedUserId ?? null,
+          recipientUserIdChecked: error.recipientUserIdChecked ?? null,
+          recipientDeviceRowsFound: error.recipientDeviceRowsFound ?? null,
+          recipientActiveDeviceRowsFound:
+            error.recipientActiveDeviceRowsFound ?? null,
+          recipientSelectedDeviceRowId:
+            error.recipientSelectedDeviceRowId ?? null,
+          recipientSelectedDeviceLogicalId:
+            error.recipientSelectedDeviceLogicalId ?? null,
+          recipientSelectedDeviceRetiredAt:
+            error.recipientSelectedDeviceRetiredAt ?? null,
+          recipientSelectedDeviceIdentityKeyPresent:
+            error.recipientSelectedDeviceIdentityKeyPresent ?? null,
+          recipientSelectedDeviceSignedPrekeyPresent:
+            error.recipientSelectedDeviceSignedPrekeyPresent ?? null,
+          recipientSelectedDeviceSignaturePresent:
+            error.recipientSelectedDeviceSignaturePresent ?? null,
+          recipientSelectedDeviceAvailablePrekeyCount:
+            error.recipientSelectedDeviceAvailablePrekeyCount ?? null,
+          recipientPrekeyQueryDeviceRef:
+            error.recipientPrekeyQueryDeviceRef ?? null,
+          recipientBundleQueryErrorMessage:
+            error.recipientBundleQueryErrorMessage ?? null,
+          recipientBundleQueryErrorCode:
+            error.recipientBundleQueryErrorCode ?? null,
+          recipientBundleQueryErrorDetails:
+            error.recipientBundleQueryErrorDetails ?? null,
+          recipientMismatchLeft: error.recipientMismatchLeft ?? null,
+          recipientMismatchRight: error.recipientMismatchRight ?? null,
+          recipientReadinessFailedReason:
+            error.recipientReadinessFailedReason ?? null,
+        },
+        errorMessage: error.message,
+        recipientUserId,
+      });
+    }
+
     throw error;
   }
+
+  clearRecipientBundleSoftFailure(conversationId, recipientUserId);
 
   if (
     process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
@@ -766,6 +986,25 @@ export function EncryptedDmComposerForm({
     resolveErrorMessage: (error) => getEncryptedDmErrorMessage(error, t),
   });
 
+  const getActiveRecipientBundleSoftFailureError = useCallback(() => {
+    const activeSoftFailure = getActiveRecipientBundleSoftFailure(
+      conversationId,
+      recipientUserId,
+    );
+
+    if (!activeSoftFailure) {
+      return null;
+    }
+
+    return buildRecipientBundleError({
+      code: activeSoftFailure.code,
+      debugState: activeSoftFailure.debugState,
+      errorMessage: activeSoftFailure.errorMessage,
+      recipientUserId,
+      stage: 'bundle:client-soft-failure-cooldown',
+    });
+  }, [conversationId, recipientUserId]);
+
   function attemptVoiceEntry(source: 'click' | 'pointer') {
     const now = Date.now();
 
@@ -835,6 +1074,23 @@ export function EncryptedDmComposerForm({
       if (!detail || detail.conversationId !== conversationId) {
         return;
       }
+
+      if (detail.kind !== 'voice') {
+        const activeSoftFailureError = getActiveRecipientBundleSoftFailureError();
+
+        if (activeSoftFailureError) {
+          setErrorCode(
+            (activeSoftFailureError as { code?: DmE2eeApiErrorCode | null })
+              .code ?? null,
+          );
+          setErrorMessage(getEncryptedDmErrorMessage(activeSoftFailureError, t));
+          setErrorDebugDetails(
+            getEncryptedDmDebugFailureDetails(activeSoftFailureError),
+          );
+          return;
+        }
+      }
+
       const nextRetryClientId = crypto.randomUUID();
 
       if (
@@ -889,7 +1145,7 @@ export function EncryptedDmComposerForm({
         handleRetryRequest as EventListener,
       );
     };
-  }, [conversationId, enqueue]);
+  }, [conversationId, enqueue, getActiveRecipientBundleSoftFailureError, t]);
 
   return (
     <form
@@ -925,6 +1181,20 @@ export function EncryptedDmComposerForm({
             setErrorDebugDetails(null);
           }
 
+          return;
+        }
+
+        const activeSoftFailureError = getActiveRecipientBundleSoftFailureError();
+
+        if (activeSoftFailureError) {
+          setErrorCode(
+            (activeSoftFailureError as { code?: DmE2eeApiErrorCode | null })
+              .code ?? null,
+          );
+          setErrorMessage(getEncryptedDmErrorMessage(activeSoftFailureError, t));
+          setErrorDebugDetails(
+            getEncryptedDmDebugFailureDetails(activeSoftFailureError),
+          );
           return;
         }
 
