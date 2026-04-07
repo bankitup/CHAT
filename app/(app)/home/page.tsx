@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import {
-  getKeepCozyPreview,
-  getKeepCozyPrimaryTestFlow,
+  getKeepCozyHomeDashboardData,
   isKeepCozyPrimaryTestHomeName,
-} from '@/modules/keepcozy/mvp-preview';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type HomeDashboardPageProps = {
@@ -21,9 +20,12 @@ export default async function HomeDashboardPage({
     requestedSpaceId: query.space,
     source: 'keepcozy-home-dashboard',
   });
-  const preview = getKeepCozyPreview(language);
-  const primaryFlow = getKeepCozyPrimaryTestFlow(language);
+  const { counts, primaryFlow } = await getKeepCozyHomeDashboardData({
+    language,
+    spaceId: activeSpace.id,
+  });
   const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpace.name);
+  const testFlowHomeHint = primaryFlow?.homeNameHint ?? 'TEST';
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -69,7 +71,7 @@ export default async function HomeDashboardPage({
               href={withSpaceParam('/rooms', activeSpace.id)}
               prefetch={false}
             >
-              <span className="keepcozy-link-count">{preview.rooms.length}</span>
+              <span className="keepcozy-link-count">{counts.rooms}</span>
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{t.homeDashboard.roomsTitle}</h3>
                 <p className="muted">{t.homeDashboard.roomsBody}</p>
@@ -82,7 +84,7 @@ export default async function HomeDashboardPage({
               href={withSpaceParam('/issues', activeSpace.id)}
               prefetch={false}
             >
-              <span className="keepcozy-link-count">{preview.issues.length}</span>
+              <span className="keepcozy-link-count">{counts.issues}</span>
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{t.homeDashboard.issuesTitle}</h3>
                 <p className="muted">{t.homeDashboard.issuesBody}</p>
@@ -95,7 +97,7 @@ export default async function HomeDashboardPage({
               href={withSpaceParam('/tasks', activeSpace.id)}
               prefetch={false}
             >
-              <span className="keepcozy-link-count">{preview.tasks.length}</span>
+              <span className="keepcozy-link-count">{counts.tasks}</span>
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{t.homeDashboard.tasksTitle}</h3>
                 <p className="muted">{t.homeDashboard.tasksBody}</p>
@@ -108,7 +110,7 @@ export default async function HomeDashboardPage({
               href={withSpaceParam('/activity', activeSpace.id)}
               prefetch={false}
             >
-              <span className="keepcozy-link-count">{preview.issues.length + preview.tasks.length}</span>
+              <span className="keepcozy-link-count">{counts.history}</span>
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{t.homeDashboard.historyTitle}</h3>
                 <p className="muted">{t.homeDashboard.historyBody}</p>
@@ -124,12 +126,12 @@ export default async function HomeDashboardPage({
             <p className="muted">{t.homeDashboard.testFlowBody}</p>
           </div>
 
-          {showPrimaryFlow ? (
+          {showPrimaryFlow && primaryFlow ? (
             <article className="keepcozy-detail-card">
               <div className="keepcozy-detail-header">
                 <div className="stack keepcozy-detail-heading">
                   <h3 className="card-title">{primaryFlow.issue.title}</h3>
-                  <p className="muted">{primaryFlow.issue.summary}</p>
+                  <p className="muted">{primaryFlow.issue.summary || t.issues.detailBody}</p>
                 </div>
                 <span className="summary-pill summary-pill-muted">
                   {primaryFlow.homeNameHint}
@@ -203,8 +205,12 @@ export default async function HomeDashboardPage({
             </article>
           ) : (
             <section className="empty-card">
-              <h3 className="card-title">{primaryFlow.homeNameHint}</h3>
-              <p className="muted">{t.homeDashboard.testFlowMismatchBody}</p>
+              <h3 className="card-title">{testFlowHomeHint}</h3>
+              <p className="muted">
+                {showPrimaryFlow
+                  ? t.homeDashboard.testFlowPendingBody
+                  : t.homeDashboard.testFlowMismatchBody}
+              </p>
               <Link
                 className="button button-secondary"
                 href={withSpaceParam('/spaces', activeSpace.id)}

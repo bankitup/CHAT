@@ -1,9 +1,4 @@
 import Link from 'next/link';
-import { getRequestViewer } from '@/lib/request-context/server';
-import {
-  getTranslations,
-} from '@/modules/i18n';
-import { getRequestLanguage } from '@/modules/i18n/server';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   getArchivedConversations,
@@ -16,16 +11,11 @@ import {
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
-  getKeepCozyPrimaryTestFlow,
+  getKeepCozyActivityData,
   isKeepCozyPrimaryTestHomeName,
-} from '@/modules/keepcozy/mvp-preview';
-import {
-  resolveV1TestSpaceFallback,
-  resolveActiveSpaceForUser,
-  isSpaceMembersSchemaCacheErrorMessage,
-} from '@/modules/spaces/server';
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
-import { notFound, redirect } from 'next/navigation';
 import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
 
@@ -50,7 +40,7 @@ type ActivityItem = {
         avatarPath?: string | null;
       }
     | null;
-}
+};
 
 function buildInboxHref(input: {
   spaceId: string;
@@ -69,84 +59,22 @@ function buildInboxHref(input: {
 
 export default async function ActivityPage({ searchParams }: ActivityPageProps) {
   const query = await searchParams;
-  const [user, language] = await Promise.all([
-    getRequestViewer(),
-    getRequestLanguage(),
-  ]);
-
-  if (!user?.id) {
-    return null;
-  }
-
-  let activeSpaceId: string | null = null;
-  let activeSpaceName: string | null = null;
-  const explicitV1TestSpace = await resolveV1TestSpaceFallback({
+  const { activeSpace, language, t, user } = await requireKeepCozyContext({
     requestedSpaceId: query.space,
-    source: 'activity-page-explicit-v1-test-bypass',
+    source: 'activity-page',
   });
-
-  if (explicitV1TestSpace) {
-    // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
-    // Remove once membership resolution via space_members is stable again.
-    activeSpaceId = explicitV1TestSpace.id;
-    activeSpaceName = explicitV1TestSpace.name;
-  } else {
-    let activeSpaceState: Awaited<
-      ReturnType<typeof resolveActiveSpaceForUser>
-    > | null = null;
-    try {
-      activeSpaceState = await resolveActiveSpaceForUser({
-        userId: user.id,
-        requestedSpaceId: query.space,
-        source: 'activity-page',
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-        const fallbackSpace = await resolveV1TestSpaceFallback({
-          requestedSpaceId: query.space,
-          source: 'activity-page',
-        });
-
-        if (!fallbackSpace) {
-          redirect('/spaces');
-        }
-
-        activeSpaceId = fallbackSpace.id;
-        activeSpaceName = fallbackSpace.name;
-      } else {
-        throw error;
-      }
-    }
-
-    if (!activeSpaceId) {
-      if (!activeSpaceState?.activeSpace) {
-        notFound();
-      }
-
-      if (activeSpaceState.requestedSpaceWasInvalid) {
-        redirect('/spaces');
-      }
-
-      activeSpaceId = activeSpaceState.activeSpace.id;
-      activeSpaceName = activeSpaceState.activeSpace.name;
-    }
-  }
-
-  if (!activeSpaceId) {
-    redirect('/spaces');
-  }
-
-  const t = getTranslations(language);
-  const primaryFlow = getKeepCozyPrimaryTestFlow(language);
-  const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpaceName);
+  const { counts, primaryFlow } = await getKeepCozyActivityData({
+    language,
+    spaceId: activeSpace.id,
+  });
+  const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpace.name);
+  const testFlowHomeHint = primaryFlow?.homeNameHint ?? 'TEST';
   const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
   ] = await Promise.all([
-    getInboxConversationsStable(user.id, { spaceId: activeSpaceId }),
-    getArchivedConversations(user.id, { spaceId: activeSpaceId }),
+    getInboxConversationsStable(user.id, { spaceId: activeSpace.id }),
+    getArchivedConversations(user.id, { spaceId: activeSpace.id }),
   ]);
   const participantIdentities = await getConversationParticipantIdentities(
     conversations.map((conversation) => conversation.conversationId),
@@ -160,53 +88,55 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     },
     new Map<string, (typeof participantIdentities)[number][]>(),
   );
-  const activityItems = conversations.map((conversation) => {
-    const participantOptions =
-      participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
-    const otherParticipants = participantOptions.filter(
-      (participant) => participant.userId !== user.id,
-    );
-    const otherParticipantLabels = otherParticipants.map((participant) =>
-      resolvePublicIdentityLabel(participant, t.chat.unknownUser),
-    );
-    const isGroupConversation = conversation.kind === 'group';
-    const title = isGroupConversation
-      ? getConversationDisplayName({
-          kind: conversation.kind ?? null,
-          title: conversation.title,
-          participantLabels: otherParticipantLabels,
-          fallbackTitles: {
-            dm: language === 'ru' ? 'Новый чат' : 'New chat',
-            group: language === 'ru' ? 'Новая группа' : 'New group',
-          },
-        })
-      : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
-    const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
+  const activityItems = conversations
+    .map((conversation) => {
+      const participantOptions =
+        participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
+      const otherParticipants = participantOptions.filter(
+        (participant) => participant.userId !== user.id,
+      );
+      const otherParticipantLabels = otherParticipants.map((participant) =>
+        resolvePublicIdentityLabel(participant, t.chat.unknownUser),
+      );
+      const isGroupConversation = conversation.kind === 'group';
+      const title = isGroupConversation
+        ? getConversationDisplayName({
+            kind: conversation.kind ?? null,
+            title: conversation.title,
+            participantLabels: otherParticipantLabels,
+            fallbackTitles: {
+              dm: language === 'ru' ? 'Новый чат' : 'New chat',
+              group: language === 'ru' ? 'Новая группа' : 'New group',
+            },
+          })
+        : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
+      const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
 
-    return {
-      conversationId: conversation.conversationId,
-      title,
-      groupAvatarPath: conversation.avatarPath,
-      preview: getInboxPreviewText(conversation, {
-        audio: t.chat.audio,
-        deletedMessage: t.chat.deletedMessage,
-        voiceMessage: t.chat.voiceMessage,
-        encryptedMessage: t.chat.encryptedMessage,
-        newEncryptedMessage: t.chat.newEncryptedMessage,
-        attachment: t.chat.attachment,
-        file: t.chat.file,
-        image: t.chat.image,
-      }),
-      lastActivityAt,
-      unreadCount: conversation.unreadCount,
-      isGroupConversation,
-      primaryParticipant: otherParticipants[0] ?? null,
-    } satisfies ActivityItem;
-  }).sort((left, right) => {
-    const leftValue = left.lastActivityAt ? new Date(left.lastActivityAt).getTime() : 0;
-    const rightValue = right.lastActivityAt ? new Date(right.lastActivityAt).getTime() : 0;
-    return rightValue - leftValue;
-  });
+      return {
+        conversationId: conversation.conversationId,
+        groupAvatarPath: conversation.avatarPath,
+        isGroupConversation,
+        lastActivityAt,
+        preview: getInboxPreviewText(conversation, {
+          attachment: t.chat.attachment,
+          audio: t.chat.audio,
+          deletedMessage: t.chat.deletedMessage,
+          encryptedMessage: t.chat.encryptedMessage,
+          file: t.chat.file,
+          image: t.chat.image,
+          newEncryptedMessage: t.chat.newEncryptedMessage,
+          voiceMessage: t.chat.voiceMessage,
+        }),
+        primaryParticipant: otherParticipants[0] ?? null,
+        title,
+        unreadCount: conversation.unreadCount,
+      } satisfies ActivityItem;
+    })
+    .sort((left, right) => {
+      const leftValue = left.lastActivityAt ? new Date(left.lastActivityAt).getTime() : 0;
+      const rightValue = right.lastActivityAt ? new Date(right.lastActivityAt).getTime() : 0;
+      return rightValue - leftValue;
+    });
   const liveSummariesByConversationId = new Map(
     conversations.map((conversation) => [
       conversation.conversationId,
@@ -273,7 +203,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
           <Link
             className="activity-focus-action button button-secondary"
-            href={withSpaceParam('/tasks', activeSpaceId)}
+            href={withSpaceParam('/tasks', activeSpace.id)}
             prefetch={false}
           >
             {t.activity.openTasks}
@@ -294,6 +224,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <section className="keepcozy-secondary-card">
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{t.activity.operationsIssues}</h3>
+                <span className="activity-summary-value">{counts.issueUpdates}</span>
                 <p className="muted">{t.issues.updatesBody}</p>
               </div>
             </section>
@@ -301,6 +232,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <section className="keepcozy-secondary-card">
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{t.activity.operationsTasks}</h3>
+                <span className="activity-summary-value">{counts.taskUpdates}</span>
                 <p className="muted">{t.tasks.updatesBody}</p>
               </div>
             </section>
@@ -308,6 +240,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <section className="keepcozy-secondary-card">
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{t.activity.operationsResolutions}</h3>
+                <span className="activity-summary-value">{counts.resolutionNotes}</span>
                 <p className="muted">{t.activity.digestBody}</p>
               </div>
             </section>
@@ -319,7 +252,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               <p className="muted">{t.activity.testFlowBody}</p>
             </div>
 
-            {showPrimaryFlow ? (
+            {showPrimaryFlow && primaryFlow ? (
               <article className="keepcozy-detail-card">
                 <div className="keepcozy-detail-header">
                   <div className="stack keepcozy-detail-heading">
@@ -334,21 +267,21 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                 <div className="keepcozy-meta-row">
                   <Link
                     className="keepcozy-meta-pill"
-                    href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpaceId)}
+                    href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpace.id)}
                     prefetch={false}
                   >
                     {primaryFlow.room.name}
                   </Link>
                   <Link
                     className="keepcozy-meta-pill"
-                    href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpaceId)}
+                    href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpace.id)}
                     prefetch={false}
                   >
                     {t.shell.issues}
                   </Link>
                   <Link
                     className="keepcozy-meta-pill"
-                    href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpaceId)}
+                    href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpace.id)}
                     prefetch={false}
                   >
                     {t.shell.tasks}
@@ -374,7 +307,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                             entry.href.kind === 'issue'
                               ? `/issues/${entry.href.targetId}`
                               : `/tasks/${entry.href.targetId}`,
-                            activeSpaceId,
+                            activeSpace.id,
                           )}
                           prefetch={false}
                         >
@@ -389,11 +322,15 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               </article>
             ) : (
               <section className="empty-card">
-                <h3 className="card-title">{primaryFlow.homeNameHint}</h3>
-                <p className="muted">{t.activity.testFlowMismatchBody}</p>
+                <h3 className="card-title">{testFlowHomeHint}</h3>
+                <p className="muted">
+                  {showPrimaryFlow
+                    ? t.activity.testFlowPendingBody
+                    : t.activity.testFlowMismatchBody}
+                </p>
                 <Link
                   className="button button-secondary"
-                  href={withSpaceParam('/spaces', activeSpaceId)}
+                  href={withSpaceParam('/spaces', activeSpace.id)}
                   prefetch={false}
                 >
                   {t.homeDashboard.switchHome}
@@ -436,7 +373,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               {unreadItems.length > 0 ? (
                 <Link
                   className="pill activity-section-link"
-                  href={buildInboxHref({ spaceId: activeSpaceId })}
+                  href={buildInboxHref({ spaceId: activeSpace.id })}
                   prefetch={false}
                 >
                   {t.activity.openChats}
@@ -450,7 +387,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               {unreadItems.map((conversation) => (
                 <ActivityConversationLiveItem
                   key={`unread-${conversation.conversationId}`}
-                  activeSpaceId={activeSpaceId}
+                  activeSpaceId={activeSpace.id}
                   initialSummary={
                     liveSummariesByConversationId.get(conversation.conversationId) ?? {
                       conversationId: conversation.conversationId,
@@ -480,8 +417,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   }}
                   language={language}
                   labels={{
-                    audio: t.chat.audio,
                     attachment: t.chat.attachment,
+                    audio: t.chat.audio,
                     deletedMessage: t.chat.deletedMessage,
                     encryptedMessage: t.chat.encryptedMessage,
                     file: t.chat.file,
@@ -516,7 +453,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                 <Link
                   className="pill activity-section-link"
                   href={buildInboxHref({
-                    spaceId: activeSpaceId,
+                    spaceId: activeSpace.id,
                     view: 'archived',
                   })}
                   prefetch={false}
@@ -532,7 +469,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               {recentItems.map((conversation) => (
                 <ActivityConversationLiveItem
                   key={`recent-${conversation.conversationId}`}
-                  activeSpaceId={activeSpaceId}
+                  activeSpaceId={activeSpace.id}
                   initialSummary={
                     liveSummariesByConversationId.get(conversation.conversationId) ?? {
                       conversationId: conversation.conversationId,
@@ -562,8 +499,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   }}
                   language={language}
                   labels={{
-                    audio: t.chat.audio,
                     attachment: t.chat.attachment,
+                    audio: t.chat.audio,
                     deletedMessage: t.chat.deletedMessage,
                     encryptedMessage: t.chat.encryptedMessage,
                     file: t.chat.file,

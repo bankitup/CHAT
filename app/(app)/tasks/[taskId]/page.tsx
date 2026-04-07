@@ -1,11 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  getKeepCozyPreviewIssue,
-  getKeepCozyPreviewRoom,
-  getKeepCozyPreviewTask,
-} from '@/modules/keepcozy/mvp-preview';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+  getKeepCozyTaskDetailData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type TaskDetailPageProps = {
@@ -26,14 +24,15 @@ export default async function TaskDetailPage({
     requestedSpaceId: query.space,
     source: 'keepcozy-task-detail-page',
   });
-  const task = getKeepCozyPreviewTask(language, taskId);
+  const { issue, room, task } = await getKeepCozyTaskDetailData({
+    language,
+    spaceId: activeSpace.id,
+    taskId,
+  });
 
   if (!task) {
     notFound();
   }
-
-  const issue = getKeepCozyPreviewIssue(language, task.issueId);
-  const room = issue ? getKeepCozyPreviewRoom(language, issue.roomId) : null;
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -60,7 +59,7 @@ export default async function TaskDetailPage({
 
         <p className="eyebrow">{t.tasks.title}</p>
         <h1 className="settings-hero-title">{task.title}</h1>
-        <p className="muted settings-hero-note">{task.summary}</p>
+        <p className="muted settings-hero-note">{task.summary || t.tasks.detailBody}</p>
       </section>
 
       <section className="card stack settings-surface keepcozy-surface">
@@ -89,15 +88,21 @@ export default async function TaskDetailPage({
           </div>
 
           <div className="keepcozy-timeline">
-            {task.updates.map((update) => (
-              <article key={update.id} className="keepcozy-timeline-item">
-                <div className="keepcozy-timeline-topline">
-                  <h3 className="card-title">{update.label}</h3>
-                  <span className="keepcozy-timestamp">{update.timestamp}</span>
-                </div>
-                <p className="muted">{update.note}</p>
-              </article>
-            ))}
+            {task.updates.length > 0 ? (
+              task.updates.map((update) => (
+                <article key={update.id} className="keepcozy-timeline-item">
+                  <div className="keepcozy-timeline-topline">
+                    <h3 className="card-title">{update.label}</h3>
+                    <span className="keepcozy-timestamp">{update.timestamp}</span>
+                  </div>
+                  <p className="muted">{update.note}</p>
+                </article>
+              ))
+            ) : (
+              <section className="empty-card">
+                <p className="muted">{t.tasks.updatesBody}</p>
+              </section>
+            )}
           </div>
         </section>
 
@@ -105,7 +110,7 @@ export default async function TaskDetailPage({
           <section className="stack settings-section keepcozy-section">
             <div className="stack keepcozy-section-copy">
               <h2 className="card-title">{t.tasks.viewIssue}</h2>
-              <p className="muted">{issue.summary}</p>
+              <p className="muted">{issue.summary || t.issues.detailBody}</p>
             </div>
             <Link
               className="keepcozy-secondary-card"
@@ -114,7 +119,7 @@ export default async function TaskDetailPage({
             >
               <div className="stack keepcozy-link-copy">
                 <h3 className="card-title">{issue.title}</h3>
-                <p className="muted">{issue.nextStep}</p>
+                <p className="muted">{issue.nextStep || t.issues.tasksBody}</p>
               </div>
               <span className="summary-pill summary-pill-muted">{issue.status}</span>
             </Link>

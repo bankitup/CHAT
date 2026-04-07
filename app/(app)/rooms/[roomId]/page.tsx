@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
-  getKeepCozyPreview,
-  getKeepCozyPreviewRoom,
-} from '@/modules/keepcozy/mvp-preview';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+  getKeepCozyRoomDetailData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type RoomDetailPageProps = {
@@ -25,17 +24,15 @@ export default async function RoomDetailPage({
     requestedSpaceId: query.space,
     source: 'keepcozy-room-detail-page',
   });
-  const preview = getKeepCozyPreview(language);
-  const room = getKeepCozyPreviewRoom(language, roomId);
+  const { room, roomIssues, roomTasks } = await getKeepCozyRoomDetailData({
+    language,
+    roomId,
+    spaceId: activeSpace.id,
+  });
 
   if (!room) {
     notFound();
   }
-
-  const roomIssues = preview.issues.filter((issue) => issue.roomId === room.id);
-  const roomTasks = preview.tasks.filter((task) =>
-    roomIssues.some((issue) => issue.id === task.issueId),
-  );
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -53,7 +50,7 @@ export default async function RoomDetailPage({
 
         <p className="eyebrow">{t.rooms.title}</p>
         <h1 className="settings-hero-title">{room.name}</h1>
-        <p className="muted settings-hero-note">{room.summary}</p>
+        <p className="muted settings-hero-note">{room.summary || t.rooms.detailBody}</p>
       </section>
 
       <section className="card stack settings-surface keepcozy-surface">
@@ -76,23 +73,29 @@ export default async function RoomDetailPage({
         <section className="stack settings-section keepcozy-section">
           <div className="stack keepcozy-section-copy">
             <h2 className="card-title">{t.rooms.issuesLabel}</h2>
-            <p className="muted">{room.focus}</p>
+            <p className="muted">{t.rooms.detailBody}</p>
           </div>
           <div className="keepcozy-stack-list">
-            {roomIssues.map((issue) => (
-              <Link
-                key={issue.id}
-                className="keepcozy-secondary-card"
-                href={withSpaceParam(`/issues/${issue.id}`, activeSpace.id)}
-                prefetch={false}
-              >
-                <div className="stack keepcozy-link-copy">
-                  <h3 className="card-title">{issue.title}</h3>
-                  <p className="muted">{issue.summary}</p>
-                </div>
-                <span className="summary-pill summary-pill-muted">{issue.status}</span>
-              </Link>
-            ))}
+            {roomIssues.length > 0 ? (
+              roomIssues.map((issue) => (
+                <Link
+                  key={issue.id}
+                  className="keepcozy-secondary-card"
+                  href={withSpaceParam(`/issues/${issue.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  <div className="stack keepcozy-link-copy">
+                    <h3 className="card-title">{issue.title}</h3>
+                    <p className="muted">{issue.summary || t.issues.detailBody}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">{issue.status}</span>
+                </Link>
+              ))
+            ) : (
+              <section className="empty-card">
+                <p className="muted">{t.rooms.detailBody}</p>
+              </section>
+            )}
           </div>
         </section>
 
@@ -102,27 +105,33 @@ export default async function RoomDetailPage({
             <p className="muted">{t.rooms.detailHistoryTitle}</p>
           </div>
           <div className="keepcozy-stack-list">
-            {roomTasks.map((task) => (
-              <Link
-                key={task.id}
-                className="keepcozy-secondary-card"
-                href={withSpaceParam(`/tasks/${task.id}`, activeSpace.id)}
-                prefetch={false}
-              >
-                <div className="stack keepcozy-link-copy">
-                  <h3 className="card-title">{task.title}</h3>
-                  <p className="muted">{task.summary}</p>
-                </div>
-                <span className="summary-pill summary-pill-muted">{task.status}</span>
-              </Link>
-            ))}
+            {roomTasks.length > 0 ? (
+              roomTasks.map((task) => (
+                <Link
+                  key={task.id}
+                  className="keepcozy-secondary-card"
+                  href={withSpaceParam(`/tasks/${task.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  <div className="stack keepcozy-link-copy">
+                    <h3 className="card-title">{task.title}</h3>
+                    <p className="muted">{task.summary || t.tasks.detailBody}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">{task.status}</span>
+                </Link>
+              ))
+            ) : (
+              <section className="empty-card">
+                <p className="muted">{t.tasks.detailBody}</p>
+              </section>
+            )}
           </div>
         </section>
 
         <section className="stack settings-section keepcozy-section">
           <h2 className="card-title">{t.rooms.detailHistoryTitle}</h2>
           <section className="empty-card">
-            <p className="muted">{room.historyNote}</p>
+            <p className="muted">{t.rooms.detailBody}</p>
           </section>
         </section>
       </section>

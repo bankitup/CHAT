@@ -18,29 +18,52 @@ Related documents:
 - [keepcozy-mvp-schema-runtime-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-schema-runtime-alignment.md)
 - [space-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-model.md)
 - [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
+- [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql)
+- [2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql)
+- [2026-04-07-keepcozy-first-persistence-slice-test-seed.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql)
 
 ## Current Test-Flow Stance
 
-Until dedicated KeepCozy MVP tables exist, the first test flow should use the
-current compatibility seams that already exist in this repository:
+The first test flow uses the current compatibility seams that already exist in
+this repository:
 
 - shared `public.spaces` and `public.space_members` act as the current
   `home` and `home_membership` boundary
 - the default seeded home is the shared `TEST` space from
   [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
-- the visible KeepCozy route layer is currently backed by lightweight preview
-  runtime support in
-  [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
+- the visible KeepCozy route layer now reads dedicated persisted MVP records
+  through [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/server.ts)
 
 Important clarification:
 
-- this remains the current runtime proof path while the live screens are still
-  preview-backed
-- dedicated persistence migrations now exist for `rooms`, `issues`,
-  `issue_updates`, `tasks`, and `task_updates`, but the route layer has not
-  switched to those records yet
+- this is now the canonical persisted proof path once the first KeepCozy MVP
+  tables and TEST-home seed have been applied
+- [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
+  remains only as a temporary fallback for pre-migration environments where
+  those tables are not available yet
 - the first proof should still be representative of the real MVP loop during
-  that transition
+  rollout across environments
+
+## Persisted Setup Checklist
+
+Use this order when validating the canonical flow against real records:
+
+1. Ensure the shared TEST home exists by applying
+   [2026-04-03-spaces-default-test-backfill.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-default-test-backfill.sql)
+   if needed.
+2. Apply the first KeepCozy MVP tables from
+   [2026-04-07-keepcozy-first-persistence-slice.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice.sql).
+3. Apply the conservative access rules from
+   [2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql).
+4. Apply the narrow canonical seed from
+   [2026-04-07-keepcozy-first-persistence-slice-test-seed.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql).
+5. Open `/spaces`, select `TEST`, and validate the flow from `/home`.
+
+Important rule:
+
+- the canonical validation path should now use persisted rows first
+- preview fallback should only be treated as an environment safety net before
+  the migrations and seed are applied
 
 ## Canonical Test Home
 
@@ -67,8 +90,14 @@ Use one primary operational path and keep the rest secondary.
 | issue updates | `Issue logged`, `Initial assessment` | issue history proof |
 | task updates | `Task created`, `Scope held` | task history proof |
 
-Secondary preview rooms may stay visible, but they should not become the main
+Secondary rooms may stay visible, but they should not become the main
 validation path.
+
+Canonical persisted route slugs must stay stable:
+
+- room route: `/rooms/kitchen`
+- issue route: `/issues/kitchen-faucet-drip`
+- task route: `/tasks/capture-faucet-model`
 
 ## End-To-End Validation Path
 
@@ -84,6 +113,8 @@ The first proof path should be checked in this order:
    history.
    If another home is active, the app should ask the reviewer to switch to
    `TEST` instead of pretending the canonical proof path applies there.
+   If the card is missing while `TEST` is active, confirm the persisted
+   KeepCozy seed has been applied before changing the flow.
 3. Room
    Open `/rooms/kitchen` and confirm the room presents the issue/task context as
    room-scoped operational work.
@@ -103,6 +134,13 @@ The first proof path should be checked in this order:
    If another home is active, the screen should again prompt the reviewer back
    to `TEST`.
 
+Expected persisted history order:
+
+- `Issue logged`
+- `Initial assessment`
+- `Task created`
+- `Scope held`
+
 ## What Counts As A Pass
 
 The first test flow passes when the team can validate all of the following in
@@ -119,14 +157,16 @@ one home session:
 
 This branch keeps implementation support intentionally small:
 
-- the canonical preview data and primary test flow are defined in
-  [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
-- the active home context still resolves through shared space helpers in
+- the active home context and persisted MVP read layer resolve through
   [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/server.ts)
+- the canonical fallback ids and compatibility preview remain defined in
+  [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
 - the home dashboard explicitly exposes the first proof path in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
 - the history screen exposes the combined issue/task proof path in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+- the canonical TEST-home seed preserves the same room, issue, and task slugs
+  as the preview-backed shell so the mental model does not change
 
 ## What This Test Flow Should Not Do Yet
 
@@ -142,16 +182,15 @@ The first proof path should not expand into:
 ## Next Lift After This Pass
 
 Once the team is satisfied with the first proof path, the next implementation
-lift should replace the preview-backed room/issue/task records with the first
-dedicated MVP schema slice:
+lift should add narrow write paths on top of the first dedicated MVP schema
+slice:
 
-- `rooms`
-- `issues`
-- `issue_updates`
-- `tasks`
-- `task_updates`
+- create issue
+- create task
+- append issue update
+- append task update
 
-That next lift is now defined in
+That first persistence slice is defined in
 [keepcozy-first-persistence-slice.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-first-persistence-slice.md)
 and begins with:
 
@@ -159,5 +198,5 @@ and begins with:
 - [2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql)
 - [2026-04-07-keepcozy-first-persistence-slice-test-seed.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql)
 
-The test flow above should remain the same when that lift happens. Only the
-backing persistence layer should change.
+The test flow above should remain the same when that lift happens. The main
+change should be broader write support, not a new proof path.

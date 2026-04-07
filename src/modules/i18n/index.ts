@@ -150,6 +150,7 @@ type LanguageDictionary = {
     secondarySettingsBody: string;
     testFlowTitle: string;
     testFlowBody: string;
+    testFlowPendingBody: string;
     testFlowMismatchBody: string;
     openChats: string;
     openSettings: string;
@@ -260,6 +261,7 @@ type LanguageDictionary = {
     recentMessagingBody: string;
     testFlowTitle: string;
     testFlowBody: string;
+    testFlowPendingBody: string;
     testFlowMismatchBody: string;
   };
   inboxSettings: {
@@ -713,9 +715,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     homeDashboard: {
       eyebrow: 'Home dashboard',
       subtitle: 'Keep the first MVP loop grounded in one home, then move through rooms, issues, tasks, and history.',
-      previewPill: 'MVP focus scaffold',
+      previewPill: 'MVP slice',
       previewBody:
-        'This dashboard intentionally centers the first KeepCozy runtime slice. The richer home-ops layers stay secondary for now.',
+        'This dashboard intentionally centers the first persisted KeepCozy runtime slice. Richer home-ops layers still stay secondary.',
       currentHomeLabel: 'Current home',
       switchHome: 'Choose another home',
       loopTitle: 'First proven loop',
@@ -742,6 +744,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'Primary test flow',
       testFlowBody:
         'Use one representative kitchen issue to validate the full MVP path from home to room to issue to task to history.',
+      testFlowPendingBody:
+        'The TEST home is active, but the canonical persisted room, issue, task, and history path has not been seeded yet.',
       testFlowMismatchBody:
         'This branch uses the seeded TEST home as the canonical MVP proof path. Switch homes before validating the flow.',
       openChats: 'Open chats',
@@ -751,9 +755,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       title: 'Rooms',
       subtitle: 'Treat rooms as the place where issues and task history begin to make sense.',
       backToHome: 'Back to home',
-      previewPill: 'Preview structure',
+      previewPill: 'MVP slice',
       previewBody:
-        'These room cards show the intended MVP center of gravity while the first schema slice is still being wired.',
+        'These room cards now read from the first KeepCozy persistence slice and stay intentionally narrow around issues, tasks, and history.',
       selectedHomeLabel: 'Selected home',
       issuesLabel: 'Issues',
       tasksLabel: 'Tasks',
@@ -769,9 +773,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       subtitle: 'Keep problems structured, scoped to a home and room, and ready to turn into task work.',
       backToHome: 'Back to home',
       create: 'Create issue',
-      previewPill: 'Preview structure',
+      previewPill: 'MVP slice',
       previewBody:
-        'This is a focused issue lane for the MVP. Supplier richness, recommendations, and automation stay out of the way for now.',
+        'This is a focused issue lane for the MVP, now backed by the first persisted issue records. Supplier richness, recommendations, and automation stay out of the way.',
       selectedHomeLabel: 'Selected home',
       filteredByRoom: 'Filtered room',
       allRooms: 'All rooms',
@@ -801,9 +805,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       subtitle: 'Use tasks to move an issue forward with clear ownership, progress notes, and completion history.',
       backToHome: 'Back to home',
       create: 'Create task',
-      previewPill: 'Preview structure',
+      previewPill: 'MVP slice',
       previewBody:
-        'The task lane stays intentionally narrow for the MVP: actionable work, linked issue context, and update history.',
+        'The task lane stays intentionally narrow for the MVP and now reads from the first persisted task records: actionable work, linked issue context, and update history.',
       selectedHomeLabel: 'Selected home',
       filteredByIssue: 'Filtered issue',
       allIssues: 'All issues',
@@ -861,6 +865,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'Primary test flow history',
       testFlowBody:
         'This list is the first end-to-end MVP proof path: one room, one issue, one linked task, and the updates that move the work forward.',
+      testFlowPendingBody:
+        'The TEST home is active, but the canonical persisted room, issue, task, and history path has not been seeded yet.',
       testFlowMismatchBody:
         'Open the seeded TEST home first so the canonical MVP proof path and history stay aligned.',
     },
@@ -1336,9 +1342,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       eyebrow: 'Главная дома',
       subtitle:
         'Держите первый MVP-цикл в одном доме, а затем двигайтесь через комнаты, проблемы, задачи и историю.',
-      previewPill: 'MVP-фокус',
+      previewPill: 'MVP-срез',
       previewBody:
-        'Эта главная намеренно держит в центре первый runtime-срез KeepCozy. Более широкие home-ops слои пока остаются вторичными.',
+        'Эта главная намеренно держит в центре первый persisted runtime-срез KeepCozy. Более широкие home-ops слои пока остаются вторичными.',
       currentHomeLabel: 'Текущий дом',
       switchHome: 'Выбрать другой дом',
       loopTitle: 'Первый доказанный цикл',
@@ -1370,6 +1376,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'Основной тестовый путь',
       testFlowBody:
         'Используйте одну показательную проблему на кухне, чтобы проверить полный MVP-путь: дом -> комната -> проблема -> задача -> история.',
+      testFlowPendingBody:
+        'Дом TEST активен, но канонический persisted-путь комната -> проблема -> задача -> история еще не засеян.',
       testFlowMismatchBody:
         'В этой ветке канонический MVP-путь проверяется через seeded-дом TEST. Переключите дом перед проверкой сценария.',
       openChats: 'Открыть чаты',
@@ -1380,9 +1388,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       subtitle:
         'Комнаты должны быть местом, где проблемы и история задач начинают складываться в понятную картину.',
       backToHome: 'Назад к дому',
-      previewPill: 'Предпросмотр структуры',
+      previewPill: 'MVP-срез',
       previewBody:
-        'Эти карточки комнат показывают задуманный центр тяжести MVP, пока первый срез схемы еще подключается.',
+        'Эти карточки комнат теперь читаются из первого persistence-среза KeepCozy и намеренно остаются узкими вокруг проблем, задач и истории.',
       selectedHomeLabel: 'Выбранный дом',
       issuesLabel: 'Проблемы',
       tasksLabel: 'Задачи',
@@ -1400,9 +1408,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Держите проблемы структурированными, привязанными к дому и комнате, и готовыми перейти в задачи.',
       backToHome: 'Назад к дому',
       create: 'Создать проблему',
-      previewPill: 'Предпросмотр структуры',
+      previewPill: 'MVP-срез',
       previewBody:
-        'Это сфокусированная линия проблем для MVP. Богатые поставщики, рекомендации и автоматизация пока не мешают.',
+        'Это сфокусированная линия проблем для MVP, теперь опирающаяся на первый persisted-срез проблем. Богатые поставщики, рекомендации и автоматизация пока не мешают.',
       selectedHomeLabel: 'Выбранный дом',
       filteredByRoom: 'Фильтр по комнате',
       allRooms: 'Все комнаты',
@@ -1436,9 +1444,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Используйте задачи, чтобы двигать проблему вперед с понятной ответственностью, заметками о прогрессе и историей завершения.',
       backToHome: 'Назад к дому',
       create: 'Создать задачу',
-      previewPill: 'Предпросмотр структуры',
+      previewPill: 'MVP-срез',
       previewBody:
-        'Линия задач в MVP намеренно узкая: конкретная работа, связанная проблема и история обновлений.',
+        'Линия задач в MVP намеренно узкая и теперь читается из первого persisted-среза задач: конкретная работа, связанная проблема и история обновлений.',
       selectedHomeLabel: 'Выбранный дом',
       filteredByIssue: 'Фильтр по проблеме',
       allIssues: 'Все проблемы',
@@ -1505,6 +1513,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       testFlowTitle: 'История основного тестового пути',
       testFlowBody:
         'Этот список служит первым сквозным MVP-доказательством: одна комната, одна проблема, одна связанная задача и обновления, которые двигают работу вперед.',
+      testFlowPendingBody:
+        'Дом TEST активен, но канонический persisted-путь комната -> проблема -> задача -> история еще не засеян.',
       testFlowMismatchBody:
         'Сначала откройте seeded-дом TEST, чтобы канонический MVP-сценарий и его история оставались согласованными.',
     },

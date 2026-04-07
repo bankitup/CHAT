@@ -1,6 +1,8 @@
 import Link from 'next/link';
-import { getKeepCozyPreview } from '@/modules/keepcozy/mvp-preview';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+import {
+  getKeepCozyRoomsPageData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type RoomsPageProps = {
@@ -15,7 +17,10 @@ export default async function RoomsPage({ searchParams }: RoomsPageProps) {
     requestedSpaceId: query.space,
     source: 'keepcozy-rooms-page',
   });
-  const preview = getKeepCozyPreview(language);
+  const { rooms } = await getKeepCozyRoomsPageData({
+    language,
+    spaceId: activeSpace.id,
+  });
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -47,15 +52,9 @@ export default async function RoomsPage({ searchParams }: RoomsPageProps) {
           <p className="muted">{t.rooms.previewBody}</p>
         </section>
 
-        <div className="keepcozy-stack-list">
-          {preview.rooms.map((room) => {
-            const issueCount = preview.issues.filter((issue) => issue.roomId === room.id).length;
-            const taskCount = preview.tasks.filter((task) => {
-              const issue = preview.issues.find((candidate) => candidate.id === task.issueId);
-              return issue?.roomId === room.id;
-            }).length;
-
-            return (
+        {rooms.length > 0 ? (
+          <div className="keepcozy-stack-list">
+            {rooms.map((room) => (
               <article key={room.id} className="keepcozy-detail-card">
                 <Link
                   className="stack keepcozy-detail-copy"
@@ -65,25 +64,25 @@ export default async function RoomsPage({ searchParams }: RoomsPageProps) {
                   <div className="keepcozy-detail-header">
                     <div className="stack keepcozy-detail-heading">
                       <h2 className="card-title">{room.name}</h2>
-                      <p className="muted">{room.summary}</p>
+                      <p className="muted">{room.summary || t.rooms.detailBody}</p>
                     </div>
                     <span className="summary-pill summary-pill-muted">{t.rooms.detailTitle}</span>
                   </div>
 
-                  <p className="keepcozy-detail-body">{room.focus}</p>
+                  <p className="keepcozy-detail-body">{t.rooms.detailBody}</p>
                 </Link>
 
                 <div className="keepcozy-meta-row">
                   <span className="keepcozy-meta-pill">
-                    {t.rooms.issuesLabel}: {issueCount}
+                    {t.rooms.issuesLabel}: {room.issueCount}
                   </span>
                   <span className="keepcozy-meta-pill">
-                    {t.rooms.tasksLabel}: {taskCount}
+                    {t.rooms.tasksLabel}: {room.taskCount}
                   </span>
                 </div>
 
                 <p className="muted keepcozy-history-note">
-                  {t.rooms.historyLabel}: {room.historyNote}
+                  {t.rooms.historyLabel}: {t.rooms.detailHistoryTitle}
                 </p>
 
                 <div className="keepcozy-card-actions">
@@ -103,9 +102,14 @@ export default async function RoomsPage({ searchParams }: RoomsPageProps) {
                   </Link>
                 </div>
               </article>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <section className="empty-card">
+            <h2 className="card-title">{t.rooms.title}</h2>
+            <p className="muted">{t.rooms.previewBody}</p>
+          </section>
+        )}
       </section>
     </section>
   );
