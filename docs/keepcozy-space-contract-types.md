@@ -40,14 +40,24 @@ The main exported names are:
 - `KeepCozyGlobalPlatformRole`
 - `KeepCozySpaceRole`
 - `KeepCozyThreadParticipationRole`
+- `KeepCozyCurrentRuntimeDmThreadParticipationRole`
 - `KeepCozyThreadType`
 - `KeepCozyThreadAudienceMode`
 - `KeepCozyThreadStatus`
 - `KeepCozyOperationalObjectKind`
 - `KeepCozyOperationalObjectRef`
+- `KeepCozyThreadOperationalObjectLink`
 - `KeepCozyResolvedRoleLayers`
+- `KeepCozyRoleLayerCompatibilityNote`
 - `KeepCozyRoleLayerTranslation`
 - `KeepCozyThreadCompanionMetadata`
+- `KEEP_COZY_CURRENT_RUNTIME_SPACE_ROLE_SURFACE`
+- `KEEP_COZY_CURRENT_RUNTIME_GROUP_THREAD_ROLE_SURFACE`
+- `KEEP_COZY_CURRENT_RUNTIME_DM_THREAD_ROLE_SURFACE`
+- `KEEP_COZY_RUNTIME_SPACE_ROLE_TO_CANDIDATE_SPACE_ROLES`
+- `KEEP_COZY_ROLE_LAYER_TRANSLATION_DRAFT`
+- `KEEP_COZY_ROLE_LAYER_GUARDRAILS`
+- `KEEP_COZY_THREAD_TYPE_TO_OPERATIONAL_OBJECT_KINDS_DRAFT`
 
 ## What Is Future-Facing Only
 
@@ -61,6 +71,7 @@ including:
 - thread workflow `status`
 - `operational_object_type`
 - `operational_object_id`
+- thread-to-object linkage hints
 - KeepCozy-specific operational role meanings such as `operator` and
   `contractor`
 
@@ -81,6 +92,110 @@ The current runtime contracts remain unchanged:
   vocabulary
 
 The new types deliberately sit beside those models rather than mutating them.
+
+## Current Runtime Role Surface
+
+The contract file now makes the current role surface explicit:
+
+- space runtime roles: `owner | admin | member`
+- group-thread moderation roles: `owner | admin | member`
+- DM-thread participation role: `member` only
+
+The DM rule is important.
+
+It reflects the current architecture choice that DM flows intentionally avoid
+owner/admin moderation semantics, and that operational oversight must not be
+confused with DM decrypt or moderation authority.
+
+## Future KeepCozy Role Surface
+
+The future-facing surface remains the one defined by the KeepCozy architecture
+docs:
+
+- global platform roles such as `authenticated_user`, `platform_admin`, and
+  `support_staff`
+- space roles such as `owner`, `resident`, `operator`, `internal_staff`,
+  `contractor`, `supplier`, and `inspector`
+- generic thread participation and moderation roles that remain thread-local
+  and intentionally narrower than business-role meaning
+
+## Future Operational Object Reference Surface
+
+The object-link contract is intentionally small and future-facing.
+
+The current draft object kinds are:
+
+- `service_request`
+- `work_order`
+- `inspection`
+- `procurement_request`
+- `issue_case`
+- `vendor_assignment`
+- `quality_review`
+- `space_document`
+
+Two design rules matter here:
+
+1. these are reference kinds, not proof that those tables already exist
+2. object kinds are not the same thing as thread types
+
+Examples:
+
+- a `job_coordination` thread may later point at a `work_order`
+- a `supplier_order` thread may later point at a `procurement_request`
+- a thread may also point at a `vendor_assignment` record without changing its
+  main thread type
+
+The new contracts keep that distinction explicit through:
+
+- `KeepCozyOperationalObjectRef`
+- `KeepCozyThreadOperationalObjectLink`
+- `KEEP_COZY_THREAD_TYPE_TO_OPERATIONAL_OBJECT_KINDS_DRAFT`
+
+## Draft Translation Layer
+
+The new compatibility draft is intentionally small and explicit.
+
+It now provides:
+
+- current runtime role-surface constants
+- a reverse candidate map from current generic runtime `SpaceRole` values to
+  possible future `KeepCozySpaceRole` values
+- a forward draft translation from `KeepCozySpaceRole` to:
+  - a compatible current runtime `SpaceRole`
+  - a safe default thread participation role
+  - allowed audience modes
+  - explicit compatibility notes
+- a guardrail constant set and tiny lookup helpers
+
+Most importantly, the forward draft translation is intentionally lossy.
+
+Examples:
+
+- `operator` currently maps to runtime `admin` only as a temporary
+  compatibility shape, not as a claim that the two roles are equivalent
+- `contractor`, `supplier`, and `inspector` all currently collapse to runtime
+  `member`, because current runtime space roles do not yet encode assignment
+  scope
+- all future KeepCozy space roles default to thread participation role
+  `member`, because moderation should be granted explicitly per thread rather
+  than inferred from business role
+
+## Explicit Non-Equivalence Notes
+
+The translation draft now encodes the following facts directly:
+
+- current runtime space roles are lower-fidelity than future KeepCozy space
+  roles
+- current thread moderation roles are not operational job-function roles
+- current runtime does not encode assignment scope for external participants
+- operator visibility is not the same thing as DM decrypt authority
+- DM threads intentionally avoid owner/admin moderation semantics
+
+These are compatibility notes, not policy outcomes.
+
+They are meant to prevent later code from silently treating one layer as a
+drop-in substitute for another.
 
 ## How These Contracts Map to the Architecture Docs
 
@@ -114,6 +229,7 @@ contracts mirror that vocabulary directly:
 - `KeepCozyThreadAudienceMode`
 - `KeepCozyThreadStatus`
 - `KeepCozyOperationalObjectRef`
+- `KeepCozyThreadOperationalObjectLink`
 - `KeepCozyThreadCompanionMetadata`
 
 ### Data flow and implementation plan
@@ -124,6 +240,15 @@ both call for additive thread metadata, operational object linkage, and a
 future compatibility layer. These contracts are the low-risk phase-one
 foundation for that work.
 
+The object-linking draft is intentionally narrow:
+
+- one stable object ref shape
+- one optional thread-link metadata shape
+- one advisory mapping from thread type to likely object kinds
+
+That keeps future schema work open while still giving backend and UI scaffolds
+one shared language.
+
 ## Guardrails
 
 These types should be used with the following explicit constraints:
@@ -132,6 +257,14 @@ These types should be used with the following explicit constraints:
 - do not expand `space_members.role` in this phase
 - do not expand `conversation_members.role` with operational job-function roles
   in this phase
+- do not assume every thread must point at an operational object
+- do not assume one thread type maps to exactly one object kind
+- do not treat the current object-kind union as a frozen database naming
+  decision
+- do not infer thread moderation from KeepCozy business role by default
+- do not treat runtime `admin` as identical to `operator`
+- do not treat runtime `member` as sufficient to distinguish resident vs
+  contractor vs supplier vs inspector
 - do not treat placeholder translation types as proof that policy or schema
   work is finished
 - do not treat operational thread visibility as equivalent to DM decryption
