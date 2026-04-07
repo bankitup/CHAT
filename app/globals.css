@@ -2723,6 +2723,7 @@ main {
 
 .keepcozy-link-grid,
 .keepcozy-stack-list,
+.keepcozy-flow-grid,
 .keepcozy-secondary-grid,
 .keepcozy-timeline {
   display: grid;
@@ -2730,6 +2731,10 @@ main {
 }
 
 .keepcozy-link-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.keepcozy-flow-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -2867,6 +2872,10 @@ main {
 
 @media (max-width: 380px) {
   .keepcozy-link-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .keepcozy-flow-grid {
     grid-template-columns: 1fr;
   }
 }

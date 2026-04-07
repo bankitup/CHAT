@@ -148,6 +148,9 @@ type LanguageDictionary = {
     secondaryChatsBody: string;
     secondarySettingsTitle: string;
     secondarySettingsBody: string;
+    testFlowTitle: string;
+    testFlowBody: string;
+    testFlowMismatchBody: string;
     openChats: string;
     openSettings: string;
   };
@@ -255,6 +258,9 @@ type LanguageDictionary = {
     messagingBody: string;
     recentMessagingTitle: string;
     recentMessagingBody: string;
+    testFlowTitle: string;
+    testFlowBody: string;
+    testFlowMismatchBody: string;
   };
   inboxSettings: {
     title: string;
@@ -733,6 +739,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       secondaryChatsBody: 'Optional communication lane for coordination around the work.',
       secondarySettingsTitle: 'Profile',
       secondarySettingsBody: 'Language, account details, and home switching still live here.',
+      testFlowTitle: 'Primary test flow',
+      testFlowBody:
+        'Use one representative kitchen issue to validate the full MVP path from home to room to issue to task to history.',
+      testFlowMismatchBody:
+        'This branch uses the seeded TEST home as the canonical MVP proof path. Switch homes before validating the flow.',
       openChats: 'Open chats',
       openSettings: 'Open profile',
     },
@@ -847,6 +858,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       messagingBody: 'Chat remains useful for coordination, but it should not define the main KeepCozy workflow.',
       recentMessagingTitle: 'Recent message traffic',
       recentMessagingBody: 'Use this lane when conversation context matters around the work.',
+      testFlowTitle: 'Primary test flow history',
+      testFlowBody:
+        'This list is the first end-to-end MVP proof path: one room, one issue, one linked task, and the updates that move the work forward.',
+      testFlowMismatchBody:
+        'Open the seeded TEST home first so the canonical MVP proof path and history stay aligned.',
     },
     inboxSettings: {
       title: 'Chats settings',
@@ -1351,6 +1367,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       secondaryChatsBody: 'Дополнительный канал координации вокруг работы.',
       secondarySettingsTitle: 'Профиль',
       secondarySettingsBody: 'Язык, аккаунт и смена дома по-прежнему живут здесь.',
+      testFlowTitle: 'Основной тестовый путь',
+      testFlowBody:
+        'Используйте одну показательную проблему на кухне, чтобы проверить полный MVP-путь: дом -> комната -> проблема -> задача -> история.',
+      testFlowMismatchBody:
+        'В этой ветке канонический MVP-путь проверяется через seeded-дом TEST. Переключите дом перед проверкой сценария.',
       openChats: 'Открыть чаты',
       openSettings: 'Открыть профиль',
     },
@@ -1481,6 +1502,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       recentMessagingTitle: 'Недавний трафик сообщений',
       recentMessagingBody:
         'Используйте этот слой, когда вокруг работы действительно важен разговорный контекст.',
+      testFlowTitle: 'История основного тестового пути',
+      testFlowBody:
+        'Этот список служит первым сквозным MVP-доказательством: одна комната, одна проблема, одна связанная задача и обновления, которые двигают работу вперед.',
+      testFlowMismatchBody:
+        'Сначала откройте seeded-дом TEST, чтобы канонический MVP-сценарий и его история оставались согласованными.',
     },
     inboxSettings: {
       title: 'Настройки чатов',

@@ -1,5 +1,9 @@
 import Link from 'next/link';
-import { getKeepCozyPreview } from '@/modules/keepcozy/mvp-preview';
+import {
+  getKeepCozyPreview,
+  getKeepCozyPrimaryTestFlow,
+  isKeepCozyPrimaryTestHomeName,
+} from '@/modules/keepcozy/mvp-preview';
 import { requireKeepCozyContext } from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
@@ -18,6 +22,8 @@ export default async function HomeDashboardPage({
     source: 'keepcozy-home-dashboard',
   });
   const preview = getKeepCozyPreview(language);
+  const primaryFlow = getKeepCozyPrimaryTestFlow(language);
+  const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpace.name);
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -110,6 +116,104 @@ export default async function HomeDashboardPage({
               <span className="pill keepcozy-link-action">{t.homeDashboard.openHistory}</span>
             </Link>
           </div>
+        </section>
+
+        <section className="stack settings-section keepcozy-section">
+          <div className="stack keepcozy-section-copy">
+            <h2 className="card-title">{t.homeDashboard.testFlowTitle}</h2>
+            <p className="muted">{t.homeDashboard.testFlowBody}</p>
+          </div>
+
+          {showPrimaryFlow ? (
+            <article className="keepcozy-detail-card">
+              <div className="keepcozy-detail-header">
+                <div className="stack keepcozy-detail-heading">
+                  <h3 className="card-title">{primaryFlow.issue.title}</h3>
+                  <p className="muted">{primaryFlow.issue.summary}</p>
+                </div>
+                <span className="summary-pill summary-pill-muted">
+                  {primaryFlow.homeNameHint}
+                </span>
+              </div>
+
+              <div className="keepcozy-stack-list keepcozy-flow-grid">
+                <section className="keepcozy-secondary-card">
+                  <div className="stack keepcozy-link-copy">
+                    <h4 className="card-title">{t.homeDashboard.currentHomeLabel}</h4>
+                    <p className="muted">{activeSpace.name}</p>
+                  </div>
+                </section>
+
+                <Link
+                  className="keepcozy-secondary-card"
+                  href={withSpaceParam(`/rooms/${primaryFlow.room.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  <div className="stack keepcozy-link-copy">
+                    <h4 className="card-title">{t.homeDashboard.roomsTitle}</h4>
+                    <p className="muted">{primaryFlow.room.name}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">
+                    {t.homeDashboard.openRooms}
+                  </span>
+                </Link>
+
+                <Link
+                  className="keepcozy-secondary-card"
+                  href={withSpaceParam(`/issues/${primaryFlow.issue.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  <div className="stack keepcozy-link-copy">
+                    <h4 className="card-title">{t.homeDashboard.issuesTitle}</h4>
+                    <p className="muted">{primaryFlow.issue.title}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">
+                    {t.homeDashboard.openIssues}
+                  </span>
+                </Link>
+
+                <Link
+                  className="keepcozy-secondary-card"
+                  href={withSpaceParam(`/tasks/${primaryFlow.task.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  <div className="stack keepcozy-link-copy">
+                    <h4 className="card-title">{t.homeDashboard.tasksTitle}</h4>
+                    <p className="muted">{primaryFlow.task.title}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">
+                    {t.homeDashboard.openTasks}
+                  </span>
+                </Link>
+
+                <Link
+                  className="keepcozy-secondary-card"
+                  href={withSpaceParam('/activity', activeSpace.id)}
+                  prefetch={false}
+                >
+                  <div className="stack keepcozy-link-copy">
+                    <h4 className="card-title">{t.homeDashboard.historyTitle}</h4>
+                    <p className="muted">{t.homeDashboard.historyBody}</p>
+                  </div>
+                  <span className="summary-pill summary-pill-muted">
+                    {t.homeDashboard.openHistory}
+                  </span>
+                </Link>
+              </div>
+            </article>
+          ) : (
+            <section className="empty-card">
+              <h3 className="card-title">{primaryFlow.homeNameHint}</h3>
+              <p className="muted">{t.homeDashboard.testFlowMismatchBody}</p>
+              <Link
+                className="button button-secondary"
+                href={withSpaceParam('/spaces', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.homeDashboard.switchHome}
+              </Link>
+            </section>
+          )}
         </section>
 
         <section className="stack settings-section keepcozy-section">

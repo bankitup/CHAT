@@ -41,6 +41,33 @@ export type KeepCozyPreviewDataset = {
   tasks: KeepCozyPreviewTask[];
 };
 
+export type KeepCozyPrimaryTestFlow = {
+  homeNameHint: string;
+  room: KeepCozyPreviewRoom;
+  issue: KeepCozyPreviewIssue;
+  task: KeepCozyPreviewTask;
+  history: Array<
+    KeepCozyPreviewUpdate & {
+      href: {
+        kind: 'issue' | 'task';
+        targetId: string;
+      };
+      stage: 'issue' | 'task';
+    }
+  >;
+};
+
+const KEEP_COZY_PRIMARY_TEST_FLOW = {
+  homeNameHint: 'TEST',
+  issueId: 'kitchen-faucet-drip',
+  roomId: 'kitchen',
+  taskId: 'capture-faucet-model',
+} as const;
+
+export function isKeepCozyPrimaryTestHomeName(name: string | null | undefined) {
+  return (name ?? '').trim().toUpperCase() === KEEP_COZY_PRIMARY_TEST_FLOW.homeNameHint;
+}
+
 const previewByLanguage: Record<AppLanguage, KeepCozyPreviewDataset> = {
   en: {
     rooms: [
@@ -398,4 +425,41 @@ export function getKeepCozyPreviewTask(
   taskId: string,
 ) {
   return getKeepCozyPreview(language).tasks.find((task) => task.id === taskId) ?? null;
+}
+
+export function getKeepCozyPrimaryTestFlow(
+  language: AppLanguage,
+): KeepCozyPrimaryTestFlow {
+  const room = getKeepCozyPreviewRoom(language, KEEP_COZY_PRIMARY_TEST_FLOW.roomId);
+  const issue = getKeepCozyPreviewIssue(language, KEEP_COZY_PRIMARY_TEST_FLOW.issueId);
+  const task = getKeepCozyPreviewTask(language, KEEP_COZY_PRIMARY_TEST_FLOW.taskId);
+
+  if (!room || !issue || !task) {
+    throw new Error('KeepCozy primary MVP test flow is missing required preview records.');
+  }
+
+  return {
+    history: [
+      ...issue.updates.map((update) => ({
+        ...update,
+        href: {
+          kind: 'issue' as const,
+          targetId: issue.id,
+        },
+        stage: 'issue' as const,
+      })),
+      ...task.updates.map((update) => ({
+        ...update,
+        href: {
+          kind: 'task' as const,
+          targetId: task.id,
+        },
+        stage: 'task' as const,
+      })),
+    ],
+    homeNameHint: KEEP_COZY_PRIMARY_TEST_FLOW.homeNameHint,
+    issue,
+    room,
+    task,
+  };
 }
