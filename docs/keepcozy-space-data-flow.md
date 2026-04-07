@@ -341,6 +341,8 @@ Recommended design rule:
 - timeline events should be append-oriented and audit-friendly
 - they should summarize meaningful state changes
 - they should not depend on loading blobs or replaying entire message history
+- later visibility should inherit from parent thread/object/space policy
+  boundaries rather than being guessed from generic thread role alone
 
 ## 6. Search and Indexing Implications
 

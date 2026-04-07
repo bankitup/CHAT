@@ -247,6 +247,88 @@ Important rules:
 - later timeline filtering belongs to policy-aware backend work, not this
   branch's helper scaffolding
 
+## Timeline Visibility Preparation
+
+The future space timeline should be understood as a visibility-dependent
+projection, not a separate permission system.
+
+That means later policy work should answer two distinct questions:
+
+1. What happened in the space?
+2. Which subset of those committed events may this viewer actually see?
+
+The second question must not be answered by timeline rows alone.
+
+### Recommended inheritance order
+
+Later timeline visibility should inherit or derive from the strongest parent
+resource available:
+
+1. parent conversation policy when `conversation_id` is present
+2. parent operational-object policy when only object linkage is present
+3. conservative space-level policy only when no narrower parent exists
+
+Important rule:
+
+- a timeline row should never be easier to see than the thread or object that
+  produced it
+
+### Space-wide vs thread-scoped vs policy-filtered later
+
+Recommended later interpretation:
+
+- space-wide:
+  rows linked only to durable space-level operational changes may later be
+  visible to a broader in-space audience, but still not to all members by
+  default
+- thread-scoped:
+  rows linked to a specific conversation should later inherit from that
+  thread's audience and participation rules
+- policy-filtered:
+  rows linked to mixed, internal-only, restricted-external, or object-scoped
+  work should later be filtered through the final policy matrix rather than
+  shown just because the viewer is in the same space
+
+### Why generic thread role is not enough
+
+Generic runtime thread role is not sufficient to decide future timeline
+visibility by itself because it does not encode:
+
+- whether the thread is internal-only
+- whether external access is assignment-scoped
+- whether operator oversight should apply by policy
+- whether the event really belongs to a parent object rather than a thread
+- whether the viewer is seeing a space-level summary vs one thread lane
+
+That is why later timeline filtering must combine:
+
+- outer space boundary
+- role-layer interpretation
+- audience metadata
+- assignment-aware external scope
+- parent thread/object linkage
+
+and must not rely only on `conversation_members.role`.
+
+### What Must Wait for Final Policy/RLS Work
+
+This branch intentionally does not decide:
+
+- the exact SQL/RLS predicates for timeline-row visibility
+- whether operator oversight is implemented by membership materialization or
+  policy joins
+- whether some space-level events are visible to all internal roles or only a
+  narrower operational subset
+- whether some owner/resident-facing event types should be hidden even when the
+  parent thread is client-facing
+- how support or compliance review is audited for exceptional visibility cases
+
+Practical boundary:
+
+- this branch explains how later policy should think about timeline visibility
+- the final policy/RLS branch must still decide how those rules are enforced
+- the current runtime must remain unchanged until that later branch lands
+
 Matrix note:
 
 - the interpretation matrix above is the intended first reference point for
