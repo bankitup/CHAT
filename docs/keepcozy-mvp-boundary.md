@@ -73,7 +73,7 @@ Important clarification:
   slice around the shared `space` home context
 - preview support remains only as a temporary fallback for environments where
   the first KeepCozy tables have not been applied yet
-- the next narrow gap is write behavior, now scoped in
+- the first narrow issue/task write paths now exist, as scoped in
   [keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md)
 
 That means the first KeepCozy MVP boundary should still be defined

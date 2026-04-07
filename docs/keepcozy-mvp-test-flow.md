@@ -42,6 +42,8 @@ Important clarification:
 - [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
   remains only as a temporary fallback for pre-migration environments where
   those tables are not available yet
+- the seeded faucet issue and linked task remain the shared anchor records for
+  the first proof path
 - the first proof should still be representative of the real MVP loop during
   rollout across environments
 
@@ -65,6 +67,9 @@ Important rule:
 - the canonical validation path should now use persisted rows first
 - preview fallback should only be treated as an environment safety net before
   the migrations and seed are applied
+- the seed provides the baseline proof path and does not reset prior reviewer
+  edits, so repeated validation should append new updates instead of expecting a
+  pristine reset every run
 
 ## Canonical Test Home
 
@@ -124,26 +129,53 @@ The first proof path should be checked in this order:
    - the issue is room-linked
    - issue updates are visible as structured history
    - the linked task is visible from the issue detail
+   - add one note-only issue update through the live form
+   Recommended shared validation input:
+   `label = Write-path check`
+   `body = Requested one faucet model photo before deciding on parts.`
 5. Task
    Open `/tasks/capture-faucet-model` and confirm:
    - the task is issue-linked
    - task updates are visible as structured progress history
    - the task still points back to the issue and room
+   - add one note-only task update through the live form
+   Recommended shared validation input:
+   `label = Waiting on photo`
+   `body = Need one clear fixture photo before moving from identification to repair.`
 6. History
    Open `/activity` and confirm the `Primary test flow history` section shows
+<<<<<<< HEAD
    the same issue/task update path in one place.
    The surface should make the room -> issue -> task chain explicit and group
    the operational updates into issue history and task history instead of
    reading like a generic feed.
+=======
+   the same issue/task update path in one place, including the newly appended
+   persisted issue/task updates.
+>>>>>>> 229ac35874fd9fea5f73c213ec37ebb8c117604f
    If another home is active, the screen should again prompt the reviewer back
    to `TEST`.
+7. Optional creator-owned extension
+   If you need to validate the create surfaces or status-change flow end to
+   end, use the live forms to create a new issue in `TEST`, then create a new
+   linked task from that issue, and finally append updates or a status change
+   on those new records.
+   This keeps the canonical faucet path intact while also giving the current
+   reviewer creator-owned records for full write validation.
 
-Expected persisted history order:
+Expected baseline persisted history order:
 
 - `Issue logged`
 - `Initial assessment`
 - `Task created`
 - `Scope held`
+
+Expected write-validation behavior:
+
+- the two new note-only updates should appear after the seeded baseline entries
+  in both the issue/task detail timelines and `/activity`
+- the seeded faucet issue/task remain the canonical anchor records even after
+  those extra updates are appended
 
 ## What Counts As A Pass
 
@@ -155,7 +187,17 @@ one home session:
 - one issue can be read as a structured problem record
 - one linked task can be read as the work item that moves the issue forward
 - issue and task updates are visible as history, not just generic chat traffic
+- at least one persisted issue update and one persisted task update can be
+  appended through the live KeepCozy forms
+- `/activity` reflects those same persisted updates as operational history
 - the user can move through the loop without needing chat as the primary UX
+
+Optional stronger pass:
+
+- the reviewer can create a new issue in `TEST`
+- the reviewer can create a new task from that issue
+- the reviewer can append updates or change status on those newly created
+  records
 
 ## Minimal Runtime Support In This Branch
 
@@ -167,10 +209,50 @@ This branch keeps implementation support intentionally small:
   [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
 - the home dashboard explicitly exposes the first proof path in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
+- the issue create/detail routes now support persisted writes in
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/issues/new/page.tsx)
+  and
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/issues/[issueId]/page.tsx)
+- the task create/detail routes now support persisted writes in
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/tasks/new/page.tsx)
+  and
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/tasks/[taskId]/page.tsx)
 - the history screen exposes the combined issue/task proof path in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
 - the canonical TEST-home seed preserves the same room, issue, and task slugs
   as the preview-backed shell so the mental model does not change
+
+## Current Validation Modes
+
+Use these two modes deliberately:
+
+### Shared canonical mode
+
+Use the seeded `TEST` -> `Kitchen` -> faucet issue -> linked task path when the
+team wants one common proof flow across environments.
+
+Best for:
+
+- validating the product story
+- validating persisted reads
+- validating note-only issue/task updates that should show up in `/activity`
+
+### Creator-owned extension mode
+
+Create a new issue and linked task in `TEST` when the reviewer needs to confirm
+full authoring behavior on records they own.
+
+Best for:
+
+- validating `/issues/new`
+- validating `/tasks/new`
+- validating creator-owned status changes on issue/task records
+
+Important current policy note:
+
+- note-only updates can be validated against the seeded faucet issue/task path
+- status-change validation may require the current reviewer to be the record
+  creator or a `TEST` home owner/admin under the current narrow RLS rules
 
 ## What This Test Flow Should Not Do Yet
 
