@@ -60,6 +60,7 @@ work on `develop`:
 - `feature/space-backend-thread-object-links`
 - `feature/space-timeline-foundation`
 - `feature/space-access-mapping-prep`
+- `feature/space-policy-matrix`
 
 Current runtime intentionally remains unchanged across those branches:
 
@@ -85,10 +86,9 @@ work:
 
 Recommended exact remaining branch order from the current state:
 
-1. `feature/space-policy-matrix`
-2. `feature/space-rls-hardening`
-3. `feature/space-first-operational-object`
-4. `feature/keepcozy-space-ui-shell`
+1. `feature/space-rls-hardening`
+2. `feature/space-first-operational-object`
+3. `feature/keepcozy-space-ui-shell`
 
 ## 1. Current State Summary
 
@@ -651,22 +651,8 @@ The changes most likely to cause regressions are:
 
 ## 13. Recommended Immediate Next Step
 
-The next practical step from the current baseline should be:
-
-- open `feature/space-policy-matrix`
-- treat the docs, contracts, additive schema drafts, backend-link boundaries,
-  timeline foundation, and access-mapping prep as baseline inputs rather than
-  redoing them
-- keep `feature/space-rls-hardening` as a separate, review-heavy follow-on
-  branch once the matrix is frozen
-- avoid user-facing KeepCozy UI until the policy matrix and enforcement layers
-  are in place
-
-That gives the project the best chance of making KeepCozy reusable without
-breaking the restored CHAT runtime.
-
-If reading this plan from the completed `feature/space-policy-matrix` branch,
-the next practical step becomes:
+From the completed `feature/space-policy-matrix` branch, the next practical
+step should be:
 
 - open `feature/space-rls-hardening`
 - translate
@@ -677,3 +663,10 @@ the next practical step becomes:
   forces it
 - do not treat the policy matrix as already-enforced behavior; the hardening
   branch still owns predicates, joins, redaction, and audited exception paths
+- avoid user-facing KeepCozy UI until the policy matrix and enforcement layers
+  are in place
+
+That keeps the next phase narrow:
+
+- this branch freezes semantic intent
+- the next branch translates that intent into reviewed enforcement

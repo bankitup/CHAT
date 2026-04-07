@@ -42,6 +42,13 @@ Recommended exact next branch after this one:
 
 - `feature/space-rls-hardening`
 
+Practical status note:
+
+- this branch should now be treated as the semantic source of truth for later
+  enforcement work
+- the next branch should translate this matrix into reviewed backend and SQL/RLS
+  behavior rather than redefining policy intent
+
 Current runtime intentionally remains unchanged while this matrix is being
 defined:
 

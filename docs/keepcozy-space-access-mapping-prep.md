@@ -65,6 +65,8 @@ Practical handoff note:
   [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - later enforcement work should use that matrix rather than treating this prep
   document as the final source of allow/deny rules
+- from the completed policy-definition state, the exact next enforcement branch
+  should be `feature/space-rls-hardening`
 
 ## Current Runtime Inputs vs Future Policy Inputs
 
