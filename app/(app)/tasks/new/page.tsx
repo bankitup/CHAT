@@ -1,19 +1,42 @@
 import Link from 'next/link';
-import { requireKeepCozyContext } from '@/modules/keepcozy/server';
+import { createTaskAction } from '../actions';
+import {
+  getKeepCozyIssuesPageData,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
+import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type NewTaskPageProps = {
   searchParams: Promise<{
+    error?: string;
+    issue?: string;
+    message?: string;
     space?: string;
   }>;
 };
 
 export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
   const query = await searchParams;
-  const { activeSpace, t } = await requireKeepCozyContext({
+  const { activeSpace, language, t } = await requireKeepCozyContext({
     requestedSpaceId: query.space,
     source: 'keepcozy-new-task-page',
   });
+  const { issues } = await getKeepCozyIssuesPageData({
+    language,
+    spaceId: activeSpace.id,
+  });
+  const selectedIssue = query.issue
+    ? issues.find((candidate) => candidate.id === query.issue) ?? null
+    : null;
+  const visibleError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: t.tasks.createFailed,
+        language,
+        rawMessage: query.error,
+      })
+    : null;
+  const visibleMessage = query.message?.trim() || null;
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -34,6 +57,16 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
         <p className="muted settings-hero-note">{t.tasks.createSubtitle}</p>
       </section>
 
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
+
       <section className="card stack settings-surface keepcozy-surface">
         <section className="empty-card keepcozy-preview-card">
           <div className="keepcozy-preview-header">
@@ -46,42 +79,76 @@ export default async function NewTaskPage({ searchParams }: NewTaskPageProps) {
           <p className="muted">{t.tasks.draftBody}</p>
         </section>
 
-        <div className="keepcozy-stack-list">
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.tasks.fieldHome}</h3>
-              <p className="muted">{activeSpace.name}</p>
-            </div>
-          </section>
+        {issues.length > 0 ? (
+          <form action={createTaskAction} className="stack settings-section keepcozy-section">
+            <input name="spaceId" type="hidden" value={activeSpace.id} />
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.tasks.fieldIssue}</h3>
-              <p className="muted">{t.issues.title}</p>
-            </div>
-          </section>
+            <label className="field">
+              <span>{t.tasks.fieldHome}</span>
+              <input className="input" readOnly value={activeSpace.name} />
+            </label>
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.tasks.fieldTask}</h3>
-              <p className="muted">{t.tasks.detailBody}</p>
-            </div>
-          </section>
+            <label className="field">
+              <span>{t.tasks.fieldIssue}</span>
+              <select
+                className="input"
+                defaultValue={selectedIssue?.id ?? ''}
+                name="issueSlug"
+              >
+                <option value="">{t.tasks.allIssues}</option>
+                {issues.map((issue) => (
+                  <option key={issue.id} value={issue.id}>
+                    {issue.title}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.tasks.fieldFirstUpdate}</h3>
-              <p className="muted">{t.tasks.updatesBody}</p>
-            </div>
-          </section>
+            <label className="field">
+              <span>{t.tasks.fieldTask}</span>
+              <input
+                autoComplete="off"
+                className="input"
+                name="title"
+                placeholder={selectedIssue ? `${selectedIssue.title}: ` : ''}
+                required
+              />
+            </label>
 
-          <section className="keepcozy-secondary-card">
-            <div className="stack keepcozy-link-copy">
-              <h3 className="card-title">{t.tasks.fieldAttachments}</h3>
-              <p className="muted">{t.tasks.createNote}</p>
-            </div>
+            <label className="field">
+              <span>{t.tasks.fieldSummary}</span>
+              <textarea className="input textarea" name="summary" />
+            </label>
+
+            <label className="field">
+              <span>{t.tasks.fieldNextStep}</span>
+              <input className="input" name="nextStep" />
+            </label>
+
+            <label className="field">
+              <span>{t.tasks.fieldFirstUpdate}</span>
+              <textarea className="input textarea" name="firstUpdateBody" required />
+            </label>
+
+            <p className="muted">{t.tasks.createNote}</p>
+
+            <button className="button" type="submit">
+              {t.tasks.submitCreate}
+            </button>
+          </form>
+        ) : (
+          <section className="empty-card">
+            <h2 className="card-title">{t.tasks.fieldIssue}</h2>
+            <p className="muted">{t.tasks.createIssueFirstBody}</p>
+            <Link
+              className="button"
+              href={withSpaceParam('/issues/new', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.issues.create}
+            </Link>
           </section>
-        </div>
+        )}
       </section>
     </section>
   );

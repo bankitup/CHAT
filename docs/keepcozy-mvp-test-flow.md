@@ -180,18 +180,17 @@ The first proof path should not expand into:
 - automation or recommendation layers
 - broad fixture libraries or many synthetic homes
 
-## Next Lift After This Pass
+## Current Write Support
 
-Once the team is satisfied with the first proof path, the next implementation
-lift should add narrow write paths on top of the first dedicated MVP schema
-slice:
+The canonical proof path can now be validated with narrow persisted writes on
+top of the first dedicated MVP schema slice:
 
 - create issue
 - create task
 - append issue update
 - append task update
 
-That next lift is defined in
+That current write layer is defined in
 [keepcozy-mvp-write-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-write-paths.md).
 
 That first persistence slice is defined in
@@ -202,5 +201,5 @@ and begins with:
 - [2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-rls-hardening.sql)
 - [2026-04-07-keepcozy-first-persistence-slice-test-seed.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-keepcozy-first-persistence-slice-test-seed.sql)
 
-The test flow above should remain the same when that lift happens. The main
-change should be broader write support, not a new proof path.
+The test flow above should remain the same as those writes harden. The main
+change should be better authoring polish, not a new proof path.

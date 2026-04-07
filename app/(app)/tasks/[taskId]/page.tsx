@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { appendTaskUpdateAction } from '../actions';
 import {
   getKeepCozyTaskDetailData,
   requireKeepCozyContext,
 } from '@/modules/keepcozy/server';
+import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type TaskDetailPageProps = {
@@ -11,6 +13,8 @@ type TaskDetailPageProps = {
     taskId: string;
   }>;
   searchParams: Promise<{
+    error?: string;
+    message?: string;
     space?: string;
   }>;
 };
@@ -33,6 +37,15 @@ export default async function TaskDetailPage({
   if (!task) {
     notFound();
   }
+
+  const visibleError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: t.tasks.updateFailed,
+        language,
+        rawMessage: query.error,
+      })
+    : null;
+  const visibleMessage = query.message?.trim() || null;
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -62,6 +75,16 @@ export default async function TaskDetailPage({
         <p className="muted settings-hero-note">{task.summary || t.tasks.detailBody}</p>
       </section>
 
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
+
       <section className="card stack settings-surface keepcozy-surface">
         <section className="keepcozy-focus-card">
           <div className="stack keepcozy-focus-copy">
@@ -79,6 +102,44 @@ export default async function TaskDetailPage({
               {t.tasks.viewRoom}
             </Link>
           ) : null}
+        </section>
+
+        <section className="stack settings-section keepcozy-section">
+          <div className="stack keepcozy-section-copy">
+            <h2 className="card-title">{t.tasks.appendTitle}</h2>
+            <p className="muted">{t.tasks.appendBody}</p>
+          </div>
+
+          <form action={appendTaskUpdateAction} className="stack">
+            <input name="spaceId" type="hidden" value={activeSpace.id} />
+            <input name="taskId" type="hidden" value={task.id} />
+
+            <label className="field">
+              <span>{t.tasks.fieldUpdateLabel}</span>
+              <input className="input" name="label" />
+            </label>
+
+            <label className="field">
+              <span>{t.tasks.fieldStatus}</span>
+              <select className="input" defaultValue="" name="status">
+                <option value="">{t.tasks.statusKeepCurrent}</option>
+                <option value="planned">{t.tasks.statusPlanned}</option>
+                <option value="active">{t.tasks.statusActive}</option>
+                <option value="waiting">{t.tasks.statusWaiting}</option>
+                <option value="done">{t.tasks.statusDone}</option>
+                <option value="cancelled">{t.tasks.statusCancelled}</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>{t.tasks.fieldUpdateBody}</span>
+              <textarea className="input textarea" name="body" required />
+            </label>
+
+            <button className="button" type="submit">
+              {t.tasks.submitUpdate}
+            </button>
+          </form>
         </section>
 
         <section className="stack settings-section keepcozy-section">

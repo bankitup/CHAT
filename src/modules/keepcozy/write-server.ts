@@ -15,6 +15,17 @@ export const KEEP_COZY_ISSUE_STATUS_VALUES = [
 export type KeepCozyIssueStatusCode =
   (typeof KEEP_COZY_ISSUE_STATUS_VALUES)[number];
 
+export const KEEP_COZY_TASK_STATUS_VALUES = [
+  'planned',
+  'active',
+  'waiting',
+  'done',
+  'cancelled',
+] as const;
+
+export type KeepCozyTaskStatusCode =
+  (typeof KEEP_COZY_TASK_STATUS_VALUES)[number];
+
 type KeepCozyWriteRoomRow = {
   id: string;
   slug: string;
@@ -28,6 +39,16 @@ type KeepCozyWriteIssueRow = {
   status: KeepCozyIssueStatusCode;
   resolved_at: string | null;
   resolved_by: string | null;
+  updated_at: string | null;
+};
+
+type KeepCozyWriteTaskRow = {
+  id: string;
+  slug: string;
+  issue_id: string;
+  status: KeepCozyTaskStatusCode;
+  completed_at: string | null;
+  completed_by: string | null;
   updated_at: string | null;
 };
 
@@ -64,6 +85,22 @@ export function normalizeKeepCozyIssueStatus(
     : null;
 }
 
+export function normalizeKeepCozyTaskStatus(
+  value: string | null | undefined,
+): KeepCozyTaskStatusCode | null {
+  const normalized = value?.trim() ?? '';
+
+  if (!normalized) {
+    return null;
+  }
+
+  return KEEP_COZY_TASK_STATUS_VALUES.includes(
+    normalized as KeepCozyTaskStatusCode,
+  )
+    ? (normalized as KeepCozyTaskStatusCode)
+    : null;
+}
+
 async function findKeepCozyRoomBySlug(input: {
   spaceId: string;
   roomSlug: string;
@@ -74,6 +111,25 @@ async function findKeepCozyRoomBySlug(input: {
     .select('id, slug, name')
     .eq('space_id', input.spaceId)
     .eq('slug', input.roomSlug)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? null) as KeepCozyWriteRoomRow | null;
+}
+
+async function findKeepCozyRoomByRecordId(input: {
+  roomId: string;
+  spaceId: string;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('id, slug, name')
+    .eq('space_id', input.spaceId)
+    .eq('id', input.roomId)
     .maybeSingle();
 
   if (error) {
@@ -100,6 +156,44 @@ async function findKeepCozyIssueBySlug(input: {
   }
 
   return (data ?? null) as KeepCozyWriteIssueRow | null;
+}
+
+async function findKeepCozyIssueByRecordId(input: {
+  issueId: string;
+  spaceId: string;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('issues')
+    .select('id, slug, room_id, status, resolved_at, resolved_by, updated_at')
+    .eq('space_id', input.spaceId)
+    .eq('id', input.issueId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? null) as KeepCozyWriteIssueRow | null;
+}
+
+async function findKeepCozyTaskBySlug(input: {
+  spaceId: string;
+  taskSlug: string;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('id, slug, issue_id, status, completed_at, completed_by, updated_at')
+    .eq('space_id', input.spaceId)
+    .eq('slug', input.taskSlug)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? null) as KeepCozyWriteTaskRow | null;
 }
 
 async function createUniqueKeepCozyIssueSlug(input: {
@@ -131,6 +225,37 @@ async function createUniqueKeepCozyIssueSlug(input: {
   }
 
   throw new Error('Unable to create a unique issue slug right now.');
+}
+
+async function createUniqueKeepCozyTaskSlug(input: {
+  spaceId: string;
+  title: string;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+  const baseSlug = slugifyKeepCozyValue(input.title);
+  let attempt = 1;
+
+  while (attempt < 100) {
+    const candidate = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('slug')
+      .eq('space_id', input.spaceId)
+      .eq('slug', candidate)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data) {
+      return candidate;
+    }
+
+    attempt += 1;
+  }
+
+  throw new Error('Unable to create a unique task slug right now.');
 }
 
 export async function createKeepCozyIssue(input: {
@@ -257,21 +382,10 @@ export async function appendKeepCozyIssueUpdate(input: {
   }
 
   const room = issue.room_id
-    ? await (async () => {
-        const client = await getRequestSupabaseServerClient();
-        const { data, error } = await client
-          .from('rooms')
-          .select('id, slug, name')
-          .eq('space_id', input.spaceId)
-          .eq('id', issue.room_id)
-          .maybeSingle();
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        return (data ?? null) as KeepCozyWriteRoomRow | null;
-      })()
+    ? await findKeepCozyRoomByRecordId({
+        roomId: issue.room_id,
+        spaceId: input.spaceId,
+      })
     : null;
 
   const requestedStatus =
@@ -366,5 +480,249 @@ export async function appendKeepCozyIssueUpdate(input: {
   return {
     issueSlug: issue.slug,
     roomSlug: room?.slug ?? null,
+  };
+}
+
+export async function createKeepCozyTask(input: {
+  firstUpdateBody: string;
+  firstUpdateLabel: string;
+  issueSlug: string;
+  nextStep?: string | null;
+  spaceId: string;
+  summary?: string | null;
+  title: string;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+  const user = await requireRequestViewer('keepcozy:create-task');
+  const issueSlug = trimToNullable(input.issueSlug);
+  const title = trimToNullable(input.title);
+  const firstUpdateBody = trimToNullable(input.firstUpdateBody);
+  const firstUpdateLabel = trimToNullable(input.firstUpdateLabel);
+
+  if (!input.spaceId?.trim()) {
+    throw new Error('Active home is required before creating a task.');
+  }
+
+  if (!issueSlug) {
+    throw new Error('Issue selection is required before creating a task.');
+  }
+
+  if (!title) {
+    throw new Error('Task title is required.');
+  }
+
+  if (!firstUpdateBody) {
+    throw new Error('The first task update is required.');
+  }
+
+  if (!firstUpdateLabel) {
+    throw new Error('The first task update label is required.');
+  }
+
+  const issue = await findKeepCozyIssueBySlug({
+    issueSlug,
+    spaceId: input.spaceId,
+  });
+
+  if (!issue) {
+    throw new Error('The selected issue could not be found in this home.');
+  }
+
+  const room = issue.room_id
+    ? await findKeepCozyRoomByRecordId({
+        roomId: issue.room_id,
+        spaceId: input.spaceId,
+      })
+    : null;
+  const taskSlug = await createUniqueKeepCozyTaskSlug({
+    spaceId: input.spaceId,
+    title,
+  });
+  const now = new Date().toISOString();
+  const { data: createdTask, error: createTaskError } = await supabase
+    .from('tasks')
+    .insert({
+      created_by: user.id,
+      issue_id: issue.id,
+      next_step: trimToNullable(input.nextStep),
+      slug: taskSlug,
+      space_id: input.spaceId,
+      status: 'planned' satisfies KeepCozyTaskStatusCode,
+      summary: trimToNullable(input.summary),
+      title,
+      updated_at: now,
+    })
+    .select('id, slug')
+    .single();
+
+  if (createTaskError || !createdTask?.id) {
+    throw new Error(createTaskError?.message ?? 'Unable to create the task.');
+  }
+
+  const { error: createUpdateError } = await supabase.from('task_updates').insert({
+    body: firstUpdateBody,
+    created_by: user.id,
+    kind: 'note',
+    label: firstUpdateLabel,
+    space_id: input.spaceId,
+    task_id: createdTask.id,
+  });
+
+  if (createUpdateError) {
+    throw new Error(createUpdateError.message);
+  }
+
+  return {
+    issueSlug: issue.slug,
+    roomSlug: room?.slug ?? null,
+    taskSlug: createdTask.slug,
+  };
+}
+
+export async function appendKeepCozyTaskUpdate(input: {
+  body: string;
+  label?: string | null;
+  noteLabelFallback: string;
+  requestedStatus?: KeepCozyTaskStatusCode | null;
+  completionLabelFallback: string;
+  spaceId: string;
+  statusChangeLabelFallback: string;
+  taskSlug: string;
+}) {
+  const supabase = await getRequestSupabaseServerClient();
+  const user = await requireRequestViewer('keepcozy:append-task-update');
+  const taskSlug = trimToNullable(input.taskSlug);
+  const body = trimToNullable(input.body);
+
+  if (!input.spaceId?.trim()) {
+    throw new Error('Active home is required before saving a task update.');
+  }
+
+  if (!taskSlug) {
+    throw new Error('Task selection is required.');
+  }
+
+  if (!body) {
+    throw new Error('Task update text is required.');
+  }
+
+  const task = await findKeepCozyTaskBySlug({
+    spaceId: input.spaceId,
+    taskSlug,
+  });
+
+  if (!task) {
+    throw new Error('The selected task could not be found in this home.');
+  }
+
+  const issue = await findKeepCozyIssueByRecordId({
+    issueId: task.issue_id,
+    spaceId: input.spaceId,
+  });
+
+  if (!issue) {
+    throw new Error('The linked issue could not be found in this home.');
+  }
+
+  const room = issue.room_id
+    ? await findKeepCozyRoomByRecordId({
+        roomId: issue.room_id,
+        spaceId: input.spaceId,
+      })
+    : null;
+  const requestedStatus =
+    input.requestedStatus && input.requestedStatus !== task.status
+      ? input.requestedStatus
+      : null;
+
+  if (!requestedStatus) {
+    const { error } = await supabase.from('task_updates').insert({
+      body,
+      created_by: user.id,
+      kind: 'note',
+      label: trimToNullable(input.label) ?? input.noteLabelFallback,
+      space_id: input.spaceId,
+      task_id: task.id,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const { error: touchTaskError } = await supabase
+      .from('tasks')
+      .update({
+        updated_at: new Date().toISOString(),
+      })
+      .eq('space_id', input.spaceId)
+      .eq('id', task.id);
+
+    if (touchTaskError && !touchTaskError.message.toLowerCase().includes('row-level security')) {
+      throw new Error(touchTaskError.message);
+    }
+
+    return {
+      issueSlug: issue.slug,
+      roomSlug: room?.slug ?? null,
+      taskSlug: task.slug,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const previousTaskState = {
+    completed_at: task.completed_at,
+    completed_by: task.completed_by,
+    status: task.status,
+    updated_at: task.updated_at,
+  };
+  const nextTaskState = {
+    completed_at: requestedStatus === 'done' ? now : null,
+    completed_by: requestedStatus === 'done' ? user.id : null,
+    status: requestedStatus,
+    updated_at: now,
+  };
+  const { error: updateTaskError } = await supabase
+    .from('tasks')
+    .update(nextTaskState)
+    .eq('space_id', input.spaceId)
+    .eq('id', task.id);
+
+  if (updateTaskError) {
+    throw new Error(updateTaskError.message);
+  }
+
+  const { error: insertUpdateError } = await supabase.from('task_updates').insert({
+    body,
+    created_by: user.id,
+    kind: requestedStatus === 'done' ? 'completion' : 'status_change',
+    label:
+      trimToNullable(input.label) ??
+      (requestedStatus === 'done'
+        ? input.completionLabelFallback
+        : input.statusChangeLabelFallback),
+    space_id: input.spaceId,
+    status_after: requestedStatus,
+    task_id: task.id,
+  });
+
+  if (insertUpdateError) {
+    await supabase
+      .from('tasks')
+      .update({
+        completed_at: previousTaskState.completed_at,
+        completed_by: previousTaskState.completed_by,
+        status: previousTaskState.status,
+        updated_at: previousTaskState.updated_at ?? now,
+      })
+      .eq('space_id', input.spaceId)
+      .eq('id', task.id);
+
+    throw new Error(insertUpdateError.message);
+  }
+
+  return {
+    issueSlug: issue.slug,
+    roomSlug: room?.slug ?? null,
+    taskSlug: task.slug,
   };
 }

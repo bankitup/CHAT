@@ -75,10 +75,12 @@ Current branch status:
 - `/issues/new` now creates real `issues` and first `issue_updates` rows
 - `/issues/[issueId]` now appends real `issue_updates` rows, including status
   changes and resolution history
-- task write paths remain the next narrow lift
+- `/tasks/new` now creates real `tasks` and first `task_updates` rows
+- `/tasks/[taskId]` now appends real `task_updates` rows, including status
+  changes and completion history
 
-What is still missing is the first task write behavior, not route structure or
-object shape.
+What is still missing is broader write polish, not the first real MVP task
+behavior or route structure.
 
 ## Scope Of The First Write Slice
 
