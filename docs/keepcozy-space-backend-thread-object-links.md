@@ -22,6 +22,7 @@ Related documents:
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
 - [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
+- [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
 
 ## What This Branch Adds
@@ -215,12 +216,20 @@ This backend foundation still does not:
 - change current conversation creation behavior
 - change current inbox/chat loading behavior by default
 - attach companion metadata to message-history payloads
+- emit committed space timeline events
 - validate object references against real operational tables
 - add related-object join-table behavior
 - change DM/group semantics
 - change RLS or policy behavior
 
 That scope remains deferred on purpose.
+
+Timeline boundary note:
+
+- later event-emission seams are documented in
+  [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
+- this branch may expose optional operational thread context, but it must not
+  become the place where timeline rows are committed
 
 ## What Must Wait for `feature/space-timeline-foundation`
 

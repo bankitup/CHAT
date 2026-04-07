@@ -7,6 +7,15 @@ import type {
   KeepCozySpaceTimelineEventSummaryPayloadDraft,
 } from './types';
 
+/**
+ * Low-level timeline row-builder boundary for future `public.space_timeline_events`
+ * writes.
+ *
+ * A later direct table adapter may live beside this helper in the spaces
+ * module, while access-checked emitters should remain in the backend service
+ * layer that owns the underlying operational transition.
+ */
+
 export type SpaceTimelineEventWriteInput = {
   spaceId: string;
   conversationId?: string | null;

@@ -30,6 +30,7 @@ Related documents:
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
 - [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
+- [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 
 ## Design Decisions Locked by This Pass
@@ -386,6 +387,13 @@ Important first-pass choices:
 - no automatic message-to-timeline mirroring yet
 - no explicit idempotency key in the first draft; later write paths must choose
   a dedupe strategy deliberately
+
+Runtime boundary note:
+
+- later backend event-emission seams are documented in
+  [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
+- this branch defines the timeline model before wiring emitters into existing
+  `server.ts` flows
 
 ## 11. Relationship to Companion Metadata and Thread-Object Linkage
 

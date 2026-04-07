@@ -97,6 +97,10 @@ Why:
 
 The following paths should not emit committed timeline events in this branch:
 
+- [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+  low-level companion-metadata row reads/writes
+- [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+  access-checked conversation-level read composition
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
   `sendMessage(...)`
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
@@ -119,6 +123,8 @@ Reason:
 
 - these paths either describe ordinary chat behavior, read-model loading, or
   personal visibility state
+- some are intentionally low-level adapters or read composition helpers and
+  should not become event-policy decision makers
 - they do not own committed operational history semantics yet
 
 ## How to Avoid Coupling Ordinary Chat Sends to Timeline Emission Too Early
