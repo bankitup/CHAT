@@ -12,6 +12,7 @@ work from without changing current runtime behavior on this branch.
 Related documents:
 
 - [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
+- [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
@@ -66,6 +67,13 @@ Important boundary:
 
 That split should stay intact when companion metadata arrives.
 
+Current branch note:
+
+- the first low-level backend helper now exists in
+  [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+- the remaining work is to wrap that helper in access-checked conversation
+  flows rather than adding a brand-new helper style
+
 ## Future Write Boundary
 
 The preferred future write boundary is:
@@ -76,11 +84,16 @@ The preferred future write boundary is:
 
 ### Recommended first integration shape
 
-Later backend work should introduce a dedicated helper adjacent to
+The current backend foundation already provides a low-level upsert helper in:
+
+- [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+  `upsertConversationCompanionMetadataWithoutAccessCheck(...)`
+
+Later backend work should add an access-checked wrapper adjacent to
 `createConversationWithMembers(...)`, for example:
 
-- `createConversationWithCompanionMetadata(...)`
-- or `upsertConversationCompanionMetadata(...)`
+- `createConversationWithOperationalMetadata(...)`
+- or `createOperationalConversationWithMembers(...)`
 
 The important design rule is the same either way:
 
@@ -132,7 +145,15 @@ The preferred future read boundary is:
 
 ### Recommended first read helpers later
 
-Later backend work should add one or both of:
+The current backend foundation already provides low-level reads in:
+
+- [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+  `getConversationCompanionMetadataWithoutAccessCheck(...)`
+- [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+  `getConversationCompanionMetadataByConversationIdsWithoutAccessCheck(...)`
+
+Later backend work should wrap those in access-checked conversation loaders,
+for example:
 
 - `getConversationCompanionMetadata(conversationId, userId)`
 - `getConversationCompanionMetadataByConversationIds(conversationIds, userId)`

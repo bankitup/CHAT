@@ -20,6 +20,7 @@ Related documents:
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 - [keepcozy-space-schema-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-runtime-boundaries.md)
+- [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
@@ -281,6 +282,13 @@ After this schema draft exists, the next safe follow-ons become:
 1. backend helper boundaries for reading companion rows
 2. controlled write paths for one operational thread type
 3. later RLS/policy work once the policy matrix is ready
+
+Current branch note:
+
+- the first low-level backend helper boundary now exists in
+  [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+- the next remaining step is access-checked integration in conversation-level
+  service flows, not a new schema redesign
 
 This schema draft is therefore not the final model. It is the first durable
 physical foothold for the future companion metadata layer.
