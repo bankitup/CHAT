@@ -20,5 +20,7 @@ Current KeepCozy companion-metadata note:
   layer optional companion metadata beside the existing conversation shell
 - `server.ts` remains the place for later access-checked conversation-level
   shell loaders that this companion-context helper builds on
+- this branch-level helper boundary is not a policy engine and not a timeline
+  writer; later branches should keep access mapping and event emission separate
 - do not add direct companion-metadata reads/writes in page actions, history
   loaders, or UI code first
