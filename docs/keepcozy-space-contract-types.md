@@ -59,6 +59,7 @@ Main exported names:
 - `KeepCozyOperationalObjectKind`
 - `KeepCozyOperationalObjectRef`
 - `KeepCozyThreadRelatedOperationalObjectLinkDraft`
+- `KeepCozyThreadCompanionMetadataRowDraft`
 - `KeepCozyThreadCompanionMetadata`
 - `KEEP_COZY_THREAD_TYPES`
 - `KEEP_COZY_THREAD_AUDIENCE_MODES`
@@ -66,6 +67,7 @@ Main exported names:
 - `KEEP_COZY_OPERATIONAL_OBJECT_KINDS`
 - `KEEP_COZY_THREAD_COMPANION_METADATA_TABLE_NAME_DRAFT`
 - `KEEP_COZY_THREAD_COMPANION_METADATA_FIELD_CANDIDATES_DRAFT`
+- `KEEP_COZY_THREAD_COMPANION_METADATA_DEFAULTS_DRAFT`
 
 ## What Is Future-Facing Only
 
@@ -146,6 +148,7 @@ The metadata and object contracts are shaped around the KeepCozy docs:
 - `KeepCozyThreadStatus`
 - `KeepCozyOperationalObjectKind`
 - `KeepCozyOperationalObjectRef`
+- `KeepCozyThreadCompanionMetadataRowDraft`
 - `KeepCozyThreadCompanionMetadata`
 
 Important boundaries:
@@ -206,6 +209,15 @@ Important scope note:
 - the existence of `KeepCozyThreadRelatedOperationalObjectLinkDraft` is
   intentional scaffolding, not proof that the first physical schema pass should
   store secondary links yet
+
+Type alignment note:
+
+- `KeepCozyThreadCompanionMetadata` is the logical future-facing contract shape
+- `KeepCozyThreadCompanionMetadataRowDraft` mirrors the first SQL pass more
+  directly, including snake_case column names and nullable object-ref columns
+- `KEEP_COZY_THREAD_COMPANION_METADATA_DEFAULTS_DRAFT` mirrors the first SQL
+  defaults for `status`, `operator_visible_by_policy`, and
+  `external_access_requires_assignment`
 
 ## How This Relates To The KeepCozy Docs
 

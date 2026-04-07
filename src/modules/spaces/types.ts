@@ -346,6 +346,54 @@ export const KEEP_COZY_THREAD_TYPE_TO_OPERATIONAL_OBJECT_KINDS_DRAFT: Record<
 };
 
 /**
+ * Flat row shape that mirrors the first SQL draft directly.
+ *
+ * This exists so later backend work can map between the logical companion
+ * metadata contract and the additive table columns without guessing nullability
+ * or column naming.
+ *
+ * Important:
+ *
+ * - the row itself is still optional because not every conversation will have
+ *   companion metadata
+ * - `primaryOperationalObjectRef` is intentionally flattened into
+ *   `operational_object_type` and `operational_object_id` here to match SQL
+ */
+export type KeepCozyThreadCompanionMetadataRowDraft = {
+  conversation_id: string;
+  space_id: string;
+  thread_type: KeepCozyThreadType;
+  audience_mode: KeepCozyThreadAudienceMode;
+  status: KeepCozyThreadStatus;
+  operational_object_type: KeepCozyOperationalObjectKind | null;
+  operational_object_id: string | null;
+  thread_owner_user_id: string | null;
+  operator_visible_by_policy: boolean;
+  external_access_requires_assignment: boolean;
+  opened_at: string | null;
+  closed_at: string | null;
+  visibility_scope_notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Defaulted values from the first SQL pass.
+ *
+ * These do not imply that the row itself is auto-created for every
+ * conversation. They only mirror the non-null defaults once a companion row
+ * exists.
+ */
+export const KEEP_COZY_THREAD_COMPANION_METADATA_DEFAULTS_DRAFT = {
+  status: 'open',
+  operator_visible_by_policy: true,
+  external_access_requires_assignment: false,
+} as const satisfies Pick<
+  KeepCozyThreadCompanionMetadataRowDraft,
+  'status' | 'operator_visible_by_policy' | 'external_access_requires_assignment'
+>;
+
+/**
  * Logical contract shape for a future companion metadata row keyed by
  * `conversation_id`.
  *

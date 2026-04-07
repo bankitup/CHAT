@@ -214,6 +214,10 @@ The safest follow-on order is:
    operational tables exist
 5. add policy and RLS hardening after the policy matrix is settled
 
+Recommended next feature branch:
+
+- `feature/space-backend-thread-object-links`
+
 ## Practical Rule For The Next Backend Branch
 
 If the next branch needs companion metadata, use this rule:

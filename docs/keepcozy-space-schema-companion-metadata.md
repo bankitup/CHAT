@@ -55,6 +55,14 @@ Core fields in this first pass:
 - `created_at`
 - `updated_at`
 
+Type alignment note:
+
+- the shared TypeScript layer keeps a logical
+  `KeepCozyThreadCompanionMetadata` shape for future backend/domain use
+- it also now includes `KeepCozyThreadCompanionMetadataRowDraft` so later
+  backend work can map directly to the first SQL pass without guessing column
+  names, nullability, or defaulted fields
+
 ## First-Pass Object Ref Decision
 
 The chosen first-pass strategy is:
@@ -276,6 +284,10 @@ After this schema draft exists, the next safe follow-ons become:
 
 This schema draft is therefore not the final model. It is the first durable
 physical foothold for the future companion metadata layer.
+
+Recommended exact next feature branch:
+
+- `feature/space-backend-thread-object-links`
 
 For the concrete read/write integration seams that should be used later, see:
 
