@@ -321,6 +321,8 @@ type LanguageDictionary = {
     quietTitle: string;
     quietBody: string;
     openTasks: string;
+    openTask: string;
+    openHome: string;
     operationsTitle: string;
     operationsBody: string;
     operationsIssues: string;
@@ -1005,6 +1007,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       quietTitle: 'History is quiet',
       quietBody: 'Nothing in the secondary messaging lane needs attention right now.',
       openTasks: 'Open tasks',
+      openTask: 'Open task',
+      openHome: 'Open home',
       operationsTitle: 'Operational history',
       operationsBody: 'The first MVP history surface should revolve around these layers.',
       operationsIssues: 'Issue updates',
@@ -1735,6 +1739,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       quietTitle: 'История спокойна',
       quietBody: 'Во вторичном коммуникационном слое сейчас ничего не требует внимания.',
       openTasks: 'Открыть задачи',
+      openTask: 'Открыть задачу',
+      openHome: 'Открыть дом',
       operationsTitle: 'Операционная история',
       operationsBody: 'Первая MVP-поверхность истории должна крутиться вокруг этих слоев.',
       operationsIssues: 'Обновления проблем',

@@ -132,6 +132,9 @@ The first proof path should be checked in this order:
 6. History
    Open `/activity` and confirm the `Primary test flow history` section shows
    the same issue/task update path in one place.
+   The surface should make the room -> issue -> task chain explicit and group
+   the operational updates into issue history and task history instead of
+   reading like a generic feed.
    If another home is active, the screen should again prompt the reviewer back
    to `TEST`.
 

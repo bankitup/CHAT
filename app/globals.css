@@ -2717,6 +2717,11 @@ main {
   padding-inline: 14px;
 }
 
+.keepcozy-focus-actions {
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
 .keepcozy-section {
   gap: 12px;
 }
@@ -2874,7 +2879,12 @@ main {
     flex-direction: column;
   }
 
+  .keepcozy-focus-actions {
+    width: 100%;
+  }
+
   .keepcozy-focus-action {
+    flex: 1 1 auto;
     width: 100%;
     justify-content: center;
   }

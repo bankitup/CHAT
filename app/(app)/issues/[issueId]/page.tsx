@@ -116,15 +116,24 @@ export default async function IssueDetailPage({
             </div>
           </div>
 
-          {room ? (
+          <div className="keepcozy-card-actions keepcozy-focus-actions">
+            {room ? (
+              <Link
+                className="button button-secondary keepcozy-focus-action"
+                href={withSpaceParam(`/rooms/${room.id}`, activeSpace.id)}
+                prefetch={false}
+              >
+                {t.issues.viewRoom}
+              </Link>
+            ) : null}
             <Link
               className="button button-secondary keepcozy-focus-action"
-              href={withSpaceParam(`/rooms/${room.id}`, activeSpace.id)}
+              href={withSpaceParam('/activity', activeSpace.id)}
               prefetch={false}
             >
-              {t.issues.viewRoom}
+              {t.homeDashboard.openHistory}
             </Link>
-          ) : null}
+          </div>
         </section>
 
         <section className="stack settings-section keepcozy-section">
