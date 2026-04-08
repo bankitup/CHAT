@@ -65,10 +65,11 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
   }
 
   const requestedSpaceId = query.space?.trim() || null;
-  const currentSpaceId =
-    (requestedSpaceId && spaces.some((space) => space.id === requestedSpaceId)
-      ? requestedSpaceId
-      : spaces[0]?.id) ?? null;
+  const requestedSpace = requestedSpaceId
+    ? spaces.find((space) => space.id === requestedSpaceId)
+    : undefined;
+  const currentSpace = requestedSpace ?? spaces[0] ?? null;
+  const currentSpaceId = currentSpace?.id ?? null;
 
   return (
     <section className="stack spaces-screen">
@@ -78,14 +79,17 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
             <Link
               aria-label={t.spaces.backToChats}
               className="back-arrow-link spaces-back-link"
-              href={withSpaceParam('/home', currentSpaceId)}
+              href={withSpaceParam(
+                currentSpace?.defaultShellRoute ?? '/home',
+                currentSpaceId,
+              )}
             >
               <span aria-hidden="true">←</span>
             </Link>
           </div>
         ) : null}
 
-        <p className="eyebrow">{t.shell.home}</p>
+        <p className="eyebrow">{t.shell.spaces}</p>
         <h1 className="settings-hero-title">{t.spaces.title}</h1>
         <p className="muted settings-hero-note">{t.spaces.subtitle}</p>
       </section>
@@ -106,7 +110,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
                     ? 'space-card space-card-current'
                     : 'space-card'
                 }
-                href={withSpaceParam('/home', space.id)}
+                href={withSpaceParam(space.defaultShellRoute, space.id)}
               >
                 <div className="stack space-card-copy">
                   <div className="space-card-title-row">

@@ -241,6 +241,8 @@ Current runtime note:
   persisted profile storage lands
 - a dedicated profile-aware default-shell helper now exists for later routing
   work and is now used by the authenticated public/auth entry paths
+- the shared space selector now opens each space into its profile-default
+  shell instead of forcing every space through `/home`
 - the shared app shell can now render a messenger-centered navigation set for
   `messenger_full` spaces and a KeepCozy-centered navigation set for
   `keepcozy_ops` spaces without splitting the app into two products
@@ -367,6 +369,52 @@ The following intentionally remain deferred after the first runtime seam:
 - final capability enforcement
 - profile-aware per-thread or per-object policy enforcement
 - hybrid or override-heavy profile systems
+
+## Practical Verification
+
+Use the current temporary runtime resolver rule for this branch:
+
+- the shared `TEST` space resolves as `keepcozy_ops`
+- any non-`TEST` space resolves as `messenger_full`
+
+Recommended review setup:
+
+- one `TEST` space that is already part of the shared KeepCozy MVP proof path
+- one additional non-`TEST` space for messenger verification
+
+### How to test `messenger_full`
+
+1. Open [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx)
+   in the app and choose a non-`TEST` space.
+2. Verify the selector opens `/inbox?space=...` for that space.
+3. Verify the bottom navigation is messenger-centered:
+   `Chats`, `Spaces`, `Settings`.
+4. Verify inbox/chat behavior remains the primary visible shell.
+
+### How to test `keepcozy_ops`
+
+1. Open the same selector and choose the shared `TEST` space.
+2. Verify the selector opens `/home?space=...` for that space.
+3. Verify the bottom navigation is KeepCozy-centered:
+   `Home`, `Rooms`, `Issues`, `Tasks`, `History`.
+4. Verify the visible product center is the KeepCozy operational loop rather
+   than inbox-first chat.
+
+### What should visibly differ
+
+- authenticated entry target after login/public re-entry
+- the shell navigation set
+- the first product surface that opens for the selected space
+- whether the space reads as chat-first or operations-first
+
+### What should remain shared
+
+- the same auth/session model
+- the same `space` query seam and active-space resolution path
+- the same `space_members` boundary
+- the same shared conversation/message substrate
+- the same settings/profile account surfaces
+- the same shared backend and storage foundations
 
 ## Remaining Ambiguities
 

@@ -54,7 +54,8 @@ export function AppShellFrame({
   const activeSpaceProfile = activeSpace?.profile ?? null;
   const navSpaceHref = (pathname: string) =>
     activeSpace?.id ? withSpaceParam(pathname, activeSpace.id) : pathname;
-  const showBottomNav = !isChatRoute && !isSpacesRoute;
+  const showBottomNav =
+    !isChatRoute && !(isSpacesRoute && activeSpaceProfile !== 'messenger_full');
   let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
   let messengerActiveTab: 'chats' | 'spaces' | 'settings' | null = null;
 
