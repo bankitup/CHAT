@@ -35,6 +35,7 @@ import {
   applyConversationVisibility,
   isHiddenAtVisibilityRuntimeError,
 } from '@/modules/messaging/data/visibility';
+import { requireExactSpaceAccessForUser } from '@/modules/spaces/server';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeBootstrapDebugState,
@@ -4748,55 +4749,53 @@ export async function getAvailableUsers(
   const supabase = await createSupabaseServerClient();
   let userIds: string[] = [];
   const source = options?.source ?? 'unknown';
+  const requestedSpaceId = options?.spaceId?.trim() || null;
 
-  if (options?.spaceId) {
-    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:start', {
-      source,
-      queryShape:
-        "from('space_members').select('user_id').eq('space_id', ?).neq('user_id', ?).order('user_id')",
-      spaceId: options.spaceId,
-    });
-    const { data, error } = await supabase
-      .from('space_members')
-      .select('user_id')
-      .eq('space_id', options.spaceId)
-      .neq('user_id', currentUserId)
-      .order('user_id', { ascending: true });
-
-    if (error) {
-      logSpaceMembershipDiagnostics('getAvailableUsers:space-members:error', {
-        source,
-        message: error.message,
-      });
-      if (isMissingRelationErrorMessage(error.message, 'space_members')) {
-        throw createSchemaRequirementError(
-          'Space-scoped user lookup requires public.space_members.',
-        );
-      }
-
-      throw new Error(error.message);
-    }
-
-    userIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
-    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:ok', {
-      source,
-      count: userIds.length,
-    });
-  } else {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('user_id')
-      .neq('user_id', currentUserId)
-      .order('user_id', { ascending: true });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    userIds = ((data ?? []) as { user_id: string }[]).map(
-      (profile) => profile.user_id,
+  if (!requestedSpaceId) {
+    throw new Error(
+      'Space-scoped user lookup requires an explicit current space.',
     );
   }
+
+  const exactSpaceAccess = await requireExactSpaceAccessForUser({
+    requestedSpaceId,
+    source: `${source}:available-users-space-access`,
+    userId: currentUserId,
+  });
+
+  logSpaceMembershipDiagnostics('getAvailableUsers:space-members:start', {
+    source,
+    queryShape:
+      "from('space_members').select('user_id').eq('space_id', ?).neq('user_id', ?).order('user_id')",
+    requestedSpaceId,
+    resolvedSpaceId: exactSpaceAccess.activeSpace.id,
+  });
+  const { data, error } = await supabase
+    .from('space_members')
+    .select('user_id')
+    .eq('space_id', exactSpaceAccess.activeSpace.id)
+    .neq('user_id', currentUserId)
+    .order('user_id', { ascending: true });
+
+  if (error) {
+    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:error', {
+      source,
+      message: error.message,
+    });
+    if (isMissingRelationErrorMessage(error.message, 'space_members')) {
+      throw createSchemaRequirementError(
+        'Space-scoped user lookup requires public.space_members.',
+      );
+    }
+
+    throw new Error(error.message);
+  }
+
+  userIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
+  logSpaceMembershipDiagnostics('getAvailableUsers:space-members:ok', {
+    source,
+    count: userIds.length,
+  });
 
   const identities = await getProfileIdentities(userIds);
   const identityByUserId = new Map<string, MessageSenderProfile>(

@@ -220,8 +220,9 @@ Current runtime note:
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
   already has the correct space-scoped path:
   `getAvailableUsers(currentUserId, { spaceId })`
-- the no-`spaceId` fallback should be treated as a hardening target for later
-  governance work, not as a valid ordinary admin flow
+- current runtime now rejects the no-`spaceId` fallback for ordinary flows
+- the helper also verifies the actor actually belongs to the exact requested
+  `space_id` instead of trusting the client-provided scope alone
 
 Recommended later member-add shape:
 
@@ -331,11 +332,11 @@ Hard rule:
 
 | Topic | Current state | Target state |
 | --- | --- | --- |
-| Space creation | no reviewed runtime provisioning path yet | `super_admin`-only controlled provisioning |
-| First admin assignment | implied by later interpretation of `space_members` | explicit during provisioning |
+| Space creation | first narrow `super_admin` runtime provisioning path exists | `super_admin`-only controlled provisioning with fuller audit/tooling |
+| First admin assignment | explicit during current provisioning flow | explicit during provisioning |
 | Member management | no dedicated invite runtime yet | own-space-only invite/add/remove/change-role flow |
 | Membership boundary | `public.space_members` already exists | remains the hard outer allowlist |
-| User discovery for admin actions | space-scoped path exists; no-`spaceId` fallback still exists in messaging helper | no ordinary global user browser for `space_admin` |
+| User discovery for admin actions | space-scoped path exists and now rejects no-`spaceId` ordinary fallback | no ordinary global user browser for `space_admin` |
 | KeepCozy create-or-bind flow | not yet implemented | controlled audited backend create-or-bind path |
 | Sensitive-action audit | not yet defined in runtime | explicit audit expectations for provisioning and membership changes |
 

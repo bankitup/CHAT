@@ -315,13 +315,15 @@ These guardrails should remain explicit in later branches.
 ### No ordinary global user discovery
 
 The current `getAvailableUsers(...)` helper already has the correct
-space-scoped path for product flows when `spaceId` is present.
+space-scoped path for product flows when `spaceId` is present, and current
+runtime now rejects the no-`spaceId` ordinary fallback.
 
 Governance rule:
 
 - all ordinary product flows must use the space-scoped path
-- the no-`spaceId` global fallback should be treated as a hardening target and
-  later removed or tightly admin-gated
+- the helper must verify the actor actually belongs to the exact requested
+  `space_id`
+- no ordinary global user-discovery fallback should remain in place
 
 ### Roles stay layered
 
@@ -340,7 +342,7 @@ Governance rule:
 | Topic | Current state | Target state |
 | --- | --- | --- |
 | Outer isolation boundary | `public.spaces`, `public.space_members`, and `conversations.space_id` already exist | remains the hard non-negotiable boundary |
-| Space creation | no documented reviewed provisioning-only runtime path yet | super-admin-only controlled backend provisioning |
+| Space creation | first narrow super-admin provisioning path exists through `/spaces/new` | super-admin-only controlled backend provisioning with fuller audit/tooling |
 | Space admin scope | current runtime has generic `owner | admin | member`; scope is coarse | explicit own-space-only governance responsibilities |
 | Member management | no dedicated invite records yet | explicit invite/removal model, still limited to one space |
 | User discovery | ordinary app flows use space-scoped lookup when `spaceId` is provided | no ordinary global discovery path across unrelated spaces |
@@ -360,6 +362,65 @@ When a later branch asks “can this action happen?”, answer in this order:
 
 If a proposal cannot answer those five questions cleanly, it is probably
 violating the governance foundation.
+
+## 10. Practical Verification
+
+Use the current runtime seam on this branch:
+
+- `dmtest1@chat.local` is an initial `super_admin`
+- `dmtest2@chat.local` is an initial `super_admin`
+- ordinary users are not `super_admin`
+- current ordinary user discovery remains space-scoped only
+
+### Test With `dmtest1@chat.local`
+
+1. Sign in as `dmtest1@chat.local`.
+2. Open [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/page.tsx).
+3. Verify the `Create space` card is visible.
+4. Open [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/new/page.tsx).
+5. Create a space with:
+   - a name
+   - at least one admin identifier
+   - optional participant identifiers
+6. Verify the created people are seeded into `public.space_members` and the
+   first listed admin is written as `owner`.
+7. If you include `dmtest1@chat.local` in the member/admin list, verify the
+   new space appears in the selector afterward.
+
+### Test With `dmtest2@chat.local`
+
+1. Repeat the same flow as `dmtest1@chat.local`.
+2. Verify `dmtest2@chat.local` also sees the `Create space` entry point.
+3. Verify a created space can be provisioned without changing behavior for
+   ordinary users.
+
+### Verify A Space Admin Cannot Leave The Space Boundary
+
+1. Use a user who is `owner` or `admin` in one space but not a member of a
+   second space.
+2. Confirm that user does not see the global `Create space` action.
+3. Confirm they cannot open the `/spaces/new` flow successfully; it redirects
+   back to `/spaces`.
+4. Confirm ordinary participant lookup continues to require an explicit
+   `spaceId` and that the actor must actually belong to that exact space.
+5. Confirm the user cannot discover unrelated users through ordinary inbox/chat
+   flows outside their own space boundary.
+
+### Verify Ordinary Members Cannot Create Spaces
+
+1. Sign in as a user who is only a `member`.
+2. Open the space selector.
+3. Verify there is no `Create space` card.
+4. Try to open `/spaces/new` directly.
+5. Verify the user is redirected back to `/spaces` and no space is created.
+
+### What Still Waits For Later Branches
+
+- persisted and audited `super_admin` storage beyond the email allowlist
+- own-space add/remove/change-role UI for `space_admin`
+- invite records and acceptance flow
+- audit logging for provisioning and member mutations
+- KeepCozy create-or-bind automation on top of the same governed `space_id`
 
 ## Remaining Ambiguities
 

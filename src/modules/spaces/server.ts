@@ -36,6 +36,15 @@ export type ResolvedActiveSpaceState = {
   requestedSpaceWasInvalid: boolean;
 };
 
+export type ExactUserSpaceAccessState = {
+  activeSpace: UserSpaceRecord;
+  activeSpaceGovernance: ResolvedSpaceGovernanceState;
+  activeSpaceProfile: ResolvedSpaceProfile;
+  globalGovernance: ResolvedSpaceGovernanceGlobalRole;
+  requestedSpaceId: string;
+  spaces: UserSpaceRecord[];
+};
+
 export const INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST = new Set([
   'dmtest1@chat.local',
   'dmtest2@chat.local',
@@ -495,6 +504,60 @@ export async function resolveActiveSpaceForUser(input: {
     requestedSpaceId,
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
   };
+}
+
+export async function requireExactSpaceAccessForUser(input: {
+  userId: string;
+  userEmail?: string | null;
+  requestedSpaceId?: string | null;
+  source?: string;
+}): Promise<ExactUserSpaceAccessState> {
+  const requestedSpaceId = input.requestedSpaceId?.trim() || null;
+
+  if (!requestedSpaceId) {
+    throw new Error('An explicit space is required for this operation.');
+  }
+
+  const resolved = await resolveActiveSpaceForUser({
+    requestedSpaceId,
+    source: input.source ?? 'unknown',
+    userEmail: input.userEmail ?? null,
+    userId: input.userId,
+  });
+
+  if (
+    !resolved.activeSpace ||
+    !resolved.activeSpaceGovernance ||
+    !resolved.activeSpaceProfile ||
+    resolved.requestedSpaceWasInvalid ||
+    resolved.activeSpace.id !== requestedSpaceId
+  ) {
+    throw new Error('You do not have access to this space.');
+  }
+
+  return {
+    activeSpace: resolved.activeSpace,
+    activeSpaceGovernance: resolved.activeSpaceGovernance,
+    activeSpaceProfile: resolved.activeSpaceProfile,
+    globalGovernance: resolved.globalGovernance,
+    requestedSpaceId,
+    spaces: resolved.spaces,
+  };
+}
+
+export async function requireSpaceMemberManagementForUser(input: {
+  userId: string;
+  userEmail?: string | null;
+  requestedSpaceId?: string | null;
+  source?: string;
+}): Promise<ExactUserSpaceAccessState> {
+  const exactSpaceAccess = await requireExactSpaceAccessForUser(input);
+
+  if (!exactSpaceAccess.activeSpaceGovernance.canManageMembers) {
+    throw new Error('Only a space admin may manage members in this space.');
+  }
+
+  return exactSpaceAccess;
 }
 
 export async function resolveDefaultSpaceShellHrefForUser(input: {
