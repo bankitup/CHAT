@@ -14,6 +14,7 @@ This is a governance and isolation foundation document, not a UI branch.
 
 Related documents:
 
+- [space-creation-and-membership-rules.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-creation-and-membership-rules.md)
 - [space-governance-role-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-governance-role-matrix.md)
 - [space-profiles.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-profiles.md)
 - [keepcozy-chat-shared-vocabulary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-shared-vocabulary.md)

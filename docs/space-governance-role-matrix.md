@@ -21,6 +21,7 @@ This is a semantics and enforcement-prep document. It does not:
 
 Related documents:
 
+- [space-creation-and-membership-rules.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-creation-and-membership-rules.md)
 - [space-governance-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-governance-foundation.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-chat-role-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-role-alignment.md)
