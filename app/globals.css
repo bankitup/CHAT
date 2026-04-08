@@ -560,6 +560,10 @@ main {
   gap: 6px;
 }
 
+.app-shell-flow-block {
+  gap: 8px;
+}
+
 .app-shell-context-kicker {
   color: rgba(91, 100, 112, 0.86);
   font-size: 0.72rem;
@@ -594,6 +598,32 @@ main {
 .app-shell-context-link,
 .app-shell-context-button {
   flex-shrink: 0;
+}
+
+.app-shell-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app-shell-flow-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(221, 228, 238, 0.84);
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(91, 100, 112, 0.86);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.app-shell-flow-link-active {
+  border-color: rgba(31, 111, 235, 0.16);
+  background: rgba(31, 111, 235, 0.08);
+  color: rgba(17, 24, 39, 0.94);
 }
 
 .app-bottom-nav {

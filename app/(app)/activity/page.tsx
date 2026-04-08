@@ -212,18 +212,18 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
           <div className="keepcozy-card-actions keepcozy-focus-actions">
             <Link
+              className="activity-focus-action button"
+              href={withSpaceParam('/tasks', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.activity.openTasks}
+            </Link>
+            <Link
               className="pill"
               href={withSpaceParam('/home', activeSpace.id)}
               prefetch={false}
             >
               {t.activity.openHome}
-            </Link>
-            <Link
-              className="activity-focus-action button button-secondary"
-              href={withSpaceParam('/tasks', activeSpace.id)}
-              prefetch={false}
-            >
-              {t.activity.openTasks}
             </Link>
           </div>
         </section>

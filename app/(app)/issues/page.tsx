@@ -72,18 +72,18 @@ export default async function IssuesPage({ searchParams }: IssuesPageProps) {
           <p className="muted">{t.issues.previewBody}</p>
           <div className="keepcozy-card-actions">
             <Link
-              className="pill"
-              href={withSpaceParam('/home', activeSpace.id)}
-              prefetch={false}
-            >
-              {t.shell.openHome}
-            </Link>
-            <Link
-              className="button button-secondary"
+              className="button"
               href={withSpaceParam('/tasks', activeSpace.id)}
               prefetch={false}
             >
               {t.shell.openTasks}
+            </Link>
+            <Link
+              className="button button-secondary"
+              href={withSpaceParam('/home', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.shell.openHome}
             </Link>
           </div>
           {activeRoom ? (

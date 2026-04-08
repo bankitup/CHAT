@@ -101,6 +101,33 @@ export function AppShellFrame({
                 }
               : null;
   const chooseHomeHref = activeSpaceId ? withSpaceParam('/spaces', activeSpaceId) : '/spaces';
+  const loopSteps = [
+    {
+      href: navSpaceHref('/home'),
+      isActive: activeTab === 'home',
+      label: t.shell.home,
+    },
+    {
+      href: navSpaceHref('/rooms'),
+      isActive: activeTab === 'rooms',
+      label: t.shell.rooms,
+    },
+    {
+      href: navSpaceHref('/issues'),
+      isActive: activeTab === 'issues',
+      label: t.shell.issues,
+    },
+    {
+      href: navSpaceHref('/tasks'),
+      isActive: activeTab === 'tasks',
+      label: t.shell.tasks,
+    },
+    {
+      href: navSpaceHref('/activity'),
+      isActive: activeTab === 'activity',
+      label: t.shell.activity,
+    },
+  ];
 
   return (
     <main
@@ -149,6 +176,26 @@ export function AppShellFrame({
                 </Link>
               </div>
               <p className="muted app-shell-context-body">{currentSection.body}</p>
+            </section>
+
+            <section className="stack app-shell-context-block app-shell-flow-block">
+              <span className="app-shell-context-kicker">{t.homeDashboard.loopTitle}</span>
+              <div className="app-shell-flow">
+                {loopSteps.map((step) => (
+                  <Link
+                    key={step.label}
+                    className={
+                      step.isActive
+                        ? 'app-shell-flow-link app-shell-flow-link-active'
+                        : 'app-shell-flow-link'
+                    }
+                    href={step.href}
+                    prefetch={false}
+                  >
+                    {step.label}
+                  </Link>
+                ))}
+              </div>
             </section>
           </div>
         </section>

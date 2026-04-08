@@ -54,18 +54,18 @@ export default async function RoomsPage({ searchParams }: RoomsPageProps) {
           <p className="muted">{t.rooms.previewBody}</p>
           <div className="keepcozy-card-actions">
             <Link
-              className="pill"
-              href={withSpaceParam('/home', activeSpace.id)}
-              prefetch={false}
-            >
-              {t.shell.openHome}
-            </Link>
-            <Link
-              className="button button-secondary"
+              className="button"
               href={withSpaceParam('/issues', activeSpace.id)}
               prefetch={false}
             >
               {t.shell.openIssues}
+            </Link>
+            <Link
+              className="button button-secondary"
+              href={withSpaceParam('/home', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.shell.openHome}
             </Link>
           </div>
         </section>

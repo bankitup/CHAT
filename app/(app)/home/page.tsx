@@ -50,13 +50,22 @@ export default async function HomeDashboardPage({
             <p className="muted activity-focus-body">{t.homeDashboard.previewBody}</p>
           </div>
 
-          <Link
-            className="button button-secondary keepcozy-focus-action"
-            href={withSpaceParam('/spaces', activeSpace.id)}
-            prefetch={false}
-          >
-            {t.homeDashboard.switchHome}
-          </Link>
+          <div className="keepcozy-card-actions keepcozy-focus-actions">
+            <Link
+              className="button keepcozy-focus-action"
+              href={withSpaceParam('/rooms', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.homeDashboard.openRooms}
+            </Link>
+            <Link
+              className="button button-secondary keepcozy-focus-action"
+              href={withSpaceParam('/spaces', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.homeDashboard.switchHome}
+            </Link>
+          </div>
         </section>
 
         <section className="stack settings-section keepcozy-section">

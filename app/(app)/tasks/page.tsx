@@ -74,19 +74,36 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
           </div>
           <p className="muted">{t.tasks.previewBody}</p>
           <div className="keepcozy-card-actions">
-            <Link
-              className="pill"
-              href={withSpaceParam('/home', activeSpace.id)}
-              prefetch={false}
-            >
-              {t.shell.openHome}
-            </Link>
+            {activeIssue ? (
+              <Link
+                className="button"
+                href={withSpaceParam(`/issues/${activeIssue.id}`, activeSpace.id)}
+                prefetch={false}
+              >
+                {t.tasks.viewIssue}
+              </Link>
+            ) : (
+              <Link
+                className="button"
+                href={withSpaceParam('/issues', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.shell.openIssues}
+              </Link>
+            )}
             <Link
               className="button button-secondary"
               href={withSpaceParam('/activity', activeSpace.id)}
               prefetch={false}
             >
               {t.shell.openActivity}
+            </Link>
+            <Link
+              className="pill"
+              href={withSpaceParam('/home', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.shell.openHome}
             </Link>
           </div>
           {activeIssue ? (
