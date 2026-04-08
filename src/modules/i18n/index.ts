@@ -207,6 +207,8 @@ type LanguageDictionary = {
     overviewTitle: string;
     overviewBody: string;
     settingsAction: string;
+    surfaceTitle: string;
+    surfaceBody: string;
     filtersLabel: string;
     filterAttention: string;
     filterRecent: string;
@@ -1041,6 +1043,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       overviewBody:
         'Catch up on unread replies and recent conversation movement here, then jump straight into the exact message that needs you.',
       settingsAction: 'Notification settings',
+      surfaceTitle: 'Replies and recent chat activity',
+      surfaceBody:
+        'Each row groups the latest reply movement for one conversation so you can catch up fast and jump back into the right message.',
       filtersLabel: 'Activity filters',
       filterAttention: 'Needs reply',
       filterRecent: 'Recent',
@@ -1380,7 +1385,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       enabledBadge: 'On',
       availableBody: 'Available for this device.',
       availableBadge: 'Available',
-      permissionReadyBody: 'Permission is on. Connect this device to finish setup.',
+      permissionReadyBody: 'Permission is on. Enable notifications to finish setup for this device.',
       unavailable: 'Unavailable',
       available: 'Available',
       setupNeeded: 'Needs setup',
@@ -1392,14 +1397,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       device: 'This device',
       connected: 'Connected',
       notConnected: 'Not connected',
-      turnOn: 'Turn on notifications',
-      turningOn: 'Turning on…',
+      turnOn: 'Enable notifications',
+      turningOn: 'Enabling…',
       connectDevice: 'Connect this device',
       connectingDevice: 'Connecting…',
       browserSettingsNote: 'You can change this later in browser settings.',
       comingSoonNote: 'This browser is connected for the first chat push delivery slice.',
-      availableNote: 'You can turn this on now for this browser.',
-      permissionReadyNote: 'Permission is already on. Connect this browser to save a real push subscription.',
+      availableNote: 'You can enable this now for this browser.',
+      permissionReadyNote: 'Permission is already on. Enable notifications to save a real push subscription for this browser.',
       notConfiguredNote:
         'Add NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY and apply the push-subscriptions SQL before enabling this here.',
       syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
@@ -1943,6 +1948,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       overviewBody:
         'Разбирайте здесь непрочитанные ответы и недавнее движение разговоров, а затем переходите сразу к тому сообщению, которое требует внимания.',
       settingsAction: 'Настройки уведомлений',
+      surfaceTitle: 'Ответы и недавняя активность',
+      surfaceBody:
+        'Каждая строка собирает последнее движение по одному разговору, чтобы можно было быстро сориентироваться и вернуться сразу к нужному сообщению.',
       filtersLabel: 'Фильтры активности',
       filterAttention: 'Нужен ответ',
       filterRecent: 'Недавнее',
@@ -2308,7 +2316,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       enabledBadge: 'Включено',
       availableBody: 'Доступно для этого устройства.',
       availableBadge: 'Доступно',
-      permissionReadyBody: 'Разрешение уже включено. Подключите это устройство, чтобы завершить настройку.',
+      permissionReadyBody: 'Разрешение уже включено. Включите уведомления, чтобы завершить настройку для этого устройства.',
       unavailable: 'Недоступно',
       available: 'Доступно',
       setupNeeded: 'Нужна настройка',
@@ -2321,14 +2329,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       connected: 'Подключено',
       notConnected: 'Не подключено',
       turnOn: 'Включить уведомления',
-      turningOn: 'Включаем…',
+      turningOn: 'Включаем уведомления…',
       connectDevice: 'Подключить это устройство',
       connectingDevice: 'Подключаем…',
       browserSettingsNote: 'Позже это можно изменить в настройках браузера.',
       comingSoonNote: 'Этот браузер уже подключен для первого chat-first среза push-уведомлений.',
       availableNote: 'Это можно включить сейчас для этого браузера.',
       permissionReadyNote:
-        'Разрешение уже включено. Подключите этот браузер, чтобы сохранить реальную push-подписку.',
+        'Разрешение уже включено. Включите уведомления, чтобы сохранить реальную push-подписку для этого браузера.',
       notConfiguredNote:
         'Добавьте NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY и примените SQL для push_subscriptions, прежде чем включать это здесь.',
       syncFailedNote:
