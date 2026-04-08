@@ -13,7 +13,7 @@ This is a foundation document, not a runtime-redesign branch.
 
 Related documents:
 
-- [space-profile-capability-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-profile-capability-matrix.md)
+- [space-governance-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-governance-foundation.md)
 - [keepcozy-chat-shared-vocabulary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-shared-vocabulary.md)
 - [keepcozy-chat-role-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-role-alignment.md)
 - [keepcozy-chat-integration-seam.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-integration-seam.md)
@@ -108,6 +108,8 @@ Important rule:
 
 - profiles should separate product surfaces, not split the system into
   different products with different infrastructure
+- governance and isolation should be locked before profile-specific shell
+  rollout gets broader
 
 ## Initial Recommended Profiles
 

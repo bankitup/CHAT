@@ -22,7 +22,7 @@ export default async function AppLayout({
     redirect('/login');
   }
 
-  let spaces = [] as Awaited<ReturnType<typeof getUserSpaces>>;
+  let spaces: Awaited<ReturnType<typeof getUserSpaces>> = [];
 
   try {
     spaces = await getUserSpaces(user.id, {
@@ -39,22 +39,6 @@ export default async function AppLayout({
   const dmE2eeEnabled = isDmE2eeEnabledForUser(user.id, user.email ?? null, {
     source: 'app-layout',
   });
-  let spaces: Array<{
-    id: string;
-    name: string;
-  }> = [];
-
-  try {
-    const userSpaces = await getUserSpaces(user.id, {
-      source: 'app-layout-shell',
-    });
-    spaces = userSpaces.map((space) => ({
-      id: space.id,
-      name: space.name,
-    }));
-  } catch {
-    spaces = [];
-  }
 
   return (
     <AppShellFrame

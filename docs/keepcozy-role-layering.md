@@ -11,6 +11,7 @@ reviewable.
 
 Related documents:
 
+- [space-governance-role-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-governance-role-matrix.md)
 - [keepcozy-chat-role-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-role-alignment.md)
 - [keepcozy-space-model-spec.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-model-spec.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
