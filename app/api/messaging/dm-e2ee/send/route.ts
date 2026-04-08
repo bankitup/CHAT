@@ -10,6 +10,7 @@ import {
   isDmE2eeOperationError,
   sendEncryptedDmTextMessage,
 } from '@/modules/messaging/data/server';
+import { sendChatPushNotifications } from '@/modules/messaging/push/server';
 
 function logDmE2eeSendRouteDiagnostics(
   stage: string,
@@ -84,6 +85,24 @@ export async function POST(request: Request) {
       ...input,
       senderId: user.id,
     });
+
+    try {
+      await sendChatPushNotifications({
+        body: null,
+        contentMode: 'dm_e2ee_v1',
+        conversationId: input.conversationId,
+        messageId: result.messageId,
+        messageKind: 'text',
+        senderId: user.id,
+      });
+    } catch (pushError) {
+      logDmE2eeSendRouteDiagnostics('push:error', {
+        message:
+          pushError instanceof Error
+            ? pushError.message
+            : 'Unable to send encrypted DM push.',
+      });
+    }
 
     logDmE2eeSendRouteDiagnostics('send:ok');
     return NextResponse.json(result);

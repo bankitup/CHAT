@@ -16,10 +16,19 @@ This is not a full notification product spec. It is the bridge from the current 
 The first practical subscription foundation on this branch uses:
 
 - `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` on the client for `PushManager.subscribe(...)`
+- `WEB_PUSH_VAPID_PRIVATE_KEY` on the server for signed Web Push delivery
+- optional `WEB_PUSH_VAPID_SUBJECT` on the server for explicit VAPID contact identity
 - [2026-04-08-push-subscriptions-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-push-subscriptions-foundation.sql) for `public.push_subscriptions`
 - `POST` and `DELETE` on `/api/messaging/push-subscriptions` for current-user subscription persistence
 
-This is intentionally the subscription/storage slice only. Real chat send fan-out and unread-driven badge updates still remain a later implementation step.
+This branch now also adds the first chat-first send path:
+
+- server push fan-out after committed chat sends
+- recipient filtering by active membership and `conversation_members.notification_level`
+- endpoint soft-disable on `404` / `410` push responses
+- shared click routing back into `/chat/[conversationId]?space=...`
+
+Unread-driven app-icon badge updates still remain a later implementation step.
 
 ## Current repo reality
 
@@ -278,6 +287,42 @@ These should wait until the first slice is proven:
 - media thumbnails in push payloads
 - per-space notification centers
 - push delivery for future operational domains outside chat
+
+## First send-path shape
+
+The first real send path on this branch is intentionally narrow.
+
+Included now:
+
+- new committed chat messages only
+- group chat plaintext messages
+- non-encrypted voice and attachment sends from the current chat composer path
+- encrypted DM text sends with generic preview text
+- recipient exclusion for the sender
+- recipient exclusion for muted memberships
+- one notification tag per conversation so repeated pushes on the same device stay calmer
+
+Excluded for now:
+
+- KeepCozy activity, issue, task, or home alerts
+- reactions, edits, deletes, read receipts, joins, and presence changes
+- rich media thumbnails
+- plaintext previews for encrypted DM content
+- mention-specific targeting
+- unread badge syncing
+
+### First title/body rules
+
+For the first implementation:
+
+- direct messages use the sender label as the notification title
+- direct-message encrypted text uses a generic body such as `Sent you an encrypted message.`
+- group chats use the conversation name as the title
+- group-chat bodies use `Sender: preview`
+- voice messages use `Sent a voice message.`
+- file sends use either the typed body text or `Sent an attachment.`
+
+This keeps the first send path readable without leaking encrypted DM plaintext or overbuilding notification templating.
 
 ## Recommended implementation order
 

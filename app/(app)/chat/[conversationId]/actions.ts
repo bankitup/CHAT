@@ -36,6 +36,7 @@ import {
   type InboxConversationSummarySnapshot,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
+import { sendChatPushNotifications } from '@/modules/messaging/push/server';
 import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
@@ -461,6 +462,31 @@ export async function sendMessageMutationAction(
       lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
     });
     const summary = await getConversationSummaryForUser(conversationId, user.id);
+
+    try {
+      await sendChatPushNotifications({
+        body: body || null,
+        contentMode: 'plaintext',
+        conversationId,
+        messageId: messageResult.messageId,
+        messageKind: attachment
+          ? attachment.type.startsWith('audio/')
+            ? 'voice'
+            : 'attachment'
+          : 'text',
+        senderId: user.id,
+        spaceId: conversation.spaceId ?? null,
+      });
+    } catch (pushError) {
+      logControlledUiError({
+        fallback: 'Unable to send chat push notification right now.',
+        rawMessage:
+          pushError instanceof Error
+            ? pushError.message
+            : 'Unable to send chat push notification right now.',
+        surface: 'chat:push-after-send',
+      });
+    }
 
     return mutationOk({
       clientId: messageResult.clientId ?? null,

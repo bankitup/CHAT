@@ -15,6 +15,7 @@ self.addEventListener('push', (event) => {
     title: 'BWC Products',
     body: 'You have a new update.',
     url: '/inbox',
+    tag: null,
   };
 
   try {
@@ -34,9 +35,14 @@ self.addEventListener('push', (event) => {
       body: payload.body,
       data: {
         url: payload.url,
+        conversationId: payload.conversationId ?? null,
+        messageId: payload.messageId ?? null,
+        spaceId: payload.spaceId ?? null,
       },
       icon: '/icon?size=192',
       badge: '/icon?size=192',
+      tag: typeof payload.tag === 'string' ? payload.tag : undefined,
+      renotify: false,
     }),
   );
 });

@@ -17,3 +17,13 @@ export type StoredPushSubscription = {
   updatedAt: string;
   disabledAt: string | null;
 };
+
+export type ChatPushPayload = {
+  title: string;
+  body: string;
+  url: string;
+  conversationId: string;
+  spaceId: string | null;
+  messageId: string;
+  tag: string;
+};
