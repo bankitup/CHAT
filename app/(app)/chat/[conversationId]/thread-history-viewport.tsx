@@ -849,6 +849,7 @@ function ThreadVoiceMessageBubble({
     string | null
   >(null);
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
+  const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
   const attachmentSignedUrl = attachment?.signedUrl?.trim() || null;
   const hasRecoverableAttachmentLocator = Boolean(
@@ -891,8 +892,9 @@ function ThreadVoiceMessageBubble({
       : 0;
   const isPlaying = playbackState === 'playing';
   const isBuffering = playbackState === 'buffering';
+  const isPreparingPlayback = hasPendingPlaybackIntent && !isPlaying;
   const readyStateLabel =
-    playbackState === 'buffering'
+    playbackState === 'buffering' || isPreparingPlayback
       ? t.chat.voiceMessageLoading
       : t.chat.voiceMessage;
   const isRecoveringVoiceMessage =
@@ -929,7 +931,7 @@ function ThreadVoiceMessageBubble({
       ? voiceState === 'failed' || voiceState === 'unavailable'
         ? 'error'
         : 'loading'
-      : isBuffering
+      : isPreparingPlayback || isBuffering
         ? 'loading'
         : isPlaying
           ? 'pause'
@@ -954,6 +956,7 @@ function ThreadVoiceMessageBubble({
     setResolvedSignedUrl(attachment?.signedUrl ?? null);
     setDidFailSignedUrlResolve(false);
     setIgnoredAttachmentSignedUrl(null);
+    setHasPendingPlaybackIntent(false);
     setPlaybackFailed(false);
   }, [attachment?.durationMs, attachment?.id, attachment?.signedUrl]);
 
@@ -1060,6 +1063,40 @@ function ThreadVoiceMessageBubble({
     void resolveSignedUrl();
   }, [canResolveSignedUrl, resolveSignedUrl, voiceState]);
 
+  const startPlayback = useCallback(
+    async (signedUrlOverride?: string | null) => {
+      const audio = audioRef.current;
+      const nextSignedUrl = signedUrlOverride?.trim() || effectiveSignedUrl;
+
+      if (!audio || !nextSignedUrl) {
+        return false;
+      }
+
+      if (audio.getAttribute('src') !== nextSignedUrl) {
+        audio.setAttribute('src', nextSignedUrl);
+        audio.load();
+      } else if (audio.readyState === 0) {
+        audio.load();
+      }
+
+      setPlaybackFailed(false);
+      setPlaybackState('buffering');
+      claimActiveThreadVoicePlayback(messageId, audio);
+
+      try {
+        await audio.play();
+        return true;
+      } catch {
+        releaseActiveThreadVoicePlayback(messageId, audio);
+        setHasPendingPlaybackIntent(false);
+        setPlaybackFailed(true);
+        setPlaybackState('failed');
+        return false;
+      }
+    },
+    [effectiveSignedUrl, messageId],
+  );
+
   useEffect(() => {
     if (
       process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE !== '1' ||
@@ -1116,10 +1153,47 @@ function ThreadVoiceMessageBubble({
     );
   }, [effectiveSignedUrl, messageId]);
 
+  useEffect(() => {
+    if (!hasPendingPlaybackIntent) {
+      return;
+    }
+
+    if (playbackState === 'buffering' || playbackState === 'playing') {
+      return;
+    }
+
+    if (!effectiveSignedUrl) {
+      if (canResolveSignedUrl && !isResolvingSignedUrl) {
+        void resolveSignedUrl();
+        return;
+      }
+
+      if (!canResolveSignedUrl && voiceState !== 'processing') {
+        setHasPendingPlaybackIntent(false);
+      }
+
+      return;
+    }
+
+    void startPlayback(effectiveSignedUrl);
+  }, [
+    canResolveSignedUrl,
+    effectiveSignedUrl,
+    hasPendingPlaybackIntent,
+    isResolvingSignedUrl,
+    playbackState,
+    resolveSignedUrl,
+    startPlayback,
+    voiceState,
+  ]);
+
   const togglePlayback = async () => {
     if (voiceState !== 'ready') {
       if (canResolveSignedUrl) {
-        await resolveSignedUrl();
+        setHasPendingPlaybackIntent(true);
+        if (!isResolvingSignedUrl) {
+          void resolveSignedUrl();
+        }
       }
       return;
     }
@@ -1131,31 +1205,19 @@ function ThreadVoiceMessageBubble({
     }
 
     if (audio.paused) {
-      setPlaybackFailed(false);
-      setPlaybackState('buffering');
-      claimActiveThreadVoicePlayback(messageId, audio);
-
-      if (audio.readyState === 0) {
-        audio.load();
-      }
-
-      try {
-        await audio.play();
-      } catch {
-        releaseActiveThreadVoicePlayback(messageId, audio);
-        setPlaybackFailed(true);
-        setPlaybackState('failed');
-      }
+      setHasPendingPlaybackIntent(true);
+      await startPlayback();
       return;
     }
 
+    setHasPendingPlaybackIntent(false);
     audio.pause();
   };
 
   const playButtonLabel =
     voiceState !== 'ready'
       ? stateLabel
-      : isBuffering
+      : isPreparingPlayback || isBuffering
         ? t.chat.voiceMessageLoading
         : isPlaying
         ? t.chat.voiceMessagePause
@@ -1169,6 +1231,7 @@ function ThreadVoiceMessageBubble({
           : 'message-voice-card'
       }
       data-playback-state={voiceState === 'ready' ? playbackState : voiceState}
+      data-play-intent={hasPendingPlaybackIntent ? 'pending' : 'idle'}
       data-voice-state={voiceState}
     >
       <button
@@ -1213,7 +1276,7 @@ function ThreadVoiceMessageBubble({
           </div>
         ) : null}
       </div>
-      {voiceState === 'ready' && effectiveSignedUrl ? (
+      {effectiveSignedUrl || hasRecoverableAttachmentLocator ? (
         <audio
           ref={audioRef}
           className="message-voice-audio"
@@ -1221,6 +1284,7 @@ function ThreadVoiceMessageBubble({
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
             event.currentTarget.currentTime = 0;
             setProgressMs(0);
+            setHasPendingPlaybackIntent(false);
             setPlaybackState('ended');
           }}
           onError={(event) => {
@@ -1238,6 +1302,7 @@ function ThreadVoiceMessageBubble({
               return;
             }
 
+            setHasPendingPlaybackIntent(false);
             setPlaybackFailed(true);
             setPlaybackState('failed');
           }}
@@ -1259,6 +1324,7 @@ function ThreadVoiceMessageBubble({
           }}
           onPause={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            setHasPendingPlaybackIntent(false);
 
             if (event.currentTarget.ended) {
               return;
@@ -1268,6 +1334,7 @@ function ThreadVoiceMessageBubble({
           }}
           onPlaying={(event) => {
             claimActiveThreadVoicePlayback(messageId, event.currentTarget);
+            setHasPendingPlaybackIntent(false);
             setPlaybackFailed(false);
             setPlaybackState('playing');
           }}
@@ -1278,7 +1345,7 @@ function ThreadVoiceMessageBubble({
             setPlaybackState('buffering');
           }}
           preload="none"
-          src={effectiveSignedUrl}
+          src={effectiveSignedUrl ?? undefined}
         />
       ) : null}
     </div>

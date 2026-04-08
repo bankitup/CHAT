@@ -28,6 +28,25 @@ The messenger shell already has a real shape:
   [activity/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
 - voice playback and recovery are functional in
   [thread-history-viewport.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/chat/[conversationId]/thread-history-viewport.tsx)
+- messenger `Home` now keeps profile and status at the top while scoping
+  switch-space and logout controls to admin and super-admin users in
+  [home/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
+- messenger `Activity` now acts like a notification and reply surface with
+  lightweight filters and message-aware deep links in
+  [activity/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+  and
+  [activity-conversation-live-item.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/activity-conversation-live-item.tsx)
+- shared app loading and error fallbacks are now neutral instead of flashing an
+  obviously KeepCozy shell in
+  [loading.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/loading.tsx)
+  and
+  [error.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/error.tsx)
+- DM chat headers and participant lists now expose profile status more cleanly
+  through
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/chat/[conversationId]/page.tsx),
+  [settings/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/chat/[conversationId]/settings/page.tsx),
+  and
+  [identity-status.tsx](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/ui/identity-status.tsx)
 
 The remaining issues are not about whether messenger shell exists. They are
 about whether it feels intentional, stable, and clean enough for main.
@@ -270,3 +289,76 @@ The next implementation branch should make these things true:
 
 When these are done, messenger spaces will feel much more intentional and much
 safer to put in front of main-branch dogfood users.
+
+## Landed On This Branch
+
+This branch is now doing the intended pre-main messenger cleanup:
+
+- `Home` is now a lighter personal entry surface instead of a weak duplicate of
+  `Activity`
+- admin-only space switching and logout controls are no longer promoted to
+  ordinary members on messenger `Home`
+- messenger route transitions no longer flash an obviously wrong KeepCozy
+  loading shell
+- `Activity` is now notification-first, filterable, and routes into the exact
+  chat and latest message anchor for each conversation
+- voice playback no longer treats the first recoverable tap as “load only”
+- DM header status now reads like identity context instead of a heavy subtitle
+- participant rows in chat settings now show compact inline status without
+  making the list noisy
+
+## Practical Verification
+
+### Home Behavior
+
+- Sign in as a normal member inside a messenger space and open
+  [home/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx).
+  Confirm profile and status sit at the top, chat-first actions stay primary,
+  and switch-space / logout controls are not promoted there.
+- Sign in as a space admin or super-admin and confirm the same screen still
+  exposes the lighter admin controls for member management, switching spaces,
+  and logout.
+
+### Shell Transitions
+
+- Move between `/home`, `/inbox`, `/activity`, and a few `/chat/[conversationId]`
+  routes inside a messenger space.
+- Confirm loading and error transitions no longer briefly render an obviously
+  KeepCozy-shaped shell or KeepCozy-specific wording.
+
+### Voice Playback
+
+- Open a conversation with recent voice messages and tap a recoverable voice
+  bubble once.
+- Confirm the first meaningful tap carries through into playback when the asset
+  is recoverable, and that loading, ready, and unavailable states are visually
+  obvious without extra noisy metadata.
+- Refresh shortly after sending or opening a voice message and confirm recovery
+  states still read as recoverable rather than silently broken.
+
+### Activity Navigation
+
+- Open
+  [activity/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+  in a messenger space and confirm it leads with notifications rather than a
+  big “go to chats” hero.
+- Switch between `Needs reply`, `Recent`, `Direct`, and `Groups` filters and
+  confirm the list stays compact and conversation-grouped.
+- Tap several items and confirm they route into the exact chat and latest
+  message anchor instead of only the thread root.
+
+## Highest-Risk Follow-Up
+
+- Thread deep links currently target the latest message anchor per
+  conversation, not a richer event or mention-specific notification model.
+- Messenger settings still carry some shared-shell density that could be
+  softened later without changing runtime behavior.
+- Voice send durability is still bounded by the current upload/send runtime, so
+  this branch improves tap reliability and clarity more than deeper transport
+  resilience.
+- Messenger `Home` and `Activity` are now meaningfully separated, but future
+  product work should keep them from drifting back into overlap.
+
+## Recommended Next Branch
+
+- `feature/post-main-messenger-notification-targeting`

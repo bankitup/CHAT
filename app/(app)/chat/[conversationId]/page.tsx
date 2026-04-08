@@ -43,6 +43,7 @@ import {
 import {
   IdentityStatusInline,
   hasIdentityStatus,
+  resolveIdentityStatusParts,
 } from '@/modules/messaging/ui/identity-status';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
@@ -946,6 +947,10 @@ export default async function ChatPage({
       };
     },
   );
+  const directParticipantStatus = resolveIdentityStatusParts(directParticipantIdentity);
+  const hasDirectParticipantStatusText = Boolean(directParticipantStatus.text);
+  const hasDirectParticipantStatusEmojiOnly =
+    Boolean(directParticipantStatus.emoji) && !hasDirectParticipantStatusText;
   const attachmentHelpText =
     language === 'ru'
       ? 'Поддерживаются JPG, PNG, WEBP, GIF, PDF и TXT до 10 МБ.'
@@ -1247,29 +1252,52 @@ export default async function ChatPage({
             prefetch={false}
           >
             <div className="stack chat-header-copy">
-              <h1 className="conversation-screen-title">
-                {directConversationDisplayTitle}
-              </h1>
               {conversation.kind === 'group' ? (
-                <p className="muted chat-member-summary">{groupMemberSummary}</p>
-              ) : hasIdentityStatus(directParticipantIdentity) || otherParticipants[0] ? (
-                <div className="chat-header-meta">
-                  <IdentityStatusInline
-                    className="chat-header-status"
-                    identity={directParticipantIdentity}
-                  />
+                <>
+                  <h1 className="conversation-screen-title">
+                    {directConversationDisplayTitle}
+                  </h1>
+                  <p className="muted chat-member-summary">{groupMemberSummary}</p>
+                </>
+              ) : hasDirectParticipantStatusText ? (
+                <>
+                  <span className="sr-only">{directConversationDisplayTitle}</span>
+                  <span className="chat-header-status-bubble">
+                    <IdentityStatusInline
+                      className="chat-header-status chat-header-status-bubble-copy"
+                      identity={directParticipantIdentity}
+                    />
+                  </span>
+                </>
+              ) : (
+                <>
+                  <h1 className="conversation-screen-title chat-header-title-with-status">
+                    <span className="chat-header-title-label">
+                      {directConversationDisplayTitle}
+                    </span>
+                    {hasDirectParticipantStatusEmojiOnly ? (
+                      <span
+                        aria-hidden="true"
+                        className="chat-header-title-emoji"
+                      >
+                        {directParticipantStatus.emoji}
+                      </span>
+                    ) : null}
+                  </h1>
                   {otherParticipants[0] ? (
-                    <DmThreadClientSubtree
-                      conversationId={conversationId}
-                      {...threadClientDiagnostics}
-                      fallback={null}
-                      surface="conversation-presence-status"
-                    >
-                      <ConversationPresenceStatus language={language} />
-                    </DmThreadClientSubtree>
+                    <div className="chat-header-meta">
+                      <DmThreadClientSubtree
+                        conversationId={conversationId}
+                        {...threadClientDiagnostics}
+                        fallback={null}
+                        surface="conversation-presence-status"
+                      >
+                        <ConversationPresenceStatus language={language} />
+                      </DmThreadClientSubtree>
+                    </div>
                   ) : null}
-                </div>
-              ) : null}
+                </>
+              )}
             </div>
           </Link>
 
@@ -1597,13 +1625,15 @@ export default async function ChatPage({
                         size="sm"
                       />
                       <div className="stack conversation-member-copy">
-                        <span className="user-label">
-                          {participant.label}
-                        </span>
-                        <IdentityStatusInline
-                          className="conversation-member-status"
-                          identity={participant.identity}
-                        />
+                        <div className="conversation-member-title-row">
+                          <span className="user-label">
+                            {participant.label}
+                          </span>
+                          <IdentityStatusInline
+                            className="conversation-member-status"
+                            identity={participant.identity}
+                          />
+                        </div>
                         <div className="conversation-member-meta">
                           {conversation.kind === 'group' ? (
                             <span className="conversation-role-chip">
