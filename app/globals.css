@@ -4486,6 +4486,28 @@ main {
   text-align: center;
 }
 
+.chat-header-title-with-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  max-width: min(100%, 26ch);
+  margin-inline: auto;
+}
+
+.chat-header-title-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-header-title-emoji {
+  flex: 0 0 auto;
+  font-size: 0.94em;
+  line-height: 1;
+}
+
 .chat-header-subtitle {
   line-height: 1.35;
 }
@@ -4500,6 +4522,33 @@ main {
   max-width: min(100%, 26ch);
   font-size: 0.76rem;
   text-align: center;
+}
+
+.chat-header-status-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 31px;
+  max-width: min(100%, 28ch);
+  margin-inline: auto;
+  padding: 0 12px;
+  border: 1px solid rgba(214, 223, 236, 0.92);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 248, 253, 0.84));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 8px 20px rgba(17, 24, 39, 0.045);
+}
+
+.chat-header-status-bubble-copy {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: rgba(54, 65, 79, 0.92);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.15;
 }
 
 .chat-presence-status {
@@ -5334,13 +5383,36 @@ main {
 }
 
 .conversation-member-copy {
-  gap: 2px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.conversation-member-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.conversation-member-title-row .user-label {
   min-width: 0;
 }
 
 .conversation-member-status {
-  max-width: 100%;
-  font-size: 0.73rem;
+  max-width: min(100%, 20ch);
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.045);
+  color: rgba(54, 65, 79, 0.88);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.conversation-member-status .identity-status-text {
+  max-width: 16ch;
 }
 
 .conversation-member-meta {
