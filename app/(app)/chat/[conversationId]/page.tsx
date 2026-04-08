@@ -151,11 +151,22 @@ function logThreadRenderDiagnostics(
   console.info('[chat-thread-render]', stage, details);
 }
 
+function shouldLogThreadRenderCheckpoint() {
+  return (
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ||
+    process.env.CHAT_DEBUG_THREAD_RENDER === '1'
+  );
+}
+
 function logThreadRenderCheckpoint(
   stage: string,
   details?: Record<string, unknown>,
   level: 'info' | 'error' = 'info',
 ) {
+  if (level !== 'error' && !shouldLogThreadRenderCheckpoint()) {
+    return;
+  }
+
   if (details) {
     console[level]('[chat-thread-checkpoint]', stage, details);
     return;
@@ -708,6 +719,10 @@ export default async function ChatPage({
         ] as const),
       ),
   );
+  const reactionsByMessageEntries = messageIds.map((messageId) => ({
+    messageId,
+    reactions: reactionsByMessage.get(messageId) ?? [],
+  }));
   const e2eeEnvelopeHistory = {
     activeDeviceCreatedAt:
       threadHistorySnapshot.dmE2ee?.activeDeviceCreatedAt ?? null,
@@ -1177,24 +1192,21 @@ export default async function ChatPage({
           <ActiveChatRealtimeSync
             conversationId={conversationId}
             currentUserId={user.id}
-            messageIds={messages.map((message) => message.id)}
+            messageIds={messageIds}
           />
         </DmThreadClientSubtree>
       ) : (
         <ActiveChatRealtimeSync
           conversationId={conversationId}
           currentUserId={user.id}
-          messageIds={messages.map((message) => message.id)}
+          messageIds={messageIds}
         />
       )}
       <ThreadLiveStateHydrator
         conversationId={conversationId}
         currentUserReadSeq={readState.lastReadMessageSeq}
         otherParticipantReadSeq={otherParticipantReadState?.lastReadMessageSeq ?? null}
-        reactionsByMessage={messageIds.map((messageId) => ({
-          messageId,
-          reactions: reactionsByMessage.get(messageId) ?? [],
-        }))}
+        reactionsByMessage={reactionsByMessageEntries}
       />
       {conversation.kind === 'dm' ? (
         <DmThreadClientSubtree

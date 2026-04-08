@@ -916,6 +916,14 @@ function shouldLogVoiceSendDiagnostics() {
   );
 }
 
+function shouldLogChatThreadSnapshotDiagnostics() {
+  return (
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ||
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1' ||
+    process.env.CHAT_DEBUG_THREAD_SNAPSHOT === '1'
+  );
+}
+
 function logVoiceSendDiagnostics(
   stage: string,
   details?: Record<string, unknown>,
@@ -939,6 +947,10 @@ function logChatThreadSnapshotCheckpoint(
   stage: string,
   details?: Record<string, unknown>,
 ) {
+  if (!shouldLogChatThreadSnapshotDiagnostics()) {
+    return;
+  }
+
   if (details) {
     console.info('[chat-thread-snapshot]', stage, details);
     return;
@@ -2689,10 +2701,12 @@ function getAttachmentMessageKind(mimeType: string | null) {
 export async function getProfileIdentities(
   userIds: string[],
   options?: {
+    includeAvatarPath?: boolean;
     includeStatuses?: boolean;
   },
 ) {
   const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
+  const includeAvatarPath = options?.includeAvatarPath !== false;
   const includeStatuses = options?.includeStatuses !== false;
 
   if (uniqueUserIds.length === 0) {
@@ -2706,15 +2720,23 @@ export async function getProfileIdentities(
     ids: string[],
   ) => {
     if (includeStatuses) {
+      const withStatusesProjection = [
+        'user_id',
+        'display_name',
+        'username',
+        'email_local_part',
+        ...(includeAvatarPath ? ['avatar_path'] : []),
+        'status_emoji',
+        'status_text',
+        'status_updated_at',
+      ].join(', ');
       const withStatuses = await client
         .from('profiles')
-        .select(
-          'user_id, display_name, username, email_local_part, avatar_path, status_emoji, status_text, status_updated_at',
-        )
+        .select(withStatusesProjection)
         .in('user_id', ids);
 
       if (!withStatuses.error) {
-        const profiles = ((withStatuses.data ?? []) as {
+        const profiles = ((withStatuses.data ?? []) as unknown as {
           user_id: string;
           display_name: string | null;
           username?: string | null;
@@ -2730,7 +2752,9 @@ export async function getProfileIdentities(
           displayName: profile.display_name?.trim() || null,
           username: profile.username?.trim() || null,
           emailLocalPart: profile.email_local_part?.trim() || null,
-          avatarPath: resolveStoredAvatarPath(client, profile.avatar_path),
+          avatarPath: includeAvatarPath
+            ? resolveStoredAvatarPath(client, profile.avatar_path)
+            : null,
           statusEmoji: profile.status_emoji?.trim() || null,
           statusText: profile.status_text?.trim() || null,
           statusUpdatedAt: profile.status_updated_at?.trim() || null,
@@ -2738,13 +2762,20 @@ export async function getProfileIdentities(
       }
     }
 
+    const withIdentityProjection = [
+      'user_id',
+      'display_name',
+      'username',
+      'email_local_part',
+      ...(includeAvatarPath ? ['avatar_path'] : []),
+    ].join(', ');
     const withIdentityFallbacksAndAvatars = await client
       .from('profiles')
-      .select('user_id, display_name, username, email_local_part, avatar_path')
+      .select(withIdentityProjection)
       .in('user_id', ids);
 
     if (!withIdentityFallbacksAndAvatars.error) {
-      const profiles = ((withIdentityFallbacksAndAvatars.data ?? []) as {
+      const profiles = ((withIdentityFallbacksAndAvatars.data ?? []) as unknown as {
         user_id: string;
         display_name: string | null;
         username?: string | null;
@@ -2757,35 +2788,39 @@ export async function getProfileIdentities(
         displayName: profile.display_name?.trim() || null,
         username: profile.username?.trim() || null,
         emailLocalPart: profile.email_local_part?.trim() || null,
-        avatarPath: resolveStoredAvatarPath(client, profile.avatar_path),
+        avatarPath: includeAvatarPath
+          ? resolveStoredAvatarPath(client, profile.avatar_path)
+          : null,
         statusEmoji: null,
         statusText: null,
         statusUpdatedAt: null,
       }));
     }
 
-    const withDisplayNamesAndAvatars = await client
-      .from('profiles')
-      .select('user_id, display_name, avatar_path')
-      .in('user_id', ids);
+    if (includeAvatarPath) {
+      const withDisplayNamesAndAvatars = await client
+        .from('profiles')
+        .select('user_id, display_name, avatar_path')
+        .in('user_id', ids);
 
-    if (!withDisplayNamesAndAvatars.error) {
-      const profiles = ((withDisplayNamesAndAvatars.data ?? []) as {
-        user_id: string;
-        display_name: string | null;
-        avatar_path?: string | null;
-      }[]);
+      if (!withDisplayNamesAndAvatars.error) {
+        const profiles = ((withDisplayNamesAndAvatars.data ?? []) as {
+          user_id: string;
+          display_name: string | null;
+          avatar_path?: string | null;
+        }[]);
 
-      return profiles.map((profile) => ({
-        userId: profile.user_id,
-        displayName: profile.display_name?.trim() || null,
-        username: null,
-        emailLocalPart: null,
-        avatarPath: resolveStoredAvatarPath(client, profile.avatar_path),
-        statusEmoji: null,
-        statusText: null,
-        statusUpdatedAt: null,
-      }));
+        return profiles.map((profile) => ({
+          userId: profile.user_id,
+          displayName: profile.display_name?.trim() || null,
+          username: null,
+          emailLocalPart: null,
+          avatarPath: resolveStoredAvatarPath(client, profile.avatar_path),
+          statusEmoji: null,
+          statusText: null,
+          statusUpdatedAt: null,
+        }));
+      }
     }
 
     const withIdentityFallbacks = await client
@@ -6166,7 +6201,10 @@ export async function getConversationHistorySnapshot(input: {
     attachmentsByMessageResult,
     e2eeEnvelopeHistoryResult,
   ] = await Promise.allSettled([
-    getMessageSenderProfiles(senderProfileIds),
+    getMessageSenderProfiles(senderProfileIds, {
+      includeAvatarPath: false,
+      includeStatuses: false,
+    }),
     getGroupedReactionsForMessages(messageIds, input.userId),
     getMessageAttachments(attachmentMessageIds),
     getCurrentUserDmE2eeEnvelopesForMessages({
@@ -6424,8 +6462,14 @@ export async function getConversationHistorySnapshot(input: {
   };
 }
 
-export async function getMessageSenderProfiles(userIds: string[]) {
-  return getProfileIdentities(userIds);
+export async function getMessageSenderProfiles(
+  userIds: string[],
+  options?: {
+    includeAvatarPath?: boolean;
+    includeStatuses?: boolean;
+  },
+) {
+  return getProfileIdentities(userIds, options);
 }
 
 async function createSignedChatAttachmentUrl(input: {
