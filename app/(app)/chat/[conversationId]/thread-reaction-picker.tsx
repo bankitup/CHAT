@@ -9,21 +9,27 @@ import type { MessageReactionGroup } from '@/modules/messaging/data/server';
 import { toggleReactionMutationAction } from './actions';
 
 type ThreadReactionPickerProps = {
+  className?: string;
   conversationId: string;
   currentUserId: string;
   emojis: readonly string[];
   initialReactions: MessageReactionGroup[];
   isOwnMessage?: boolean;
   messageId: string;
+  onReactionSelected?: () => void;
+  showCounts?: boolean;
 };
 
 export function ThreadReactionPicker({
+  className,
   conversationId,
   currentUserId,
   emojis,
   initialReactions,
   isOwnMessage = false,
   messageId,
+  onReactionSelected,
+  showCounts = true,
 }: ThreadReactionPickerProps) {
   const reactions = useThreadLiveReactionGroups(
     conversationId,
@@ -34,11 +40,13 @@ export function ThreadReactionPicker({
 
   return (
     <div
-      className={
-        isOwnMessage
-          ? 'reaction-picker reaction-picker-own message-sheet-reactions'
-          : 'reaction-picker message-sheet-reactions'
-      }
+      className={[
+        'reaction-picker',
+        isOwnMessage ? 'reaction-picker-own' : null,
+        className ?? null,
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       {emojis.map((emoji) => {
         const currentReaction = reactions.find((reaction) => reaction.emoji === emoji);
@@ -76,6 +84,7 @@ export function ThreadReactionPicker({
                   messageId: result.data.messageId,
                   selected: result.data.selected,
                 });
+                onReactionSelected?.();
               } finally {
                 setPendingEmoji(null);
               }
@@ -83,7 +92,7 @@ export function ThreadReactionPicker({
             type="button"
           >
             <span>{emoji}</span>
-            {currentReaction ? (
+            {showCounts && currentReaction ? (
               <span className="reaction-count">{currentReaction.count}</span>
             ) : null}
           </button>
