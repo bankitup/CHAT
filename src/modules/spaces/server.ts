@@ -42,20 +42,38 @@ function getDefaultShellRouteForSpaceProfile(
   return profile === 'keepcozy_ops' ? '/home' : '/inbox';
 }
 
+function normalizeStoredSpaceProfile(profile: string | null | undefined) {
+  if (profile === 'messenger_full' || profile === 'keepcozy_ops') {
+    return profile;
+  }
+
+  return null;
+}
+
 /**
- * Temporary runtime profile resolver until profile storage is persisted.
+ * Runtime profile resolver that prefers persisted profile storage when present
+ * and falls back to the earlier name-based compatibility rule otherwise.
  *
- * Current rule:
+ * Current fallback rule:
  *
  * - the shared `TEST` space is the canonical KeepCozy operational sandbox
  * - every other space falls back to the messenger-first profile
- *
- * This keeps the profile seam explicit without redesigning shared schema yet.
  */
 export function resolveSpaceProfileForSpace(input: {
   spaceId: string;
   spaceName: string | null;
+  storedProfile?: string | null;
 }): ResolvedSpaceProfile {
+  const storedProfile = normalizeStoredSpaceProfile(input.storedProfile);
+
+  if (storedProfile) {
+    return {
+      profile: storedProfile,
+      source: 'space_profile_column',
+      defaultShellRoute: getDefaultShellRouteForSpaceProfile(storedProfile),
+    };
+  }
+
   const normalizedSpaceName = input.spaceName?.trim().toUpperCase() ?? '';
 
   if (normalizedSpaceName === 'TEST') {
@@ -208,6 +226,16 @@ function isMissingRelationErrorMessage(message: string, relationName: string) {
   );
 }
 
+function isMissingSpaceProfileColumnErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedMessage.includes('spaces.profile') &&
+    (normalizedMessage.includes('does not exist') ||
+      normalizedMessage.includes('schema cache'))
+  );
+}
+
 export function isSpaceMembersSchemaCacheErrorMessage(message: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -325,10 +353,52 @@ export async function getUserSpaces(
     return [] as UserSpaceRecord[];
   }
 
-  const { data: spaces, error: spacesError } = await supabase
+  let spaces:
+    | Array<{
+        id: string;
+        name: string;
+        created_by: string;
+        created_at: string | null;
+        profile?: string | null;
+      }>
+    | null = null;
+  let spacesError: Error | null = null;
+  const spacesWithProfileResult = await supabase
     .from('spaces')
-    .select('id, name, created_by, created_at')
+    .select('id, name, created_by, created_at, profile')
     .in('id', spaceIds);
+
+  if (
+    spacesWithProfileResult.error &&
+    isMissingSpaceProfileColumnErrorMessage(spacesWithProfileResult.error.message)
+  ) {
+    logSpacesDiagnostics('spaces:query-profile-fallback', {
+      source,
+      message: spacesWithProfileResult.error.message,
+    });
+
+    const spacesWithoutProfileResult = await supabase
+      .from('spaces')
+      .select('id, name, created_by, created_at')
+      .in('id', spaceIds);
+
+    spaces = (spacesWithoutProfileResult.data ?? []) as Array<{
+      id: string;
+      name: string;
+      created_by: string;
+      created_at: string | null;
+    }>;
+    spacesError = spacesWithoutProfileResult.error;
+  } else {
+    spaces = (spacesWithProfileResult.data ?? []) as Array<{
+      id: string;
+      name: string;
+      created_by: string;
+      created_at: string | null;
+      profile?: string | null;
+    }>;
+    spacesError = spacesWithProfileResult.error;
+  }
 
   if (spacesError) {
     logSpacesDiagnostics('spaces:query-error', {
@@ -345,20 +415,18 @@ export async function getUserSpaces(
   }
 
   const spaceById = new Map(
-    ((spaces ?? []) as Array<{
-      id: string;
-      name: string;
-      created_by: string;
-      created_at: string | null;
-    }>).map((space) => [
+    (spaces ?? []).map((space) => [
       space.id,
       {
         id: space.id,
         name: space.name,
         createdBy: space.created_by,
         createdAt: space.created_at,
+        storedProfile: space.profile ?? null,
         updatedAt: null,
-      } satisfies SpaceRecord,
+      } satisfies SpaceRecord & {
+        storedProfile: string | null;
+      },
     ]),
   );
   const joinedAtBySpaceId = new Map(
@@ -376,6 +444,7 @@ export async function getUserSpaces(
       const profileResolution = resolveSpaceProfileForSpace({
         spaceId: space.id,
         spaceName: space.name,
+        storedProfile: space.storedProfile,
       });
       const governanceResolution = resolveSpaceGovernanceRoleForRuntimeSpaceRole(
         membership.role,

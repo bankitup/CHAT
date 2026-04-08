@@ -46,6 +46,7 @@ export const SPACE_PROFILES = [
 ] as const satisfies readonly SpaceProfile[];
 
 export type SpaceProfileSource =
+  | 'space_profile_column'
   | 'space_name_test_default'
   | 'fallback_messenger_default';
 
