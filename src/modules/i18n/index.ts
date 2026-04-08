@@ -184,6 +184,8 @@ type LanguageDictionary = {
     subtitle: string;
     overviewTitle: string;
     overviewBody: string;
+    adminTitle: string;
+    adminBody: string;
     activeChatsTitle: string;
     activeChatsBody: string;
     unreadChatsBody: string;
@@ -985,9 +987,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       eyebrow: 'Messenger space',
       subtitle:
         'Use this space for conversations first, then check recent chat movement without leaving the current workspace.',
-      overviewTitle: 'Chat-first workspace',
+      overviewTitle: 'Start chatting',
       overviewBody:
-        'Open chats to start talking, review recent activity when you need context, and switch spaces only when you want a different workspace.',
+        'Open chats fast, start a DM, or create a group without turning Home into another activity feed.',
+      adminTitle: 'Space and session',
+      adminBody:
+        'Keep space switching and sign-out nearby only when you manage this space or administer multiple spaces.',
       activeChatsTitle: 'Active chats',
       activeChatsBody: 'Current conversations that belong to this space.',
       unreadChatsBody: 'Chats in this space that still need attention.',
@@ -1861,9 +1866,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       eyebrow: 'Пространство мессенджера',
       subtitle:
         'Используйте это пространство прежде всего для чатов, а затем проверяйте недавнюю активность, не выходя из текущего контекста.',
-      overviewTitle: 'Чат-ориентированное пространство',
+      overviewTitle: 'Начать общение',
       overviewBody:
-        'Открывайте чаты, чтобы начать общение, просматривайте недавнюю активность, когда нужен контекст, и переключайте пространство только когда нужен другой рабочий контур.',
+        'Быстро открывайте чаты, начинайте личный диалог или создавайте группу, не превращая Home в ещё одну ленту активности.',
+      adminTitle: 'Пространство и сессия',
+      adminBody:
+        'Держите переключение пространства и выход рядом только тогда, когда вы управляете этим пространством или администрируете несколько пространств.',
       activeChatsTitle: 'Активные чаты',
       activeChatsBody: 'Текущие разговоры, которые относятся к этому пространству.',
       unreadChatsBody: 'Чаты в этом пространстве, которые ещё требуют внимания.',

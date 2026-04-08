@@ -3227,6 +3227,103 @@ main {
     0 16px 40px rgba(17, 24, 39, 0.08);
 }
 
+.messenger-home-screen {
+  gap: 14px;
+}
+
+.messenger-home-personal-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.messenger-home-personal-card {
+  gap: 14px;
+}
+
+.messenger-home-profile-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.messenger-home-profile-copy {
+  gap: 4px;
+  min-width: 0;
+}
+
+.messenger-home-profile-name {
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+}
+
+.messenger-home-profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.messenger-home-profile-email {
+  font-size: 0.82rem;
+  line-height: 1.32;
+  overflow-wrap: anywhere;
+}
+
+.messenger-home-personal-actions {
+  justify-content: flex-start;
+}
+
+.messenger-home-status-card {
+  justify-content: space-between;
+}
+
+.messenger-home-status-empty,
+.messenger-home-status-updated {
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.messenger-home-entry-card {
+  gap: 0;
+}
+
+.messenger-home-summary-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.messenger-home-entry-actions,
+.messenger-home-admin-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.messenger-home-admin-actions form {
+  display: contents;
+}
+
+.messenger-home-empty-section {
+  gap: 8px;
+}
+
+@media (min-width: 700px) {
+  .messenger-home-personal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (min-width: 560px) {
+  .messenger-home-entry-actions,
+  .messenger-home-admin-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .inbox-settings-route-screen {
   gap: 18px;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
