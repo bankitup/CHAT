@@ -139,6 +139,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     try {
       const activeSpaceState = await resolveActiveSpaceForUser({
         userId: user.id,
+        userEmail: user.email ?? null,
         requestedSpaceId: query.space,
         source: 'inbox-page',
       });

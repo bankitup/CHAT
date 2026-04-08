@@ -59,14 +59,18 @@ The repository already has the first hard boundary primitives:
   space-scoped path in
   [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
   `getAvailableUsers(currentUserId, { spaceId })`
+- a first super-admin-only create-space flow now exists on
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/new/page.tsx)
+  with provisioning logic in
+  [write-server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/write-server.ts)
 
 The repository does not yet have:
 
-- a dedicated super-admin provisioning path
 - invitation tables
 - assignment tables
 - a persisted governance-specific admin model beyond current generic
   `owner | admin | member`
+- broad admin tooling beyond the first narrow super-admin provisioning path
 
 That means the governance foundation must distinguish clearly between:
 
@@ -340,13 +344,15 @@ These guardrails should remain explicit in later branches.
 ### No ordinary global user discovery
 
 The current `getAvailableUsers(...)` helper already has the correct
-space-scoped path for product flows when `spaceId` is present.
+space-scoped path for product flows when `spaceId` is present, and current
+runtime now rejects the no-`spaceId` ordinary fallback.
 
 Governance rule:
 
 - all ordinary product flows must use the space-scoped path
-- the no-`spaceId` global fallback should be treated as a hardening target and
-  later removed or tightly admin-gated
+- the helper must verify the actor actually belongs to the exact requested
+  `space_id`
+- no ordinary global user-discovery fallback should remain in place
 
 ### Roles stay layered
 
@@ -365,7 +371,7 @@ Governance rule:
 | Topic | Current state | Target state |
 | --- | --- | --- |
 | Outer isolation boundary | `public.spaces`, `public.space_members`, and `conversations.space_id` already exist | remains the hard non-negotiable boundary |
-| Space creation | no documented reviewed provisioning-only runtime path yet | super-admin-only controlled backend provisioning |
+| Space creation | first narrow super-admin provisioning path exists through `/spaces/new` | super-admin-only controlled backend provisioning with fuller audit/tooling |
 | Space admin scope | current runtime has generic `owner | admin | member`; scope is coarse | explicit own-space-only governance responsibilities |
 | Member management | no dedicated invite records yet | explicit invite/removal model, still limited to one space |
 | User discovery | ordinary app flows use space-scoped lookup when `spaceId` is provided | no ordinary global discovery path across unrelated spaces |
@@ -388,72 +394,62 @@ violating the governance foundation.
 
 ## 10. Practical Verification
 
-Use the following review model when sanity-checking this branch before the next
-profile/runtime phase.
+Use the current runtime seam on this branch:
 
-### One super-admin-created messenger space
+- `dmtest1@chat.local` is an initial `super_admin`
+- `dmtest2@chat.local` is an initial `super_admin`
+- ordinary users are not `super_admin`
+- current ordinary user discovery remains space-scoped only
 
-Reason about a messenger-first space like this:
+### Test With `dmtest1@chat.local`
 
-- a `super_admin` provisions the space
-- the first governing admin is seeded explicitly into `space_members`
-- the space may later resolve to profile `messenger_full`
-- the profile changes shell posture, not ownership or isolation
-- members of that messenger space remain invisible to unrelated spaces unless
-  they also have explicit membership there
+1. Sign in as `dmtest1@chat.local`.
+2. Open [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/page.tsx).
+3. Verify the `Create space` card is visible.
+4. Open [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/new/page.tsx).
+5. Create a space with:
+   - a name
+   - at least one admin identifier
+   - optional participant identifiers
+6. Verify the created people are seeded into `public.space_members` and the
+   first listed admin is written as `owner`.
+7. If you include `dmtest1@chat.local` in the member/admin list, verify the
+   new space appears in the selector afterward.
 
-### One super-admin-created KeepCozy space
+### Test With `dmtest2@chat.local`
 
-Reason about a KeepCozy-first space like this:
+1. Repeat the same flow as `dmtest1@chat.local`.
+2. Verify `dmtest2@chat.local` also sees the `Create space` entry point.
+3. Verify a created space can be provisioned without changing behavior for
+   ordinary users.
 
-- a `super_admin` provisions the space or later creates/binds it through the
-  controlled KeepCozy create-or-bind backend path
-- the first governing admin is seeded explicitly into `space_members`
-- the space may later resolve to profile `keepcozy_ops`
-- homes, objects, threads, and later timeline rows inherit that same
-  governing `space_id`
-- the KeepCozy product surface changes, but the space boundary stays the same
+### Verify A Space Admin Cannot Leave The Space Boundary
 
-### What a space admin should and should not be able to do
+1. Use a user who is `owner` or `admin` in one space but not a member of a
+   second space.
+2. Confirm that user does not see the global `Create space` action.
+3. Confirm they cannot open the `/spaces/new` flow successfully; it redirects
+   back to `/spaces`.
+4. Confirm ordinary participant lookup continues to require an explicit
+   `spaceId` and that the actor must actually belong to that exact space.
+5. Confirm the user cannot discover unrelated users through ordinary inbox/chat
+   flows outside their own space boundary.
 
-A `space_admin` should be able to:
+### Verify Ordinary Members Cannot Create Spaces
 
-- manage members inside the governed `space_id`
-- operate later invite/remove/change-role flows for that same `space_id`
-- manage space-local conversations and operational records inside that same
-  boundary
+1. Sign in as a user who is only a `member`.
+2. Open the space selector.
+3. Verify there is no `Create space` card.
+4. Try to open `/spaces/new` directly.
+5. Verify the user is redirected back to `/spaces` and no space is created.
 
-A `space_admin` should not be able to:
+### What Still Waits For Later Branches
 
-- create new spaces
-- manage unrelated spaces
-- browse the global user base in ordinary product flows
-- treat business role alone as proof of thread-moderation or cross-space power
-
-### What a member should and should not be able to do
-
-A `space_member` should be able to:
-
-- participate inside allowed space-scoped product flows
-- create or reply where later product policy allows
-
-A `space_member` should not be able to:
-
-- manage the general roster
-- invite unrelated users by default
-- widen access through thread mechanics
-- infer access to another space because the same person belongs to both
-
-### What must still wait for later branches
-
-The following are intentionally not final on this branch:
-
-- persisted super-admin storage and reviewed provisioning tooling
-- final invite/add/remove/change-role runtime implementation
-- audited mutation logging for sensitive actions
-- KeepCozy create-or-bind backend automation
-- final RLS and policy enforcement
-- profile-aware capability gating beyond the governance seam
+- persisted and audited `super_admin` storage beyond the email allowlist
+- own-space add/remove/change-role UI for `space_admin`
+- invite records and acceptance flow
+- audit logging for provisioning and member mutations
+- KeepCozy create-or-bind automation on top of the same governed `space_id`
 
 ## Remaining Ambiguities
 

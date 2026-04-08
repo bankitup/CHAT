@@ -9,11 +9,11 @@ import type {
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
   SpaceProfileSource,
-  SpaceGovernanceGlobalRoleSource,
   SpaceGovernanceRoleSource,
   SpaceRecord,
   SpaceRole,
 } from './model';
+import { getDefaultShellRouteForSpaceProfile, normalizeSpaceProfile } from './model';
 import { withSpaceParam } from './url';
 
 export type UserSpaceRecord = SpaceRecord & {
@@ -36,26 +36,45 @@ export type ResolvedActiveSpaceState = {
   requestedSpaceWasInvalid: boolean;
 };
 
-function getDefaultShellRouteForSpaceProfile(
-  profile: SpaceProfile,
-): SpaceProfileDefaultShellRoute {
-  return profile === 'keepcozy_ops' ? '/home' : '/inbox';
-}
+export type ExactUserSpaceAccessState = {
+  activeSpace: UserSpaceRecord;
+  activeSpaceGovernance: ResolvedSpaceGovernanceState;
+  activeSpaceProfile: ResolvedSpaceProfile;
+  globalGovernance: ResolvedSpaceGovernanceGlobalRole;
+  requestedSpaceId: string;
+  spaces: UserSpaceRecord[];
+};
+
+export const INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST = new Set([
+  'dmtest1@chat.local',
+  'dmtest2@chat.local',
+]);
 
 /**
- * Temporary runtime profile resolver until profile storage is persisted.
+ * Persisted-first runtime profile resolver.
  *
  * Current rule:
  *
- * - the shared `TEST` space is the canonical KeepCozy operational sandbox
+ * - an explicit stored profile on `public.spaces.profile` wins when present
+ * - the shared `TEST` space remains the canonical KeepCozy operational
+ *   fallback when storage is absent or null
  * - every other space falls back to the messenger-first profile
- *
- * This keeps the profile seam explicit without redesigning shared schema yet.
  */
 export function resolveSpaceProfileForSpace(input: {
   spaceId: string;
   spaceName: string | null;
+  storedProfile?: string | null;
 }): ResolvedSpaceProfile {
+  const persistedProfile = normalizeSpaceProfile(input.storedProfile);
+
+  if (persistedProfile) {
+    return {
+      profile: persistedProfile,
+      source: 'persisted_space_profile',
+      defaultShellRoute: getDefaultShellRouteForSpaceProfile(persistedProfile),
+    };
+  }
+
   const normalizedSpaceName = input.spaceName?.trim().toUpperCase() ?? '';
 
   if (normalizedSpaceName === 'TEST') {
@@ -83,13 +102,26 @@ export function resolveSpaceProfileShellHref(input: {
   );
 }
 
-function parseNormalizedGovernanceAllowlist(rawValue: string | undefined) {
-  return new Set(
-    (rawValue ?? '')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean),
-  );
+function normalizeGovernanceEmail(value: string | null | undefined) {
+  const normalizedValue = value?.trim().toLowerCase() ?? null;
+  return normalizedValue && normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+export function resolveSuperAdminGovernanceForUser(input: {
+  userEmail?: string | null;
+}): ResolvedSpaceGovernanceGlobalRole {
+  const normalizedEmail = normalizeGovernanceEmail(input.userEmail);
+  const isSuperAdmin = normalizedEmail
+    ? INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST.has(normalizedEmail)
+    : false;
+
+  return {
+    globalRole: isSuperAdmin ? 'super_admin' : null,
+    globalRoleSource: isSuperAdmin
+      ? 'initial_email_allowlist'
+      : 'not_super_admin',
+    canCreateSpaces: isSuperAdmin,
+  };
 }
 
 export function resolveSpaceGovernanceRoleForRuntimeSpaceRole(
@@ -112,38 +144,6 @@ export function resolveSpaceGovernanceRoleForRuntimeSpaceRole(
     governanceRole,
     governanceRoleSource,
     canManageMembers: governanceRole === 'space_admin',
-  };
-}
-
-export function resolveSuperAdminGovernanceForUser(input: {
-  userId: string;
-  userEmail?: string | null;
-}): ResolvedSpaceGovernanceGlobalRole {
-  const normalizedUserId = input.userId.trim();
-  const normalizedEmail = input.userEmail?.trim().toLowerCase() ?? null;
-  const allowedUserIds = parseNormalizedGovernanceAllowlist(
-    process.env.CHAT_SUPER_ADMIN_USER_IDS,
-  );
-  const allowedEmails = parseNormalizedGovernanceAllowlist(
-    process.env.CHAT_SUPER_ADMIN_EMAILS,
-  );
-
-  let globalRole: ResolvedSpaceGovernanceGlobalRole['globalRole'] = null;
-  let globalRoleSource: SpaceGovernanceGlobalRoleSource =
-    'deferred_no_runtime_binding';
-
-  if (allowedUserIds.has(normalizedUserId)) {
-    globalRole = 'super_admin';
-    globalRoleSource = 'env_user_id_allowlist';
-  } else if (normalizedEmail && allowedEmails.has(normalizedEmail)) {
-    globalRole = 'super_admin';
-    globalRoleSource = 'env_email_allowlist';
-  }
-
-  return {
-    globalRole,
-    globalRoleSource,
-    canCreateSpaces: globalRole === 'super_admin',
   };
 }
 
@@ -205,6 +205,18 @@ function isMissingRelationErrorMessage(message: string, relationName: string) {
   return (
     normalizedMessage.includes('relation') &&
     normalizedMessage.includes(relationName.toLowerCase())
+  );
+}
+
+function isMissingColumnErrorMessage(message: string, columnName: string) {
+  const normalizedMessage = message.toLowerCase();
+  const normalizedColumnName = columnName.toLowerCase();
+
+  return (
+    normalizedMessage.includes(normalizedColumnName) &&
+    (normalizedMessage.includes('column') ||
+      normalizedMessage.includes('schema cache') ||
+      normalizedMessage.includes('could not find'))
   );
 }
 
@@ -325,10 +337,28 @@ export async function getUserSpaces(
     return [] as UserSpaceRecord[];
   }
 
-  const { data: spaces, error: spacesError } = await supabase
+  const spacesWithProfileResponse = await supabase
     .from('spaces')
-    .select('id, name, created_by, created_at')
+    .select('id, name, created_by, created_at, profile')
     .in('id', spaceIds);
+  const spacesFallbackResponse =
+    spacesWithProfileResponse.error &&
+    isMissingColumnErrorMessage(spacesWithProfileResponse.error.message, 'profile')
+      ? await supabase
+          .from('spaces')
+          .select('id, name, created_by, created_at')
+          .in('id', spaceIds)
+      : null;
+  const spaces =
+    (spacesFallbackResponse?.data ?? spacesWithProfileResponse.data) as Array<{
+      id: string;
+      name: string;
+      created_by: string;
+      created_at: string | null;
+      profile?: string | null;
+    }> | null;
+  const spacesError =
+    spacesFallbackResponse?.error ?? spacesWithProfileResponse.error;
 
   if (spacesError) {
     logSpacesDiagnostics('spaces:query-error', {
@@ -350,6 +380,7 @@ export async function getUserSpaces(
       name: string;
       created_by: string;
       created_at: string | null;
+      profile?: string | null;
     }>).map((space) => [
       space.id,
       {
@@ -357,6 +388,7 @@ export async function getUserSpaces(
         name: space.name,
         createdBy: space.created_by,
         createdAt: space.created_at,
+        profile: normalizeSpaceProfile(space.profile),
         updatedAt: null,
       } satisfies SpaceRecord,
     ]),
@@ -376,6 +408,7 @@ export async function getUserSpaces(
       const profileResolution = resolveSpaceProfileForSpace({
         spaceId: space.id,
         spaceName: space.name,
+        storedProfile: space.profile,
       });
       const governanceResolution = resolveSpaceGovernanceRoleForRuntimeSpaceRole(
         membership.role,
@@ -431,7 +464,6 @@ export async function resolveActiveSpaceForUser(input: {
       : null;
   const activeSpace = requestedSpace ?? spaces[0] ?? null;
   const globalGovernance = resolveSuperAdminGovernanceForUser({
-    userId: input.userId,
     userEmail: input.userEmail ?? null,
   });
   const activeSpaceGovernance = activeSpace
@@ -472,6 +504,60 @@ export async function resolveActiveSpaceForUser(input: {
     requestedSpaceId,
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
   };
+}
+
+export async function requireExactSpaceAccessForUser(input: {
+  userId: string;
+  userEmail?: string | null;
+  requestedSpaceId?: string | null;
+  source?: string;
+}): Promise<ExactUserSpaceAccessState> {
+  const requestedSpaceId = input.requestedSpaceId?.trim() || null;
+
+  if (!requestedSpaceId) {
+    throw new Error('An explicit space is required for this operation.');
+  }
+
+  const resolved = await resolveActiveSpaceForUser({
+    requestedSpaceId,
+    source: input.source ?? 'unknown',
+    userEmail: input.userEmail ?? null,
+    userId: input.userId,
+  });
+
+  if (
+    !resolved.activeSpace ||
+    !resolved.activeSpaceGovernance ||
+    !resolved.activeSpaceProfile ||
+    resolved.requestedSpaceWasInvalid ||
+    resolved.activeSpace.id !== requestedSpaceId
+  ) {
+    throw new Error('You do not have access to this space.');
+  }
+
+  return {
+    activeSpace: resolved.activeSpace,
+    activeSpaceGovernance: resolved.activeSpaceGovernance,
+    activeSpaceProfile: resolved.activeSpaceProfile,
+    globalGovernance: resolved.globalGovernance,
+    requestedSpaceId,
+    spaces: resolved.spaces,
+  };
+}
+
+export async function requireSpaceMemberManagementForUser(input: {
+  userId: string;
+  userEmail?: string | null;
+  requestedSpaceId?: string | null;
+  source?: string;
+}): Promise<ExactUserSpaceAccessState> {
+  const exactSpaceAccess = await requireExactSpaceAccessForUser(input);
+
+  if (!exactSpaceAccess.activeSpaceGovernance.canManageMembers) {
+    throw new Error('Only a space admin may manage members in this space.');
+  }
+
+  return exactSpaceAccess;
 }
 
 export async function resolveDefaultSpaceShellHrefForUser(input: {
