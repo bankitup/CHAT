@@ -3494,10 +3494,15 @@ export function ThreadHistoryViewport({
               delete: t.chat.delete,
               failed: t.chat.sendFailed,
               justNow: t.chat.justNow,
+              queued: t.chat.messageQueued,
               remove: t.chat.remove,
               retry: t.chat.retrySend,
               sending: t.chat.sending,
               sent: t.chat.sent,
+              voiceFailed: t.chat.voiceMessageFailed,
+              voicePendingHint: t.chat.voiceMessagePendingHint,
+              voiceProcessing: t.chat.voiceMessageProcessing,
+              voiceUploading: t.chat.voiceMessageUploading,
             }}
           />
         </DmThreadClientSubtree>
@@ -3510,10 +3515,15 @@ export function ThreadHistoryViewport({
             delete: t.chat.delete,
             failed: t.chat.sendFailed,
             justNow: t.chat.justNow,
+            queued: t.chat.messageQueued,
             remove: t.chat.remove,
             retry: t.chat.retrySend,
             sending: t.chat.sending,
             sent: t.chat.sent,
+            voiceFailed: t.chat.voiceMessageFailed,
+            voicePendingHint: t.chat.voiceMessagePendingHint,
+            voiceProcessing: t.chat.voiceMessageProcessing,
+            voiceUploading: t.chat.voiceMessageUploading,
           }}
         />
       )}

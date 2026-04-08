@@ -303,3 +303,44 @@ The next implementation batch should make these practical improvements visible:
 - refresh/reopen is less punishing for pending sends and voice drafts
 - voice playback and recovery feels more deterministic
 - summary routes stay lightweight enough for later encrypted groups, richer media, and eventual calls
+
+## Implemented in this branch
+
+This branch closes the loop on the current runtime pass with a narrow chat-and-voice stabilization slice:
+
+- voice drafts now expose restored-after-refresh state so the composer can explain what happened instead of looking stuck
+- voice recorder failure states now give next-step guidance for permission, unsupported-device, and retryable capture failures
+- optimistic outgoing rows now distinguish queued, sending, voice processing, and failed states more clearly
+- optimistic voice rows now explain that audio is still syncing instead of feeling like a frozen or broken bubble
+- the existing reopen-recovery path stays intact, but the user-facing state around it is clearer and less likely to read as app slowness
+
+This is intentionally a runtime-feedback and recovery pass, not a queue rewrite or thread-loader redesign.
+
+## Practical verification
+
+### General chat responsiveness
+
+- open a busy chat thread and send several short text messages in sequence
+- confirm new outgoing rows appear immediately with clear queued or sending feedback instead of a silent wait
+- verify failed sends still show retry and remove actions inline without blocking the rest of the thread
+
+### Conversation-entry speed
+
+- enter `/inbox`, open one conversation, go back, and open another conversation
+- confirm the route reaches a readable thread quickly and any remaining background work reads as secondary progress rather than a broken load
+- pay attention to mobile behavior: opening a thread should feel stable, with no obvious scroll jump caused by runtime status UI
+
+### Voice send, refresh, reopen, and playback
+
+- start a voice recording, stop it, then refresh before sending
+- confirm the draft is restored with explicit recovered-draft guidance
+- send a voice message and watch the optimistic bubble transition through queued or processing copy before the committed message replaces it
+- refresh or reopen the thread shortly after sending and confirm the voice bubble can recover into a playable state instead of dead-ending immediately
+- if playback is not ready yet, confirm the bubble communicates that the audio is still resolving rather than silently failing
+
+## Known limitations that remain
+
+- the outgoing queue is still in-memory during the actual send or upload step, so a hard refresh mid-send can still drop local optimistic job state
+- thread open still has not been fully split into strict first-paint snapshot versus secondary enrichment
+- voice playback recovery is still owned by the large thread viewport rather than a smaller dedicated runtime helper
+- this pass improves clarity and perceived speed, but it does not yet make media transport or queue durability transactional
