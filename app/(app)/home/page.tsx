@@ -1,20 +1,15 @@
+import { logoutAction } from '../actions';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
-  getInboxDisplayPreviewText,
-} from '@/modules/messaging/e2ee/inbox-policy';
-import {
+  getCurrentUserProfile,
   getArchivedConversations,
-  getConversationDisplayName,
-  getConversationParticipantIdentities,
-  getDirectMessageDisplayName,
   getInboxConversationsStable,
 } from '@/modules/messaging/data/server';
-import { getInboxSectionPreferences } from '@/modules/messaging/inbox/preferences-server';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { IdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   getKeepCozyPrimaryTestFlowHints,
   getKeepCozyHomeDashboardData,
@@ -23,6 +18,7 @@ import {
 import {
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
+  resolveSuperAdminGovernanceForUser,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
@@ -44,7 +40,7 @@ function buildMessengerInboxCreateHref(input: {
   return `/inbox?${params.toString()}`;
 }
 
-function formatMessengerHomeRecency(
+function formatMessengerStatusUpdatedAt(
   value: string | null,
   language: 'en' | 'ru',
 ) {
@@ -58,25 +54,37 @@ function formatMessengerHomeRecency(
     return null;
   }
 
-  const now = new Date();
   const locale = language === 'ru' ? 'ru-RU' : 'en-US';
-  const isSameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
 
   return new Intl.DateTimeFormat(
     locale,
-    isSameDay
-      ? {
-          hour: 'numeric',
-          minute: '2-digit',
-        }
-      : {
-          day: 'numeric',
-          month: 'short',
-        },
+    {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    },
   ).format(date);
+}
+
+function resolveMessengerProfileLabel(input: {
+  displayName: string | null;
+  email: string | null;
+  username: string | null;
+}) {
+  const displayName = input.displayName?.trim();
+
+  if (displayName) {
+    return displayName;
+  }
+
+  const username = input.username?.trim();
+
+  if (username) {
+    return username;
+  }
+
+  const emailLocalPart = input.email?.split('@')[0]?.trim();
+
+  return emailLocalPart || null;
 }
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
@@ -163,285 +171,79 @@ export default async function HomeDashboardPage({
   );
 
   if (activeSpace.profile === 'messenger_full') {
-    const [conversations, archivedConversations, inboxPreferences] = await Promise.all([
+    const [conversations, archivedConversations, currentUserProfile] = await Promise.all([
       getInboxConversationsStable(user.id, { spaceId: activeSpace.id }),
       getArchivedConversations(user.id, { spaceId: activeSpace.id }),
-      getInboxSectionPreferences(),
+      getCurrentUserProfile(user.id, user.email ?? null),
     ]);
     const unreadChatCount = conversations.filter(
       (conversation) => conversation.unreadCount > 0,
     ).length;
-    const recentConversations = conversations.slice(0, 3);
-    const recentParticipantIdentities = await getConversationParticipantIdentities(
-      recentConversations.map((conversation) => conversation.conversationId),
-    );
-    const recentParticipantIdentitiesByConversation = recentParticipantIdentities.reduce(
-      (map, identity) => {
-        const existing = map.get(identity.conversationId) ?? [];
-        existing.push(identity);
-        map.set(identity.conversationId, existing);
-        return map;
-      },
-      new Map<string, (typeof recentParticipantIdentities)[number][]>(),
-    );
-    const recentChatItems = recentConversations.map((conversation) => {
-      const participantOptions =
-        recentParticipantIdentitiesByConversation.get(conversation.conversationId) ??
-        [];
-      const otherParticipants = participantOptions.filter(
-        (participant) => participant.userId !== user.id,
-      );
-      const otherParticipantLabels = otherParticipants.map((participant) =>
-        resolvePublicIdentityLabel(participant, t.chat.unknownUser),
-      );
-      const isGroupConversation = conversation.kind === 'group';
-
-      return {
-        conversationId: conversation.conversationId,
-        isGroupConversation,
-        preview: getInboxDisplayPreviewText(
-          conversation,
-          {
-            attachment: t.chat.attachment,
-            audio: t.chat.audio,
-            deletedMessage: t.chat.deletedMessage,
-            encryptedMessage: t.chat.encryptedMessage,
-            file: t.chat.file,
-            image: t.chat.image,
-            newEncryptedMessage: t.chat.newEncryptedMessage,
-            newMessage: t.chat.newMessage,
-            voiceMessage: t.chat.voiceMessage,
-          },
-          inboxPreferences.previewMode,
-        ),
-        recencyLabel: formatMessengerHomeRecency(
-          conversation.lastMessageAt ?? conversation.createdAt,
-          language,
-        ),
-        title: isGroupConversation
-          ? getConversationDisplayName({
-              kind: conversation.kind ?? null,
-              title: conversation.title,
-              participantLabels: otherParticipantLabels,
-              fallbackTitles: {
-                dm: language === 'ru' ? 'Новый чат' : 'New chat',
-                group: language === 'ru' ? 'Новая группа' : 'New group',
-              },
-            })
-          : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser),
-        unreadCount: conversation.unreadCount,
-      };
-    });
     const hasAnyChats =
       conversations.length > 0 || archivedConversations.length > 0;
     const canManageMessengerMembers =
       'canManageMembers' in activeSpace && activeSpace.canManageMembers;
+    const canCreateSpaces = resolveSuperAdminGovernanceForUser({
+      userEmail: user.email ?? null,
+    }).canCreateSpaces;
+    const showMessengerAdminControls =
+      canManageMessengerMembers || canCreateSpaces;
+    const profileLabel =
+      resolveMessengerProfileLabel({
+        displayName: currentUserProfile.displayName ?? null,
+        email: currentUserProfile.email ?? user.email ?? null,
+        username: currentUserProfile.username ?? null,
+      }) ?? t.settings.profileTitle;
+    const profileHandle = currentUserProfile.username?.trim()
+      ? `@${currentUserProfile.username.trim()}`
+      : null;
+    const profileEmail = currentUserProfile.email ?? user.email ?? null;
+    const statusEmoji = currentUserProfile.statusEmoji?.trim() ?? '';
+    const statusText = currentUserProfile.statusText?.trim() ?? '';
+    const hasStatus = Boolean(statusEmoji || statusText);
+    const statusUpdatedLabel = formatMessengerStatusUpdatedAt(
+      currentUserProfile.statusUpdatedAt ?? null,
+      language,
+    );
 
     return (
-      <section className="stack settings-screen settings-shell activity-screen">
-        <section className="stack settings-hero activity-hero">
-          <section className="activity-focus-card">
-            <div className="stack activity-focus-copy">
-              <span className="activity-focus-kicker">{t.messengerHome.eyebrow}</span>
-              <h1 className="settings-hero-title">{activeSpace.name}</h1>
-              <p className="muted activity-focus-body">
-                {t.messengerHome.subtitle}
-              </p>
-              <div className="keepcozy-meta-row">
-                <span className="keepcozy-meta-pill">
-                  {t.settings.currentSpaceLabel}: {activeSpace.name}
-                </span>
-              </div>
-            </div>
+      <section className="stack settings-screen settings-shell activity-screen messenger-home-screen">
+        <section className="messenger-home-personal-grid">
+          <section className="card stack settings-surface settings-home-card settings-home-card-profile messenger-home-personal-card">
+            <div className="messenger-home-profile-row">
+              <IdentityAvatar
+                diagnosticsSurface="home:messenger-profile"
+                identity={{
+                  avatarPath: currentUserProfile.avatarPath ?? null,
+                  displayName: profileLabel,
+                  userId: user.id,
+                }}
+                label={profileLabel}
+                size="lg"
+              />
 
-            <div className="keepcozy-card-actions keepcozy-focus-actions">
-              <Link
-                className="activity-focus-action button"
-                href={withSpaceParam('/inbox', activeSpace.id)}
-                prefetch={false}
-              >
-                {t.shell.openChats}
-              </Link>
-              <Link
-                className="button button-secondary"
-                href={withSpaceParam('/activity', activeSpace.id)}
-                prefetch={false}
-              >
-                {t.shell.openMessengerActivity}
-              </Link>
-              <Link
-                className="pill"
-                href={withSpaceParam('/spaces', activeSpace.id)}
-                prefetch={false}
-              >
-                {t.settings.chooseAnotherSpace}
-              </Link>
-            </div>
-          </section>
-        </section>
-
-        <section className="card stack settings-surface activity-surface">
-          <section className="stack settings-section">
-            <div className="stack activity-section-copy">
-              <h2 className="card-title">{t.messengerHome.overviewTitle}</h2>
-              <p className="muted">{t.messengerHome.overviewBody}</p>
-            </div>
-          </section>
-
-          <section className="stack settings-section">
-            <div className="activity-summary-grid">
-              <div className="activity-summary-card">
-                <span className="activity-summary-label">
-                  {t.messengerHome.activeChatsTitle}
-                </span>
-                <span className="activity-summary-value">{conversations.length}</span>
-                <p className="muted">{t.messengerHome.activeChatsBody}</p>
-              </div>
-
-              <div className="activity-summary-card">
-                <span className="activity-summary-label">{t.activity.unreadChats}</span>
-                <span className="activity-summary-value">{unreadChatCount}</span>
-                <p className="muted">{t.messengerHome.unreadChatsBody}</p>
-              </div>
-
-              <div className="activity-summary-card">
-                <span className="activity-summary-label">{t.activity.archivedChats}</span>
-                <span className="activity-summary-value">
-                  {archivedConversations.length}
-                </span>
-                <p className="muted">{t.messengerHome.archivedChatsBody}</p>
-              </div>
-            </div>
-          </section>
-
-          {recentChatItems.length > 0 ? (
-            <section className="stack settings-section activity-section">
-              <div className="activity-section-header">
-                <div className="stack activity-section-copy">
-                  <h2 className="card-title">{t.messengerHome.recentTitle}</h2>
-                  <p className="muted">{t.messengerHome.recentBody}</p>
-                </div>
-
-                <div className="activity-section-actions">
-                  <span className="activity-section-count">
-                    {recentChatItems.length}
+              <div className="stack messenger-home-profile-copy">
+                <span className="activity-focus-kicker">{t.settings.profileTitle}</span>
+                <h1 className="messenger-home-profile-name">{profileLabel}</h1>
+                <div className="messenger-home-profile-meta">
+                  {profileEmail ? (
+                    <span className="muted messenger-home-profile-email">
+                      {profileEmail}
+                    </span>
+                  ) : null}
+                  {profileHandle ? (
+                    <span className="summary-pill summary-pill-muted">
+                      {profileHandle}
+                    </span>
+                  ) : null}
+                  <span className="summary-pill summary-pill-muted">
+                    {t.settings.currentSpaceLabel}: {activeSpace.name}
                   </span>
-                  <Link
-                    className="pill activity-section-link"
-                    href={withSpaceParam('/inbox', activeSpace.id)}
-                    prefetch={false}
-                  >
-                    {t.shell.openChats}
-                  </Link>
                 </div>
               </div>
-
-              <div className="activity-list">
-                {recentChatItems.map((conversation) => (
-                  <Link
-                    key={conversation.conversationId}
-                    className="activity-item activity-item-link"
-                    href={withSpaceParam(
-                      `/chat/${conversation.conversationId}`,
-                      activeSpace.id,
-                    )}
-                    prefetch={false}
-                  >
-                    <div className="activity-item-copy">
-                      <div className="activity-item-title-row">
-                        <h3 className="activity-item-title">{conversation.title}</h3>
-                        {conversation.recencyLabel ? (
-                          <span className="activity-item-recency">
-                            {conversation.recencyLabel}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      <p
-                        className={[
-                          'activity-item-preview',
-                          !conversation.preview
-                            ? 'activity-item-preview-empty'
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                      >
-                        {conversation.preview ?? t.messengerHome.recentEmptyBody}
-                      </p>
-
-                      <div className="activity-item-meta">
-                        <div className="activity-item-meta-left">
-                          {conversation.isGroupConversation ? (
-                            <span className="keepcozy-meta-pill">
-                              {t.messengerHome.groupBadgeLabel}
-                            </span>
-                          ) : null}
-                          {conversation.unreadCount > 0 ? (
-                            <span className="activity-unread-pill">
-                              {t.messengerHome.unreadBadgeLabel} ·{' '}
-                              {conversation.unreadCount}
-                            </span>
-                          ) : null}
-                        </div>
-                        <span className="pill">{t.shell.openChats}</span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {!hasAnyChats ? (
-            <section className="empty-card keepcozy-preview-card">
-              <h2 className="card-title">{t.messengerHome.emptyTitle}</h2>
-              <p className="muted">{t.messengerHome.emptyBody}</p>
-              <div className="keepcozy-card-actions">
-                <Link
-                  className="button"
-                  href={buildMessengerInboxCreateHref({
-                    mode: 'dm',
-                    spaceId: activeSpace.id,
-                  })}
-                  prefetch={false}
-                >
-                  {t.inbox.create.createDm}
-                </Link>
-                <Link
-                  className="button button-secondary"
-                  href={buildMessengerInboxCreateHref({
-                    mode: 'group',
-                    spaceId: activeSpace.id,
-                  })}
-                  prefetch={false}
-                >
-                  {t.inbox.create.createGroup}
-                </Link>
-                <Link
-                  className="pill"
-                  href={
-                    canManageMessengerMembers
-                      ? withSpaceParam('/spaces/members', activeSpace.id)
-                      : withSpaceParam('/spaces', activeSpace.id)
-                  }
-                  prefetch={false}
-                >
-                  {canManageMessengerMembers
-                    ? t.spaces.manageMembersAction
-                    : t.settings.chooseAnotherSpace}
-                </Link>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="stack settings-section">
-            <div className="stack activity-section-copy">
-              <h2 className="card-title">{t.messengerHome.profileTitle}</h2>
-              <p className="muted">{t.messengerHome.profileBody}</p>
             </div>
 
-            <div className="keepcozy-card-actions">
+            <div className="keepcozy-card-actions messenger-home-personal-actions">
               <Link
                 className="button button-secondary"
                 href={withSpaceParam('/settings', activeSpace.id)}
@@ -449,15 +251,130 @@ export default async function HomeDashboardPage({
               >
                 {t.messengerHome.openProfileAction}
               </Link>
+            </div>
+          </section>
+
+          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
+            <div className="stack settings-card-copy settings-section-copy">
+              <h2 className="section-title">{t.settings.statusTitle}</h2>
+              <p className="muted">{t.settings.statusSubtitle}</p>
+            </div>
+
+            {hasStatus ? (
+              <div className="profile-status-pill">
+                {statusEmoji ? (
+                  <span aria-hidden="true" className="profile-status-emoji">
+                    {statusEmoji}
+                  </span>
+                ) : null}
+                <span className="profile-status-text">
+                  {statusText || t.settings.statusEmpty}
+                </span>
+              </div>
+            ) : (
+              <p className="muted messenger-home-status-empty">
+                {t.settings.statusEmpty}
+              </p>
+            )}
+
+            {statusUpdatedLabel ? (
+              <p className="muted messenger-home-status-updated">
+                {statusUpdatedLabel}
+              </p>
+            ) : null}
+          </section>
+        </section>
+
+        <section className="card stack settings-surface activity-surface messenger-home-entry-card">
+          <section className="stack settings-section">
+            <div className="stack activity-section-copy">
+              <h2 className="card-title">{t.messengerHome.overviewTitle}</h2>
+              <p className="muted">{t.messengerHome.overviewBody}</p>
+            </div>
+            <div className="messenger-home-summary-pills">
+              <span className="summary-pill">
+                {t.messengerHome.activeChatsTitle}: {conversations.length}
+              </span>
+              <span className="summary-pill summary-pill-muted">
+                {t.activity.unreadChats}: {unreadChatCount}
+              </span>
+              {archivedConversations.length > 0 ? (
+                <span className="summary-pill summary-pill-muted">
+                  {t.activity.archivedChats}: {archivedConversations.length}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="messenger-home-entry-actions">
               <Link
-                className="pill"
-                href={withSpaceParam('/spaces', activeSpace.id)}
+                className="button"
+                href={withSpaceParam('/inbox', activeSpace.id)}
                 prefetch={false}
               >
-                {t.settings.chooseAnotherSpace}
+                {t.shell.openChats}
+              </Link>
+              <Link
+                className="button button-secondary"
+                href={buildMessengerInboxCreateHref({
+                  mode: 'dm',
+                  spaceId: activeSpace.id,
+                })}
+                prefetch={false}
+              >
+                {t.inbox.create.createDm}
+              </Link>
+              <Link
+                className="button button-secondary"
+                href={buildMessengerInboxCreateHref({
+                  mode: 'group',
+                  spaceId: activeSpace.id,
+                })}
+                prefetch={false}
+              >
+                {t.inbox.create.createGroup}
               </Link>
             </div>
           </section>
+
+          {!hasAnyChats ? (
+            <section className="stack settings-section messenger-home-empty-section">
+              <h2 className="card-title">{t.messengerHome.emptyTitle}</h2>
+              <p className="muted">{t.messengerHome.emptyBody}</p>
+            </section>
+          ) : null}
+
+          {showMessengerAdminControls ? (
+            <section className="stack settings-section messenger-home-admin-section">
+              <div className="stack activity-section-copy">
+                <h2 className="card-title">{t.messengerHome.adminTitle}</h2>
+                <p className="muted">{t.messengerHome.adminBody}</p>
+              </div>
+
+              <div className="messenger-home-admin-actions">
+                {canManageMessengerMembers ? (
+                  <Link
+                    className="pill"
+                    href={withSpaceParam('/spaces/members', activeSpace.id)}
+                    prefetch={false}
+                  >
+                    {t.spaces.manageMembersAction}
+                  </Link>
+                ) : null}
+                <Link
+                  className="button button-secondary"
+                  href={withSpaceParam('/spaces', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.settings.chooseAnotherSpace}
+                </Link>
+                <form action={logoutAction} className="messenger-home-logout-form">
+                  <button className="button button-secondary" type="submit">
+                    {t.settings.logoutButton}
+                  </button>
+                </form>
+              </div>
+            </section>
+          ) : null}
         </section>
       </section>
     );
