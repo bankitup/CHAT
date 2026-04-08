@@ -69,11 +69,15 @@ function getStatusCopy(
 }
 
 export function NotificationReadinessPanel({
+  anchorId,
   embedded = false,
   language,
+  surface = 'settings',
 }: {
+  anchorId?: string;
   embedded?: boolean;
   language: AppLanguage;
+  surface?: 'activity' | 'settings';
 }) {
   const [readiness, setReadiness] = useState<NotificationReadiness | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -99,9 +103,12 @@ export function NotificationReadinessPanel({
 
   return (
     <section
+      id={anchorId}
       className={
         embedded
-          ? 'stack settings-section settings-notification-section'
+          ? surface === 'activity'
+            ? 'stack settings-section settings-notification-section messenger-activity-notification-panel'
+            : 'stack settings-section settings-notification-section'
           : 'card stack settings-card'
       }
     >
@@ -162,13 +169,7 @@ export function NotificationReadinessPanel({
               });
             }}
           >
-            {isPending
-              ? readiness.permission === 'granted'
-                ? t.notifications.connectingDevice
-                : t.notifications.turningOn
-              : readiness.permission === 'granted'
-                ? t.notifications.connectDevice
-                : t.notifications.turnOn}
+            {isPending ? t.notifications.turningOn : t.notifications.turnOn}
           </button>
         ) : null}
 
