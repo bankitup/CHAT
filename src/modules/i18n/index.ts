@@ -96,6 +96,7 @@ type LanguageDictionary = {
     includeYourselfHint: string;
     submitCreateSpace: string;
     nameRequired: string;
+    testSpaceReservedName: string;
     adminIdentifiersRequired: string;
     createSpaceFailed: string;
     createSpaceSuccess: string;
@@ -810,7 +811,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSpaceRouteSubtitle:
         'Create a new space, choose its primary mode, and seed the first governed members.',
       createSpaceRouteBody:
-        'This flow is reserved for super admins. It creates the shared space, assigns its initial profile when supported, and seeds the first explicit space-boundary members.',
+        'This flow is reserved for super admins. A new space starts clean: no inherited history and no copied TEST-space members unless you list them here.',
       fieldSpaceName: 'Space name',
       fieldSpaceProfile: 'Primary mode',
       fieldParticipantIdentifiers: 'Initial participants',
@@ -820,13 +821,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileHint:
         'Messenger spaces land chat-first. KeepCozy spaces land home-first when persisted profile storage is available.',
       participantIdentifiersHint:
-        'Enter one email or user ID per line. These people become the initial member set.',
+        'Enter one email or user ID per line. Leave this blank to start with only the listed admins. Nothing is copied from TEST.',
       adminIdentifiersHint:
         'Enter one email or user ID per line. Admin identifiers are also added as members automatically, and the first one becomes the owner.',
       includeYourselfHint:
         'Add yourself to the participant or admin list if you need to enter the new space right away.',
       submitCreateSpace: 'Create governed space',
       nameRequired: 'Space name is required.',
+      testSpaceReservedName:
+        'TEST is reserved for the existing KeepCozy sandbox. Use a different name for a new messenger space.',
       adminIdentifiersRequired: 'At least one initial space admin is required.',
       createSpaceFailed: 'Unable to create the space right now.',
       createSpaceSuccess: 'Space created. Open it from the list below.',
@@ -1599,7 +1602,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSpaceRouteSubtitle:
         'Создайте новое пространство, выберите его основной режим и задайте первый управляемый состав участников.',
       createSpaceRouteBody:
-        'Этот поток зарезервирован для супер-админов. Он создает общее пространство, назначает его начальный профиль, когда это поддержано, и задает первых явных участников границы пространства.',
+        'Этот поток зарезервирован для супер-админов. Новое пространство создается с чистого листа: без истории и без копирования участников из TEST, если вы не укажете их явно.',
       fieldSpaceName: 'Название пространства',
       fieldSpaceProfile: 'Основной режим',
       fieldParticipantIdentifiers: 'Первые участники',
@@ -1609,13 +1612,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileHint:
         'Мессенджер-пространства открываются с чатов. Пространства KeepCozy открываются с дома, когда включено сохранение профиля пространства.',
       participantIdentifiersHint:
-        'Введите по одному email или user ID на строку. Эти люди станут первым набором участников.',
+        'Введите по одному email или user ID на строку. Оставьте поле пустым, если хотите начать только с указанных админов. Ничего не копируется из TEST.',
       adminIdentifiersHint:
         'Введите по одному email или user ID на строку. Администраторы автоматически добавляются и как участники, а первый из них становится owner.',
       includeYourselfHint:
         'Добавьте себя в список участников или админов, если вам нужно сразу открыть новое пространство.',
       submitCreateSpace: 'Создать управляемое пространство',
       nameRequired: 'Нужно указать название пространства.',
+      testSpaceReservedName:
+        'TEST зарезервирован за существующей KeepCozy-песочницей. Для нового мессенджер-пространства используйте другое название.',
       adminIdentifiersRequired:
         'Нужно указать хотя бы одного первого администратора пространства.',
       createSpaceFailed: 'Сейчас не удалось создать пространство.',

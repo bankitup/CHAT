@@ -16,6 +16,10 @@ function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
 }
 
+function isReservedTestSpaceName(value: string) {
+  return value.trim().toUpperCase() === 'TEST';
+}
+
 function setTextParam(params: URLSearchParams, key: string, value?: string | null) {
   const normalized = value?.trim() ?? '';
 
@@ -97,6 +101,13 @@ export async function createSpaceAction(formData: FormData) {
   if (!spaceName) {
     redirectToCreateSpaceSurface({
       error: t.spaces.nameRequired,
+      ...draft,
+    });
+  }
+
+  if (isReservedTestSpaceName(spaceName)) {
+    redirectToCreateSpaceSurface({
+      error: t.spaces.testSpaceReservedName,
       ...draft,
     });
   }

@@ -31,6 +31,10 @@ function trimToNullable(value: string | null | undefined) {
   return normalized ? normalized : null;
 }
 
+function isReservedTestSpaceName(value: string | null | undefined) {
+  return value?.trim().toUpperCase() === 'TEST';
+}
+
 function isMissingColumnErrorMessage(message: string, columnName: string) {
   const normalizedMessage = message.toLowerCase();
   const normalizedColumnName = columnName.toLowerCase();
@@ -339,6 +343,12 @@ export async function createGovernedSpace(input: {
 
   if (!spaceName) {
     throw new Error('Space name is required.');
+  }
+
+  if (isReservedTestSpaceName(spaceName)) {
+    throw new Error(
+      'TEST is reserved for the existing KeepCozy sandbox. Use a different name for a new messenger space.',
+    );
   }
 
   if (participantIdentifiers.invalid.length > 0) {
