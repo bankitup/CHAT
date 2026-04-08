@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getTranslations } from '@/modules/i18n';
 import { getCookieLanguage } from '@/modules/i18n/server';
 import { DmE2eePublicBoundaryCleanup } from '@/modules/messaging/e2ee/local-state-boundary';
-import { resolveHomeHrefForUser } from '@/modules/spaces/server';
+import { resolveDefaultSpaceShellHrefForUser } from '@/modules/spaces/server';
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   if (user) {
     redirect(
-      await resolveHomeHrefForUser({
+      await resolveDefaultSpaceShellHrefForUser({
         userId: user.id,
         source: 'login-page',
       }),

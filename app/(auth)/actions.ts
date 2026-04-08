@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getStoredProfileLanguage } from '@/modules/messaging/data/server';
 import { LANGUAGE_COOKIE_NAME } from '@/modules/i18n';
-import { resolveHomeHrefForUser } from '@/modules/spaces/server';
+import { resolveDefaultSpaceShellHrefForUser } from '@/modules/spaces/server';
 
 function readFormValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -54,7 +54,7 @@ export async function loginAction(formData: FormData) {
   }
 
   const nextHref = data.user?.id
-    ? await resolveHomeHrefForUser({
+    ? await resolveDefaultSpaceShellHrefForUser({
         userId: data.user.id,
         source: 'login-action',
       })

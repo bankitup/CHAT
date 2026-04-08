@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCookieLanguage } from '@/modules/i18n/server';
+import { resolveDefaultSpaceShellHrefForUser } from '@/modules/spaces/server';
 import { PublicHomeScreen } from './public-home-screen';
-import { resolveHomeHrefForUser } from '@/modules/spaces/server';
 
 export default async function HomePage() {
   const supabase = await createSupabaseServerClient();
@@ -9,8 +9,8 @@ export default async function HomePage() {
     data: { user },
   } = await supabase.auth.getUser();
   const language = await getCookieLanguage();
-  const authenticatedHomeHref = user?.id
-    ? await resolveHomeHrefForUser({
+  const authenticatedEntryHref = user?.id
+    ? await resolveDefaultSpaceShellHrefForUser({
         userId: user.id,
         source: 'public-home',
       })
@@ -18,7 +18,7 @@ export default async function HomePage() {
 
   return (
     <PublicHomeScreen
-      authenticatedHomeHref={authenticatedHomeHref}
+      authenticatedEntryHref={authenticatedEntryHref}
       initialLanguage={language}
       isAuthenticated={Boolean(user)}
     />
