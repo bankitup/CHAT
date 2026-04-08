@@ -17,10 +17,14 @@ This is intentionally a narrow runtime-performance audit, not a messaging-archit
 
 The current branch already moved a few important pieces in the right direction:
 
-- voice drafts can now recover after refresh instead of disappearing silently
-- optimistic send states are clearer than before, especially for voice
+- inbox now defers create-target loading and trims some avoidable row/runtime work on first entry
+- conversation entry does less first-paint work than before, especially around attachment and sender mapping
+- message density and same-sender grouping are tighter, so more useful thread content fits on screen
+- the header now follows the intended mobile hierarchy: back left, centered title, avatar right
+- voice bubbles are cleaner: stronger play affordance, inline duration, and less metadata noise
+- voice drafts can recover after refresh instead of disappearing silently
+- optimistic and committed voice states are clearer, especially while uploading, recovering, or retrying
 - quick message actions are lighter than the old popup pattern
-- inbox create-target loading is now conditional on the create sheet being opened
 
 Even with those improvements, the live browser experience still feels heavier than it should because the app is paying cost in three places at once:
 
@@ -400,3 +404,22 @@ The next implementation batch should make these improvements visible:
 - the thread fits more real conversation on screen without feeling cramped
 - voice bubbles feel easier to understand and easier to play
 - refresh, reopen, and delayed voice hydration feel recoverable rather than broken
+
+## Practical verification
+
+- General chat responsiveness: open `/inbox`, switch between main and archived views, and confirm the inbox feels ready before any create-chat flow is opened. Then send a few short text messages and make sure optimistic rows appear immediately instead of feeling blocked on the backend.
+- Conversation-entry speed: from `/inbox`, open one busy conversation, return, then open another. The first readable frame should appear quickly, and the route should feel less “busy” before the first screenful is usable.
+- Denser message grouping: use a thread with several short consecutive messages from the same sender. Confirm same-sender runs are tighter than sender-switches, replies still read clearly, and more messages fit on one mobile-height screen than before.
+- Header layout: in both a DM and a group thread, confirm the back button stays on the left, the title/meta block reads as centered, and the avatar stays on the right without pulling the title off-axis.
+- Voice send, reopen, and playback: record a voice draft, stop it, and send it. Confirm the optimistic row moves through clearer queued and uploading states. Then refresh before sending another draft and confirm the draft restores. Finally refresh or reopen shortly after sending and confirm the committed bubble shows recovering or retry guidance instead of landing in a dead-end unavailable state.
+
+## Known limitations
+
+- The outgoing queue is still in-memory during the actual upload/send step, so a hard refresh mid-send can still lose local job state.
+- Thread open has not yet been fully split into strict first-paint snapshot versus secondary enrichment.
+- Voice playback recovery still lives in the large thread viewport instead of a smaller dedicated helper.
+- Final voice availability still depends on attachment hydration and signed-URL resolution completing successfully server-side.
+
+## Recommended next branch
+
+- `feature/chat-thread-snapshot-split`

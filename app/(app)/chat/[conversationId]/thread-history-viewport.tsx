@@ -198,6 +198,7 @@ const VOICE_MESSAGE_REOPEN_RECOVERY_REASON =
 const VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS = [180, 700] as const;
 const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
+const MESSAGE_CLUSTER_MAX_GAP_MS = 5 * 60 * 1000;
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -843,6 +844,7 @@ function ThreadVoiceMessageBubble({
   const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
     attachment?.signedUrl ?? null,
   );
+  const [didFailSignedUrlResolve, setDidFailSignedUrlResolve] = useState(false);
   const [ignoredAttachmentSignedUrl, setIgnoredAttachmentSignedUrl] = useState<
     string | null
   >(null);
@@ -893,11 +895,25 @@ function ThreadVoiceMessageBubble({
     playbackState === 'buffering'
       ? t.chat.voiceMessageLoading
       : t.chat.voiceMessage;
+  const isRecoveringVoiceMessage =
+    voiceState !== 'ready' &&
+    canResolveSignedUrl &&
+    (isResolvingSignedUrl ||
+      (ignoredAttachmentSignedUrl !== null && !didFailSignedUrlResolve));
   const stateLabel =
     voiceState === 'ready'
       ? readyStateLabel
-      : getVoiceMessageStateLabel({ state: voiceState, t });
-  const sizeLabel = formatAttachmentSize(attachment?.sizeBytes ?? null);
+      : isRecoveringVoiceMessage
+        ? t.chat.voiceMessageRecovering
+        : getVoiceMessageStateLabel({ state: voiceState, t });
+  const stateNote =
+    voiceState === 'ready'
+      ? null
+      : isRecoveringVoiceMessage
+        ? t.chat.voiceMessagePendingHint
+        : canResolveSignedUrl && didFailSignedUrlResolve && !isResolvingSignedUrl
+          ? t.chat.voiceMessageRetryHint
+          : null;
   const durationLabel =
     voiceState === 'ready'
       ? playbackState === 'playing' ||
@@ -908,6 +924,16 @@ function ThreadVoiceMessageBubble({
           )}`
         : formatVoiceDuration(resolvedDurationMs)
       : '--:--';
+  const playIconState =
+    voiceState !== 'ready'
+      ? voiceState === 'failed' || voiceState === 'unavailable'
+        ? 'error'
+        : 'loading'
+      : isBuffering
+        ? 'loading'
+        : isPlaying
+          ? 'pause'
+          : 'play';
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -926,6 +952,7 @@ function ThreadVoiceMessageBubble({
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? null);
     setResolvedSignedUrl(attachment?.signedUrl ?? null);
+    setDidFailSignedUrlResolve(false);
     setIgnoredAttachmentSignedUrl(null);
     setPlaybackFailed(false);
   }, [attachment?.durationMs, attachment?.id, attachment?.signedUrl]);
@@ -944,6 +971,7 @@ function ThreadVoiceMessageBubble({
 
     const promise = (async () => {
       setIsResolvingSignedUrl(true);
+      setDidFailSignedUrlResolve(false);
 
       try {
         const response = await fetch(
@@ -972,6 +1000,7 @@ function ThreadVoiceMessageBubble({
 
         if (nextSignedUrl) {
           setIgnoredAttachmentSignedUrl(null);
+          setDidFailSignedUrlResolve(false);
           setPlaybackFailed(false);
           setResolvedSignedUrl(nextSignedUrl);
         }
@@ -990,6 +1019,7 @@ function ThreadVoiceMessageBubble({
 
         return nextSignedUrl;
       } catch (error) {
+        setDidFailSignedUrlResolve(true);
         if (
           process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
           typeof window !== 'undefined'
@@ -1150,16 +1180,11 @@ function ThreadVoiceMessageBubble({
         }}
         type="button"
       >
-        <span aria-hidden="true" className="message-voice-play-icon">
-          {voiceState !== 'ready'
-            ? voiceState === 'failed' || voiceState === 'unavailable'
-              ? '!'
-              : '...'
-            : isBuffering
-              ? '...'
-              : isPlaying
-                ? '||'
-                : '>'}
+        <span
+          aria-hidden="true"
+          className={`message-voice-play-icon message-voice-play-icon-${playIconState}`}
+        >
+          {playIconState === 'error' ? '!' : null}
         </span>
       </button>
       <div className="message-voice-copy">
@@ -1179,15 +1204,14 @@ function ThreadVoiceMessageBubble({
             }
           />
         </div>
-        <div className="message-voice-meta">
-          <span className="message-voice-state">{stateLabel}</span>
-          {voiceState === 'ready' && sizeLabel ? (
-            <span className="message-voice-meta-separator">·</span>
-          ) : null}
-          {voiceState === 'ready' && sizeLabel ? (
-            <span>{sizeLabel}</span>
-          ) : null}
-        </div>
+        {voiceState !== 'ready' ? (
+          <div className="message-voice-meta">
+            <span className="message-voice-state">{stateLabel}</span>
+            {stateNote ? (
+              <span className="message-voice-note">{stateNote}</span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {voiceState === 'ready' && effectiveSignedUrl ? (
         <audio
@@ -1207,6 +1231,7 @@ function ThreadVoiceMessageBubble({
 
             if (effectiveSignedUrl && hasRecoverableAttachmentLocator) {
               setIgnoredAttachmentSignedUrl(effectiveSignedUrl);
+              setDidFailSignedUrlResolve(false);
               setResolvedSignedUrl(null);
               setPlaybackFailed(false);
               setPlaybackState('idle');
@@ -1477,6 +1502,35 @@ function buildTimelineItems(input: {
   });
 }
 
+function canClusterAdjacentMessages(
+  left: ConversationMessageRow | null | undefined,
+  right: ConversationMessageRow | null | undefined,
+) {
+  if (!left || !right) {
+    return false;
+  }
+
+  if (!left.sender_id || left.sender_id !== right.sender_id) {
+    return false;
+  }
+
+  if (left.deleted_at || right.deleted_at) {
+    return false;
+  }
+
+  const leftCreatedAt = parseSafeDate(left.created_at);
+  const rightCreatedAt = parseSafeDate(right.created_at);
+
+  if (!leftCreatedAt || !rightCreatedAt) {
+    return false;
+  }
+
+  return (
+    Math.abs(rightCreatedAt.getTime() - leftCreatedAt.getTime()) <=
+    MESSAGE_CLUSTER_MAX_GAP_MS
+  );
+}
+
 function getSnapshotRevisionKey(snapshot: ThreadHistoryPageSnapshot) {
   return JSON.stringify({
     hasMoreOlder: snapshot.hasMoreOlder,
@@ -1696,6 +1750,8 @@ type ThreadMessageRowProps = {
   currentUserId: string;
   encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
   encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
+  isClusteredWithNext: boolean;
+  isClusteredWithPrevious: boolean;
   language: AppLanguage;
   latestVisibleMessageSeq: number | null;
   message: ConversationMessageRow;
@@ -1717,6 +1773,8 @@ function ThreadMessageRow({
   currentUserId,
   encryptedEnvelopesByMessage,
   encryptedHistoryHintsByMessage,
+  isClusteredWithNext,
+  isClusteredWithPrevious,
   language,
   latestVisibleMessageSeq,
   message,
@@ -2018,19 +2076,33 @@ function ThreadMessageRow({
 
   return (
     <article
-      className={isOwnMessage ? 'message-row message-row-own' : 'message-row'}
+      className={[
+        isOwnMessage ? 'message-row message-row-own' : 'message-row',
+        isClusteredWithPrevious
+          ? 'message-row-clustered-with-previous'
+          : null,
+        isClusteredWithNext ? 'message-row-clustered-with-next' : null,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       key={message.id}
     >
       <div
-        className={
+        className={[
           isDeletedMessage
             ? isOwnMessage
               ? 'message-card message-card-own message-card-deleted'
               : 'message-card message-card-deleted'
             : isOwnMessage
               ? 'message-card message-card-own'
-              : 'message-card'
-        }
+              : 'message-card',
+          isClusteredWithPrevious
+            ? 'message-card-clustered-with-previous'
+            : null,
+          isClusteredWithNext ? 'message-card-clustered-with-next' : null,
+        ]
+          .filter(Boolean)
+          .join(' ')}
         id={`message-${message.id}`}
       >
         <div
@@ -2088,11 +2160,55 @@ function ThreadMessageRow({
             className={
               message.reply_to_message_id && !isDeletedMessage
                 ? isOwnMessage
-                  ? 'message-bubble message-bubble-own message-bubble-with-reply'
-                  : 'message-bubble message-bubble-with-reply'
+                  ? [
+                      'message-bubble',
+                      'message-bubble-own',
+                      'message-bubble-with-reply',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  : [
+                      'message-bubble',
+                      'message-bubble-with-reply',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
                 : isOwnMessage
-                  ? 'message-bubble message-bubble-own'
-                  : 'message-bubble'
+                  ? [
+                      'message-bubble',
+                      'message-bubble-own',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  : [
+                      'message-bubble',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
             }
           >
           {message.reply_to_message_id && !isDeletedMessage ? (
@@ -3426,7 +3542,7 @@ export function ThreadHistoryViewport({
           <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
         </div>
       ) : (
-        timelineItems.map((item) => {
+        timelineItems.map((item, index) => {
           if (item.type === 'separator') {
             return (
               <div
@@ -3452,6 +3568,17 @@ export function ThreadHistoryViewport({
           }
 
           if (item.type === 'message') {
+            const previousTimelineItem = timelineItems[index - 1];
+            const nextTimelineItem = timelineItems[index + 1];
+            const previousMessage =
+              previousTimelineItem?.type === 'message'
+                ? previousTimelineItem.message
+                : null;
+            const nextMessage =
+              nextTimelineItem?.type === 'message'
+                ? nextTimelineItem.message
+                : null;
+
             return (
               <ThreadMessageRow
                 key={item.key}
@@ -3464,6 +3591,14 @@ export function ThreadHistoryViewport({
                 currentUserId={currentUserId}
                 encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
                 encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
+                isClusteredWithNext={canClusterAdjacentMessages(
+                  item.message,
+                  nextMessage,
+                )}
+                isClusteredWithPrevious={canClusterAdjacentMessages(
+                  previousMessage,
+                  item.message,
+                )}
                 language={language}
                 latestVisibleMessageSeq={latestCommittedMessageSeq}
                 message={item.message}
