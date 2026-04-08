@@ -45,6 +45,8 @@ type LanguageDictionary = {
     issues: string;
     tasks: string;
     chats: string;
+    spaces: string;
+    settings: string;
     activity: string;
     activeHomeLabel: string;
     currentSectionLabel: string;
@@ -59,6 +61,8 @@ type LanguageDictionary = {
     openIssues: string;
     openTasks: string;
     openChats: string;
+    openSpaces: string;
+    openSettings: string;
     openActivity: string;
   };
   spaces: {
@@ -703,10 +707,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Language',
     },
     publicHome: {
-      title: 'Open your home workspace',
+      title: 'Open your workspace',
       subtitle:
-        'A calm place to enter the homes you already have access to and keep work moving.',
-      openChats: 'Open KeepCozy',
+        'A calm place to enter the spaces you already have access to and keep work moving.',
+      openChats: 'Open workspace',
       openSettings: 'Open settings',
       logIn: 'Log in',
       watermark: 'KeepCozy by Build With Care',
@@ -739,6 +743,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       issues: 'Issues',
       tasks: 'Tasks',
       chats: 'Chats',
+      spaces: 'Spaces',
+      settings: 'Settings',
       activity: 'History',
       activeHomeLabel: 'Active home',
       currentSectionLabel: 'Current section',
@@ -753,19 +759,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openIssues: 'Open issues',
       openTasks: 'Open tasks',
       openChats: 'Open chats',
+      openSpaces: 'Open spaces',
+      openSettings: 'Open settings',
       openActivity: 'Open history',
     },
     spaces: {
-      title: 'Choose a home',
-      subtitle: 'Pick the home context you want to open first.',
-      backToChats: 'Back to home',
-      currentSpace: 'Current home',
-      openSpace: 'Open home',
-      currentActivityNote: 'Open the home dashboard, rooms, issues, tasks, and history from here.',
-      emptyTitle: 'No homes yet',
-      emptyBody: 'Ask the operator to add you to a home first.',
-      unavailableTitle: 'Homes are temporarily unavailable',
-      unavailableBody: 'Please try again in a moment while home access is being refreshed.',
+      title: 'Choose a space',
+      subtitle: 'Pick the space you want to open first.',
+      backToChats: 'Back to workspace',
+      currentSpace: 'Current space',
+      openSpace: 'Open space',
+      currentActivityNote: 'Open the right workspace for this space from here.',
+      emptyTitle: 'No spaces yet',
+      emptyBody: 'Ask the operator to add you to a space first.',
+      unavailableTitle: 'Spaces are temporarily unavailable',
+      unavailableBody: 'Please try again in a moment while space access is being refreshed.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -819,11 +827,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       statusEmojiTooLong: 'Emoji status can be up to 16 characters.',
       statusTextTooLong: 'Status text can be up to 80 characters.',
       statusUpdateFailed: 'Unable to update your status right now.',
-      spaceTitle: 'Home',
-      spaceSubtitle: 'Your current activity opens in this home by default. Switch homes only when you want to change context.',
-      currentSpaceLabel: 'Current home',
-      noSpaceSelected: 'No home selected yet',
-      chooseAnotherSpace: 'Choose another home',
+      spaceTitle: 'Space',
+      spaceSubtitle: 'Your current activity opens in this space by default. Switch spaces only when you want to change context.',
+      currentSpaceLabel: 'Current space',
+      noSpaceSelected: 'No space selected yet',
+      chooseAnotherSpace: 'Choose another space',
       logoutTitle: 'Log out',
       logoutSubtitle: 'Sign out on this device',
       logoutButton: 'Log out',
@@ -1449,10 +1457,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Язык',
     },
     publicHome: {
-      title: 'Откройте рабочее пространство дома',
+      title: 'Откройте рабочее пространство',
       subtitle:
-        'Спокойное пространство, чтобы войти в дома, к которым у вас уже есть доступ, и держать работу в движении.',
-      openChats: 'Открыть KeepCozy',
+        'Спокойное пространство, чтобы войти в доступные вам пространства и держать работу в движении.',
+      openChats: 'Открыть пространство',
       openSettings: 'Открыть профиль',
       logIn: 'Войти',
       watermark: 'KeepCozy by Build With Care',
@@ -1486,6 +1494,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       issues: 'Проблемы',
       tasks: 'Задачи',
       chats: 'Чаты',
+      spaces: 'Пространства',
+      settings: 'Настройки',
       activity: 'История',
       activeHomeLabel: 'Активный дом',
       currentSectionLabel: 'Текущий раздел',
@@ -1500,20 +1510,23 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openIssues: 'Открыть проблемы',
       openTasks: 'Открыть задачи',
       openChats: 'Открыть чаты',
+      openSpaces: 'Открыть пространства',
+      openSettings: 'Открыть настройки',
       openActivity: 'Открыть историю',
     },
     spaces: {
-      title: 'Выберите дом',
-      subtitle: 'Сначала откройте нужный дом.',
-      backToChats: 'Назад к дому',
-      currentSpace: 'Текущий дом',
-      openSpace: 'Открыть дом',
+      title: 'Выберите пространство',
+      subtitle: 'Сначала откройте нужное пространство.',
+      backToChats: 'Назад к рабочему пространству',
+      currentSpace: 'Текущее пространство',
+      openSpace: 'Открыть пространство',
       currentActivityNote:
-        'Отсюда открываются главная, комнаты, проблемы, задачи и история этого дома.',
-      emptyTitle: 'Пока нет домов',
-      emptyBody: 'Попросите оператора добавить вас в дом.',
-      unavailableTitle: 'Дома временно недоступны',
-      unavailableBody: 'Попробуйте снова чуть позже, пока доступ к домам обновляется.',
+        'Отсюда открывается правильное рабочее пространство для этого пространства.',
+      emptyTitle: 'Пока нет пространств',
+      emptyBody: 'Попросите оператора добавить вас в пространство.',
+      unavailableTitle: 'Пространства временно недоступны',
+      unavailableBody:
+        'Попробуйте снова чуть позже, пока доступ к пространствам обновляется.',
     },
     settings: {
       backToChats: 'Назад к чатам',
@@ -1567,11 +1580,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       statusEmojiTooLong: 'Эмодзи-статус может быть до 16 символов.',
       statusTextTooLong: 'Текст статуса может быть до 80 символов.',
       statusUpdateFailed: 'Сейчас не удалось обновить статус.',
-      spaceTitle: 'Дом',
-      spaceSubtitle: 'Текущая активность по умолчанию открывается в этом доме. Меняйте дом только когда хотите сменить контекст.',
-      currentSpaceLabel: 'Текущий дом',
-      noSpaceSelected: 'Дом пока не выбран',
-      chooseAnotherSpace: 'Выбрать другой дом',
+      spaceTitle: 'Пространство',
+      spaceSubtitle:
+        'Текущая активность по умолчанию открывается в этом пространстве. Меняйте пространство только когда хотите сменить контекст.',
+      currentSpaceLabel: 'Текущее пространство',
+      noSpaceSelected: 'Пространство пока не выбрано',
+      chooseAnotherSpace: 'Выбрать другое пространство',
       logoutTitle: 'Выйти',
       logoutSubtitle: 'Выйти на этом устройстве',
       logoutButton: 'Выйти',

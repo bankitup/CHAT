@@ -1,12 +1,69 @@
 import 'server-only';
 
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
-import type { SpaceRecord, SpaceRole } from './model';
+import type {
+  ResolvedSpaceProfile,
+  SpaceProfile,
+  SpaceProfileDefaultShellRoute,
+  SpaceProfileSource,
+  SpaceRecord,
+  SpaceRole,
+} from './model';
 import { withSpaceParam } from './url';
 
 export type UserSpaceRecord = SpaceRecord & {
   role: SpaceRole;
+  profile: SpaceProfile;
+  profileSource: SpaceProfileSource;
+  defaultShellRoute: SpaceProfileDefaultShellRoute;
 };
+
+function getDefaultShellRouteForSpaceProfile(
+  profile: SpaceProfile,
+): SpaceProfileDefaultShellRoute {
+  return profile === 'keepcozy_ops' ? '/home' : '/inbox';
+}
+
+/**
+ * Temporary runtime profile resolver until profile storage is persisted.
+ *
+ * Current rule:
+ *
+ * - the shared `TEST` space is the canonical KeepCozy operational sandbox
+ * - every other space falls back to the messenger-first profile
+ *
+ * This keeps the profile seam explicit without redesigning shared schema yet.
+ */
+export function resolveSpaceProfileForSpace(input: {
+  spaceId: string;
+  spaceName: string | null;
+}): ResolvedSpaceProfile {
+  const normalizedSpaceName = input.spaceName?.trim().toUpperCase() ?? '';
+
+  if (normalizedSpaceName === 'TEST') {
+    return {
+      profile: 'keepcozy_ops',
+      source: 'space_name_test_default',
+      defaultShellRoute: getDefaultShellRouteForSpaceProfile('keepcozy_ops'),
+    };
+  }
+
+  return {
+    profile: 'messenger_full',
+    source: 'fallback_messenger_default',
+    defaultShellRoute: getDefaultShellRouteForSpaceProfile('messenger_full'),
+  };
+}
+
+export function resolveSpaceProfileShellHref(input: {
+  profile: SpaceProfile;
+  spaceId: string;
+}) {
+  return withSpaceParam(
+    getDefaultShellRouteForSpaceProfile(input.profile),
+    input.spaceId,
+  );
+}
 
 function getSafeSupabaseHostFragment() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -234,8 +291,16 @@ export async function getUserSpaces(
         return null;
       }
 
+      const profileResolution = resolveSpaceProfileForSpace({
+        spaceId: space.id,
+        spaceName: space.name,
+      });
+
       return {
         ...space,
+        defaultShellRoute: profileResolution.defaultShellRoute,
+        profile: profileResolution.profile,
+        profileSource: profileResolution.source,
         role: membership.role,
       } satisfies UserSpaceRecord;
     })
@@ -276,9 +341,18 @@ export async function resolveActiveSpaceForUser(input: {
       ? spaces.find((space) => space.id === requestedSpaceId) ?? null
       : null;
   const activeSpace = requestedSpace ?? spaces[0] ?? null;
+  const activeSpaceProfile = activeSpace
+    ? ({
+        defaultShellRoute: activeSpace.defaultShellRoute,
+        profile: activeSpace.profile,
+        source: activeSpace.profileSource,
+      } satisfies ResolvedSpaceProfile)
+    : null;
 
   logSpacesDiagnostics('resolveActiveSpaceForUser:done', {
     source: input.source ?? 'unknown',
+    activeSpaceDefaultShellRoute: activeSpace?.defaultShellRoute ?? null,
+    activeSpaceProfile: activeSpace?.profile ?? null,
     spaceCount: spaces.length,
     hasActiveSpace: Boolean(activeSpace),
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
@@ -287,9 +361,37 @@ export async function resolveActiveSpaceForUser(input: {
   return {
     spaces,
     activeSpace,
+    activeSpaceProfile,
     requestedSpaceId,
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
   };
+}
+
+export async function resolveDefaultSpaceShellHrefForUser(input: {
+  userId: string;
+  requestedSpaceId?: string | null;
+  source?: string;
+}) {
+  try {
+    const { activeSpace } = await resolveActiveSpaceForUser(input);
+
+    if (!activeSpace) {
+      return '/spaces';
+    }
+
+    return resolveSpaceProfileShellHref({
+      profile: activeSpace.profile,
+      spaceId: activeSpace.id,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
+      return '/spaces';
+    }
+
+    throw error;
+  }
 }
 
 export async function resolveChatsHrefForUser(input: {

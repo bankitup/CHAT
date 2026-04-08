@@ -173,6 +173,9 @@ Profiles should not hard-code every screen directly into policy or schema.
 Instead, each profile should resolve to a narrow capability posture for a
 space.
 
+The first explicit profile-default matrix now lives in
+[space-profile-capability-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-profile-capability-matrix.md).
+
 ### Shared capabilities across profiles
 
 Every profile still shares:
@@ -224,6 +227,27 @@ Recommended initial route posture:
 | --- | --- |
 | `messenger_full` | `/inbox?space=...` |
 | `keepcozy_ops` | `/home?space=...` |
+
+Current runtime note:
+
+- the repo now exposes a minimal runtime seam for this in
+  [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+  and [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+- profile is currently resolved at runtime, not stored as a committed database
+  field yet
+- active-space resolution now exposes profile information on the resolved
+  space runtime shape
+- the current temporary resolver treats the shared `TEST` space as
+  `keepcozy_ops`
+- all other spaces currently fall back to `messenger_full` until explicit
+  persisted profile storage lands
+- a dedicated profile-aware default-shell helper now exists for later routing
+  work and is now used by the authenticated public/auth entry paths
+- the shared space selector now opens each space into its profile-default
+  shell instead of forcing every space through `/home`
+- the shared app shell can now render a messenger-centered navigation set for
+  `messenger_full` spaces and a KeepCozy-centered navigation set for
+  `keepcozy_ops` spaces without splitting the app into two products
 
 Important boundaries:
 
@@ -324,8 +348,9 @@ Recommended sequence:
    - `messenger_full`
    - `keepcozy_ops`
 2. add a profile-resolution seam close to active-space resolution
-3. make shell entry/profile routing aware of that resolved value
-4. keep capability and policy branching shallow until the routing seam is
+3. expose that resolved value on active-space runtime shapes
+4. make shell entry/profile routing aware of that resolved value
+5. keep capability and policy branching shallow until the routing seam is
    stable
 
 Avoid in the first profile pass:
@@ -336,6 +361,63 @@ Avoid in the first profile pass:
 - overloading `public.conversations.kind`
 - adding more profiles before the first two are proven
 
+## What Is Deferred
+
+The following intentionally remain deferred after the first runtime seam:
+
+- persisted `space_profile` storage in shared schema
+- admin-facing profile editing
+- profile-aware shell rendering changes across the full app
+- final capability enforcement
+- profile-aware per-thread or per-object policy enforcement
+- hybrid or override-heavy profile systems
+
+## Practical Verification
+
+Use the current temporary runtime resolver rule for this branch:
+
+- the shared `TEST` space resolves as `keepcozy_ops`
+- any non-`TEST` space resolves as `messenger_full`
+
+Recommended review setup:
+
+- one `TEST` space that is already part of the shared KeepCozy MVP proof path
+- one additional non-`TEST` space for messenger verification
+
+### How to test `messenger_full`
+
+1. Open [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx)
+   in the app and choose a non-`TEST` space.
+2. Verify the selector opens `/inbox?space=...` for that space.
+3. Verify the bottom navigation is messenger-centered:
+   `Chats`, `Spaces`, `Settings`.
+4. Verify inbox/chat behavior remains the primary visible shell.
+
+### How to test `keepcozy_ops`
+
+1. Open the same selector and choose the shared `TEST` space.
+2. Verify the selector opens `/home?space=...` for that space.
+3. Verify the bottom navigation is KeepCozy-centered:
+   `Home`, `Rooms`, `Issues`, `Tasks`, `History`.
+4. Verify the visible product center is the KeepCozy operational loop rather
+   than inbox-first chat.
+
+### What should visibly differ
+
+- authenticated entry target after login/public re-entry
+- the shell navigation set
+- the first product surface that opens for the selected space
+- whether the space reads as chat-first or operations-first
+
+### What should remain shared
+
+- the same auth/session model
+- the same `space` query seam and active-space resolution path
+- the same `space_members` boundary
+- the same shared conversation/message substrate
+- the same settings/profile account surfaces
+- the same shared backend and storage foundations
+
 ## Remaining Ambiguities
 
 The following questions are intentionally left for later narrow branches:
@@ -343,7 +425,8 @@ The following questions are intentionally left for later narrow branches:
 - where the resolved profile should live first:
   - explicit `public.spaces` metadata
   - a companion profile table
-  - a temporary resolver/config seam
+  - another reviewed persisted shape that can replace the current temporary
+    runtime resolver
 - whether some spaces should later support a deliberately hybrid shell posture
   without becoming a third profile
 - how much of `/inbox` should stay visible in `keepcozy_ops` before chat
