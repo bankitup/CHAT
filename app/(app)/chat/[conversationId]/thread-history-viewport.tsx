@@ -1,7 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   formatPersonFallbackLabel,
   getLocaleForLanguage,
@@ -39,6 +48,7 @@ import { ThreadDeleteMessageConfirm } from './thread-delete-message-confirm';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
 import { ThreadInlineEditForm } from './thread-inline-edit-form';
 import { ThreadReactionGroups } from './thread-reaction-groups';
+import { ThreadReactionPicker } from './thread-reaction-picker';
 
 type ConversationMessageRow = {
   body: string | null;
@@ -117,7 +127,6 @@ type ThreadHistoryPageSnapshot = {
 };
 
 type ThreadHistoryViewportProps = {
-  activeActionMessageId: string | null;
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
   activeSpaceId: string;
@@ -188,6 +197,7 @@ const VOICE_MESSAGE_REOPEN_RECOVERY_REASON =
   'voice-reopen:retry-attachment-resolution';
 const VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS = [180, 700] as const;
 const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
+const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -784,6 +794,26 @@ function getOutgoingMessageStatus(input: {
   }
 
   return 'sent' as const;
+}
+
+function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.closest('[data-message-quick-actions-surface="true"]')) {
+    return true;
+  }
+
+  if (target.closest('.reaction-groups')) {
+    return true;
+  }
+
+  return Boolean(
+    target.closest(
+      'a, button, input, textarea, select, summary, details, audio, video',
+    ),
+  );
 }
 
 function ThreadVoiceMessageBubble({
@@ -1657,7 +1687,6 @@ function mergeThreadHistoryState(input: {
 }
 
 type ThreadMessageRowProps = {
-  activeActionMessageId: string | null;
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
   activeSpaceId: string;
@@ -1679,7 +1708,6 @@ type ThreadMessageRowProps = {
 };
 
 function ThreadMessageRow({
-  activeActionMessageId,
   activeDeleteMessageId,
   activeEditMessageId,
   activeSpaceId,
@@ -1700,11 +1728,15 @@ function ThreadMessageRow({
   threadClientDiagnostics,
 }: ThreadMessageRowProps) {
   const t = getTranslations(language);
+  const quickActionsContainerRef = useRef<HTMLDivElement | null>(null);
+  const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressPointerRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   const isOwnMessage = message.sender_id === currentUserId;
-  const isMessageActionActive =
-    activeActionMessageId === message.id &&
-    !activeEditMessageId &&
-    !activeDeleteMessageId;
   const patchedBody = useThreadMessagePatchedBody(
     conversationId,
     message.id,
@@ -1782,6 +1814,155 @@ function ThreadMessageRow({
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
   const encryptedRenderBranch = normalizeEncryptedDmBranchLabel(isOwnMessage);
+  const canShowQuickActions =
+    !isDeletedMessage &&
+    !isMessageInEditMode &&
+    !isMessageInDeleteMode;
+  const replyActionHref = buildChatHref({
+    conversationId,
+    hash: '#message-composer',
+    replyToMessageId: message.id,
+    spaceId: activeSpaceId,
+  });
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+
+    longPressPointerRef.current = null;
+  }, []);
+
+  const closeQuickActions = useCallback(() => {
+    setIsQuickActionsOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (canShowQuickActions) {
+      return;
+    }
+
+    clearLongPress();
+    const timeoutId = window.setTimeout(() => {
+      setIsQuickActionsOpen(false);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [canShowQuickActions, clearLongPress]);
+
+  useEffect(() => {
+    if (!isQuickActionsOpen) {
+      return;
+    }
+
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      const nextTarget = event.target;
+
+      if (
+        quickActionsContainerRef.current &&
+        nextTarget instanceof Node &&
+        quickActionsContainerRef.current.contains(nextTarget)
+      ) {
+        return;
+      }
+
+      setIsQuickActionsOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsQuickActionsOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDownOutside, true);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDownOutside, true);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isQuickActionsOpen]);
+
+  useEffect(() => {
+    return () => {
+      clearLongPress();
+    };
+  }, [clearLongPress]);
+
+  const handleBubblePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        !canShowQuickActions ||
+        event.button !== 0 ||
+        isMessageQuickActionInteractiveTarget(event.target)
+      ) {
+        return;
+      }
+
+      clearLongPress();
+      longPressPointerRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      longPressTimeoutRef.current = setTimeout(() => {
+        setIsQuickActionsOpen(true);
+        longPressTimeoutRef.current = null;
+      }, 280);
+    },
+    [canShowQuickActions, clearLongPress],
+  );
+
+  const handleBubblePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const activePointer = longPressPointerRef.current;
+
+      if (!activePointer || activePointer.pointerId !== event.pointerId) {
+        return;
+      }
+
+      if (
+        Math.abs(event.clientX - activePointer.startX) > 10 ||
+        Math.abs(event.clientY - activePointer.startY) > 10
+      ) {
+        clearLongPress();
+      }
+    },
+    [clearLongPress],
+  );
+
+  const handleBubblePointerEnd = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const activePointer = longPressPointerRef.current;
+
+      if (!activePointer || activePointer.pointerId !== event.pointerId) {
+        return;
+      }
+
+      clearLongPress();
+    },
+    [clearLongPress],
+  );
+
+  const handleBubbleContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (
+        !canShowQuickActions ||
+        isMessageQuickActionInteractiveTarget(event.target)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      clearLongPress();
+      setIsQuickActionsOpen(true);
+    },
+    [canShowQuickActions, clearLongPress],
+  );
 
   if (isEncryptedDmTextMessage(message)) {
     const encryptedInputIssues = getEncryptedDmServerRenderInputIssues({
@@ -1852,46 +2033,68 @@ function ThreadMessageRow({
         }
         id={`message-${message.id}`}
       >
-        {!isDeletedMessage ? (
-          <div
-            className={
-              isOwnMessage
-                ? 'message-header message-header-own'
-                : 'message-header'
-            }
-          >
-            <div className="message-header-side">
+        <div
+          ref={quickActionsContainerRef}
+          className={
+            isOwnMessage
+              ? 'message-bubble-shell message-bubble-shell-own'
+              : 'message-bubble-shell'
+          }
+          onContextMenu={handleBubbleContextMenu}
+          onPointerCancel={handleBubblePointerEnd}
+          onPointerDown={handleBubblePointerDown}
+          onPointerLeave={handleBubblePointerEnd}
+          onPointerMove={handleBubblePointerMove}
+          onPointerUp={handleBubblePointerEnd}
+        >
+          {isQuickActionsOpen ? (
+            <div
+              className={
+                isOwnMessage
+                  ? 'message-quick-actions message-quick-actions-own'
+                  : 'message-quick-actions'
+              }
+              data-message-quick-actions-surface="true"
+            >
+              <ThreadReactionPicker
+                className="message-quick-actions-reactions"
+                conversationId={conversationId}
+                currentUserId={currentUserId}
+                emojis={MESSAGE_QUICK_REACTIONS}
+                initialReactions={reactionsByMessage.get(message.id) ?? []}
+                isOwnMessage={isOwnMessage}
+                messageId={message.id}
+                onReactionSelected={closeQuickActions}
+                showCounts={false}
+              />
               <Link
-                aria-label={t.chat.openMessageActions}
-                className={
-                  isMessageActionActive
-                    ? 'message-actions-trigger message-actions-trigger-active'
-                    : 'message-actions-trigger'
-                }
-                href={buildChatHref({
-                  actionMessageId: message.id,
-                  conversationId,
-                  hash: `#message-${message.id}`,
-                  spaceId: activeSpaceId,
-                })}
+                aria-label={t.chat.reply}
+                className="message-quick-actions-reply"
+                href={replyActionHref}
+                onClick={closeQuickActions}
                 prefetch={false}
+                title={t.chat.reply}
               >
-                <span aria-hidden="true">⋯</span>
+                <span
+                  aria-hidden="true"
+                  className="message-quick-actions-reply-icon"
+                >
+                  ↩
+                </span>
               </Link>
             </div>
-          </div>
-        ) : null}
-        <div
-          className={
-            message.reply_to_message_id && !isDeletedMessage
-              ? isOwnMessage
-                ? 'message-bubble message-bubble-own message-bubble-with-reply'
-                : 'message-bubble message-bubble-with-reply'
-              : isOwnMessage
-                ? 'message-bubble message-bubble-own'
-                : 'message-bubble'
-          }
-        >
+          ) : null}
+          <div
+            className={
+              message.reply_to_message_id && !isDeletedMessage
+                ? isOwnMessage
+                  ? 'message-bubble message-bubble-own message-bubble-with-reply'
+                  : 'message-bubble message-bubble-with-reply'
+                : isOwnMessage
+                  ? 'message-bubble message-bubble-own'
+                  : 'message-bubble'
+            }
+          >
           {message.reply_to_message_id && !isDeletedMessage ? (
             <div
               className={
@@ -2183,6 +2386,7 @@ function ThreadMessageRow({
             </div>
           ) : null}
         </div>
+        </div>
         <span
           className={
             isOwnMessage
@@ -2270,7 +2474,6 @@ function ThreadMessageRow({
 }
 
 export function ThreadHistoryViewport({
-  activeActionMessageId,
   activeDeleteMessageId,
   activeEditMessageId,
   activeSpaceId,
@@ -3252,7 +3455,6 @@ export function ThreadHistoryViewport({
             return (
               <ThreadMessageRow
                 key={item.key}
-                activeActionMessageId={activeActionMessageId}
                 activeDeleteMessageId={activeDeleteMessageId}
                 activeEditMessageId={activeEditMessageId}
                 activeSpaceId={activeSpaceId}
