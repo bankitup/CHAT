@@ -4,9 +4,11 @@ import webpush from 'web-push';
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import {
+  getArchivedConversations,
   getConversationDisplayName,
   getConversationForUser,
   getConversationParticipants,
+  getInboxConversations,
   getProfileIdentities,
 } from '@/modules/messaging/data/server';
 import { withSpaceParam } from '@/modules/spaces/url';
@@ -56,6 +58,11 @@ type ChatPushSendResult = {
   disabledCount: number;
   failedCount: number;
   skippedReason: string | null;
+};
+
+type ChatUnreadBadgeState = {
+  mutedExcluded: boolean;
+  unreadCount: number;
 };
 
 let vapidConfigured = false;
@@ -357,6 +364,100 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
       (row) => row.endpoint && row.p256dh && row.auth,
     ),
     skippedReason: null,
+  };
+}
+
+export async function getChatUnreadBadgeStateForUser(input: {
+  userId: string;
+}): Promise<ChatUnreadBadgeState> {
+  const [visibleConversations, archivedConversations, supabase] = await Promise.all([
+    getInboxConversations(input.userId),
+    getArchivedConversations(input.userId),
+    getRequestSupabaseServerClient(),
+  ]);
+  const allConversations = Array.from(
+    new Map(
+      [...visibleConversations, ...archivedConversations].map((conversation) => [
+        conversation.conversationId,
+        conversation,
+      ]),
+    ).values(),
+  );
+
+  if (allConversations.length === 0) {
+    return {
+      mutedExcluded: true,
+      unreadCount: 0,
+    };
+  }
+
+  const membershipsWithNotificationLevel = await supabase
+    .from('conversation_members')
+    .select('conversation_id, notification_level')
+    .eq('user_id', input.userId)
+    .eq('state', 'active')
+    .in(
+      'conversation_id',
+      allConversations.map((conversation) => conversation.conversationId),
+    );
+  let mutedExcluded = true;
+  let membershipRows: Array<{
+    conversation_id: string;
+    notification_level?: string | null;
+  }> = [];
+
+  if (
+    !membershipsWithNotificationLevel.error
+  ) {
+    membershipRows = (membershipsWithNotificationLevel.data ?? []) as Array<{
+      conversation_id: string;
+      notification_level?: string | null;
+    }>;
+  } else if (
+    membershipsWithNotificationLevel.error.message &&
+    membershipsWithNotificationLevel.error.message
+      .toLowerCase()
+      .includes('notification_level')
+  ) {
+    const membershipsWithoutNotificationLevel = await supabase
+      .from('conversation_members')
+      .select('conversation_id')
+      .eq('user_id', input.userId)
+      .eq('state', 'active')
+      .in(
+        'conversation_id',
+        allConversations.map((conversation) => conversation.conversationId),
+      );
+
+    if (membershipsWithoutNotificationLevel.error) {
+      throw new Error(membershipsWithoutNotificationLevel.error.message);
+    }
+
+    mutedExcluded = false;
+    membershipRows = (membershipsWithoutNotificationLevel.data ?? []) as Array<{
+      conversation_id: string;
+      notification_level?: string | null;
+    }>;
+  } else {
+    throw new Error(membershipsWithNotificationLevel.error.message);
+  }
+
+  const mutedConversationIds = new Set(
+    membershipRows
+      .filter((membership) => membership.notification_level === 'muted')
+      .map((membership) => membership.conversation_id),
+  );
+  const unreadCount = allConversations.reduce((total, conversation) => {
+    if (mutedConversationIds.has(conversation.conversationId)) {
+      return total;
+    }
+
+    return total + Math.max(0, conversation.unreadCount);
+  }, 0);
+
+  return {
+    mutedExcluded,
+    unreadCount,
   };
 }
 

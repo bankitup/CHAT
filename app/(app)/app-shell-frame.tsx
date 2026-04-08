@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
+import { ChatUnreadBadgeSync } from '@/modules/messaging/push/chat-unread-badge-sync';
 import type {
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
@@ -54,6 +55,7 @@ export function AppShellFrame({
   const activeSpaceProfile = activeSpace?.profile ?? null;
   const navSpaceHref = (pathname: string) =>
     activeSpace?.id ? withSpaceParam(pathname, activeSpace.id) : pathname;
+  const badgeSyncKey = `${pathname}?${searchParams.toString()}`;
   const showBottomNav =
     !isChatRoute && !(isSpacesRoute && activeSpaceProfile !== 'messenger_full');
   let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
@@ -93,6 +95,7 @@ export function AppShellFrame({
         .join(' ')}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
+      <ChatUnreadBadgeSync syncKey={badgeSyncKey} />
       <div className="stack app-shell-content">{children}</div>
 
       {showBottomNav ? (

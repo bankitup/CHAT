@@ -27,8 +27,10 @@ This branch now also adds the first chat-first send path:
 - recipient filtering by active membership and `conversation_members.notification_level`
 - endpoint soft-disable on `404` / `410` push responses
 - shared click routing back into `/chat/[conversationId]?space=...`
+- exact unread badge sync from authenticated chat state on app load, route change, focus, and visibility return
+- safe generic service-worker badge nudge on incoming push when the platform supports badge APIs
 
-Unread-driven app-icon badge updates still remain a later implementation step.
+This is still intentionally chat-first. It does not widen into KeepCozy or non-chat notification domains yet.
 
 ## Current repo reality
 
@@ -254,12 +256,14 @@ This keeps the current service worker click flow and shared space context intact
 
 #### 6. Unread-driven badge strategy
 
-The first badge slice should:
+The first badge slice on this branch now:
 
-- derive one aggregate unread count from server-truth chat summaries
-- set the badge when the count is greater than zero
-- clear the badge when the count is zero
-- refresh on app load, inbox/activity load, and read-state-changing chat actions
+- derives one aggregate unread count from server-truth chat summaries
+- excludes muted conversations when `conversation_members.notification_level` is available
+- sets the badge when the count is greater than zero
+- clears the badge when the count is zero
+- refreshes on authenticated app load, route change, focus, and visibility return
+- uses a generic service-worker badge nudge on push receipt where supported, then lets the app restore the exact count on next active sync
 
 Keep this badge account-level and chat-level first. Do not split the badge by product surface or by space profile yet.
 
@@ -301,6 +305,7 @@ Included now:
 - recipient exclusion for the sender
 - recipient exclusion for muted memberships
 - one notification tag per conversation so repeated pushes on the same device stay calmer
+- one aggregate app badge count for unread chat activity only
 
 Excluded for now:
 
@@ -309,7 +314,8 @@ Excluded for now:
 - rich media thumbnails
 - plaintext previews for encrypted DM content
 - mention-specific targeting
-- unread badge syncing
+- KeepCozy or cross-product badge partitioning
+- service-worker exact unread recount while the app is fully closed
 
 ### First title/body rules
 
