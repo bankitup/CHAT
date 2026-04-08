@@ -109,25 +109,6 @@ function formatActivityRecency(value: string | null, language: 'en' | 'ru', yest
   }).format(target);
 }
 
-function formatActivityTimestamp(value: string | null, language: 'en' | 'ru', noActivityLabel: string) {
-  if (!value) {
-    return noActivityLabel;
-  }
-
-  const target = new Date(value);
-
-  if (Number.isNaN(target.getTime())) {
-    return noActivityLabel;
-  }
-
-  return new Intl.DateTimeFormat(language === 'ru' ? 'ru-RU' : 'en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(target);
-}
-
 type ActivityConversationAvatarVisualProps = {
   groupAvatarPath: string | null;
   isGroupConversation: boolean;
@@ -250,9 +231,18 @@ export function ActivityConversationLiveItem({
   const chatHref = latestMessageHash ? `${chatHrefBase}${latestMessageHash}` : chatHrefBase;
   const itemKindLabel =
     item.variant === 'attention' ? labels.attentionBadge : labels.recentBadge;
+  const unreadSummary =
+    item.variant === 'attention' && liveSummary.unreadCount > 0
+      ? `${liveSummary.unreadCount} ${labels.unreadMessages.toLowerCase()}`
+      : null;
 
   return (
     <Link
+      aria-label={
+        item.variant === 'attention'
+          ? `${item.title}. ${itemKindLabel}. ${unreadSummary ?? ''}`.trim()
+          : `${item.title}. ${itemKindLabel}`.trim()
+      }
       className={
         item.variant === 'recent'
           ? 'activity-item activity-item-messenger activity-item-recent'
@@ -287,18 +277,15 @@ export function ActivityConversationLiveItem({
         <div className="activity-item-meta">
           <div className="activity-item-meta-left">
             <span className="activity-item-kind-pill">{itemKindLabel}</span>
-            {item.variant === 'attention' ? (
+            {unreadSummary ? (
               <span className="activity-unread-pill">
-                {labels.unreadMessages}: {liveSummary.unreadCount}
+                {unreadSummary}
               </span>
             ) : null}
             {item.isGroupConversation ? (
               <span className="conversation-kind-label">{labels.group}</span>
             ) : null}
           </div>
-          <span className="muted activity-item-timestamp">
-            {formatActivityTimestamp(lastActivityAt, language, labels.noActivityYet)}
-          </span>
         </div>
       </div>
     </Link>

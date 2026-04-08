@@ -207,6 +207,8 @@ type LanguageDictionary = {
     overviewTitle: string;
     overviewBody: string;
     settingsAction: string;
+    surfaceTitle: string;
+    surfaceBody: string;
     filtersLabel: string;
     filterAttention: string;
     filterRecent: string;
@@ -1041,6 +1043,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       overviewBody:
         'Catch up on unread replies and recent conversation movement here, then jump straight into the exact message that needs you.',
       settingsAction: 'Notification settings',
+      surfaceTitle: 'Replies and recent chat activity',
+      surfaceBody:
+        'Each row groups the latest reply movement for one conversation so you can catch up fast and jump back into the right message.',
       filtersLabel: 'Activity filters',
       filterAttention: 'Needs reply',
       filterRecent: 'Recent',
@@ -1943,6 +1948,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       overviewBody:
         'Разбирайте здесь непрочитанные ответы и недавнее движение разговоров, а затем переходите сразу к тому сообщению, которое требует внимания.',
       settingsAction: 'Настройки уведомлений',
+      surfaceTitle: 'Ответы и недавняя активность',
+      surfaceBody:
+        'Каждая строка собирает последнее движение по одному разговору, чтобы можно было быстро сориентироваться и вернуться сразу к нужному сообщению.',
       filtersLabel: 'Фильтры активности',
       filterAttention: 'Нужен ответ',
       filterRecent: 'Недавнее',
