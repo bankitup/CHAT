@@ -33,6 +33,13 @@ type LanguageDictionary = {
   };
   shell: {
     label: string;
+    contextLabel: string;
+    loadingTitle: string;
+    loadingBody: string;
+    errorTitle: string;
+    errorBody: string;
+    errorProofPathBody: string;
+    retry: string;
     home: string;
     rooms: string;
     issues: string;
@@ -41,6 +48,14 @@ type LanguageDictionary = {
     spaces: string;
     settings: string;
     activity: string;
+    activeHomeLabel: string;
+    currentSectionLabel: string;
+    homeScopeBody: string;
+    homeSectionBody: string;
+    roomsSectionBody: string;
+    issuesSectionBody: string;
+    tasksSectionBody: string;
+    activitySectionBody: string;
     openHome: string;
     openRooms: string;
     openIssues: string;
@@ -165,6 +180,9 @@ type LanguageDictionary = {
     backToHome: string;
     previewPill: string;
     previewBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+    emptyTestBody: string;
     selectedHomeLabel: string;
     issuesLabel: string;
     tasksLabel: string;
@@ -184,6 +202,10 @@ type LanguageDictionary = {
     submitUpdate: string;
     previewPill: string;
     previewBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+    emptyFilteredBody: string;
+    emptyTestBody: string;
     selectedHomeLabel: string;
     filteredByRoom: string;
     allRooms: string;
@@ -247,6 +269,10 @@ type LanguageDictionary = {
     submitUpdate: string;
     previewPill: string;
     previewBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+    emptyFilteredBody: string;
+    emptyTestBody: string;
     selectedHomeLabel: string;
     filteredByIssue: string;
     allIssues: string;
@@ -307,6 +333,8 @@ type LanguageDictionary = {
     subtitle: string;
     overviewTitle: string;
     overviewBody: string;
+    operationsEmptyTitle: string;
+    operationsEmptyBody: string;
     unreadChats: string;
     unreadDms: string;
     archivedChats: string;
@@ -701,6 +729,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Primary navigation',
+      contextLabel: 'KeepCozy shell context',
+      loadingTitle: 'Opening this home',
+      loadingBody: 'Preparing the current home, the main sections, and the next operational steps.',
+      errorTitle: "Couldn't load this home view",
+      errorBody:
+        'Try again first. If this still fails, go back to Home or choose a different home context before reopening the current section.',
+      errorProofPathBody:
+        'If you are validating the canonical TEST-home proof path, choose TEST again from the home picker before retrying.',
+      retry: 'Try again',
       home: 'Home',
       rooms: 'Rooms',
       issues: 'Issues',
@@ -709,6 +746,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaces: 'Spaces',
       settings: 'Settings',
       activity: 'History',
+      activeHomeLabel: 'Active home',
+      currentSectionLabel: 'Current section',
+      homeScopeBody: 'All top-level sections stay inside this home until you switch context.',
+      homeSectionBody: 'Start here to open the full operational loop for this home.',
+      roomsSectionBody: 'Use rooms to anchor the issue and task work happening inside this home.',
+      issuesSectionBody: 'Track the structured problems that belong to this home and turn into tasks.',
+      tasksSectionBody: 'Follow the work linked to this home’s issues and keep the next step visible.',
+      activitySectionBody: 'Review the operational history and updates collected across this home.',
       openHome: 'Open home',
       openRooms: 'Open rooms',
       openIssues: 'Open issues',
@@ -839,6 +884,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       previewPill: 'MVP slice',
       previewBody:
         'These room cards now read from the first KeepCozy persistence slice and stay intentionally narrow around issues, tasks, and history.',
+      emptyTitle: 'No rooms yet in this home',
+      emptyBody:
+        'Rooms will appear here once this home has room records. Start from Home or move into Issues if the work has already been logged.',
+      emptyTestBody:
+        'The TEST home is active, but the canonical Kitchen room has not been seeded yet. Recheck the persisted TEST-home setup before validating the proof path.',
       selectedHomeLabel: 'Selected home',
       issuesLabel: 'Issues',
       tasksLabel: 'Tasks',
@@ -859,6 +909,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       previewPill: 'MVP slice',
       previewBody:
         'This is a focused issue lane for the MVP, now backed by the first persisted issue records. Supplier richness, recommendations, and automation stay out of the way.',
+      emptyTitle: 'No issues yet in this home',
+      emptyBody:
+        'Create the first issue when something in this home needs attention. Keep it structured so it can turn into task work and history.',
+      emptyFilteredBody:
+        'There are no issues in this filtered view yet. Clear the filter or create the first issue for this room.',
+      emptyTestBody:
+        'The TEST home is active, but the canonical faucet issue has not been seeded yet. Recheck the persisted TEST-home setup before validating the proof path.',
       selectedHomeLabel: 'Selected home',
       filteredByRoom: 'Filtered room',
       allRooms: 'All rooms',
@@ -929,6 +986,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       previewPill: 'MVP slice',
       previewBody:
         'The task lane stays intentionally narrow for the MVP and now reads from the first persisted task records: actionable work, linked issue context, and update history.',
+      emptyTitle: 'No tasks yet in this home',
+      emptyBody:
+        'Tasks appear here once issue work turns into specific next steps. Start from Issues or open Home to keep the loop moving.',
+      emptyFilteredBody:
+        'There are no tasks in this filtered view yet. Clear the filter or create the first task from the right issue.',
+      emptyTestBody:
+        'The TEST home is active, but the canonical linked task has not been seeded yet. Recheck the persisted TEST-home setup before validating the proof path.',
       selectedHomeLabel: 'Selected home',
       filteredByIssue: 'Filtered issue',
       allIssues: 'All issues',
@@ -997,6 +1061,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       subtitle: 'A home-level place for updates, follow-through, and the secondary messaging lane.',
       overviewTitle: 'History first',
       overviewBody: 'Use this space for issue and task updates first, with chat activity supporting the loop instead of defining it.',
+      operationsEmptyTitle: 'No operational history yet',
+      operationsEmptyBody:
+        'This home does not have issue or task updates yet. Open Issues or Tasks to start leaving a real operational trail.',
       unreadChats: 'Unread chats',
       unreadDms: 'Unread DMs',
       archivedChats: 'Archived chats',
@@ -1413,6 +1480,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Основная навигация',
+      contextLabel: 'Контекст оболочки KeepCozy',
+      loadingTitle: 'Открываем этот дом',
+      loadingBody: 'Подготавливаем текущий дом, главные разделы и следующие операционные шаги.',
+      errorTitle: 'Не удалось открыть этот вид дома',
+      errorBody:
+        'Сначала попробуйте снова. Если ошибка повторится, вернитесь на главную или выберите другой контекст дома, прежде чем снова открывать этот раздел.',
+      errorProofPathBody:
+        'Если вы проверяете канонический TEST-сценарий, снова выберите TEST в переключателе домов перед повторной попыткой.',
+      retry: 'Попробовать снова',
       home: 'Главная',
       rooms: 'Комнаты',
       issues: 'Проблемы',
@@ -1421,6 +1497,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaces: 'Пространства',
       settings: 'Настройки',
       activity: 'История',
+      activeHomeLabel: 'Активный дом',
+      currentSectionLabel: 'Текущий раздел',
+      homeScopeBody: 'Все верхнеуровневые разделы остаются внутри этого дома, пока вы не смените контекст.',
+      homeSectionBody: 'Начинайте здесь, чтобы открыть полный рабочий цикл этого дома.',
+      roomsSectionBody: 'Используйте комнаты как основу для проблем и задач, которые живут внутри этого дома.',
+      issuesSectionBody: 'Отслеживайте структурированные проблемы этого дома и переводите их в задачи.',
+      tasksSectionBody: 'Следите за работой, связанной с проблемами этого дома, и держите следующий шаг на виду.',
+      activitySectionBody: 'Просматривайте операционную историю и обновления, собранные по всему дому.',
       openHome: 'Открыть главную',
       openRooms: 'Открыть комнаты',
       openIssues: 'Открыть проблемы',
@@ -1561,6 +1645,11 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       previewPill: 'MVP-срез',
       previewBody:
         'Эти карточки комнат теперь читаются из первого persistence-среза KeepCozy и намеренно остаются узкими вокруг проблем, задач и истории.',
+      emptyTitle: 'В этом доме пока нет комнат',
+      emptyBody:
+        'Комнаты появятся здесь, как только у этого дома появятся записи комнат. Начните с главной или переходите в проблемы, если работа уже зафиксирована.',
+      emptyTestBody:
+        'Дом TEST активен, но каноническая комната Kitchen еще не засеяна. Проверьте persisted-настройку TEST-дома перед валидацией сценария.',
       selectedHomeLabel: 'Выбранный дом',
       issuesLabel: 'Проблемы',
       tasksLabel: 'Задачи',
@@ -1583,6 +1672,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       previewPill: 'MVP-срез',
       previewBody:
         'Это сфокусированная линия проблем для MVP, теперь опирающаяся на первый persisted-срез проблем. Богатые поставщики, рекомендации и автоматизация пока не мешают.',
+      emptyTitle: 'В этом доме пока нет проблем',
+      emptyBody:
+        'Создайте первую проблему, когда в этом доме что-то требует внимания. Держите запись структурированной, чтобы из нее могла вырасти задача и история.',
+      emptyFilteredBody:
+        'В этом фильтре пока нет проблем. Сбросьте фильтр или создайте первую проблему для этой комнаты.',
+      emptyTestBody:
+        'Дом TEST активен, но каноническая проблема с краном еще не засеяна. Проверьте persisted-настройку TEST-дома перед валидацией сценария.',
       selectedHomeLabel: 'Выбранный дом',
       filteredByRoom: 'Фильтр по комнате',
       allRooms: 'Все комнаты',
@@ -1659,6 +1755,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       previewPill: 'MVP-срез',
       previewBody:
         'Линия задач в MVP намеренно узкая и теперь читается из первого persisted-среза задач: конкретная работа, связанная проблема и история обновлений.',
+      emptyTitle: 'В этом доме пока нет задач',
+      emptyBody:
+        'Задачи появятся здесь, когда работа по проблемам превратится в конкретные следующие шаги. Начните с проблем или откройте главную, чтобы удержать цикл.',
+      emptyFilteredBody:
+        'В этом фильтре пока нет задач. Сбросьте фильтр или создайте первую задачу из нужной проблемы.',
+      emptyTestBody:
+        'Дом TEST активен, но каноническая связанная задача еще не засеяна. Проверьте persisted-настройку TEST-дома перед валидацией сценария.',
       selectedHomeLabel: 'Выбранный дом',
       filteredByIssue: 'Фильтр по проблеме',
       allIssues: 'Все проблемы',
@@ -1733,6 +1836,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       overviewTitle: 'Сначала история',
       overviewBody:
         'Используйте это место прежде всего для обновлений по проблемам и задачам. Чат должен поддерживать цикл, а не определять его.',
+      operationsEmptyTitle: 'Операционной истории пока нет',
+      operationsEmptyBody:
+        'У этого дома еще нет обновлений по проблемам или задачам. Откройте проблемы или задачи, чтобы начать оставлять реальный операционный след.',
       unreadChats: 'Непрочитанные чаты',
       unreadDms: 'Непрочитанные личные',
       archivedChats: 'Архивные чаты',

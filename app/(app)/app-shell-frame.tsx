@@ -93,6 +93,63 @@ export function AppShellFrame({
         .join(' ')}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
+      {showShellContext && currentSection ? (
+        <section className="app-shell-context" aria-label={t.shell.contextLabel}>
+          <div className="app-shell-context-shell">
+            <section className="stack app-shell-context-block">
+              <span className="app-shell-context-kicker">{t.shell.activeHomeLabel}</span>
+              <div className="app-shell-context-row">
+                <p className="app-shell-context-title">
+                  {activeSpace?.name || t.settings.noSpaceSelected}
+                </p>
+                <Link
+                  className="pill app-shell-context-link"
+                  href={chooseHomeHref}
+                  prefetch={false}
+                >
+                  {t.settings.chooseAnotherSpace}
+                </Link>
+              </div>
+              <p className="muted app-shell-context-body">{t.shell.homeScopeBody}</p>
+            </section>
+
+            <section className="stack app-shell-context-block">
+              <span className="app-shell-context-kicker">{t.shell.currentSectionLabel}</span>
+              <div className="app-shell-context-row">
+                <p className="app-shell-context-title">{currentSection.title}</p>
+                <Link
+                  className="button button-secondary app-shell-context-button"
+                  href={navSpaceHref(currentSection.nextHref)}
+                  prefetch={false}
+                >
+                  {currentSection.nextLabel}
+                </Link>
+              </div>
+              <p className="muted app-shell-context-body">{currentSection.body}</p>
+            </section>
+
+            <section className="stack app-shell-context-block app-shell-flow-block">
+              <span className="app-shell-context-kicker">{t.homeDashboard.loopTitle}</span>
+              <div className="app-shell-flow">
+                {loopSteps.map((step) => (
+                  <Link
+                    key={step.label}
+                    className={
+                      step.isActive
+                        ? 'app-shell-flow-link app-shell-flow-link-active'
+                        : 'app-shell-flow-link'
+                    }
+                    href={step.href}
+                    prefetch={false}
+                  >
+                    {step.label}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          </div>
+        </section>
+      ) : null}
       <div className="stack app-shell-content">{children}</div>
 
       {showBottomNav ? (
