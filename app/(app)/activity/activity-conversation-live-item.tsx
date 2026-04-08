@@ -12,6 +12,7 @@ import {
   GroupIdentityAvatar,
   IdentityAvatar,
 } from '@/modules/messaging/ui/identity';
+import { withSpaceParam } from '@/modules/spaces/url';
 
 type ActivityConversationLiveItemProps = {
   activeSpaceId: string | null;
@@ -28,7 +29,7 @@ type ActivityConversationLiveItemProps = {
         }
       | null;
     title: string;
-    variant: 'recent' | 'unread';
+    variant: 'attention' | 'recent';
   };
   language: 'en' | 'ru';
   labels: {
@@ -44,6 +45,8 @@ type ActivityConversationLiveItemProps = {
     yesterday: string;
     group: string;
     image: string;
+    attentionBadge: string;
+    recentBadge: string;
   };
 };
 
@@ -238,19 +241,24 @@ export function ActivityConversationLiveItem({
       voiceMessage: labels.voiceMessage,
     },
   );
+  const chatHrefBase = activeSpaceId?.trim()
+    ? withSpaceParam(`/chat/${item.conversationId}`, activeSpaceId)
+    : `/chat/${item.conversationId}`;
+  const latestMessageHash = liveSummary.latestMessageId?.trim()
+    ? `#message-${liveSummary.latestMessageId.trim()}`
+    : '';
+  const chatHref = latestMessageHash ? `${chatHrefBase}${latestMessageHash}` : chatHrefBase;
+  const itemKindLabel =
+    item.variant === 'attention' ? labels.attentionBadge : labels.recentBadge;
 
   return (
     <Link
       className={
         item.variant === 'recent'
-          ? 'activity-item activity-item-recent'
-          : 'activity-item'
+          ? 'activity-item activity-item-messenger activity-item-recent'
+          : 'activity-item activity-item-messenger activity-item-attention'
       }
-      href={
-        activeSpaceId?.trim()
-          ? `/chat/${item.conversationId}?space=${encodeURIComponent(activeSpaceId)}`
-          : `/chat/${item.conversationId}`
-      }
+      href={chatHref}
       prefetch={false}
     >
       <ActivityConversationAvatarVisual
@@ -278,7 +286,8 @@ export function ActivityConversationLiveItem({
 
         <div className="activity-item-meta">
           <div className="activity-item-meta-left">
-            {item.variant === 'unread' ? (
+            <span className="activity-item-kind-pill">{itemKindLabel}</span>
+            {item.variant === 'attention' ? (
               <span className="activity-unread-pill">
                 {labels.unreadMessages}: {liveSummary.unreadCount}
               </span>
