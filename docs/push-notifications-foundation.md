@@ -358,3 +358,41 @@ The first implementation branch should make these things true:
 - the app icon badge reflects aggregate unread chat count on supported browsers
 
 When those are working, the repo will have a real push-notification foundation instead of only browser-readiness scaffolding.
+
+## Practical verification
+
+Use this branch for installed-app chat push testing first, not broader product notifications.
+
+### Installed-app push notifications
+
+- Apply [2026-04-08-push-subscriptions-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-push-subscriptions-foundation.sql) to the target database.
+- Set `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` in the client environment and `WEB_PUSH_VAPID_PRIVATE_KEY` on the server.
+- Install the app as a PWA where the browser supports service workers and push.
+- Sign in, open [notification-readiness.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/settings/notification-readiness.tsx), grant notification permission, and confirm the current browser becomes subscribed instead of only permission-ready.
+- From a second account, send a new message into a chat where the subscribed user is an active member and not the sender.
+- Confirm a push notification appears on the subscribed device.
+
+### Notification click routing
+
+- Click the incoming notification from the installed app or browser notification center.
+- Confirm the app focuses or opens and routes into `/chat/[conversationId]?space=...` for the exact conversation from the payload.
+- Verify this works for both plaintext group chat sends and the current encrypted-DM send path, with encrypted DMs showing only generic preview text.
+
+### Unread and badge behavior
+
+- Leave the app or background it, then send one or more new messages to the subscribed user.
+- Where badge APIs are supported, confirm the app icon gets a badge signal after push receipt.
+- Reopen the app and confirm the exact unread badge count sync restores from authenticated chat state instead of staying generic.
+- Read the conversation and confirm the badge clears when aggregate unread reaches zero.
+- Mute a conversation, send a new message there, and confirm that muted chat is excluded from the exact unread badge count when `conversation_members.notification_level` is available.
+
+### Known platform limitations
+
+- Browser push support, installability, and App Badging API support vary significantly by platform.
+- The service worker currently applies a generic badge nudge on push receipt; exact counts are restored on the next app sync.
+- Push delivery depends on valid VAPID configuration and access to recipient subscriptions server-side.
+- Logout and account-switch badge clearing are still follow-up work, not a finished part of this branch.
+
+### Recommended next branch
+
+- `feature/push-delivery-hardening-and-badge-sync`
