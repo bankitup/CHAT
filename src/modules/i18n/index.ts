@@ -188,6 +188,14 @@ type LanguageDictionary = {
     activeChatsBody: string;
     unreadChatsBody: string;
     archivedChatsBody: string;
+    recentTitle: string;
+    recentBody: string;
+    profileTitle: string;
+    profileBody: string;
+    unreadBadgeLabel: string;
+    groupBadgeLabel: string;
+    openProfileAction: string;
+    recentEmptyBody: string;
     emptyTitle: string;
     emptyBody: string;
   };
@@ -969,6 +977,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       activeChatsBody: 'Current conversations that belong to this space.',
       unreadChatsBody: 'Chats in this space that still need attention.',
       archivedChatsBody: 'Hidden chats stay reachable without leaving the space.',
+      recentTitle: 'Resume chats',
+      recentBody:
+        'Jump back into the conversations that are already moving in this space.',
+      profileTitle: 'Profile and space',
+      profileBody:
+        'Keep profile details and space switching nearby without turning them into the main shell.',
+      unreadBadgeLabel: 'Unread',
+      groupBadgeLabel: 'Group',
+      openProfileAction: 'Open profile',
+      recentEmptyBody: 'Open chats to start the next conversation in this space.',
       emptyTitle: 'This messenger space starts clean',
       emptyBody:
         'Open Chats to start the first conversation here. No history or participants are copied in automatically from TEST or any other space.',
@@ -1814,6 +1832,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       activeChatsBody: 'Текущие разговоры, которые относятся к этому пространству.',
       unreadChatsBody: 'Чаты в этом пространстве, которые ещё требуют внимания.',
       archivedChatsBody: 'Скрытые чаты остаются доступными, не покидая пространство.',
+      recentTitle: 'Продолжить чаты',
+      recentBody:
+        'Быстро возвращайтесь в разговоры, которые уже движутся внутри этого пространства.',
+      profileTitle: 'Профиль и пространство',
+      profileBody:
+        'Держите профиль и переключение пространства рядом, не превращая их в главный слой оболочки.',
+      unreadBadgeLabel: 'Непрочитано',
+      groupBadgeLabel: 'Группа',
+      openProfileAction: 'Открыть профиль',
+      recentEmptyBody: 'Откройте Чаты, чтобы начать следующий разговор в этом пространстве.',
       emptyTitle: 'Это пространство мессенджера начинается с нуля',
       emptyBody:
         'Откройте Чаты, чтобы начать здесь первый разговор. История и участники не копируются автоматически из TEST или любого другого пространства.',

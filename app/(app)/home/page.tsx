@@ -4,9 +4,17 @@ import { getRequestViewer } from '@/lib/request-context/server';
 import { getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
+  getInboxDisplayPreviewText,
+} from '@/modules/messaging/e2ee/inbox-policy';
+import {
   getArchivedConversations,
+  getConversationDisplayName,
+  getConversationParticipantIdentities,
+  getDirectMessageDisplayName,
   getInboxConversationsStable,
 } from '@/modules/messaging/data/server';
+import { getInboxSectionPreferences } from '@/modules/messaging/inbox/preferences-server';
+import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
   getKeepCozyPrimaryTestFlowHints,
   getKeepCozyHomeDashboardData,
@@ -24,6 +32,41 @@ type HomeDashboardPageProps = {
     space?: string;
   }>;
 };
+
+function formatMessengerHomeRecency(
+  value: string | null,
+  language: 'en' | 'ru',
+) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const now = new Date();
+  const locale = language === 'ru' ? 'ru-RU' : 'en-US';
+  const isSameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  return new Intl.DateTimeFormat(
+    locale,
+    isSameDay
+      ? {
+          hour: 'numeric',
+          minute: '2-digit',
+        }
+      : {
+          day: 'numeric',
+          month: 'short',
+        },
+  ).format(date);
+}
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
   const [user, language] = await Promise.all([
@@ -109,13 +152,77 @@ export default async function HomeDashboardPage({
   );
 
   if (activeSpace.profile === 'messenger_full') {
-    const [conversations, archivedConversations] = await Promise.all([
+    const [conversations, archivedConversations, inboxPreferences] = await Promise.all([
       getInboxConversationsStable(user.id, { spaceId: activeSpace.id }),
       getArchivedConversations(user.id, { spaceId: activeSpace.id }),
+      getInboxSectionPreferences(),
     ]);
     const unreadChatCount = conversations.filter(
       (conversation) => conversation.unreadCount > 0,
     ).length;
+    const recentConversations = conversations.slice(0, 3);
+    const recentParticipantIdentities = await getConversationParticipantIdentities(
+      recentConversations.map((conversation) => conversation.conversationId),
+    );
+    const recentParticipantIdentitiesByConversation = recentParticipantIdentities.reduce(
+      (map, identity) => {
+        const existing = map.get(identity.conversationId) ?? [];
+        existing.push(identity);
+        map.set(identity.conversationId, existing);
+        return map;
+      },
+      new Map<string, (typeof recentParticipantIdentities)[number][]>(),
+    );
+    const recentChatItems = recentConversations.map((conversation) => {
+      const participantOptions =
+        recentParticipantIdentitiesByConversation.get(conversation.conversationId) ??
+        [];
+      const otherParticipants = participantOptions.filter(
+        (participant) => participant.userId !== user.id,
+      );
+      const otherParticipantLabels = otherParticipants.map((participant) =>
+        resolvePublicIdentityLabel(participant, t.chat.unknownUser),
+      );
+      const isGroupConversation = conversation.kind === 'group';
+
+      return {
+        conversationId: conversation.conversationId,
+        isGroupConversation,
+        preview: getInboxDisplayPreviewText(
+          conversation,
+          {
+            attachment: t.chat.attachment,
+            audio: t.chat.audio,
+            deletedMessage: t.chat.deletedMessage,
+            encryptedMessage: t.chat.encryptedMessage,
+            file: t.chat.file,
+            image: t.chat.image,
+            newEncryptedMessage: t.chat.newEncryptedMessage,
+            newMessage: t.chat.newMessage,
+            voiceMessage: t.chat.voiceMessage,
+          },
+          inboxPreferences.previewMode,
+        ),
+        recencyLabel: formatMessengerHomeRecency(
+          conversation.lastMessageAt ?? conversation.createdAt,
+          language,
+        ),
+        title: isGroupConversation
+          ? getConversationDisplayName({
+              kind: conversation.kind ?? null,
+              title: conversation.title,
+              participantLabels: otherParticipantLabels,
+              fallbackTitles: {
+                dm: language === 'ru' ? 'Новый чат' : 'New chat',
+                group: language === 'ru' ? 'Новая группа' : 'New group',
+              },
+            })
+          : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser),
+        unreadCount: conversation.unreadCount,
+      };
+    });
+    const hasAnyChats =
+      conversations.length > 0 || archivedConversations.length > 0;
 
     return (
       <section className="stack settings-screen settings-shell activity-screen">
@@ -194,7 +301,86 @@ export default async function HomeDashboardPage({
             </div>
           </section>
 
-          {conversations.length === 0 && archivedConversations.length === 0 ? (
+          {recentChatItems.length > 0 ? (
+            <section className="stack settings-section activity-section">
+              <div className="activity-section-header">
+                <div className="stack activity-section-copy">
+                  <h2 className="card-title">{t.messengerHome.recentTitle}</h2>
+                  <p className="muted">{t.messengerHome.recentBody}</p>
+                </div>
+
+                <div className="activity-section-actions">
+                  <span className="activity-section-count">
+                    {recentChatItems.length}
+                  </span>
+                  <Link
+                    className="pill activity-section-link"
+                    href={withSpaceParam('/inbox', activeSpace.id)}
+                    prefetch={false}
+                  >
+                    {t.shell.openChats}
+                  </Link>
+                </div>
+              </div>
+
+              <div className="activity-list">
+                {recentChatItems.map((conversation) => (
+                  <Link
+                    key={conversation.conversationId}
+                    className="activity-item activity-item-link"
+                    href={withSpaceParam(
+                      `/chat/${conversation.conversationId}`,
+                      activeSpace.id,
+                    )}
+                    prefetch={false}
+                  >
+                    <div className="activity-item-copy">
+                      <div className="activity-item-title-row">
+                        <h3 className="activity-item-title">{conversation.title}</h3>
+                        {conversation.recencyLabel ? (
+                          <span className="activity-item-recency">
+                            {conversation.recencyLabel}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <p
+                        className={[
+                          'activity-item-preview',
+                          !conversation.preview
+                            ? 'activity-item-preview-empty'
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                      >
+                        {conversation.preview ?? t.messengerHome.recentEmptyBody}
+                      </p>
+
+                      <div className="activity-item-meta">
+                        <div className="activity-item-meta-left">
+                          {conversation.isGroupConversation ? (
+                            <span className="keepcozy-meta-pill">
+                              {t.messengerHome.groupBadgeLabel}
+                            </span>
+                          ) : null}
+                          {conversation.unreadCount > 0 ? (
+                            <span className="activity-unread-pill">
+                              {t.messengerHome.unreadBadgeLabel} ·{' '}
+                              {conversation.unreadCount}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="pill">{t.shell.openChats}</span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {!hasAnyChats ? (
             <section className="empty-card keepcozy-preview-card">
               <h2 className="card-title">{t.messengerHome.emptyTitle}</h2>
               <p className="muted">{t.messengerHome.emptyBody}</p>
@@ -208,10 +394,10 @@ export default async function HomeDashboardPage({
                 </Link>
                 <Link
                   className="button button-secondary"
-                  href={withSpaceParam('/settings', activeSpace.id)}
+                  href={withSpaceParam('/activity', activeSpace.id)}
                   prefetch={false}
                 >
-                  {t.shell.openSettings}
+                  {t.shell.openMessengerActivity}
                 </Link>
                 <Link
                   className="pill"
@@ -223,6 +409,30 @@ export default async function HomeDashboardPage({
               </div>
             </section>
           ) : null}
+
+          <section className="stack settings-section">
+            <div className="stack activity-section-copy">
+              <h2 className="card-title">{t.messengerHome.profileTitle}</h2>
+              <p className="muted">{t.messengerHome.profileBody}</p>
+            </div>
+
+            <div className="keepcozy-card-actions">
+              <Link
+                className="button button-secondary"
+                href={withSpaceParam('/settings', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.messengerHome.openProfileAction}
+              </Link>
+              <Link
+                className="pill"
+                href={withSpaceParam('/spaces', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.settings.chooseAnotherSpace}
+              </Link>
+            </div>
+          </section>
         </section>
       </section>
     );
