@@ -1,5 +1,9 @@
 import type { GroupConversationMemberRole } from '@/modules/messaging/group-policy';
-import type { SpaceRole } from './model';
+import type {
+  SpaceGovernanceGlobalRole,
+  SpaceGovernanceRole,
+  SpaceRole,
+} from './model';
 
 /**
  * Draft table name for the future additive companion metadata layer.
@@ -86,7 +90,9 @@ export type KeepCozyRoleLayerCompatibilityNote =
   | 'operator-visibility-is-not-dm-decrypt-authority';
 
 export type KeepCozyResolvedRoleLayers = {
+  globalGovernanceRole: SpaceGovernanceGlobalRole | null;
   globalPlatformRole: KeepCozyGlobalPlatformRole;
+  spaceGovernanceRole: SpaceGovernanceRole | null;
   keepCozySpaceRole: KeepCozySpaceRole | null;
   threadParticipationRole: KeepCozyThreadParticipationRole | null;
   runtimeSpaceRole: SpaceRole | null;

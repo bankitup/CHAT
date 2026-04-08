@@ -1,5 +1,43 @@
 export type SpaceRole = 'owner' | 'admin' | 'member';
 
+export type SpaceGovernanceGlobalRole = 'super_admin';
+
+export const SPACE_GOVERNANCE_GLOBAL_ROLES = [
+  'super_admin',
+] as const satisfies readonly SpaceGovernanceGlobalRole[];
+
+export type SpaceGovernanceGlobalRoleSource =
+  | 'env_user_id_allowlist'
+  | 'env_email_allowlist'
+  | 'deferred_no_runtime_binding';
+
+export type SpaceGovernanceRole = 'space_admin' | 'space_member';
+
+export const SPACE_GOVERNANCE_ROLES = [
+  'space_admin',
+  'space_member',
+] as const satisfies readonly SpaceGovernanceRole[];
+
+export type SpaceGovernanceRoleSource =
+  | 'runtime_space_role_owner'
+  | 'runtime_space_role_admin'
+  | 'runtime_space_role_member';
+
+export type ResolvedSpaceGovernanceGlobalRole = {
+  globalRole: SpaceGovernanceGlobalRole | null;
+  globalRoleSource: SpaceGovernanceGlobalRoleSource;
+  canCreateSpaces: boolean;
+};
+
+export type ResolvedSpaceGovernanceRole = {
+  governanceRole: SpaceGovernanceRole;
+  governanceRoleSource: SpaceGovernanceRoleSource;
+  canManageMembers: boolean;
+};
+
+export type ResolvedSpaceGovernanceState =
+  ResolvedSpaceGovernanceGlobalRole & ResolvedSpaceGovernanceRole;
+
 export type SpaceProfile = 'messenger_full' | 'keepcozy_ops';
 
 export const SPACE_PROFILES = [

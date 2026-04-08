@@ -3,9 +3,14 @@ import 'server-only';
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import type {
   ResolvedSpaceProfile,
+  ResolvedSpaceGovernanceGlobalRole,
+  ResolvedSpaceGovernanceRole,
+  ResolvedSpaceGovernanceState,
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
   SpaceProfileSource,
+  SpaceGovernanceGlobalRoleSource,
+  SpaceGovernanceRoleSource,
   SpaceRecord,
   SpaceRole,
 } from './model';
@@ -13,9 +18,22 @@ import { withSpaceParam } from './url';
 
 export type UserSpaceRecord = SpaceRecord & {
   role: SpaceRole;
+  governanceRole: ResolvedSpaceGovernanceRole['governanceRole'];
+  governanceRoleSource: ResolvedSpaceGovernanceRole['governanceRoleSource'];
+  canManageMembers: boolean;
   profile: SpaceProfile;
   profileSource: SpaceProfileSource;
   defaultShellRoute: SpaceProfileDefaultShellRoute;
+};
+
+export type ResolvedActiveSpaceState = {
+  spaces: UserSpaceRecord[];
+  activeSpace: UserSpaceRecord | null;
+  activeSpaceGovernance: ResolvedSpaceGovernanceState | null;
+  activeSpaceProfile: ResolvedSpaceProfile | null;
+  globalGovernance: ResolvedSpaceGovernanceGlobalRole;
+  requestedSpaceId: string | null;
+  requestedSpaceWasInvalid: boolean;
 };
 
 function getDefaultShellRouteForSpaceProfile(
@@ -63,6 +81,70 @@ export function resolveSpaceProfileShellHref(input: {
     getDefaultShellRouteForSpaceProfile(input.profile),
     input.spaceId,
   );
+}
+
+function parseNormalizedGovernanceAllowlist(rawValue: string | undefined) {
+  return new Set(
+    (rawValue ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+export function resolveSpaceGovernanceRoleForRuntimeSpaceRole(
+  role: SpaceRole,
+): ResolvedSpaceGovernanceRole {
+  let governanceRole: ResolvedSpaceGovernanceRole['governanceRole'] =
+    'space_member';
+  let governanceRoleSource: SpaceGovernanceRoleSource =
+    'runtime_space_role_member';
+
+  if (role === 'owner') {
+    governanceRole = 'space_admin';
+    governanceRoleSource = 'runtime_space_role_owner';
+  } else if (role === 'admin') {
+    governanceRole = 'space_admin';
+    governanceRoleSource = 'runtime_space_role_admin';
+  }
+
+  return {
+    governanceRole,
+    governanceRoleSource,
+    canManageMembers: governanceRole === 'space_admin',
+  };
+}
+
+export function resolveSuperAdminGovernanceForUser(input: {
+  userId: string;
+  userEmail?: string | null;
+}): ResolvedSpaceGovernanceGlobalRole {
+  const normalizedUserId = input.userId.trim();
+  const normalizedEmail = input.userEmail?.trim().toLowerCase() ?? null;
+  const allowedUserIds = parseNormalizedGovernanceAllowlist(
+    process.env.CHAT_SUPER_ADMIN_USER_IDS,
+  );
+  const allowedEmails = parseNormalizedGovernanceAllowlist(
+    process.env.CHAT_SUPER_ADMIN_EMAILS,
+  );
+
+  let globalRole: ResolvedSpaceGovernanceGlobalRole['globalRole'] = null;
+  let globalRoleSource: SpaceGovernanceGlobalRoleSource =
+    'deferred_no_runtime_binding';
+
+  if (allowedUserIds.has(normalizedUserId)) {
+    globalRole = 'super_admin';
+    globalRoleSource = 'env_user_id_allowlist';
+  } else if (normalizedEmail && allowedEmails.has(normalizedEmail)) {
+    globalRole = 'super_admin';
+    globalRoleSource = 'env_email_allowlist';
+  }
+
+  return {
+    globalRole,
+    globalRoleSource,
+    canCreateSpaces: globalRole === 'super_admin',
+  };
 }
 
 function getSafeSupabaseHostFragment() {
@@ -295,10 +377,16 @@ export async function getUserSpaces(
         spaceId: space.id,
         spaceName: space.name,
       });
+      const governanceResolution = resolveSpaceGovernanceRoleForRuntimeSpaceRole(
+        membership.role,
+      );
 
       return {
         ...space,
+        canManageMembers: governanceResolution.canManageMembers,
         defaultShellRoute: profileResolution.defaultShellRoute,
+        governanceRole: governanceResolution.governanceRole,
+        governanceRoleSource: governanceResolution.governanceRoleSource,
         profile: profileResolution.profile,
         profileSource: profileResolution.source,
         role: membership.role,
@@ -325,9 +413,10 @@ export async function getUserSpaces(
 
 export async function resolveActiveSpaceForUser(input: {
   userId: string;
+  userEmail?: string | null;
   requestedSpaceId?: string | null;
   source?: string;
-}) {
+}): Promise<ResolvedActiveSpaceState> {
   logSpacesDiagnostics('resolveActiveSpaceForUser:start', {
     source: input.source ?? 'unknown',
     hasRequestedSpaceId: Boolean(input.requestedSpaceId?.trim()),
@@ -341,6 +430,20 @@ export async function resolveActiveSpaceForUser(input: {
       ? spaces.find((space) => space.id === requestedSpaceId) ?? null
       : null;
   const activeSpace = requestedSpace ?? spaces[0] ?? null;
+  const globalGovernance = resolveSuperAdminGovernanceForUser({
+    userId: input.userId,
+    userEmail: input.userEmail ?? null,
+  });
+  const activeSpaceGovernance = activeSpace
+    ? ({
+        canCreateSpaces: globalGovernance.canCreateSpaces,
+        canManageMembers: activeSpace.canManageMembers,
+        globalRole: globalGovernance.globalRole,
+        globalRoleSource: globalGovernance.globalRoleSource,
+        governanceRole: activeSpace.governanceRole,
+        governanceRoleSource: activeSpace.governanceRoleSource,
+      } satisfies ResolvedSpaceGovernanceState)
+    : null;
   const activeSpaceProfile = activeSpace
     ? ({
         defaultShellRoute: activeSpace.defaultShellRoute,
@@ -352,7 +455,9 @@ export async function resolveActiveSpaceForUser(input: {
   logSpacesDiagnostics('resolveActiveSpaceForUser:done', {
     source: input.source ?? 'unknown',
     activeSpaceDefaultShellRoute: activeSpace?.defaultShellRoute ?? null,
+    activeSpaceGovernanceRole: activeSpace?.governanceRole ?? null,
     activeSpaceProfile: activeSpace?.profile ?? null,
+    globalGovernanceRole: globalGovernance.globalRole,
     spaceCount: spaces.length,
     hasActiveSpace: Boolean(activeSpace),
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
@@ -361,7 +466,9 @@ export async function resolveActiveSpaceForUser(input: {
   return {
     spaces,
     activeSpace,
+    activeSpaceGovernance,
     activeSpaceProfile,
+    globalGovernance,
     requestedSpaceId,
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
   };
