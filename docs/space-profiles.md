@@ -226,6 +226,22 @@ Recommended initial route posture:
 | `messenger_full` | `/inbox?space=...` |
 | `keepcozy_ops` | `/home?space=...` |
 
+Current runtime note:
+
+- the repo now exposes a minimal runtime seam for this in
+  [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+  and [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+- profile is currently resolved at runtime, not stored as a committed database
+  field yet
+- active-space resolution now exposes profile information on the resolved
+  space runtime shape
+- the current temporary resolver treats the shared `TEST` space as
+  `keepcozy_ops`
+- all other spaces currently fall back to `messenger_full` until explicit
+  persisted profile storage lands
+- a dedicated profile-aware default-shell helper now exists for later routing
+  work, but current entry behavior does not need to switch immediately
+
 Important boundaries:
 
 - profile-aware routing should happen after active space resolution, not
@@ -325,8 +341,9 @@ Recommended sequence:
    - `messenger_full`
    - `keepcozy_ops`
 2. add a profile-resolution seam close to active-space resolution
-3. make shell entry/profile routing aware of that resolved value
-4. keep capability and policy branching shallow until the routing seam is
+3. expose that resolved value on active-space runtime shapes
+4. make shell entry/profile routing aware of that resolved value
+5. keep capability and policy branching shallow until the routing seam is
    stable
 
 Avoid in the first profile pass:
@@ -337,6 +354,17 @@ Avoid in the first profile pass:
 - overloading `public.conversations.kind`
 - adding more profiles before the first two are proven
 
+## What Is Deferred
+
+The following intentionally remain deferred after the first runtime seam:
+
+- persisted `space_profile` storage in shared schema
+- admin-facing profile editing
+- profile-aware shell rendering changes across the full app
+- final capability enforcement
+- profile-aware per-thread or per-object policy enforcement
+- hybrid or override-heavy profile systems
+
 ## Remaining Ambiguities
 
 The following questions are intentionally left for later narrow branches:
@@ -344,7 +372,8 @@ The following questions are intentionally left for later narrow branches:
 - where the resolved profile should live first:
   - explicit `public.spaces` metadata
   - a companion profile table
-  - a temporary resolver/config seam
+  - another reviewed persisted shape that can replace the current temporary
+    runtime resolver
 - whether some spaces should later support a deliberately hybrid shell posture
   without becoming a third profile
 - how much of `/inbox` should stay visible in `keepcozy_ops` before chat
