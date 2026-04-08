@@ -13,6 +13,7 @@ This is a foundation document, not a runtime-redesign branch.
 
 Related documents:
 
+- [space-profile-capability-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-profile-capability-matrix.md)
 - [keepcozy-chat-shared-vocabulary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-shared-vocabulary.md)
 - [keepcozy-chat-role-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-role-alignment.md)
 - [keepcozy-chat-integration-seam.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-integration-seam.md)
@@ -169,6 +170,9 @@ Profiles should not hard-code every screen directly into policy or schema.
 
 Instead, each profile should resolve to a narrow capability posture for a
 space.
+
+The first explicit profile-default matrix now lives in
+[space-profile-capability-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-profile-capability-matrix.md).
 
 ### Shared capabilities across profiles
 
