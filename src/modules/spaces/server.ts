@@ -356,40 +356,21 @@ export async function getUserSpaces(
     .from('spaces')
     .select('id, name, created_by, created_at, profile')
     .in('id', spaceIds);
-  const spacesFallbackResponse =
-    spacesWithProfileResponse.error &&
-    isMissingColumnErrorMessage(spacesWithProfileResponse.error.message, 'profile')
-      ? await supabase
-          .from('spaces')
-          .select('id, name, created_by, created_at')
-          .in('id', spaceIds)
-      : null;
-  const spaces =
-    (spacesFallbackResponse?.data ?? spacesWithProfileResponse.data) as Array<{
-      id: string;
-      name: string;
-      created_by: string;
-      created_at: string | null;
-      profile?: string | null;
-    }> | null;
-  const spacesError =
-    spacesFallbackResponse?.error ?? spacesWithProfileResponse.error;
-
   const spacesResult = (
     spacesWithProfileResult.error &&
     isMissingSpaceProfileColumnErrorMessage(spacesWithProfileResult.error.message)
   )
     ? await (async () => {
-    logSpacesDiagnostics('spaces:query-profile-fallback', {
-      source,
-      message: spacesWithProfileResult.error.message,
-    });
+        logSpacesDiagnostics('spaces:query-profile-fallback', {
+          source,
+          message: spacesWithProfileResult.error.message,
+        });
 
-      return supabase
-      .from('spaces')
-      .select('id, name, created_by, created_at')
-      .in('id', spaceIds);
-    })()
+        return supabase
+          .from('spaces')
+          .select('id, name, created_by, created_at')
+          .in('id', spaceIds);
+      })()
     : spacesWithProfileResult;
 
   const spaces = (spacesResult.data ?? []) as SpaceQueryRow[];
@@ -415,6 +396,7 @@ export async function getUserSpaces(
       {
         id: space.id,
         name: space.name,
+        profile: normalizeSpaceProfile(space.profile),
         createdBy: space.created_by,
         createdAt: space.created_at,
         storedProfile: space.profile ?? null,
