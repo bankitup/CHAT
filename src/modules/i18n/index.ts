@@ -818,14 +818,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Primary navigation',
-      contextLabel: 'KeepCozy shell context',
-      loadingTitle: 'Opening this home',
-      loadingBody: 'Preparing the current home, the main sections, and the next operational steps.',
-      errorTitle: "Couldn't load this home view",
+      contextLabel: 'Shared space shell',
+      loadingTitle: 'Opening this space',
+      loadingBody:
+        'Preparing the current space, the main sections, and the next place to continue.',
+      errorTitle: "Couldn't load this space view",
       errorBody:
-        'Try again first. If this still fails, go back to Home or choose a different home context before reopening the current section.',
+        'Try again first. If this still fails, go back to Home or choose a different space before reopening the current section.',
       errorProofPathBody:
-        'If you are validating the canonical TEST-home proof path, choose TEST again from the home picker before retrying.',
+        'If this keeps happening in one test space, reopen that space from Spaces before retrying.',
       retry: 'Try again',
       home: 'Home',
       rooms: 'Rooms',
@@ -836,7 +837,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       settings: 'Settings',
       activity: 'History',
       messengerActivity: 'Activity',
-      activeHomeLabel: 'Active home',
+      activeHomeLabel: 'Active space',
       currentSectionLabel: 'Current section',
       homeScopeBody: 'All top-level sections stay inside this home until you switch context.',
       homeSectionBody: 'Start here to open the full operational loop for this home.',
@@ -1693,14 +1694,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Основная навигация',
-      contextLabel: 'Контекст оболочки KeepCozy',
-      loadingTitle: 'Открываем этот дом',
-      loadingBody: 'Подготавливаем текущий дом, главные разделы и следующие операционные шаги.',
-      errorTitle: 'Не удалось открыть этот вид дома',
+      contextLabel: 'Общая оболочка пространства',
+      loadingTitle: 'Открываем это пространство',
+      loadingBody:
+        'Подготавливаем текущее пространство, главные разделы и следующее место, где можно продолжить.',
+      errorTitle: 'Не удалось открыть этот вид пространства',
       errorBody:
-        'Сначала попробуйте снова. Если ошибка повторится, вернитесь на главную или выберите другой контекст дома, прежде чем снова открывать этот раздел.',
+        'Сначала попробуйте снова. Если ошибка повторится, вернитесь на главную или выберите другое пространство, прежде чем снова открывать этот раздел.',
       errorProofPathBody:
-        'Если вы проверяете канонический TEST-сценарий, снова выберите TEST в переключателе домов перед повторной попыткой.',
+        'Если это продолжает происходить в одном тестовом пространстве, откройте это пространство снова через список пространств перед повторной попыткой.',
       retry: 'Попробовать снова',
       home: 'Главная',
       rooms: 'Комнаты',
@@ -1711,7 +1713,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       settings: 'Настройки',
       activity: 'История',
       messengerActivity: 'Активность',
-      activeHomeLabel: 'Активный дом',
+      activeHomeLabel: 'Активное пространство',
       currentSectionLabel: 'Текущий раздел',
       homeScopeBody: 'Все верхнеуровневые разделы остаются внутри этого дома, пока вы не смените контекст.',
       homeSectionBody: 'Начинайте здесь, чтобы открыть полный рабочий цикл этого дома.',

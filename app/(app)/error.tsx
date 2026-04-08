@@ -33,7 +33,7 @@ export default function AppRouteErrorBoundary({
     <section className="page page-mobile">
       <section className="card stack route-error-card">
         <div className="stack route-error-copy">
-          <p className="eyebrow">KeepCozy shell</p>
+          <p className="eyebrow">{t.shell.contextLabel}</p>
           <h1 className="section-title">{t.shell.errorTitle}</h1>
           <p className="muted">{t.shell.errorBody}</p>
           <p className="muted route-error-note">{t.shell.errorProofPathBody}</p>

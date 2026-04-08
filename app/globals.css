@@ -302,9 +302,24 @@ main {
   gap: 14px;
 }
 
+.app-shell-loading-screen {
+  width: min(100%, 720px);
+  margin: 0 auto;
+}
+
 .keepcozy-loading-screen {
   width: min(100%, 720px);
   margin: 0 auto;
+}
+
+.app-shell-loading-context-card,
+.app-shell-loading-hero {
+  padding: 16px;
+}
+
+.app-shell-loading-hero {
+  display: grid;
+  gap: 12px;
 }
 
 .keepcozy-loading-context,
@@ -335,6 +350,12 @@ main {
 
 .route-loading-list {
   gap: 10px;
+}
+
+.route-loading-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .route-loading-row {
