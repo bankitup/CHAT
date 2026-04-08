@@ -14,6 +14,7 @@ This is a foundation document, not a runtime-redesign branch.
 Related documents:
 
 - [space-governance-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-governance-foundation.md)
+- [messenger-space-shell-polish.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/messenger-space-shell-polish.md)
 - [keepcozy-chat-shared-vocabulary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-shared-vocabulary.md)
 - [keepcozy-chat-role-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-role-alignment.md)
 - [keepcozy-chat-integration-seam.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-integration-seam.md)
