@@ -386,6 +386,75 @@ When a later branch asks “can this action happen?”, answer in this order:
 If a proposal cannot answer those five questions cleanly, it is probably
 violating the governance foundation.
 
+## 10. Practical Verification
+
+Use the following review model when sanity-checking this branch before the next
+profile/runtime phase.
+
+### One super-admin-created messenger space
+
+Reason about a messenger-first space like this:
+
+- a `super_admin` provisions the space
+- the first governing admin is seeded explicitly into `space_members`
+- the space may later resolve to profile `messenger_full`
+- the profile changes shell posture, not ownership or isolation
+- members of that messenger space remain invisible to unrelated spaces unless
+  they also have explicit membership there
+
+### One super-admin-created KeepCozy space
+
+Reason about a KeepCozy-first space like this:
+
+- a `super_admin` provisions the space or later creates/binds it through the
+  controlled KeepCozy create-or-bind backend path
+- the first governing admin is seeded explicitly into `space_members`
+- the space may later resolve to profile `keepcozy_ops`
+- homes, objects, threads, and later timeline rows inherit that same
+  governing `space_id`
+- the KeepCozy product surface changes, but the space boundary stays the same
+
+### What a space admin should and should not be able to do
+
+A `space_admin` should be able to:
+
+- manage members inside the governed `space_id`
+- operate later invite/remove/change-role flows for that same `space_id`
+- manage space-local conversations and operational records inside that same
+  boundary
+
+A `space_admin` should not be able to:
+
+- create new spaces
+- manage unrelated spaces
+- browse the global user base in ordinary product flows
+- treat business role alone as proof of thread-moderation or cross-space power
+
+### What a member should and should not be able to do
+
+A `space_member` should be able to:
+
+- participate inside allowed space-scoped product flows
+- create or reply where later product policy allows
+
+A `space_member` should not be able to:
+
+- manage the general roster
+- invite unrelated users by default
+- widen access through thread mechanics
+- infer access to another space because the same person belongs to both
+
+### What must still wait for later branches
+
+The following are intentionally not final on this branch:
+
+- persisted super-admin storage and reviewed provisioning tooling
+- final invite/add/remove/change-role runtime implementation
+- audited mutation logging for sensitive actions
+- KeepCozy create-or-bind backend automation
+- final RLS and policy enforcement
+- profile-aware capability gating beyond the governance seam
+
 ## Remaining Ambiguities
 
 - whether the future super-admin capability should be implemented as a formal

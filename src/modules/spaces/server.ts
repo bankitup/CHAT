@@ -26,6 +26,16 @@ export type UserSpaceRecord = SpaceRecord & {
   defaultShellRoute: SpaceProfileDefaultShellRoute;
 };
 
+export type ResolvedActiveSpaceState = {
+  spaces: UserSpaceRecord[];
+  activeSpace: UserSpaceRecord | null;
+  activeSpaceGovernance: ResolvedSpaceGovernanceState | null;
+  activeSpaceProfile: ResolvedSpaceProfile | null;
+  globalGovernance: ResolvedSpaceGovernanceGlobalRole;
+  requestedSpaceId: string | null;
+  requestedSpaceWasInvalid: boolean;
+};
+
 function getDefaultShellRouteForSpaceProfile(
   profile: SpaceProfile,
 ): SpaceProfileDefaultShellRoute {
@@ -406,7 +416,7 @@ export async function resolveActiveSpaceForUser(input: {
   userEmail?: string | null;
   requestedSpaceId?: string | null;
   source?: string;
-}) {
+}): Promise<ResolvedActiveSpaceState> {
   logSpacesDiagnostics('resolveActiveSpaceForUser:start', {
     source: input.source ?? 'unknown',
     hasRequestedSpaceId: Boolean(input.requestedSpaceId?.trim()),
