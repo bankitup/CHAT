@@ -567,11 +567,7 @@ export function InboxFilterableContent({
   restoreAction,
 }: InboxFilterableContentProps) {
   const t = useMemo(() => getTranslations(language), [language]);
-  const deriveMainConversationItemsMemoized = useMemo(
-    () => createDerivedConversationItemsMemoizer(),
-    [],
-  );
-  const deriveArchivedConversationItemsMemoized = useMemo(
+  const deriveConversationItemsMemoized = useMemo(
     () => createDerivedConversationItemsMemoizer(),
     [],
   );
@@ -797,16 +793,19 @@ export function InboxFilterableContent({
       }),
     [availableUserEntries, searchTerm],
   );
-  const allSummaries = useMemo(
-    () => [...mainSummaries, ...archivedSummaries],
-    [archivedSummaries, mainSummaries],
-  );
-  const summariesByConversationId = useMemo(
+  const visibleConversationItems =
+    activeView === 'archived' ? archivedConversationItems : mainConversationItems;
+  const visibleConversationSummaries =
+    activeView === 'archived' ? archivedSummaries : mainSummaries;
+  const visibleSummariesByConversationId = useMemo(
     () =>
       new Map(
-        allSummaries.map((summary) => [summary.conversationId, summary] as const),
+        visibleConversationSummaries.map((summary) => [
+          summary.conversationId,
+          summary,
+        ] as const),
       ),
-    [allSummaries],
+    [visibleConversationSummaries],
   );
   const inboxSummaryRevision = useSyncExternalStore(
     subscribeToInboxSummaryRevision,
@@ -832,12 +831,12 @@ export function InboxFilterableContent({
     [t],
   );
   const liveSummariesByConversationId = useMemo(() => {
-    // Tie this snapshot map to store revision changes without forcing unrelated
-    // filter-state switches to rebuild it.
+    // Tie the visible snapshot map to store revision changes without forcing
+    // inactive archived/main lists to rebuild on every live inbox update.
     void inboxSummaryRevision;
     const nextMap = new Map<string, InboxConversationLiveSummary>();
 
-    for (const [conversationId, fallbackSummary] of summariesByConversationId) {
+    for (const [conversationId, fallbackSummary] of visibleSummariesByConversationId) {
       nextMap.set(
         conversationId,
         getInboxConversationSummarySnapshot(conversationId, fallbackSummary),
@@ -845,60 +844,34 @@ export function InboxFilterableContent({
     }
 
     return nextMap;
-  }, [inboxSummaryRevision, summariesByConversationId]);
-  const derivedMainConversationItems = useMemo(
+  }, [inboxSummaryRevision, visibleSummariesByConversationId]);
+  const derivedConversationItems = useMemo(
     () =>
-      deriveMainConversationItemsMemoized({
-        items: mainConversationItems,
+      deriveConversationItemsMemoized({
+        items: visibleConversationItems,
         labels: rowLabels,
         liveSummariesByConversationId,
         previewMode: preferences.previewMode,
-        visibility: 'main',
+        visibility: activeView,
       }),
     [
-      deriveMainConversationItemsMemoized,
-      liveSummariesByConversationId,
-      mainConversationItems,
-      preferences.previewMode,
-      rowLabels,
-    ],
-  );
-  const derivedArchivedConversationItems = useMemo(
-    () =>
-      deriveArchivedConversationItemsMemoized({
-        items: archivedConversationItems,
-        labels: rowLabels,
-        liveSummariesByConversationId,
-        previewMode: preferences.previewMode,
-        visibility: 'archived',
-      }),
-    [
-      archivedConversationItems,
-      deriveArchivedConversationItemsMemoized,
+      activeView,
+      deriveConversationItemsMemoized,
       liveSummariesByConversationId,
       preferences.previewMode,
       rowLabels,
+      visibleConversationItems,
     ],
   );
-  const mainBuckets = useMemo(
+  const activeBuckets = useMemo(
     () =>
       buildFilterBucket({
-        items: derivedMainConversationItems,
+        items: derivedConversationItems,
         searchTerm,
         t,
       }),
-    [derivedMainConversationItems, searchTerm, t],
+    [derivedConversationItems, searchTerm, t],
   );
-  const archivedBuckets = useMemo(
-    () =>
-      buildFilterBucket({
-        items: derivedArchivedConversationItems,
-        searchTerm,
-        t,
-      }),
-    [derivedArchivedConversationItems, searchTerm, t],
-  );
-  const activeBuckets = activeView === 'archived' ? archivedBuckets : mainBuckets;
   const organizedConversationSectionsByFilter = useMemo(
     () =>
       buildOrganizedConversationSectionsByFilter({
@@ -919,11 +892,11 @@ export function InboxFilterableContent({
   const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
   const organizedConversationSections =
     organizedConversationSectionsByFilter[activeFilter];
-  const activeConversationSourceCount =
+  const activeConversationSourceCount = derivedConversationItems.length;
+  const archivedConversationCount =
     activeView === 'archived'
-      ? derivedArchivedConversationItems.length
-      : derivedMainConversationItems.length;
-  const archivedConversationCount = derivedArchivedConversationItems.length;
+      ? derivedConversationItems.length
+      : archivedConversationItems.length;
   const messengerFreshSpaceEmpty =
     isMessengerSpace &&
     activeView === 'main' &&
@@ -1366,7 +1339,7 @@ export function InboxFilterableContent({
                   activeSpaceId={activeSpaceId}
                   currentUserId={currentUserId}
                   initialSummary={
-                    summariesByConversationId.get(conversation.conversationId) ?? {
+                    visibleSummariesByConversationId.get(conversation.conversationId) ?? {
                       conversationId: conversation.conversationId,
                       createdAt: null,
                       hiddenAt: null,
