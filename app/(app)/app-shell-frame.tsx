@@ -124,7 +124,7 @@ export function AppShellFrame({
                       : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
                   href={navSpaceHref('/home')}
-                  prefetch={false}
+                  prefetch
                 >
                   <span className="app-bottom-nav-label">{t.shell.home}</span>
                 </Link>
@@ -137,7 +137,7 @@ export function AppShellFrame({
                       : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
                   href={navSpaceHref('/inbox')}
-                  prefetch={false}
+                  prefetch
                 >
                   <span className="app-bottom-nav-label">{t.shell.chats}</span>
                 </Link>
@@ -150,7 +150,7 @@ export function AppShellFrame({
                       : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
                   href={navSpaceHref('/activity')}
-                  prefetch={false}
+                  prefetch
                 >
                   <span className="app-bottom-nav-label">
                     {t.shell.messengerActivity}
