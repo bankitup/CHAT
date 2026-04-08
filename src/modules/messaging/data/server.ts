@@ -999,8 +999,45 @@ function uniqueNonEmptyLabels(labels: string[]) {
   );
 }
 
-function buildDmConversationKey(leftUserId: string, rightUserId: string) {
+function buildCanonicalDmConversationKey(leftUserId: string, rightUserId: string) {
   return [leftUserId, rightUserId].filter(Boolean).sort().join(':');
+}
+
+function buildSpaceScopedDmConversationKey(input: {
+  leftUserId: string;
+  rightUserId: string;
+  spaceId?: string | null;
+}) {
+  const canonicalKey = buildCanonicalDmConversationKey(
+    input.leftUserId,
+    input.rightUserId,
+  );
+  const normalizedSpaceId = input.spaceId?.trim() || null;
+
+  if (!canonicalKey || !normalizedSpaceId) {
+    return canonicalKey;
+  }
+
+  // Compatibility seam for environments that still enforce global dm_key
+  // uniqueness. New spaceful DMs can still coexist across spaces while exact
+  // pair reuse inside the current space stays enforced by the lookup path.
+  return `${normalizedSpaceId}::${canonicalKey}`;
+}
+
+function buildDmConversationLookupKeys(input: {
+  leftUserId: string;
+  rightUserId: string;
+  spaceId?: string | null;
+}) {
+  const canonicalKey = buildCanonicalDmConversationKey(
+    input.leftUserId,
+    input.rightUserId,
+  );
+  const spaceScopedKey = buildSpaceScopedDmConversationKey(input);
+
+  return Array.from(
+    new Set([canonicalKey, spaceScopedKey].map((value) => value?.trim()).filter(Boolean)),
+  );
 }
 
 async function findExistingDmConversationByKey(input: {
@@ -1009,10 +1046,15 @@ async function findExistingDmConversationByKey(input: {
   otherUserId: string;
   spaceId?: string | null;
 }) {
-  const dmConversationKey = buildDmConversationKey(
-    input.creatorUserId,
-    input.otherUserId,
-  );
+  const dmConversationKeys = buildDmConversationLookupKeys({
+    leftUserId: input.creatorUserId,
+    rightUserId: input.otherUserId,
+    spaceId: input.spaceId ?? null,
+  });
+
+  if (dmConversationKeys.length === 0) {
+    return null;
+  }
 
   let directKeyLookup = input.supabase
     .from('conversations')
@@ -1022,7 +1064,7 @@ async function findExistingDmConversationByKey(input: {
         : 'id, kind, dm_key, created_at, last_message_at',
     )
     .eq('kind', 'dm')
-    .eq('dm_key', dmConversationKey);
+    .in('dm_key', dmConversationKeys);
 
   if (input.spaceId) {
     directKeyLookup = directKeyLookup.eq('space_id', input.spaceId);
@@ -4936,9 +4978,26 @@ export async function getExistingActiveDmPartnerUserIdsForCandidates(
   }
 
   const supabase = await createSupabaseServerClient();
-  const dmConversationKeys = uniqueCandidateUserIds.map((candidateUserId) =>
-    buildDmConversationKey(currentUserId, candidateUserId),
+  const lookupKeysByCandidateUserId = new Map(
+    uniqueCandidateUserIds.map((candidateUserId) => [
+      candidateUserId,
+      buildDmConversationLookupKeys({
+        leftUserId: currentUserId,
+        rightUserId: candidateUserId,
+        spaceId: options?.spaceId ?? null,
+      }),
+    ]),
   );
+  const dmConversationKeys = Array.from(
+    new Set(
+      Array.from(lookupKeysByCandidateUserId.values()).flatMap((keys) => keys),
+    ),
+  );
+
+  if (dmConversationKeys.length === 0) {
+    return [] as string[];
+  }
+
   let keyedLookupQuery = supabase
     .from('conversations')
     .select(
@@ -5018,12 +5077,15 @@ export async function getExistingActiveDmPartnerUserIdsForCandidates(
   const existingPartnerUserIds = new Set<string>();
 
   for (const candidateUserId of uniqueCandidateUserIds) {
-    const expectedConversationKey = buildDmConversationKey(
-      currentUserId,
-      candidateUserId,
+    const expectedConversationKeys = new Set(
+      lookupKeysByCandidateUserId.get(candidateUserId) ?? [],
     );
     const matchingConversations = candidateConversationRows
-      .filter((conversation) => conversation.conversationKey === expectedConversationKey)
+      .filter((conversation) =>
+        conversation.conversationKey
+          ? expectedConversationKeys.has(conversation.conversationKey)
+          : false,
+      )
       .filter((conversation) => {
         const memberIds = memberIdsByConversation.get(conversation.conversationId);
 
@@ -5089,7 +5151,11 @@ export async function findExistingActiveDmConversation(
   },
 ) {
   const supabase = await createSupabaseServerClient();
-  const dmConversationKey = buildDmConversationKey(creatorUserId, otherUserId);
+  const dmConversationKeys = buildDmConversationLookupKeys({
+    leftUserId: creatorUserId,
+    rightUserId: otherUserId,
+    spaceId: options?.spaceId ?? null,
+  });
   let keyedLookupQuery = supabase
     .from('conversation_members')
     .select(
@@ -5100,7 +5166,7 @@ export async function findExistingActiveDmConversation(
     .eq('user_id', creatorUserId)
     .eq('state', 'active')
     .eq('conversations.kind', 'dm')
-    .eq('conversations.dm_key', dmConversationKey);
+    .in('conversations.dm_key', dmConversationKeys);
 
   if (options?.spaceId) {
     keyedLookupQuery = keyedLookupQuery.eq('conversations.space_id', options.spaceId);
@@ -5326,9 +5392,20 @@ export async function createConversationWithMembers(input: {
     }
   }
 
-  const dmConversationKey =
+  const canonicalDmConversationKey =
     input.kind === 'dm'
-      ? buildDmConversationKey(input.creatorUserId, participantUserIds[0] ?? '')
+      ? buildCanonicalDmConversationKey(
+          input.creatorUserId,
+          participantUserIds[0] ?? '',
+        )
+      : null;
+  const spaceScopedDmConversationKey =
+    input.kind === 'dm'
+      ? buildSpaceScopedDmConversationKey({
+          leftUserId: input.creatorUserId,
+          rightUserId: participantUserIds[0] ?? '',
+          spaceId: normalizedSpaceId,
+        })
       : null;
 
   const conversationPayloadBase =
@@ -5351,12 +5428,21 @@ export async function createConversationWithMembers(input: {
       ? {
           ...conversationPayloadBase,
           space_id: normalizedSpaceId,
-          dm_key: dmConversationKey,
+          dm_key: canonicalDmConversationKey,
         }
       : {
           ...conversationPayloadBase,
           space_id: normalizedSpaceId,
         };
+
+  const conversationPayloadWithScopedDmKey =
+    input.kind === 'dm' && spaceScopedDmConversationKey
+      ? {
+          ...conversationPayloadBase,
+          space_id: normalizedSpaceId,
+          dm_key: spaceScopedDmConversationKey,
+        }
+      : null;
 
   const conversationPayloadWithoutDmKey = {
     ...conversationPayloadBase,
@@ -5408,15 +5494,51 @@ export async function createConversationWithMembers(input: {
       if (existingConversationId) {
         return existingConversationId;
       }
+
+      if (
+        conversationPayloadWithScopedDmKey &&
+        conversationPayloadWithScopedDmKey.dm_key !== canonicalDmConversationKey
+      ) {
+        // Older environments may still enforce global dm_key uniqueness. Retry
+        // with a space-aware compatibility key so the same pair can open one DM
+        // per space without weakening same-space reuse.
+        const { error: scopedConversationError } = await supabase
+          .from('conversations')
+          .insert(conversationPayloadWithScopedDmKey);
+
+        if (!scopedConversationError) {
+          conversationError = null;
+        } else if (
+          isUniqueConstraintErrorMessage(scopedConversationError.message, 'dm_key')
+        ) {
+          const scopedExistingConversationId = await findExistingActiveDmConversation(
+            input.creatorUserId,
+            participantUserIds[0] ?? '',
+            {
+              spaceId: normalizedSpaceId,
+            },
+          );
+
+          if (scopedExistingConversationId) {
+            return scopedExistingConversationId;
+          }
+
+          conversationError = scopedConversationError;
+        } else {
+          conversationError = scopedConversationError;
+        }
+      }
     }
 
-    if (conversationError.message.includes('row-level security policy')) {
+    if (conversationError?.message.includes('row-level security policy')) {
       throw new Error(
         `Conversation creation debug: insert blocked by conversations RLS. auth user id=${user.id}, payload created_by=${conversationPayload.created_by}. Values match, so the failure is likely in database policy state or auth context rather than payload construction.`,
       );
     }
 
-    throw new Error(conversationError.message);
+    if (conversationError) {
+      throw new Error(conversationError.message);
+    }
   }
 
   const membershipRows =
