@@ -400,13 +400,9 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           </div>
 
           <div className="messenger-activity-head-actions">
-            <Link
-              className="pill"
-              href={withSpaceParam('/settings', activeSpace.id)}
-              prefetch={false}
-            >
+            <a className="pill" href="#activity-notification-settings">
               {t.messengerActivity.settingsAction}
-            </Link>
+            </a>
             {archivedConversations.length > 0 ? (
               <Link
                 className="pill"
@@ -423,6 +419,13 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         </section>
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
+          <NotificationReadinessPanel
+            anchorId="activity-notification-settings"
+            embedded
+            language={language}
+            surface="activity"
+          />
+
           <nav className="messenger-activity-filter-row" aria-label={t.messengerActivity.filtersLabel}>
             <Link
               className={
