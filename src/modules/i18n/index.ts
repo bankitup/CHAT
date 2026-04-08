@@ -12,6 +12,7 @@ type LanguageDictionary = {
     label: string;
   };
   publicHome: {
+    eyebrow: string;
     title: string;
     subtitle: string;
     openChats: string;
@@ -486,24 +487,36 @@ type LanguageDictionary = {
     checkingBadge: string;
     unsupportedBody: string;
     unsupportedBadge: string;
+    unconfiguredBody: string;
+    unconfiguredBadge: string;
     blockedBody: string;
     blockedBadge: string;
     enabledBody: string;
     enabledBadge: string;
     availableBody: string;
     availableBadge: string;
+    permissionReadyBody: string;
     unavailable: string;
     available: string;
+    setupNeeded: string;
     on: string;
     off: string;
     checking: string;
     status: string;
     permission: string;
+    device: string;
+    connected: string;
+    notConnected: string;
     turnOn: string;
     turningOn: string;
+    connectDevice: string;
+    connectingDevice: string;
     browserSettingsNote: string;
     comingSoonNote: string;
     availableNote: string;
+    permissionReadyNote: string;
+    notConfiguredNote: string;
+    syncFailedNote: string;
   };
     inbox: {
       title: string;
@@ -794,13 +807,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Language',
     },
     publicHome: {
-      title: 'Open your workspace',
+      eyebrow: 'Build With Care',
+      title: 'BWC Products',
       subtitle:
-        'A calm place to enter the spaces you already have access to and keep work moving.',
-      openChats: 'Open workspace',
+        'A shared entry for the spaces and product surfaces you already have access to.',
+      openChats: 'Continue',
       openSettings: 'Open settings',
       logIn: 'Log in',
-      watermark: 'KeepCozy by Build With Care',
+      watermark: 'Shared entry for your spaces',
       authActionsAria: 'Primary actions',
       guestActionsAria: 'Get started',
     },
@@ -1336,24 +1350,37 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       checkingBadge: 'Checking',
       unsupportedBody: 'Not available here right now.',
       unsupportedBadge: 'Unsupported',
+      unconfiguredBody: 'Push subscriptions are not configured for this build yet.',
+      unconfiguredBadge: 'Needs setup',
       blockedBody: 'Turned off in your browser settings.',
       blockedBadge: 'Off',
-      enabledBody: 'On for this device.',
+      enabledBody: 'Connected for this device.',
       enabledBadge: 'On',
       availableBody: 'Available for this device.',
       availableBadge: 'Available',
+      permissionReadyBody: 'Permission is on. Connect this device to finish setup.',
       unavailable: 'Unavailable',
       available: 'Available',
+      setupNeeded: 'Needs setup',
       on: 'On',
       off: 'Off',
       checking: 'Checking',
       status: 'Status',
       permission: 'Permission',
+      device: 'This device',
+      connected: 'Connected',
+      notConnected: 'Not connected',
       turnOn: 'Turn on notifications',
       turningOn: 'Turning on…',
+      connectDevice: 'Connect this device',
+      connectingDevice: 'Connecting…',
       browserSettingsNote: 'You can change this later in browser settings.',
-      comingSoonNote: 'Message alerts are coming soon.',
-      availableNote: 'You can turn this on now. Message alerts are coming soon.',
+      comingSoonNote: 'This browser is connected for the first chat push delivery slice.',
+      availableNote: 'You can turn this on now for this browser.',
+      permissionReadyNote: 'Permission is already on. Connect this browser to save a real push subscription.',
+      notConfiguredNote:
+        'Add NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY and apply the push-subscriptions SQL before enabling this here.',
+      syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
     },
     inbox: {
       title: 'Chats',
@@ -1665,13 +1692,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Язык',
     },
     publicHome: {
-      title: 'Откройте рабочее пространство',
+      eyebrow: 'Build With Care',
+      title: 'BWC Products',
       subtitle:
-        'Спокойное пространство, чтобы войти в доступные вам пространства и держать работу в движении.',
-      openChats: 'Открыть пространство',
+        'Общий вход для пространств и продуктовых поверхностей, к которым у вас уже есть доступ.',
+      openChats: 'Продолжить',
       openSettings: 'Открыть профиль',
       logIn: 'Войти',
-      watermark: 'KeepCozy by Build With Care',
+      watermark: 'Общий вход для ваших пространств',
       authActionsAria: 'Основные действия',
       guestActionsAria: 'Начало работы',
     },
@@ -2238,24 +2266,39 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       checkingBadge: 'Проверка',
       unsupportedBody: 'Сейчас здесь недоступно.',
       unsupportedBadge: 'Недоступно',
+      unconfiguredBody: 'Push-подписки для этой сборки пока не настроены.',
+      unconfiguredBadge: 'Нужна настройка',
       blockedBody: 'Отключено в настройках браузера.',
       blockedBadge: 'Выключено',
-      enabledBody: 'Включено для этого устройства.',
+      enabledBody: 'Подключено для этого устройства.',
       enabledBadge: 'Включено',
       availableBody: 'Доступно для этого устройства.',
       availableBadge: 'Доступно',
+      permissionReadyBody: 'Разрешение уже включено. Подключите это устройство, чтобы завершить настройку.',
       unavailable: 'Недоступно',
       available: 'Доступно',
+      setupNeeded: 'Нужна настройка',
       on: 'Вкл',
       off: 'Выкл',
       checking: 'Проверка',
       status: 'Статус',
       permission: 'Разрешение',
+      device: 'Это устройство',
+      connected: 'Подключено',
+      notConnected: 'Не подключено',
       turnOn: 'Включить уведомления',
       turningOn: 'Включаем…',
+      connectDevice: 'Подключить это устройство',
+      connectingDevice: 'Подключаем…',
       browserSettingsNote: 'Позже это можно изменить в настройках браузера.',
-      comingSoonNote: 'Оповещения о сообщениях появятся позже.',
-      availableNote: 'Можно включить уже сейчас. Оповещения о сообщениях появятся позже.',
+      comingSoonNote: 'Этот браузер уже подключен для первого chat-first среза push-уведомлений.',
+      availableNote: 'Это можно включить сейчас для этого браузера.',
+      permissionReadyNote:
+        'Разрешение уже включено. Подключите этот браузер, чтобы сохранить реальную push-подписку.',
+      notConfiguredNote:
+        'Добавьте NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY и примените SQL для push_subscriptions, прежде чем включать это здесь.',
+      syncFailedNote:
+        'Сейчас не удалось подключить этот браузер к push-уведомлениям. Попробуйте ещё раз.',
     },
     inbox: {
       title: 'Чаты',

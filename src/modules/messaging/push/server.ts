@@ -1,0 +1,709 @@
+import 'server-only';
+
+import webpush from 'web-push';
+import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
+import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
+import {
+  getArchivedConversations,
+  getConversationDisplayName,
+  getConversationForUser,
+  getConversationParticipants,
+  getInboxConversations,
+  getProfileIdentities,
+} from '@/modules/messaging/data/server';
+import { withSpaceParam } from '@/modules/spaces/url';
+import type {
+  ChatPushPayload,
+  PushSubscriptionRecordInput,
+  StoredPushSubscription,
+} from './contract';
+
+type PushSubscriptionRow = {
+  id: string;
+  user_id?: string;
+  endpoint: string;
+  expiration_time?: number | null;
+  p256dh?: string | null;
+  auth?: string | null;
+  created_at: string;
+  updated_at: string;
+  disabled_at: string | null;
+};
+
+type ChatPushMembershipRow = {
+  user_id: string;
+  notification_level?: string | null;
+};
+
+type ChatPushPresentation = {
+  conversationKind: string | null;
+  conversationLabel: string;
+  senderLabel: string;
+  spaceId: string | null;
+};
+
+type ChatPushSendInput = {
+  conversationId: string;
+  messageId: string;
+  senderId: string;
+  messageKind: 'text' | 'attachment' | 'voice';
+  contentMode: 'plaintext' | 'dm_e2ee_v1';
+  body?: string | null;
+  spaceId?: string | null;
+};
+
+type ChatPushSendResult = {
+  attempted: boolean;
+  sentCount: number;
+  disabledCount: number;
+  failedCount: number;
+  skippedReason: string | null;
+};
+
+type ChatUnreadBadgeState = {
+  mutedExcluded: boolean;
+  unreadCount: number;
+};
+
+let vapidConfigured = false;
+
+function mapStoredPushSubscription(
+  row: PushSubscriptionRow,
+): StoredPushSubscription {
+  return {
+    id: row.id,
+    endpoint: row.endpoint,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    disabledAt: row.disabled_at,
+  };
+}
+
+async function getPushSubscriptionWriteClient() {
+  return createSupabaseServiceRoleClient() ?? (await getRequestSupabaseServerClient());
+}
+
+function logPushDiagnostics(stage: string, details?: Record<string, unknown>) {
+  if (process.env.CHAT_DEBUG_PUSH !== '1') {
+    return;
+  }
+
+  if (details) {
+    console.info('[chat-push]', stage, details);
+    return;
+  }
+
+  console.info('[chat-push]', stage);
+}
+
+function getWebPushConfig() {
+  const publicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY?.trim() || null;
+  const privateKey =
+    process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim() ||
+    process.env.VAPID_PRIVATE_KEY?.trim() ||
+    null;
+  const subject =
+    process.env.WEB_PUSH_VAPID_SUBJECT?.trim() ||
+    process.env.VAPID_SUBJECT?.trim() ||
+    'mailto:notifications@bwc.local';
+
+  if (!publicKey || !privateKey) {
+    return null;
+  }
+
+  return {
+    publicKey,
+    privateKey,
+    subject,
+  };
+}
+
+function ensureWebPushConfigured() {
+  if (vapidConfigured) {
+    return true;
+  }
+
+  const config = getWebPushConfig();
+
+  if (!config) {
+    return false;
+  }
+
+  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+  vapidConfigured = true;
+  return true;
+}
+
+function getProfileLabel(input: {
+  displayName?: string | null;
+  username?: string | null;
+  emailLocalPart?: string | null;
+}) {
+  return (
+    input.displayName?.trim() ||
+    input.username?.trim() ||
+    input.emailLocalPart?.trim() ||
+    'Someone'
+  );
+}
+
+function normalizePreviewText(value: string | null | undefined) {
+  const normalized = (value ?? '').replace(/\s+/g, ' ').trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.length > 120 ? `${normalized.slice(0, 117).trimEnd()}...` : normalized;
+}
+
+function getChatPushPreview(input: {
+  body?: string | null;
+  contentMode: 'plaintext' | 'dm_e2ee_v1';
+  messageKind: 'text' | 'attachment' | 'voice';
+}) {
+  if (input.contentMode === 'dm_e2ee_v1') {
+    return 'Sent you an encrypted message.';
+  }
+
+  if (input.messageKind === 'voice') {
+    return 'Sent a voice message.';
+  }
+
+  if (input.messageKind === 'attachment') {
+    return normalizePreviewText(input.body) ?? 'Sent an attachment.';
+  }
+
+  return normalizePreviewText(input.body) ?? 'Sent a message.';
+}
+
+function buildChatPushPayload(input: {
+  conversationId: string;
+  messageId: string;
+  preview: string;
+  presentation: ChatPushPresentation;
+}) {
+  const title =
+    input.presentation.conversationKind === 'group'
+      ? input.presentation.conversationLabel
+      : input.presentation.senderLabel;
+  const body =
+    input.presentation.conversationKind === 'group'
+      ? `${input.presentation.senderLabel}: ${input.preview}`
+      : input.preview;
+  const url = withSpaceParam(
+    `/chat/${input.conversationId}`,
+    input.presentation.spaceId,
+  );
+
+  return {
+    title,
+    body,
+    url,
+    conversationId: input.conversationId,
+    spaceId: input.presentation.spaceId,
+    messageId: input.messageId,
+    tag: `chat:${input.conversationId}`,
+  } satisfies ChatPushPayload;
+}
+
+async function getChatPushPresentation(
+  input: Pick<
+    ChatPushSendInput,
+    'conversationId' | 'senderId' | 'spaceId'
+  >,
+) {
+  const conversation = await getConversationForUser(input.conversationId, input.senderId, {
+    spaceId: input.spaceId ?? null,
+  });
+
+  if (!conversation) {
+    return null;
+  }
+
+  const participants = await getConversationParticipants(input.conversationId);
+  const identities = await getProfileIdentities(
+    Array.from(new Set([input.senderId, ...participants.map((item) => item.userId)])),
+    {
+      includeAvatarPath: false,
+      includeStatuses: false,
+    },
+  );
+  const identityByUserId = new Map(
+    identities.map((identity) => [identity.userId, identity]),
+  );
+  const senderIdentity = identityByUserId.get(input.senderId);
+  const senderLabel = getProfileLabel({
+    displayName: senderIdentity?.displayName ?? null,
+    username: senderIdentity?.username ?? null,
+    emailLocalPart: senderIdentity?.emailLocalPart ?? null,
+  });
+  const participantLabels =
+    conversation.kind === 'group'
+      ? participants
+          .map((participant) => identityByUserId.get(participant.userId))
+          .map((identity) =>
+            getProfileLabel({
+              displayName: identity?.displayName ?? null,
+              username: identity?.username ?? null,
+              emailLocalPart: identity?.emailLocalPart ?? null,
+            }),
+          )
+      : participants
+          .filter((participant) => participant.userId !== input.senderId)
+          .map((participant) => identityByUserId.get(participant.userId))
+          .map((identity) =>
+            getProfileLabel({
+              displayName: identity?.displayName ?? null,
+              username: identity?.username ?? null,
+              emailLocalPart: identity?.emailLocalPart ?? null,
+            }),
+          );
+  const conversationLabel = getConversationDisplayName({
+    kind: conversation.kind,
+    title: conversation.title,
+    participantLabels,
+    fallbackTitles: {
+      dm: 'New chat',
+      group: 'Group chat',
+    },
+  });
+
+  return {
+    conversationKind: conversation.kind,
+    conversationLabel,
+    senderLabel,
+    spaceId: conversation.spaceId ?? input.spaceId ?? null,
+  } satisfies ChatPushPresentation;
+}
+
+export function isMissingPushSubscriptionsSchemaMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedMessage.includes('push_subscriptions') ||
+    normalizedMessage.includes('browser_language') ||
+    normalizedMessage.includes('expiration_time') ||
+    normalizedMessage.includes('disabled_at') ||
+    normalizedMessage.includes('p256dh')
+  );
+}
+
+async function getActivePushSubscriptionRowsForRecipients(input: {
+  conversationId: string;
+  senderId: string;
+}) {
+  const client = createSupabaseServiceRoleClient();
+
+  if (!client) {
+    return {
+      rows: [] as PushSubscriptionRow[],
+      skippedReason: 'missing-service-role',
+    };
+  }
+
+  const membershipsWithNotificationLevel = await client
+    .from('conversation_members')
+    .select('user_id, notification_level')
+    .eq('conversation_id', input.conversationId)
+    .eq('state', 'active')
+    .neq('user_id', input.senderId);
+
+  let membershipRows: ChatPushMembershipRow[] = [];
+
+  if (!membershipsWithNotificationLevel.error) {
+    membershipRows = (membershipsWithNotificationLevel.data ?? []) as ChatPushMembershipRow[];
+  } else if (
+    membershipsWithNotificationLevel.error.message &&
+    membershipsWithNotificationLevel.error.message
+      .toLowerCase()
+      .includes('notification_level')
+  ) {
+    const membershipsWithoutNotificationLevel = await client
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', input.conversationId)
+      .eq('state', 'active')
+      .neq('user_id', input.senderId);
+
+    if (membershipsWithoutNotificationLevel.error) {
+      throw new Error(membershipsWithoutNotificationLevel.error.message);
+    }
+
+    membershipRows = (membershipsWithoutNotificationLevel.data ?? []) as ChatPushMembershipRow[];
+  } else {
+    throw new Error(membershipsWithNotificationLevel.error.message);
+  }
+
+  const eligibleUserIds = membershipRows
+    .filter((membership) => membership.notification_level !== 'muted')
+    .map((membership) => membership.user_id)
+    .filter(Boolean);
+
+  if (eligibleUserIds.length === 0) {
+    return {
+      rows: [] as PushSubscriptionRow[],
+      skippedReason: 'no-eligible-recipients',
+    };
+  }
+
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .select(
+      'id, user_id, endpoint, expiration_time, p256dh, auth, created_at, updated_at, disabled_at',
+    )
+    .in('user_id', eligibleUserIds)
+    .is('disabled_at', null);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    rows: ((data ?? []) as PushSubscriptionRow[]).filter(
+      (row) => row.endpoint && row.p256dh && row.auth,
+    ),
+    skippedReason: null,
+  };
+}
+
+export async function getChatUnreadBadgeStateForUser(input: {
+  userId: string;
+}): Promise<ChatUnreadBadgeState> {
+  const [visibleConversations, archivedConversations, supabase] = await Promise.all([
+    getInboxConversations(input.userId),
+    getArchivedConversations(input.userId),
+    getRequestSupabaseServerClient(),
+  ]);
+  const allConversations = Array.from(
+    new Map(
+      [...visibleConversations, ...archivedConversations].map((conversation) => [
+        conversation.conversationId,
+        conversation,
+      ]),
+    ).values(),
+  );
+
+  if (allConversations.length === 0) {
+    return {
+      mutedExcluded: true,
+      unreadCount: 0,
+    };
+  }
+
+  const membershipsWithNotificationLevel = await supabase
+    .from('conversation_members')
+    .select('conversation_id, notification_level')
+    .eq('user_id', input.userId)
+    .eq('state', 'active')
+    .in(
+      'conversation_id',
+      allConversations.map((conversation) => conversation.conversationId),
+    );
+  let mutedExcluded = true;
+  let membershipRows: Array<{
+    conversation_id: string;
+    notification_level?: string | null;
+  }> = [];
+
+  if (
+    !membershipsWithNotificationLevel.error
+  ) {
+    membershipRows = (membershipsWithNotificationLevel.data ?? []) as Array<{
+      conversation_id: string;
+      notification_level?: string | null;
+    }>;
+  } else if (
+    membershipsWithNotificationLevel.error.message &&
+    membershipsWithNotificationLevel.error.message
+      .toLowerCase()
+      .includes('notification_level')
+  ) {
+    const membershipsWithoutNotificationLevel = await supabase
+      .from('conversation_members')
+      .select('conversation_id')
+      .eq('user_id', input.userId)
+      .eq('state', 'active')
+      .in(
+        'conversation_id',
+        allConversations.map((conversation) => conversation.conversationId),
+      );
+
+    if (membershipsWithoutNotificationLevel.error) {
+      throw new Error(membershipsWithoutNotificationLevel.error.message);
+    }
+
+    mutedExcluded = false;
+    membershipRows = (membershipsWithoutNotificationLevel.data ?? []) as Array<{
+      conversation_id: string;
+      notification_level?: string | null;
+    }>;
+  } else {
+    throw new Error(membershipsWithNotificationLevel.error.message);
+  }
+
+  const mutedConversationIds = new Set(
+    membershipRows
+      .filter((membership) => membership.notification_level === 'muted')
+      .map((membership) => membership.conversation_id),
+  );
+  const unreadCount = allConversations.reduce((total, conversation) => {
+    if (mutedConversationIds.has(conversation.conversationId)) {
+      return total;
+    }
+
+    return total + Math.max(0, conversation.unreadCount);
+  }, 0);
+
+  return {
+    mutedExcluded,
+    unreadCount,
+  };
+}
+
+export async function upsertPushSubscriptionForUser(input: {
+  userId: string;
+  subscription: PushSubscriptionRecordInput;
+}) {
+  const client = await getPushSubscriptionWriteClient();
+  const now = new Date().toISOString();
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .upsert(
+      {
+        user_id: input.userId,
+        endpoint: input.subscription.endpoint,
+        expiration_time: input.subscription.expirationTime,
+        p256dh: input.subscription.keys.p256dh,
+        auth: input.subscription.keys.auth,
+        user_agent: input.subscription.userAgent,
+        platform: input.subscription.platform,
+        browser_language: input.subscription.language,
+        updated_at: now,
+        disabled_at: null,
+      },
+      {
+        onConflict: 'endpoint',
+      },
+    )
+    .select('id, endpoint, created_at, updated_at, disabled_at')
+    .single<PushSubscriptionRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapStoredPushSubscription(data);
+}
+
+export async function disablePushSubscriptionForUser(input: {
+  userId: string;
+  endpoint: string;
+}) {
+  const client = await getPushSubscriptionWriteClient();
+  const now = new Date().toISOString();
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .update({
+      updated_at: now,
+      disabled_at: now,
+    })
+    .eq('user_id', input.userId)
+    .eq('endpoint', input.endpoint)
+    .is('disabled_at', null)
+    .select('id, endpoint, created_at, updated_at, disabled_at')
+    .maybeSingle<PushSubscriptionRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? mapStoredPushSubscription(data) : null;
+}
+
+async function disablePushSubscriptionByEndpoint(endpoint: string) {
+  const client = createSupabaseServiceRoleClient();
+
+  if (!client) {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from('push_subscriptions')
+    .update({
+      updated_at: now,
+      disabled_at: now,
+    })
+    .eq('endpoint', endpoint)
+    .is('disabled_at', null);
+
+  if (error) {
+    throw error;
+  }
+}
+
+function getPushErrorStatusCode(error: unknown) {
+  const value = error as { statusCode?: unknown } | null;
+  return typeof value?.statusCode === 'number' ? value.statusCode : null;
+}
+
+function isExpiredPushEndpointStatusCode(statusCode: number | null) {
+  return statusCode === 404 || statusCode === 410;
+}
+
+export async function sendChatPushNotifications(
+  input: ChatPushSendInput,
+): Promise<ChatPushSendResult> {
+  if (!ensureWebPushConfigured()) {
+    return {
+      attempted: false,
+      sentCount: 0,
+      disabledCount: 0,
+      failedCount: 0,
+      skippedReason: 'missing-vapid-config',
+    };
+  }
+
+  const presentation = await getChatPushPresentation({
+    conversationId: input.conversationId,
+    senderId: input.senderId,
+    spaceId: input.spaceId ?? null,
+  });
+
+  if (!presentation) {
+    return {
+      attempted: false,
+      sentCount: 0,
+      disabledCount: 0,
+      failedCount: 0,
+      skippedReason: 'conversation-unavailable',
+    };
+  }
+
+  const preview = getChatPushPreview({
+    body: input.body ?? null,
+    contentMode: input.contentMode,
+    messageKind: input.messageKind,
+  });
+  const payload = JSON.stringify(
+    buildChatPushPayload({
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      preview,
+      presentation,
+    }),
+  );
+
+  let subscriptions: PushSubscriptionRow[] = [];
+  let subscriptionSkipReason: string | null = null;
+
+  try {
+    const result = await getActivePushSubscriptionRowsForRecipients({
+      conversationId: input.conversationId,
+      senderId: input.senderId,
+    });
+    subscriptions = result.rows;
+    subscriptionSkipReason = result.skippedReason;
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unable to resolve push subscriptions.';
+
+    if (isMissingPushSubscriptionsSchemaMessage(message)) {
+      return {
+        attempted: false,
+        sentCount: 0,
+        disabledCount: 0,
+        failedCount: 0,
+        skippedReason: 'missing-push-subscriptions-schema',
+      };
+    }
+
+    logPushDiagnostics('recipient-resolution-error', {
+      conversationId: input.conversationId,
+      message,
+    });
+
+    return {
+      attempted: false,
+      sentCount: 0,
+      disabledCount: 0,
+      failedCount: 0,
+      skippedReason: 'recipient-resolution-error',
+    };
+  }
+
+  if (subscriptions.length === 0) {
+    return {
+      attempted: false,
+      sentCount: 0,
+      disabledCount: 0,
+      failedCount: 0,
+      skippedReason: subscriptionSkipReason ?? 'no-active-subscriptions',
+    };
+  }
+
+  let sentCount = 0;
+  let disabledCount = 0;
+  let failedCount = 0;
+
+  for (const subscription of subscriptions) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: subscription.endpoint,
+          expirationTime: subscription.expiration_time ?? null,
+          keys: {
+            p256dh: subscription.p256dh ?? '',
+            auth: subscription.auth ?? '',
+          },
+        },
+        payload,
+        {
+          TTL: 60 * 60,
+          urgency: 'high',
+        },
+      );
+
+      sentCount += 1;
+    } catch (error) {
+      failedCount += 1;
+
+      const statusCode = getPushErrorStatusCode(error);
+
+      logPushDiagnostics('send-error', {
+        conversationId: input.conversationId,
+        endpoint: subscription.endpoint,
+        message:
+          error instanceof Error ? error.message : 'Unable to send chat push.',
+        messageId: input.messageId,
+        statusCode,
+      });
+
+      if (isExpiredPushEndpointStatusCode(statusCode)) {
+        try {
+          await disablePushSubscriptionByEndpoint(subscription.endpoint);
+          disabledCount += 1;
+        } catch (disableError) {
+          logPushDiagnostics('disable-endpoint-error', {
+            endpoint: subscription.endpoint,
+            message:
+              disableError instanceof Error
+                ? disableError.message
+                : 'Unable to disable expired push endpoint.',
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    attempted: true,
+    sentCount,
+    disabledCount,
+    failedCount,
+    skippedReason: null,
+  };
+}

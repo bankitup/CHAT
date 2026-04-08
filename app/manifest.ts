@@ -2,10 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'CHAT',
-    short_name: 'CHAT',
+    name: 'BWC Products',
+    short_name: 'BWC',
     description:
-      'A mobile-first PWA messenger built as a reusable messaging-core and active product shell.',
+      'A mobile-first shared entry for Build With Care products, spaces, and messaging-powered workflows.',
     start_url: '/',
     display: 'standalone',
     display_override: ['standalone', 'minimal-ui'],

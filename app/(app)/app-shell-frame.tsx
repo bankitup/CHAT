@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
+import { ChatUnreadBadgeSync } from '@/modules/messaging/push/chat-unread-badge-sync';
 import type {
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
@@ -54,6 +55,7 @@ export function AppShellFrame({
   const activeSpaceProfile = activeSpace?.profile ?? null;
   const navSpaceHref = (pathname: string) =>
     activeSpace?.id ? withSpaceParam(pathname, activeSpace.id) : pathname;
+  const badgeSyncKey = `${pathname}?${searchParams.toString()}`;
   const showBottomNav =
     !isChatRoute && !(isSpacesRoute && activeSpaceProfile !== 'messenger_full');
   let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
@@ -93,19 +95,33 @@ export function AppShellFrame({
         .join(' ')}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
+      <ChatUnreadBadgeSync syncKey={badgeSyncKey} />
       <div className="stack app-shell-content">{children}</div>
 
       {showBottomNav ? (
-        <nav className="app-bottom-nav" aria-label={t.shell.label}>
-          <div className="app-bottom-nav-shell">
+        <nav
+          className={
+            activeSpaceProfile === 'messenger_full'
+              ? 'app-bottom-nav app-bottom-nav-messenger'
+              : 'app-bottom-nav'
+          }
+          aria-label={t.shell.label}
+        >
+          <div
+            className={
+              activeSpaceProfile === 'messenger_full'
+                ? 'app-bottom-nav-shell app-bottom-nav-shell-messenger'
+                : 'app-bottom-nav-shell'
+            }
+          >
             {activeSpaceProfile === 'messenger_full' ? (
               <>
                 <Link
                   aria-label={t.shell.openHome}
                   className={
                     messengerActiveTab === 'home'
-                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                      : 'app-bottom-nav-link'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-messenger app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
                   href={navSpaceHref('/home')}
                   prefetch={false}
@@ -117,8 +133,8 @@ export function AppShellFrame({
                   aria-label={t.shell.openChats}
                   className={
                     messengerActiveTab === 'chats'
-                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                      : 'app-bottom-nav-link'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-messenger app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
                   href={navSpaceHref('/inbox')}
                   prefetch={false}
@@ -130,8 +146,8 @@ export function AppShellFrame({
                   aria-label={t.shell.openMessengerActivity}
                   className={
                     messengerActiveTab === 'activity'
-                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                      : 'app-bottom-nav-link'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-messenger app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
                   href={navSpaceHref('/activity')}
                   prefetch={false}

@@ -63,7 +63,7 @@ export function PublicHomeScreen({
       </div>
 
       <section className="stack public-home-hero">
-        <p className="public-home-name">KeepCozy</p>
+        <p className="public-home-name">{t.publicHome.eyebrow}</p>
         <h1 className="title public-home-title">{t.publicHome.title}</h1>
         <p className="subtitle public-home-subtitle">
           {t.publicHome.subtitle}
