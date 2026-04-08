@@ -12,6 +12,7 @@ type LanguageDictionary = {
     label: string;
   };
   publicHome: {
+    eyebrow: string;
     title: string;
     subtitle: string;
     openChats: string;
@@ -33,17 +34,45 @@ type LanguageDictionary = {
   };
   shell: {
     label: string;
+    contextLabel: string;
+    loadingTitle: string;
+    loadingBody: string;
+    errorTitle: string;
+    errorBody: string;
+    errorProofPathBody: string;
+    retry: string;
     home: string;
+    rooms: string;
+    issues: string;
+    tasks: string;
     chats: string;
+    spaces: string;
+    settings: string;
     activity: string;
+    messengerActivity: string;
+    activeHomeLabel: string;
+    currentSectionLabel: string;
+    homeScopeBody: string;
+    homeSectionBody: string;
+    roomsSectionBody: string;
+    issuesSectionBody: string;
+    tasksSectionBody: string;
+    activitySectionBody: string;
     openHome: string;
+    openRooms: string;
+    openIssues: string;
+    openTasks: string;
     openChats: string;
+    openSpaces: string;
+    openSettings: string;
     openActivity: string;
+    openMessengerActivity: string;
   };
   spaces: {
     title: string;
     subtitle: string;
     backToChats: string;
+    backToSpaces: string;
     currentSpace: string;
     openSpace: string;
     currentActivityNote: string;
@@ -51,6 +80,42 @@ type LanguageDictionary = {
     emptyBody: string;
     unavailableTitle: string;
     unavailableBody: string;
+    globalAdminEyebrow: string;
+    createSpaceTitle: string;
+    createSpaceBody: string;
+    createSpaceAction: string;
+    createSpaceRouteTitle: string;
+    createSpaceRouteSubtitle: string;
+    createSpaceRouteBody: string;
+    fieldSpaceName: string;
+    fieldSpaceProfile: string;
+    fieldParticipantIdentifiers: string;
+    fieldAdminIdentifiers: string;
+    profileMessengerFull: string;
+    profileKeepCozyOps: string;
+    profileHint: string;
+    participantIdentifiersHint: string;
+    adminIdentifiersHint: string;
+    includeYourselfHint: string;
+    submitCreateSpace: string;
+    nameRequired: string;
+    testSpaceReservedName: string;
+    adminIdentifiersRequired: string;
+    createSpaceFailed: string;
+    createSpaceSuccess: string;
+    createSpaceSuccessNoAccess: string;
+    createSpaceSuccessProfileDeferred: string;
+    createSpaceSuccessNoAccessProfileDeferred: string;
+    spaceAdminEyebrow: string;
+    manageMembersTitle: string;
+    manageMembersBody: string;
+    manageMembersAction: string;
+    manageMembersRouteTitle: string;
+    manageMembersRouteSubtitle: string;
+    manageMembersRouteBody: string;
+    membersOrAdminsRequired: string;
+    manageMembersFailed: string;
+    manageMembersSuccess: string;
   };
   settings: {
     backToChats: string;
@@ -115,11 +180,236 @@ type LanguageDictionary = {
     profileUpdated: string;
     languageUpdated: string;
   };
+  messengerHome: {
+    eyebrow: string;
+    subtitle: string;
+    overviewTitle: string;
+    overviewBody: string;
+    adminTitle: string;
+    adminBody: string;
+    activeChatsTitle: string;
+    activeChatsBody: string;
+    unreadChatsBody: string;
+    archivedChatsBody: string;
+    recentTitle: string;
+    recentBody: string;
+    profileTitle: string;
+    profileBody: string;
+    unreadBadgeLabel: string;
+    groupBadgeLabel: string;
+    openProfileAction: string;
+    recentEmptyBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+  };
+  messengerActivity: {
+    subtitle: string;
+    overviewTitle: string;
+    overviewBody: string;
+    unreadSectionTitle: string;
+    unreadSectionBody: string;
+    recentSectionTitle: string;
+    recentSectionBody: string;
+    quietTitle: string;
+    quietBody: string;
+    recentEmptyTitle: string;
+    recentEmptyBody: string;
+  };
+  homeDashboard: {
+    eyebrow: string;
+    subtitle: string;
+    previewPill: string;
+    previewBody: string;
+    currentHomeLabel: string;
+    switchHome: string;
+    loopTitle: string;
+    loopBody: string;
+    roomsTitle: string;
+    roomsBody: string;
+    issuesTitle: string;
+    issuesBody: string;
+    tasksTitle: string;
+    tasksBody: string;
+    historyTitle: string;
+    historyBody: string;
+    openRooms: string;
+    openIssues: string;
+    openTasks: string;
+    openHistory: string;
+    supportTitle: string;
+    supportBody: string;
+    secondaryChatsTitle: string;
+    secondaryChatsBody: string;
+    secondarySettingsTitle: string;
+    secondarySettingsBody: string;
+    testFlowTitle: string;
+    testFlowBody: string;
+    testFlowPendingBody: string;
+    testFlowMismatchBody: string;
+    openChats: string;
+    openSettings: string;
+  };
+  rooms: {
+    title: string;
+    subtitle: string;
+    backToHome: string;
+    previewPill: string;
+    previewBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+    emptyTestBody: string;
+    selectedHomeLabel: string;
+    issuesLabel: string;
+    tasksLabel: string;
+    historyLabel: string;
+    viewIssues: string;
+    viewTasks: string;
+    detailTitle: string;
+    detailBody: string;
+    detailHistoryTitle: string;
+  };
+  issues: {
+    title: string;
+    subtitle: string;
+    backToHome: string;
+    create: string;
+    submitCreate: string;
+    submitUpdate: string;
+    previewPill: string;
+    previewBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+    emptyFilteredBody: string;
+    emptyTestBody: string;
+    selectedHomeLabel: string;
+    filteredByRoom: string;
+    allRooms: string;
+    viewRoom: string;
+    viewTasks: string;
+    updatesTitle: string;
+    updatesBody: string;
+    tasksTitle: string;
+    tasksBody: string;
+    detailBody: string;
+    createTitle: string;
+    createSubtitle: string;
+    draftTitle: string;
+    draftBody: string;
+    fieldHome: string;
+    fieldRoom: string;
+    roomOptionalNote: string;
+    roomMissing: string;
+    fieldTitle: string;
+    fieldSummary: string;
+    fieldNextStep: string;
+    fieldFirstUpdate: string;
+    firstUpdateHint: string;
+    fieldUpdateLabel: string;
+    labelOptionalHint: string;
+    fieldUpdateBody: string;
+    fieldStatus: string;
+    currentStatusLabel: string;
+    statusIntentHint: string;
+    fieldAttachments: string;
+    createNote: string;
+    browseIssues: string;
+    appendTitle: string;
+    appendBody: string;
+    titleRequired: string;
+    firstUpdateRequired: string;
+    updateBodyRequired: string;
+    createSuccess: string;
+    updateSuccess: string;
+    updateSuccessStatus: string;
+    updateSuccessResolved: string;
+    createFailed: string;
+    updateFailed: string;
+    statusInvalid: string;
+    statusKeepCurrent: string;
+    statusOpen: string;
+    statusPlanned: string;
+    statusInReview: string;
+    statusResolved: string;
+    loggedLabel: string;
+    updateLabelDefault: string;
+    statusUpdatedLabel: string;
+    resolvedLabel: string;
+  };
+  tasks: {
+    title: string;
+    subtitle: string;
+    backToHome: string;
+    create: string;
+    submitCreate: string;
+    submitUpdate: string;
+    previewPill: string;
+    previewBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+    emptyFilteredBody: string;
+    emptyTestBody: string;
+    selectedHomeLabel: string;
+    filteredByIssue: string;
+    allIssues: string;
+    viewIssue: string;
+    viewRoom: string;
+    updatesTitle: string;
+    updatesBody: string;
+    detailBody: string;
+    createTitle: string;
+    createSubtitle: string;
+    draftTitle: string;
+    draftBody: string;
+    fieldHome: string;
+    fieldIssue: string;
+    issueLinkNote: string;
+    issueMissing: string;
+    fieldSummary: string;
+    fieldNextStep: string;
+    fieldTask: string;
+    fieldFirstUpdate: string;
+    firstUpdateHint: string;
+    fieldUpdateLabel: string;
+    labelOptionalHint: string;
+    fieldUpdateBody: string;
+    fieldStatus: string;
+    currentStatusLabel: string;
+    statusIntentHint: string;
+    fieldAttachments: string;
+    createNote: string;
+    browseTasks: string;
+    appendTitle: string;
+    appendBody: string;
+    issueRequired: string;
+    titleRequired: string;
+    firstUpdateRequired: string;
+    updateBodyRequired: string;
+    createSuccess: string;
+    updateSuccess: string;
+    updateSuccessStatus: string;
+    updateSuccessCompleted: string;
+    createFailed: string;
+    updateFailed: string;
+    statusInvalid: string;
+    statusKeepCurrent: string;
+    statusPlanned: string;
+    statusActive: string;
+    statusWaiting: string;
+    statusDone: string;
+    statusCancelled: string;
+    createdLabel: string;
+    updateLabelDefault: string;
+    statusUpdatedLabel: string;
+    completedLabel: string;
+    createIssueFirstBody: string;
+  };
   activity: {
     title: string;
     subtitle: string;
     overviewTitle: string;
     overviewBody: string;
+    operationsEmptyTitle: string;
+    operationsEmptyBody: string;
     unreadChats: string;
     unreadDms: string;
     archivedChats: string;
@@ -137,6 +427,22 @@ type LanguageDictionary = {
     digestBody: string;
     quietTitle: string;
     quietBody: string;
+    openTasks: string;
+    openTask: string;
+    openHome: string;
+    operationsTitle: string;
+    operationsBody: string;
+    operationsIssues: string;
+    operationsTasks: string;
+    operationsResolutions: string;
+    messagingTitle: string;
+    messagingBody: string;
+    recentMessagingTitle: string;
+    recentMessagingBody: string;
+    testFlowTitle: string;
+    testFlowBody: string;
+    testFlowPendingBody: string;
+    testFlowMismatchBody: string;
   };
   inboxSettings: {
     title: string;
@@ -183,24 +489,36 @@ type LanguageDictionary = {
     checkingBadge: string;
     unsupportedBody: string;
     unsupportedBadge: string;
+    unconfiguredBody: string;
+    unconfiguredBadge: string;
     blockedBody: string;
     blockedBadge: string;
     enabledBody: string;
     enabledBadge: string;
     availableBody: string;
     availableBadge: string;
+    permissionReadyBody: string;
     unavailable: string;
     available: string;
+    setupNeeded: string;
     on: string;
     off: string;
     checking: string;
     status: string;
     permission: string;
+    device: string;
+    connected: string;
+    notConnected: string;
     turnOn: string;
     turningOn: string;
+    connectDevice: string;
+    connectingDevice: string;
     browserSettingsNote: string;
     comingSoonNote: string;
     availableNote: string;
+    permissionReadyNote: string;
+    notConfiguredNote: string;
+    syncFailedNote: string;
   };
     inbox: {
       title: string;
@@ -235,6 +553,10 @@ type LanguageDictionary = {
     archivedNote: string;
     emptyMainTitle: string;
     emptyMainBody: string;
+    messengerFreshTitle: string;
+    messengerFreshBody: string;
+    messengerFreshAdminBody: string;
+    messengerFreshMemberBody: string;
     emptyArchivedTitle: string;
     emptyArchivedBody: string;
     emptySearchTitle: string;
@@ -268,6 +590,7 @@ type LanguageDictionary = {
       searchAria: string;
       searchPlaceholder: string;
       noUsers: string;
+      noUsersAdmin: string;
       existingDmOnly: string;
       noMatches: string;
       selected: string;
@@ -383,6 +706,7 @@ type LanguageDictionary = {
     voiceMessageLoading: string;
     voiceMessageUploading: string;
     voiceMessageProcessing: string;
+    voiceMessageRecovering: string;
     voiceMessageFailed: string;
     voiceMessageUnavailable: string;
     encryptedMessage: string;
@@ -394,6 +718,7 @@ type LanguageDictionary = {
     file: string;
     unavailableRightNow: string;
     justNow: string;
+    messageQueued: string;
     sending: string;
     sendFailed: string;
     edited: string;
@@ -435,6 +760,14 @@ type LanguageDictionary = {
     voiceRecorderPermissionDenied: string;
     voiceRecorderUnavailable: string;
     voiceRecorderFailed: string;
+    voiceRecorderPreparingHint: string;
+    voiceRecorderRecordingHint: string;
+    voiceRecorderRecoveredDraftHint: string;
+    voiceRecorderPermissionHint: string;
+    voiceRecorderUnavailableHint: string;
+    voiceRecorderRetryHint: string;
+    voiceMessagePendingHint: string;
+    voiceMessageRetryHint: string;
     mentionSuggestions: string;
     clearAttachment: string;
     attachmentSizeError: (maxSizeLabel: string) => string;
@@ -476,13 +809,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Language',
     },
     publicHome: {
-      title: 'Start your conversation',
+      eyebrow: 'Build With Care',
+      title: 'BWC Products',
       subtitle:
-        'A calm place for direct messages and groups, for people already set up to use it.',
-      openChats: 'Open chats',
+        'A shared entry for the spaces and product surfaces you already have access to.',
+      openChats: 'Continue',
       openSettings: 'Open settings',
       logIn: 'Log in',
-      watermark: 'Chat by Build With Care',
+      watermark: 'Shared entry for your spaces',
       authActionsAria: 'Primary actions',
       guestActionsAria: 'Get started',
     },
@@ -498,24 +832,108 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Primary navigation',
+      contextLabel: 'Shared space shell',
+      loadingTitle: 'Opening this space',
+      loadingBody:
+        'Preparing the current space, the main sections, and the next place to continue.',
+      errorTitle: "Couldn't load this space view",
+      errorBody:
+        'Try again first. If this still fails, go back to Home or choose a different space before reopening the current section.',
+      errorProofPathBody:
+        'If this keeps happening in one test space, reopen that space from Spaces before retrying.',
+      retry: 'Try again',
       home: 'Home',
+      rooms: 'Rooms',
+      issues: 'Issues',
+      tasks: 'Tasks',
       chats: 'Chats',
-      activity: 'Activity',
+      spaces: 'Spaces',
+      settings: 'Settings',
+      activity: 'History',
+      messengerActivity: 'Activity',
+      activeHomeLabel: 'Active space',
+      currentSectionLabel: 'Current section',
+      homeScopeBody: 'All top-level sections stay inside this home until you switch context.',
+      homeSectionBody: 'Start here to open the full operational loop for this home.',
+      roomsSectionBody: 'Use rooms to anchor the issue and task work happening inside this home.',
+      issuesSectionBody: 'Track the structured problems that belong to this home and turn into tasks.',
+      tasksSectionBody: 'Follow the work linked to this home’s issues and keep the next step visible.',
+      activitySectionBody: 'Review the operational history and updates collected across this home.',
       openHome: 'Open home',
+      openRooms: 'Open rooms',
+      openIssues: 'Open issues',
+      openTasks: 'Open tasks',
       openChats: 'Open chats',
-      openActivity: 'Open activity',
+      openSpaces: 'Open spaces',
+      openSettings: 'Open settings',
+      openActivity: 'Open history',
+      openMessengerActivity: 'Open activity',
     },
     spaces: {
       title: 'Choose a space',
-      subtitle: 'Pick the project or team context you want to open first.',
-      backToChats: 'Back to chats',
+      subtitle: 'Pick the space you want to open first.',
+      backToChats: 'Back to workspace',
+      backToSpaces: 'Back to spaces',
       currentSpace: 'Current space',
       openSpace: 'Open space',
-      currentActivityNote: 'Current messaging activity is available here for now.',
+      currentActivityNote: 'Open the right workspace for this space from here.',
       emptyTitle: 'No spaces yet',
       emptyBody: 'Ask the operator to add you to a space first.',
       unavailableTitle: 'Spaces are temporarily unavailable',
       unavailableBody: 'Please try again in a moment while space access is being refreshed.',
+      globalAdminEyebrow: 'Global admin',
+      createSpaceTitle: 'Create a new space',
+      createSpaceBody:
+        'This action is reserved for super admins and provisions a new governed space with its first members and admins.',
+      createSpaceAction: 'Create space',
+      createSpaceRouteTitle: 'Create a space',
+      createSpaceRouteSubtitle:
+        'Create a new space, choose its primary mode, and seed the first governed members.',
+      createSpaceRouteBody:
+        'This flow is reserved for super admins. A new space starts clean: no inherited history and no copied TEST-space members unless you list them here.',
+      fieldSpaceName: 'Space name',
+      fieldSpaceProfile: 'Primary mode',
+      fieldParticipantIdentifiers: 'Initial participants',
+      fieldAdminIdentifiers: 'Initial space admins',
+      profileMessengerFull: 'Messenger space',
+      profileKeepCozyOps: 'KeepCozy ops space',
+      profileHint:
+        'Messenger spaces land chat-first. KeepCozy spaces land home-first when persisted profile storage is available.',
+      participantIdentifiersHint:
+        'Enter one email or user ID per line. Leave this blank to start with only the listed admins. Nothing is copied from TEST.',
+      adminIdentifiersHint:
+        'Enter one email or user ID per line. Admin identifiers are also added as members automatically, and the first one becomes the owner.',
+      includeYourselfHint:
+        'Add yourself to the participant or admin list if you need to enter the new space right away.',
+      submitCreateSpace: 'Create governed space',
+      nameRequired: 'Space name is required.',
+      testSpaceReservedName:
+        'TEST is reserved for the existing KeepCozy sandbox. Use a different name for a new messenger space.',
+      adminIdentifiersRequired: 'At least one initial space admin is required.',
+      createSpaceFailed: 'Unable to create the space right now.',
+      createSpaceSuccess: 'Space created. Open it from the list below.',
+      createSpaceSuccessNoAccess:
+        'Space created. It will not appear in this list until you add yourself as a member.',
+      createSpaceSuccessProfileDeferred:
+        'Space created. Profile storage is not live here yet, so this space will use the default shell until the space-profile migration is applied.',
+      createSpaceSuccessNoAccessProfileDeferred:
+        'Space created. It will not appear in this list until you add yourself as a member, and its selected mode will stay on the default shell until the space-profile migration is applied.',
+      spaceAdminEyebrow: 'Space admin',
+      manageMembersTitle: 'Manage current space members',
+      manageMembersBody:
+        'Add testers to only this space by exact email or user ID, and promote selected people to space admin without exposing a broader people browser.',
+      manageMembersAction: 'Manage members',
+      manageMembersRouteTitle: 'Manage members',
+      manageMembersRouteSubtitle:
+        'Add testers to this space by explicit email or user ID only.',
+      manageMembersRouteBody:
+        'This page changes membership only for the current space. It does not browse or reveal people from other spaces.',
+      membersOrAdminsRequired:
+        'Add at least one member or admin to continue.',
+      manageMembersFailed:
+        'Unable to update space members right now.',
+      manageMembersSuccess:
+        'Space members updated for this space.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -570,7 +988,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       statusTextTooLong: 'Status text can be up to 80 characters.',
       statusUpdateFailed: 'Unable to update your status right now.',
       spaceTitle: 'Space',
-      spaceSubtitle: 'Your chats open in the current space by default. Switch spaces only when you want to change context.',
+      spaceSubtitle: 'Your current activity opens in this space by default. Switch spaces only when you want to change context.',
       currentSpaceLabel: 'Current space',
       noSpaceSelected: 'No space selected yet',
       chooseAnotherSpace: 'Choose another space',
@@ -580,28 +998,315 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileUpdated: 'Profile updated.',
       languageUpdated: 'Language updated.',
     },
+    messengerHome: {
+      eyebrow: 'Messenger space',
+      subtitle:
+        'Use this space for conversations first, then check recent chat movement without leaving the current workspace.',
+      overviewTitle: 'Start chatting',
+      overviewBody:
+        'Open chats fast, start a DM, or create a group without turning Home into another activity feed.',
+      adminTitle: 'Space and session',
+      adminBody:
+        'Keep space switching and sign-out nearby only when you manage this space or administer multiple spaces.',
+      activeChatsTitle: 'Active chats',
+      activeChatsBody: 'Current conversations that belong to this space.',
+      unreadChatsBody: 'Chats in this space that still need attention.',
+      archivedChatsBody: 'Hidden chats stay reachable without leaving the space.',
+      recentTitle: 'Resume chats',
+      recentBody:
+        'Jump back into the conversations that are already moving in this space.',
+      profileTitle: 'Profile and space',
+      profileBody:
+        'Keep profile details and space switching nearby without turning them into the main shell.',
+      unreadBadgeLabel: 'Unread',
+      groupBadgeLabel: 'Group',
+      openProfileAction: 'Open profile',
+      recentEmptyBody: 'Open chats to start the next conversation in this space.',
+      emptyTitle: 'This messenger space starts clean',
+      emptyBody:
+        'Open Chats to start the first conversation here. No history or participants are copied in automatically from TEST or any other space.',
+    },
+    messengerActivity: {
+      subtitle:
+        'Follow unread conversations and recent message movement for this space.',
+      overviewTitle: 'Message activity',
+      overviewBody:
+        'Use this view to catch up on unread chats, scan recent movement, and reopen archived conversations when they matter again.',
+      unreadSectionTitle: 'Unread chats',
+      unreadSectionBody:
+        'The conversations that need attention first in this space.',
+      recentSectionTitle: 'Recent chats',
+      recentSectionBody:
+        'The latest conversation movement across this space, newest first.',
+      quietTitle: 'Nothing needs attention right now',
+      quietBody:
+        'Unread conversations will appear here when something in this space needs a reply.',
+      recentEmptyTitle: 'No recent chat movement yet',
+      recentEmptyBody:
+        'Recent conversation activity will appear here after this space starts being used.',
+    },
+    homeDashboard: {
+      eyebrow: 'Home dashboard',
+      subtitle: 'Keep the first MVP loop grounded in one home, then move through rooms, issues, tasks, and history.',
+      previewPill: 'MVP slice',
+      previewBody:
+        'This dashboard intentionally centers the first persisted KeepCozy runtime slice. Richer home-ops layers still stay secondary.',
+      currentHomeLabel: 'Current home',
+      switchHome: 'Choose another home',
+      loopTitle: 'First proven loop',
+      loopBody:
+        'Use this home as the starting point for room-level issues, task follow-through, and update history.',
+      roomsTitle: 'Rooms',
+      roomsBody: 'Anchor operational work to a real room before it turns into vague activity.',
+      issuesTitle: 'Issues',
+      issuesBody: 'Capture the problem as a structured record, not just a conversation.',
+      tasksTitle: 'Tasks',
+      tasksBody: 'Break the issue into work that can move and leave a clean history behind.',
+      historyTitle: 'History',
+      historyBody: 'Keep updates and resolution visible without making chat the primary workflow.',
+      openRooms: 'Open rooms',
+      openIssues: 'Open issues',
+      openTasks: 'Open tasks',
+      openHistory: 'Open history',
+      supportTitle: 'Supporting surfaces',
+      supportBody: 'Profile and chat remain available, but they no longer define the product flow.',
+      secondaryChatsTitle: 'Chats',
+      secondaryChatsBody: 'Optional communication lane for coordination around the work.',
+      secondarySettingsTitle: 'Profile',
+      secondarySettingsBody: 'Language, account details, and home switching still live here.',
+      testFlowTitle: 'Primary test flow',
+      testFlowBody:
+        'Use one representative kitchen issue to validate the full MVP path from home to room to issue to task to history.',
+      testFlowPendingBody:
+        'The TEST home is active, but the canonical persisted room, issue, task, and history path has not been seeded yet.',
+      testFlowMismatchBody:
+        'This branch uses the seeded TEST home as the canonical MVP proof path. Switch homes before validating the flow.',
+      openChats: 'Open chats',
+      openSettings: 'Open profile',
+    },
+    rooms: {
+      title: 'Rooms',
+      subtitle: 'Treat rooms as the place where issues and task history begin to make sense.',
+      backToHome: 'Back to home',
+      previewPill: 'MVP slice',
+      previewBody:
+        'These room cards now read from the first KeepCozy persistence slice and stay intentionally narrow around issues, tasks, and history.',
+      emptyTitle: 'No rooms yet in this home',
+      emptyBody:
+        'Rooms will appear here once this home has room records. Start from Home or move into Issues if the work has already been logged.',
+      emptyTestBody:
+        'The TEST home is active, but the canonical Kitchen room has not been seeded yet. Recheck the persisted TEST-home setup before validating the proof path.',
+      selectedHomeLabel: 'Selected home',
+      issuesLabel: 'Issues',
+      tasksLabel: 'Tasks',
+      historyLabel: 'History note',
+      viewIssues: 'View issues',
+      viewTasks: 'View tasks',
+      detailTitle: 'Room detail',
+      detailBody: 'A room should gather related issues, tasks, and history without turning into a broad portfolio surface.',
+      detailHistoryTitle: 'Why history matters here',
+    },
+    issues: {
+      title: 'Issues',
+      subtitle: 'Keep problems structured, scoped to a home and room, and ready to turn into task work.',
+      backToHome: 'Back to home',
+      create: 'Create issue',
+      submitCreate: 'Save issue',
+      submitUpdate: 'Add update',
+      previewPill: 'MVP slice',
+      previewBody:
+        'This is a focused issue lane for the MVP, now backed by the first persisted issue records. Supplier richness, recommendations, and automation stay out of the way.',
+      emptyTitle: 'No issues yet in this home',
+      emptyBody:
+        'Create the first issue when something in this home needs attention. Keep it structured so it can turn into task work and history.',
+      emptyFilteredBody:
+        'There are no issues in this filtered view yet. Clear the filter or create the first issue for this room.',
+      emptyTestBody:
+        'The TEST home is active, but the canonical faucet issue has not been seeded yet. Recheck the persisted TEST-home setup before validating the proof path.',
+      selectedHomeLabel: 'Selected home',
+      filteredByRoom: 'Filtered room',
+      allRooms: 'All rooms',
+      viewRoom: 'Open room',
+      viewTasks: 'Open tasks',
+      updatesTitle: 'Issue history',
+      updatesBody: 'Issue updates should capture what changed, not disappear into general chat traffic.',
+      tasksTitle: 'Tasks linked to this issue',
+      tasksBody: 'Tasks are how the issue moves forward and eventually resolves.',
+      detailBody: 'Issue detail should keep the problem, next step, and updates visible in one place.',
+      createTitle: 'Create issue',
+      createSubtitle: 'Keep capture narrow: home, room, issue summary, first update, then task follow-through.',
+      draftTitle: 'First capture seam',
+      draftBody:
+        'This route now creates real issue and issue_history records while staying intentionally lightweight for the MVP.',
+      fieldHome: 'Home context',
+      fieldRoom: 'Room',
+      roomOptionalNote: 'Optional. Leave this empty when the issue belongs to the home overall rather than one room.',
+      roomMissing:
+        'The selected room is no longer available in this home. Pick another room or keep the issue at the home level.',
+      fieldTitle: 'Issue title',
+      fieldSummary: 'Issue summary',
+      fieldNextStep: 'Next step',
+      fieldFirstUpdate: 'First update',
+      firstUpdateHint:
+        'Use the first update to capture what you saw, what changed, or what needs attention right now.',
+      fieldUpdateLabel: 'Update label',
+      labelOptionalHint:
+        'Optional. Leave this empty to use the default issue history label.',
+      fieldUpdateBody: 'Update note',
+      fieldStatus: 'Status',
+      currentStatusLabel: 'Current status',
+      statusIntentHint:
+        'Leave status unchanged to add a note only. Change it only when the issue actually moved.',
+      fieldAttachments: 'Attachments',
+      createNote:
+        'Keep this screen practical: enough structure for issues and issue_updates, without growing into a full service workflow.',
+      browseIssues: 'Back to issues',
+      appendTitle: 'Add issue update',
+      appendBody: 'Use one short update to capture what changed, and only change status when the issue really moved.',
+      titleRequired: 'Add a short title before saving the issue.',
+      firstUpdateRequired: 'Add the first issue update before saving.',
+      updateBodyRequired: 'Add a short update before saving history.',
+      createSuccess: 'Issue saved.',
+      updateSuccess: 'Issue update saved.',
+      updateSuccessStatus: 'Issue status updated.',
+      updateSuccessResolved: 'Issue resolved and history saved.',
+      createFailed: 'Unable to save this issue right now. Please try again.',
+      updateFailed: 'Unable to save this issue update right now. Please try again.',
+      statusInvalid: 'Choose a valid issue status or leave it unchanged.',
+      statusKeepCurrent: 'Keep current status',
+      statusOpen: 'Needs attention',
+      statusPlanned: 'Planned',
+      statusInReview: 'In review',
+      statusResolved: 'Resolved',
+      loggedLabel: 'Issue logged',
+      updateLabelDefault: 'Update added',
+      statusUpdatedLabel: 'Status updated',
+      resolvedLabel: 'Issue resolved',
+    },
+    tasks: {
+      title: 'Tasks',
+      subtitle: 'Use tasks to move an issue forward with clear ownership, progress notes, and completion history.',
+      backToHome: 'Back to home',
+      create: 'Create task',
+      submitCreate: 'Save task',
+      submitUpdate: 'Add update',
+      previewPill: 'MVP slice',
+      previewBody:
+        'The task lane stays intentionally narrow for the MVP and now reads from the first persisted task records: actionable work, linked issue context, and update history.',
+      emptyTitle: 'No tasks yet in this home',
+      emptyBody:
+        'Tasks appear here once issue work turns into specific next steps. Start from Issues or open Home to keep the loop moving.',
+      emptyFilteredBody:
+        'There are no tasks in this filtered view yet. Clear the filter or create the first task from the right issue.',
+      emptyTestBody:
+        'The TEST home is active, but the canonical linked task has not been seeded yet. Recheck the persisted TEST-home setup before validating the proof path.',
+      selectedHomeLabel: 'Selected home',
+      filteredByIssue: 'Filtered issue',
+      allIssues: 'All issues',
+      viewIssue: 'Open issue',
+      viewRoom: 'Open room',
+      updatesTitle: 'Task history',
+      updatesBody: 'Task updates should show progress, blockers, and completion without needing a heavier work-order model.',
+      detailBody: 'Task detail should keep the next step obvious and the update trail easy to scan on mobile.',
+      createTitle: 'Create task',
+      createSubtitle: 'Keep task creation tied to one issue, one next step, and one update trail.',
+      draftTitle: 'First task capture seam',
+      draftBody:
+        'This route now creates real task and task_history records while staying intentionally lightweight for the MVP.',
+      fieldHome: 'Home context',
+      fieldIssue: 'Parent issue',
+      issueLinkNote:
+        'Tasks stay linked through one issue in the MVP. Pick the issue first so the task history stays anchored to the right problem.',
+      issueMissing:
+        'The selected issue is no longer available in this home. Choose another issue before saving the task.',
+      fieldSummary: 'Task summary',
+      fieldNextStep: 'Next step',
+      fieldTask: 'Task title',
+      fieldFirstUpdate: 'First update',
+      firstUpdateHint:
+        'Use the first update to capture the next move, blocker, or handoff that makes this task real.',
+      fieldUpdateLabel: 'Update label',
+      labelOptionalHint:
+        'Optional. Leave this empty to use the default task history label.',
+      fieldUpdateBody: 'Update note',
+      fieldStatus: 'Status',
+      currentStatusLabel: 'Current status',
+      statusIntentHint:
+        'Leave status unchanged to add a progress note only. Change it only when the task actually moved.',
+      fieldAttachments: 'Attachments',
+      createNote:
+        'The MVP task surface should stay smaller than procurement, supplier assignment, or deep automation flows.',
+      browseTasks: 'Back to tasks',
+      appendTitle: 'Add task update',
+      appendBody: 'Use short task updates to capture progress, blockers, or completion without turning this into a heavier workflow engine.',
+      issueRequired: 'Choose an issue before saving the task.',
+      titleRequired: 'Add a short task title before saving.',
+      firstUpdateRequired: 'Add the first task update before saving.',
+      updateBodyRequired: 'Add a short task update before saving history.',
+      createSuccess: 'Task saved.',
+      updateSuccess: 'Task update saved.',
+      updateSuccessStatus: 'Task status updated.',
+      updateSuccessCompleted: 'Task completed and history saved.',
+      createFailed: 'Unable to save this task right now. Please try again.',
+      updateFailed: 'Unable to save this task update right now. Please try again.',
+      statusInvalid: 'Choose a valid task status or leave it unchanged.',
+      statusKeepCurrent: 'Keep current status',
+      statusPlanned: 'Planned',
+      statusActive: 'Active',
+      statusWaiting: 'Waiting',
+      statusDone: 'Done',
+      statusCancelled: 'Cancelled',
+      createdLabel: 'Task created',
+      updateLabelDefault: 'Update added',
+      statusUpdatedLabel: 'Status updated',
+      completedLabel: 'Task completed',
+      createIssueFirstBody:
+        'Tasks stay linked through issues in the MVP. Create or open an issue first, then come back here.',
+    },
     activity: {
-      title: 'Activity',
-      subtitle: 'Notifications, unread chats, and recent updates in one place.',
-      overviewTitle: 'Overview',
-      overviewBody: 'A quick read on what needs attention right now.',
+      title: 'History',
+      subtitle: 'A home-level place for updates, follow-through, and the secondary messaging lane.',
+      overviewTitle: 'History first',
+      overviewBody: 'Use this space for issue and task updates first, with chat activity supporting the loop instead of defining it.',
+      operationsEmptyTitle: 'No operational history yet',
+      operationsEmptyBody:
+        'This home does not have issue or task updates yet. Open Issues or Tasks to start leaving a real operational trail.',
       unreadChats: 'Unread chats',
       unreadDms: 'Unread DMs',
       archivedChats: 'Archived chats',
       openChats: 'Open chats',
       openArchived: 'Archived',
-      unreadSectionTitle: 'Unread now',
-      unreadSectionBody: 'Conversations that still need your attention.',
-      recentTitle: 'Recent activity',
-      recentBody: 'Latest message updates across your chats.',
+      unreadSectionTitle: 'Messaging lane',
+      unreadSectionBody: 'Optional communication follow-up while issue and task history becomes the main record.',
+      recentTitle: 'Recent message activity',
+      recentBody: 'Latest chat traffic stays here as a secondary layer around the work.',
       recentEmptyTitle: 'No recent messages yet',
-      recentEmptyBody: 'New message activity will appear here once chats pick up.',
+      recentEmptyBody: 'Message activity will appear here when the communication lane is active.',
       alertsTitle: 'Alerts',
       alertsBody: 'Notification readiness and device-level messaging alerts.',
-      digestTitle: 'Summaries later',
-      digestBody: 'This space is reserved for smart recaps and digests when they are ready.',
-      quietTitle: 'All quiet',
-      quietBody: 'Nothing unread right now.',
+      digestTitle: 'Future layers later',
+      digestBody: 'Recommendations, intelligence, and automation can land later without changing the first loop.',
+      quietTitle: 'History is quiet',
+      quietBody: 'Nothing in the secondary messaging lane needs attention right now.',
+      openTasks: 'Open tasks',
+      openTask: 'Open task',
+      openHome: 'Open home',
+      operationsTitle: 'Operational history',
+      operationsBody: 'The first MVP history surface should revolve around these layers.',
+      operationsIssues: 'Issue updates',
+      operationsTasks: 'Task updates',
+      operationsResolutions: 'Resolution notes',
+      messagingTitle: 'Messaging stays secondary',
+      messagingBody: 'Chat remains useful for coordination, but it should not define the main KeepCozy workflow.',
+      recentMessagingTitle: 'Recent message traffic',
+      recentMessagingBody: 'Use this lane when conversation context matters around the work.',
+      testFlowTitle: 'Primary test flow history',
+      testFlowBody:
+        'This list is the first end-to-end MVP proof path: one room, one issue, one linked task, and the updates that move the work forward.',
+      testFlowPendingBody:
+        'The TEST home is active, but the canonical persisted room, issue, task, and history path has not been seeded yet.',
+      testFlowMismatchBody:
+        'Open the seeded TEST home first so the canonical MVP proof path and history stay aligned.',
     },
     inboxSettings: {
       title: 'Chats settings',
@@ -651,24 +1356,37 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       checkingBadge: 'Checking',
       unsupportedBody: 'Not available here right now.',
       unsupportedBadge: 'Unsupported',
+      unconfiguredBody: 'Push subscriptions are not configured for this build yet.',
+      unconfiguredBadge: 'Needs setup',
       blockedBody: 'Turned off in your browser settings.',
       blockedBadge: 'Off',
-      enabledBody: 'On for this device.',
+      enabledBody: 'Connected for this device.',
       enabledBadge: 'On',
       availableBody: 'Available for this device.',
       availableBadge: 'Available',
+      permissionReadyBody: 'Permission is on. Connect this device to finish setup.',
       unavailable: 'Unavailable',
       available: 'Available',
+      setupNeeded: 'Needs setup',
       on: 'On',
       off: 'Off',
       checking: 'Checking',
       status: 'Status',
       permission: 'Permission',
+      device: 'This device',
+      connected: 'Connected',
+      notConnected: 'Not connected',
       turnOn: 'Turn on notifications',
       turningOn: 'Turning on…',
+      connectDevice: 'Connect this device',
+      connectingDevice: 'Connecting…',
       browserSettingsNote: 'You can change this later in browser settings.',
-      comingSoonNote: 'Message alerts are coming soon.',
-      availableNote: 'You can turn this on now. Message alerts are coming soon.',
+      comingSoonNote: 'This browser is connected for the first chat push delivery slice.',
+      availableNote: 'You can turn this on now for this browser.',
+      permissionReadyNote: 'Permission is already on. Connect this browser to save a real push subscription.',
+      notConfiguredNote:
+        'Add NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY and apply the push-subscriptions SQL before enabling this here.',
+      syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
     },
     inbox: {
       title: 'Chats',
@@ -705,6 +1423,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Archived chats are only hidden from your inbox. They still keep their messages and can return anytime.',
       emptyMainTitle: 'No chats here',
       emptyMainBody: 'Start one from the + button.',
+      messengerFreshTitle: 'This messenger space starts clean',
+      messengerFreshBody:
+        'Start the first direct message or group here. This space begins with no copied history from TEST or any other workspace.',
+      messengerFreshAdminBody:
+        'Add members to this space first, then start the first direct message or group here. Nothing is copied in automatically from TEST or any other workspace.',
+      messengerFreshMemberBody:
+        'This space has no other visible members yet. Ask a space admin to add people here before starting the first chat.',
       emptyArchivedTitle: 'No archived chats',
       emptyArchivedBody: 'Chats you hide from your inbox will appear here.',
       emptySearchTitle: 'No matching chats',
@@ -738,6 +1463,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         searchAria: 'Search people',
         searchPlaceholder: 'Search people',
         noUsers: 'No other registered users are available yet.',
+        noUsersAdmin:
+          'No other members are available in this space yet. Add people to this space first, then come back to start chats.',
         existingDmOnly: 'Everyone here already has a direct chat with you.',
         noMatches: 'No matching people yet.',
         selected: 'Selected',
@@ -857,6 +1584,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessageLoading: 'Loading voice message',
       voiceMessageUploading: 'Uploading voice message',
       voiceMessageProcessing: 'Preparing voice message',
+      voiceMessageRecovering: 'Recovering voice message',
       voiceMessageFailed: 'Voice message is not available right now.',
       voiceMessageUnavailable: 'Voice message is unavailable on this device.',
       encryptedMessage: 'Encrypted message',
@@ -868,6 +1596,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       file: 'File',
       unavailableRightNow: 'Unavailable right now',
       justNow: 'Just now',
+      messageQueued: 'Queued on this device',
       sending: 'Sending…',
       sendFailed: 'Failed to send',
       edited: 'Edited',
@@ -909,6 +1638,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceRecorderPermissionDenied: 'Microphone access is blocked.',
       voiceRecorderUnavailable: 'Voice recording is not available here.',
       voiceRecorderFailed: 'Could not finish the recording.',
+      voiceRecorderPreparingHint: 'Waiting for microphone access.',
+      voiceRecorderRecordingHint: 'Tap Stop when you are ready to review it.',
+      voiceRecorderRecoveredDraftHint:
+        'Recovered after refresh. Send it now or discard it.',
+      voiceRecorderPermissionHint: 'Allow microphone access, then try again.',
+      voiceRecorderUnavailableHint: 'Use text or a file on this device instead.',
+      voiceRecorderRetryHint:
+        'Try again. If it keeps failing, start a fresh recording.',
+      voiceMessagePendingHint: 'Keep this chat open while the audio finishes syncing.',
+      voiceMessageRetryHint: 'Tap again if the audio still does not load.',
       mentionSuggestions: 'Mention suggestions',
       clearAttachment: 'Clear',
       attachmentSizeError: (maxSizeLabel) =>
@@ -959,13 +1698,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Язык',
     },
     publicHome: {
-      title: 'Начните разговор',
+      eyebrow: 'Build With Care',
+      title: 'BWC Products',
       subtitle:
-        'Спокойное пространство для личных и групповых чатов, для людей с уже созданным доступом.',
-      openChats: 'Открыть чаты',
+        'Общий вход для пространств и продуктовых поверхностей, к которым у вас уже есть доступ.',
+      openChats: 'Продолжить',
       openSettings: 'Открыть профиль',
       logIn: 'Войти',
-      watermark: 'Chat by Build With Care',
+      watermark: 'Общий вход для ваших пространств',
       authActionsAria: 'Основные действия',
       guestActionsAria: 'Начало работы',
     },
@@ -982,24 +1722,111 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     shell: {
       label: 'Основная навигация',
+      contextLabel: 'Общая оболочка пространства',
+      loadingTitle: 'Открываем это пространство',
+      loadingBody:
+        'Подготавливаем текущее пространство, главные разделы и следующее место, где можно продолжить.',
+      errorTitle: 'Не удалось открыть этот вид пространства',
+      errorBody:
+        'Сначала попробуйте снова. Если ошибка повторится, вернитесь на главную или выберите другое пространство, прежде чем снова открывать этот раздел.',
+      errorProofPathBody:
+        'Если это продолжает происходить в одном тестовом пространстве, откройте это пространство снова через список пространств перед повторной попыткой.',
+      retry: 'Попробовать снова',
       home: 'Главная',
+      rooms: 'Комнаты',
+      issues: 'Проблемы',
+      tasks: 'Задачи',
       chats: 'Чаты',
-      activity: 'Активность',
+      spaces: 'Пространства',
+      settings: 'Настройки',
+      activity: 'История',
+      messengerActivity: 'Активность',
+      activeHomeLabel: 'Активное пространство',
+      currentSectionLabel: 'Текущий раздел',
+      homeScopeBody: 'Все верхнеуровневые разделы остаются внутри этого дома, пока вы не смените контекст.',
+      homeSectionBody: 'Начинайте здесь, чтобы открыть полный рабочий цикл этого дома.',
+      roomsSectionBody: 'Используйте комнаты как основу для проблем и задач, которые живут внутри этого дома.',
+      issuesSectionBody: 'Отслеживайте структурированные проблемы этого дома и переводите их в задачи.',
+      tasksSectionBody: 'Следите за работой, связанной с проблемами этого дома, и держите следующий шаг на виду.',
+      activitySectionBody: 'Просматривайте операционную историю и обновления, собранные по всему дому.',
       openHome: 'Открыть главную',
+      openRooms: 'Открыть комнаты',
+      openIssues: 'Открыть проблемы',
+      openTasks: 'Открыть задачи',
       openChats: 'Открыть чаты',
-      openActivity: 'Открыть активность',
+      openSpaces: 'Открыть пространства',
+      openSettings: 'Открыть настройки',
+      openActivity: 'Открыть историю',
+      openMessengerActivity: 'Открыть активность',
     },
     spaces: {
       title: 'Выберите пространство',
-      subtitle: 'Сначала откройте нужный проектный или командный контекст.',
-      backToChats: 'Назад к чатам',
+      subtitle: 'Сначала откройте нужное пространство.',
+      backToChats: 'Назад к рабочему пространству',
+      backToSpaces: 'Назад к пространствам',
       currentSpace: 'Текущее пространство',
       openSpace: 'Открыть пространство',
-      currentActivityNote: 'Текущая переписка пока доступна здесь.',
+      currentActivityNote:
+        'Отсюда открывается правильное рабочее пространство для этого пространства.',
       emptyTitle: 'Пока нет пространств',
       emptyBody: 'Попросите оператора добавить вас в пространство.',
       unavailableTitle: 'Пространства временно недоступны',
-      unavailableBody: 'Попробуйте снова чуть позже, пока доступ к пространствам обновляется.',
+      unavailableBody:
+        'Попробуйте снова чуть позже, пока доступ к пространствам обновляется.',
+      globalAdminEyebrow: 'Глобальный админ',
+      createSpaceTitle: 'Создать новое пространство',
+      createSpaceBody:
+        'Это действие доступно только супер-админам и создает новое управляемое пространство с первыми участниками и администраторами.',
+      createSpaceAction: 'Создать пространство',
+      createSpaceRouteTitle: 'Создать пространство',
+      createSpaceRouteSubtitle:
+        'Создайте новое пространство, выберите его основной режим и задайте первый управляемый состав участников.',
+      createSpaceRouteBody:
+        'Этот поток зарезервирован для супер-админов. Новое пространство создается с чистого листа: без истории и без копирования участников из TEST, если вы не укажете их явно.',
+      fieldSpaceName: 'Название пространства',
+      fieldSpaceProfile: 'Основной режим',
+      fieldParticipantIdentifiers: 'Первые участники',
+      fieldAdminIdentifiers: 'Первые админы пространства',
+      profileMessengerFull: 'Мессенджер-пространство',
+      profileKeepCozyOps: 'KeepCozy ops-пространство',
+      profileHint:
+        'Мессенджер-пространства открываются с чатов. Пространства KeepCozy открываются с дома, когда включено сохранение профиля пространства.',
+      participantIdentifiersHint:
+        'Введите по одному email или user ID на строку. Оставьте поле пустым, если хотите начать только с указанных админов. Ничего не копируется из TEST.',
+      adminIdentifiersHint:
+        'Введите по одному email или user ID на строку. Администраторы автоматически добавляются и как участники, а первый из них становится owner.',
+      includeYourselfHint:
+        'Добавьте себя в список участников или админов, если вам нужно сразу открыть новое пространство.',
+      submitCreateSpace: 'Создать управляемое пространство',
+      nameRequired: 'Нужно указать название пространства.',
+      testSpaceReservedName:
+        'TEST зарезервирован за существующей KeepCozy-песочницей. Для нового мессенджер-пространства используйте другое название.',
+      adminIdentifiersRequired:
+        'Нужно указать хотя бы одного первого администратора пространства.',
+      createSpaceFailed: 'Сейчас не удалось создать пространство.',
+      createSpaceSuccess: 'Пространство создано. Откройте его из списка ниже.',
+      createSpaceSuccessNoAccess:
+        'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника.',
+      createSpaceSuccessProfileDeferred:
+        'Пространство создано. Здесь ещё не включено сохранение профиля пространства, поэтому пока оно будет открываться в стандартной оболочке, пока не будет применена миграция профиля пространства.',
+      createSpaceSuccessNoAccessProfileDeferred:
+        'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника, а выбранный режим останется на стандартной оболочке, пока не будет применена миграция профиля пространства.',
+      spaceAdminEyebrow: 'Админ пространства',
+      manageMembersTitle: 'Управлять участниками текущего пространства',
+      manageMembersBody:
+        'Добавляйте тестировщиков только в это пространство по точному email или user ID и повышайте выбранных людей до админов пространства без широкого браузера людей.',
+      manageMembersAction: 'Управлять участниками',
+      manageMembersRouteTitle: 'Управлять участниками',
+      manageMembersRouteSubtitle:
+        'Добавляйте тестировщиков в это пространство только по явному email или user ID.',
+      manageMembersRouteBody:
+        'Эта страница меняет состав только для текущего пространства. Она не просматривает и не раскрывает людей из других пространств.',
+      membersOrAdminsRequired:
+        'Добавьте хотя бы одного участника или админа, чтобы продолжить.',
+      manageMembersFailed:
+        'Сейчас не удалось обновить участников пространства.',
+      manageMembersSuccess:
+        'Состав участников этого пространства обновлен.',
     },
     settings: {
       backToChats: 'Назад к чатам',
@@ -1054,7 +1881,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       statusTextTooLong: 'Текст статуса может быть до 80 символов.',
       statusUpdateFailed: 'Сейчас не удалось обновить статус.',
       spaceTitle: 'Пространство',
-      spaceSubtitle: 'По умолчанию чаты открываются в текущем пространстве. Меняйте пространство только когда хотите сменить контекст.',
+      spaceSubtitle:
+        'Текущая активность по умолчанию открывается в этом пространстве. Меняйте пространство только когда хотите сменить контекст.',
       currentSpaceLabel: 'Текущее пространство',
       noSpaceSelected: 'Пространство пока не выбрано',
       chooseAnotherSpace: 'Выбрать другое пространство',
@@ -1064,28 +1892,340 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileUpdated: 'Профиль обновлён.',
       languageUpdated: 'Язык обновлён.',
     },
+    messengerHome: {
+      eyebrow: 'Пространство мессенджера',
+      subtitle:
+        'Используйте это пространство прежде всего для чатов, а затем проверяйте недавнюю активность, не выходя из текущего контекста.',
+      overviewTitle: 'Начать общение',
+      overviewBody:
+        'Быстро открывайте чаты, начинайте личный диалог или создавайте группу, не превращая Home в ещё одну ленту активности.',
+      adminTitle: 'Пространство и сессия',
+      adminBody:
+        'Держите переключение пространства и выход рядом только тогда, когда вы управляете этим пространством или администрируете несколько пространств.',
+      activeChatsTitle: 'Активные чаты',
+      activeChatsBody: 'Текущие разговоры, которые относятся к этому пространству.',
+      unreadChatsBody: 'Чаты в этом пространстве, которые ещё требуют внимания.',
+      archivedChatsBody: 'Скрытые чаты остаются доступными, не покидая пространство.',
+      recentTitle: 'Продолжить чаты',
+      recentBody:
+        'Быстро возвращайтесь в разговоры, которые уже движутся внутри этого пространства.',
+      profileTitle: 'Профиль и пространство',
+      profileBody:
+        'Держите профиль и переключение пространства рядом, не превращая их в главный слой оболочки.',
+      unreadBadgeLabel: 'Непрочитано',
+      groupBadgeLabel: 'Группа',
+      openProfileAction: 'Открыть профиль',
+      recentEmptyBody: 'Откройте Чаты, чтобы начать следующий разговор в этом пространстве.',
+      emptyTitle: 'Это пространство мессенджера начинается с нуля',
+      emptyBody:
+        'Откройте Чаты, чтобы начать здесь первый разговор. История и участники не копируются автоматически из TEST или любого другого пространства.',
+    },
+    messengerActivity: {
+      subtitle:
+        'Следите за непрочитанными чатами и недавним движением сообщений в этом пространстве.',
+      overviewTitle: 'Активность сообщений',
+      overviewBody:
+        'Используйте этот экран, чтобы разбирать непрочитанные чаты, быстро просматривать недавнее движение и возвращаться к архивным разговорам, когда это снова важно.',
+      unreadSectionTitle: 'Непрочитанные чаты',
+      unreadSectionBody:
+        'Разговоры в этом пространстве, которым прежде всего нужно внимание.',
+      recentSectionTitle: 'Недавние чаты',
+      recentSectionBody:
+        'Последнее движение разговоров по этому пространству, сначала самые новые.',
+      quietTitle: 'Сейчас ничего не требует внимания',
+      quietBody:
+        'Непрочитанные разговоры появятся здесь, когда в этом пространстве понадобится ответ.',
+      recentEmptyTitle: 'Пока нет недавней активности в чатах',
+      recentEmptyBody:
+        'Недавняя активность разговоров появится здесь после того, как это пространство начнёт использоваться.',
+    },
+    homeDashboard: {
+      eyebrow: 'Главная дома',
+      subtitle:
+        'Держите первый MVP-цикл в одном доме, а затем двигайтесь через комнаты, проблемы, задачи и историю.',
+      previewPill: 'MVP-срез',
+      previewBody:
+        'Эта главная намеренно держит в центре первый persisted runtime-срез KeepCozy. Более широкие home-ops слои пока остаются вторичными.',
+      currentHomeLabel: 'Текущий дом',
+      switchHome: 'Выбрать другой дом',
+      loopTitle: 'Первый доказанный цикл',
+      loopBody:
+        'Используйте этот дом как стартовую точку для комнатных проблем, задач и истории обновлений.',
+      roomsTitle: 'Комнаты',
+      roomsBody:
+        'Привязывайте работу к реальной комнате, прежде чем она расплывется в общую активность.',
+      issuesTitle: 'Проблемы',
+      issuesBody:
+        'Фиксируйте проблему как структурированную запись, а не как просто разговор.',
+      tasksTitle: 'Задачи',
+      tasksBody:
+        'Разбивайте проблему на работу, которая может двигаться и оставлять чистую историю.',
+      historyTitle: 'История',
+      historyBody:
+        'Держите обновления и решение на виду, не делая чат главным рабочим потоком.',
+      openRooms: 'Открыть комнаты',
+      openIssues: 'Открыть проблемы',
+      openTasks: 'Открыть задачи',
+      openHistory: 'Открыть историю',
+      supportTitle: 'Поддерживающие поверхности',
+      supportBody:
+        'Профиль и чат остаются доступными, но больше не определяют основной путь продукта.',
+      secondaryChatsTitle: 'Чаты',
+      secondaryChatsBody: 'Дополнительный канал координации вокруг работы.',
+      secondarySettingsTitle: 'Профиль',
+      secondarySettingsBody: 'Язык, аккаунт и смена дома по-прежнему живут здесь.',
+      testFlowTitle: 'Основной тестовый путь',
+      testFlowBody:
+        'Используйте одну показательную проблему на кухне, чтобы проверить полный MVP-путь: дом -> комната -> проблема -> задача -> история.',
+      testFlowPendingBody:
+        'Дом TEST активен, но канонический persisted-путь комната -> проблема -> задача -> история еще не засеян.',
+      testFlowMismatchBody:
+        'В этой ветке канонический MVP-путь проверяется через seeded-дом TEST. Переключите дом перед проверкой сценария.',
+      openChats: 'Открыть чаты',
+      openSettings: 'Открыть профиль',
+    },
+    rooms: {
+      title: 'Комнаты',
+      subtitle:
+        'Комнаты должны быть местом, где проблемы и история задач начинают складываться в понятную картину.',
+      backToHome: 'Назад к дому',
+      previewPill: 'MVP-срез',
+      previewBody:
+        'Эти карточки комнат теперь читаются из первого persistence-среза KeepCozy и намеренно остаются узкими вокруг проблем, задач и истории.',
+      emptyTitle: 'В этом доме пока нет комнат',
+      emptyBody:
+        'Комнаты появятся здесь, как только у этого дома появятся записи комнат. Начните с главной или переходите в проблемы, если работа уже зафиксирована.',
+      emptyTestBody:
+        'Дом TEST активен, но каноническая комната Kitchen еще не засеяна. Проверьте persisted-настройку TEST-дома перед валидацией сценария.',
+      selectedHomeLabel: 'Выбранный дом',
+      issuesLabel: 'Проблемы',
+      tasksLabel: 'Задачи',
+      historyLabel: 'Заметка по истории',
+      viewIssues: 'Открыть проблемы',
+      viewTasks: 'Открыть задачи',
+      detailTitle: 'Детали комнаты',
+      detailBody:
+        'Комната должна собирать связанные проблемы, задачи и историю, не превращаясь в широкую портфельную поверхность.',
+      detailHistoryTitle: 'Почему здесь важна история',
+    },
+    issues: {
+      title: 'Проблемы',
+      subtitle:
+        'Держите проблемы структурированными, привязанными к дому и комнате, и готовыми перейти в задачи.',
+      backToHome: 'Назад к дому',
+      create: 'Создать проблему',
+      submitCreate: 'Сохранить проблему',
+      submitUpdate: 'Добавить обновление',
+      previewPill: 'MVP-срез',
+      previewBody:
+        'Это сфокусированная линия проблем для MVP, теперь опирающаяся на первый persisted-срез проблем. Богатые поставщики, рекомендации и автоматизация пока не мешают.',
+      emptyTitle: 'В этом доме пока нет проблем',
+      emptyBody:
+        'Создайте первую проблему, когда в этом доме что-то требует внимания. Держите запись структурированной, чтобы из нее могла вырасти задача и история.',
+      emptyFilteredBody:
+        'В этом фильтре пока нет проблем. Сбросьте фильтр или создайте первую проблему для этой комнаты.',
+      emptyTestBody:
+        'Дом TEST активен, но каноническая проблема с краном еще не засеяна. Проверьте persisted-настройку TEST-дома перед валидацией сценария.',
+      selectedHomeLabel: 'Выбранный дом',
+      filteredByRoom: 'Фильтр по комнате',
+      allRooms: 'Все комнаты',
+      viewRoom: 'Открыть комнату',
+      viewTasks: 'Открыть задачи',
+      updatesTitle: 'История проблемы',
+      updatesBody:
+        'Обновления проблемы должны фиксировать изменения, а не теряться в общем чате.',
+      tasksTitle: 'Задачи по этой проблеме',
+      tasksBody: 'Именно задачи двигают проблему вперед и доводят ее до решения.',
+      detailBody:
+        'В деталях проблемы должны быть вместе сама проблема, следующий шаг и история обновлений.',
+      createTitle: 'Создать проблему',
+      createSubtitle:
+        'Держите ввод узким: дом, комната, краткое описание проблемы, первое обновление, затем задачи.',
+      draftTitle: 'Первый seam для ввода',
+      draftBody:
+        'Этот маршрут теперь создает реальные записи issue и issue_history, оставаясь намеренно легким для MVP.',
+      fieldHome: 'Контекст дома',
+      fieldRoom: 'Комната',
+      roomOptionalNote:
+        'Необязательно. Оставьте пустым, если проблема относится ко всему дому, а не к одной комнате.',
+      roomMissing:
+        'Выбранная комната больше недоступна в этом доме. Выберите другую комнату или оставьте проблему на уровне дома.',
+      fieldTitle: 'Название проблемы',
+      fieldSummary: 'Краткое описание проблемы',
+      fieldNextStep: 'Следующий шаг',
+      fieldFirstUpdate: 'Первое обновление',
+      firstUpdateHint:
+        'Используйте первое обновление, чтобы зафиксировать, что вы увидели, что изменилось или что сейчас требует внимания.',
+      fieldUpdateLabel: 'Заголовок обновления',
+      labelOptionalHint:
+        'Необязательно. Оставьте пустым, чтобы использовать стандартный заголовок истории проблемы.',
+      fieldUpdateBody: 'Текст обновления',
+      fieldStatus: 'Статус',
+      currentStatusLabel: 'Текущий статус',
+      statusIntentHint:
+        'Оставьте статус без изменений, если хотите добавить только заметку. Меняйте его только когда проблема действительно сдвинулась.',
+      fieldAttachments: 'Вложения',
+      createNote:
+        'Экран должен оставаться практичным: достаточно структуры для issues и issue_updates, без разрастания в полный сервисный workflow.',
+      browseIssues: 'Назад к проблемам',
+      appendTitle: 'Добавить обновление проблемы',
+      appendBody:
+        'Используйте одно короткое обновление, чтобы зафиксировать изменение, и меняйте статус только когда проблема действительно сдвинулась.',
+      titleRequired: 'Добавьте короткое название перед сохранением проблемы.',
+      firstUpdateRequired: 'Добавьте первое обновление перед сохранением проблемы.',
+      updateBodyRequired: 'Добавьте короткое обновление перед сохранением истории.',
+      createSuccess: 'Проблема сохранена.',
+      updateSuccess: 'Обновление проблемы сохранено.',
+      updateSuccessStatus: 'Статус проблемы обновлен.',
+      updateSuccessResolved: 'Проблема решена, история сохранена.',
+      createFailed: 'Не удалось сохранить проблему. Попробуйте еще раз.',
+      updateFailed: 'Не удалось сохранить обновление проблемы. Попробуйте еще раз.',
+      statusInvalid: 'Выберите корректный статус проблемы или оставьте текущий.',
+      statusKeepCurrent: 'Оставить текущий статус',
+      statusOpen: 'Требует внимания',
+      statusPlanned: 'Запланировано',
+      statusInReview: 'На разборе',
+      statusResolved: 'Решено',
+      loggedLabel: 'Проблема зафиксирована',
+      updateLabelDefault: 'Обновление добавлено',
+      statusUpdatedLabel: 'Статус обновлен',
+      resolvedLabel: 'Проблема решена',
+    },
+    tasks: {
+      title: 'Задачи',
+      subtitle:
+        'Используйте задачи, чтобы двигать проблему вперед с понятной ответственностью, заметками о прогрессе и историей завершения.',
+      backToHome: 'Назад к дому',
+      create: 'Создать задачу',
+      submitCreate: 'Сохранить задачу',
+      submitUpdate: 'Добавить обновление',
+      previewPill: 'MVP-срез',
+      previewBody:
+        'Линия задач в MVP намеренно узкая и теперь читается из первого persisted-среза задач: конкретная работа, связанная проблема и история обновлений.',
+      emptyTitle: 'В этом доме пока нет задач',
+      emptyBody:
+        'Задачи появятся здесь, когда работа по проблемам превратится в конкретные следующие шаги. Начните с проблем или откройте главную, чтобы удержать цикл.',
+      emptyFilteredBody:
+        'В этом фильтре пока нет задач. Сбросьте фильтр или создайте первую задачу из нужной проблемы.',
+      emptyTestBody:
+        'Дом TEST активен, но каноническая связанная задача еще не засеяна. Проверьте persisted-настройку TEST-дома перед валидацией сценария.',
+      selectedHomeLabel: 'Выбранный дом',
+      filteredByIssue: 'Фильтр по проблеме',
+      allIssues: 'Все проблемы',
+      viewIssue: 'Открыть проблему',
+      viewRoom: 'Открыть комнату',
+      updatesTitle: 'История задачи',
+      updatesBody:
+        'Обновления задачи должны показывать прогресс, блокеры и завершение без тяжелой модели work order.',
+      detailBody:
+        'В деталях задачи следующий шаг должен быть очевиден, а цепочка обновлений легко читаться с телефона.',
+      createTitle: 'Создать задачу',
+      createSubtitle:
+        'Держите создание задачи привязанным к одной проблеме, одному следующему шагу и одной истории обновлений.',
+      draftTitle: 'Первый seam для задачи',
+      draftBody:
+        'Этот маршрут теперь создает реальные записи task и task_history, оставаясь намеренно легким для MVP.',
+      fieldHome: 'Контекст дома',
+      fieldIssue: 'Родительская проблема',
+      issueLinkNote:
+        'В MVP задачи всегда остаются привязанными к одной проблеме. Сначала выберите проблему, чтобы история задачи оставалась связанной с нужной проблемой.',
+      issueMissing:
+        'Выбранная проблема больше недоступна в этом доме. Выберите другую проблему перед сохранением задачи.',
+      fieldSummary: 'Краткое описание задачи',
+      fieldNextStep: 'Следующий шаг',
+      fieldTask: 'Название задачи',
+      fieldFirstUpdate: 'Первое обновление',
+      firstUpdateHint:
+        'Используйте первое обновление, чтобы зафиксировать следующий шаг, блокер или передачу работы, которая делает задачу реальной.',
+      fieldUpdateLabel: 'Заголовок обновления',
+      labelOptionalHint:
+        'Необязательно. Оставьте пустым, чтобы использовать стандартный заголовок истории задачи.',
+      fieldUpdateBody: 'Текст обновления',
+      fieldStatus: 'Статус',
+      currentStatusLabel: 'Текущий статус',
+      statusIntentHint:
+        'Оставьте статус без изменений, если хотите добавить только заметку о прогрессе. Меняйте его только когда задача действительно сдвинулась.',
+      fieldAttachments: 'Вложения',
+      createNote:
+        'Поверхность задачи в MVP должна быть меньше, чем закупки, назначение подрядчиков или глубокая автоматизация.',
+      browseTasks: 'Назад к задачам',
+      appendTitle: 'Добавить обновление задачи',
+      appendBody:
+        'Используйте короткие обновления задачи, чтобы фиксировать прогресс, блокеры или завершение, не превращая все в тяжелый workflow engine.',
+      issueRequired: 'Выберите проблему перед сохранением задачи.',
+      titleRequired: 'Добавьте короткое название задачи перед сохранением.',
+      firstUpdateRequired: 'Добавьте первое обновление задачи перед сохранением.',
+      updateBodyRequired: 'Добавьте короткое обновление задачи перед сохранением истории.',
+      createSuccess: 'Задача сохранена.',
+      updateSuccess: 'Обновление задачи сохранено.',
+      updateSuccessStatus: 'Статус задачи обновлен.',
+      updateSuccessCompleted: 'Задача завершена, история сохранена.',
+      createFailed: 'Не удалось сохранить задачу. Попробуйте еще раз.',
+      updateFailed: 'Не удалось сохранить обновление задачи. Попробуйте еще раз.',
+      statusInvalid: 'Выберите корректный статус задачи или оставьте текущий.',
+      statusKeepCurrent: 'Оставить текущий статус',
+      statusPlanned: 'Запланирована',
+      statusActive: 'Активна',
+      statusWaiting: 'Ожидание',
+      statusDone: 'Завершена',
+      statusCancelled: 'Отменена',
+      createdLabel: 'Задача создана',
+      updateLabelDefault: 'Обновление добавлено',
+      statusUpdatedLabel: 'Статус обновлен',
+      completedLabel: 'Задача завершена',
+      createIssueFirstBody:
+        'В MVP задачи остаются привязанными к проблемам. Сначала создайте или откройте проблему, затем вернитесь сюда.',
+    },
     activity: {
-      title: 'Активность',
-      subtitle: 'Уведомления, непрочитанные чаты и недавние обновления в одном месте.',
-      overviewTitle: 'Обзор',
-      overviewBody: 'Быстрый срез того, что сейчас требует внимания.',
+      title: 'История',
+      subtitle:
+        'Поверхность уровня дома для обновлений, движения работы и вторичного коммуникационного слоя.',
+      overviewTitle: 'Сначала история',
+      overviewBody:
+        'Используйте это место прежде всего для обновлений по проблемам и задачам. Чат должен поддерживать цикл, а не определять его.',
+      operationsEmptyTitle: 'Операционной истории пока нет',
+      operationsEmptyBody:
+        'У этого дома еще нет обновлений по проблемам или задачам. Откройте проблемы или задачи, чтобы начать оставлять реальный операционный след.',
       unreadChats: 'Непрочитанные чаты',
       unreadDms: 'Непрочитанные личные',
       archivedChats: 'Архивные чаты',
       openChats: 'Открыть чаты',
       openArchived: 'Архив',
-      unreadSectionTitle: 'Нужно прочитать',
-      unreadSectionBody: 'Чаты, которые все еще ждут вашего внимания.',
-      recentTitle: 'Недавно',
-      recentBody: 'Последние обновления сообщений в ваших чатах.',
+      unreadSectionTitle: 'Коммуникационный слой',
+      unreadSectionBody:
+        'Дополнительные разговоры, пока история проблем и задач становится основным источником правды.',
+      recentTitle: 'Недавняя активность сообщений',
+      recentBody: 'Последний чат-трафик остается здесь как вторичный слой вокруг работы.',
       recentEmptyTitle: 'Пока нет недавних сообщений',
-      recentEmptyBody: 'Новая активность появится здесь, когда чаты оживут.',
+      recentEmptyBody: 'Когда коммуникационный слой оживет, сообщения появятся здесь.',
       alertsTitle: 'Оповещения',
       alertsBody: 'Готовность уведомлений и сигналы сообщений на этом устройстве.',
-      digestTitle: 'Сводки позже',
-      digestBody: 'Это место зарезервировано под умные сводки и дайджесты, когда они будут готовы.',
-      quietTitle: 'Пока тихо',
-      quietBody: 'Сейчас нет непрочитанного.',
+      digestTitle: 'Будущие слои позже',
+      digestBody:
+        'Рекомендации, интеллект и автоматизация могут появиться позже, не меняя первый цикл.',
+      quietTitle: 'История спокойна',
+      quietBody: 'Во вторичном коммуникационном слое сейчас ничего не требует внимания.',
+      openTasks: 'Открыть задачи',
+      openTask: 'Открыть задачу',
+      openHome: 'Открыть дом',
+      operationsTitle: 'Операционная история',
+      operationsBody: 'Первая MVP-поверхность истории должна крутиться вокруг этих слоев.',
+      operationsIssues: 'Обновления проблем',
+      operationsTasks: 'Обновления задач',
+      operationsResolutions: 'Заметки о решении',
+      messagingTitle: 'Сообщения остаются вторичными',
+      messagingBody:
+        'Чат остается полезным для координации, но не должен определять основной путь KeepCozy.',
+      recentMessagingTitle: 'Недавний трафик сообщений',
+      recentMessagingBody:
+        'Используйте этот слой, когда вокруг работы действительно важен разговорный контекст.',
+      testFlowTitle: 'История основного тестового пути',
+      testFlowBody:
+        'Этот список служит первым сквозным MVP-доказательством: одна комната, одна проблема, одна связанная задача и обновления, которые двигают работу вперед.',
+      testFlowPendingBody:
+        'Дом TEST активен, но канонический persisted-путь комната -> проблема -> задача -> история еще не засеян.',
+      testFlowMismatchBody:
+        'Сначала откройте seeded-дом TEST, чтобы канонический MVP-сценарий и его история оставались согласованными.',
     },
     inboxSettings: {
       title: 'Настройки чатов',
@@ -1136,24 +2276,39 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       checkingBadge: 'Проверка',
       unsupportedBody: 'Сейчас здесь недоступно.',
       unsupportedBadge: 'Недоступно',
+      unconfiguredBody: 'Push-подписки для этой сборки пока не настроены.',
+      unconfiguredBadge: 'Нужна настройка',
       blockedBody: 'Отключено в настройках браузера.',
       blockedBadge: 'Выключено',
-      enabledBody: 'Включено для этого устройства.',
+      enabledBody: 'Подключено для этого устройства.',
       enabledBadge: 'Включено',
       availableBody: 'Доступно для этого устройства.',
       availableBadge: 'Доступно',
+      permissionReadyBody: 'Разрешение уже включено. Подключите это устройство, чтобы завершить настройку.',
       unavailable: 'Недоступно',
       available: 'Доступно',
+      setupNeeded: 'Нужна настройка',
       on: 'Вкл',
       off: 'Выкл',
       checking: 'Проверка',
       status: 'Статус',
       permission: 'Разрешение',
+      device: 'Это устройство',
+      connected: 'Подключено',
+      notConnected: 'Не подключено',
       turnOn: 'Включить уведомления',
       turningOn: 'Включаем…',
+      connectDevice: 'Подключить это устройство',
+      connectingDevice: 'Подключаем…',
       browserSettingsNote: 'Позже это можно изменить в настройках браузера.',
-      comingSoonNote: 'Оповещения о сообщениях появятся позже.',
-      availableNote: 'Можно включить уже сейчас. Оповещения о сообщениях появятся позже.',
+      comingSoonNote: 'Этот браузер уже подключен для первого chat-first среза push-уведомлений.',
+      availableNote: 'Это можно включить сейчас для этого браузера.',
+      permissionReadyNote:
+        'Разрешение уже включено. Подключите этот браузер, чтобы сохранить реальную push-подписку.',
+      notConfiguredNote:
+        'Добавьте NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY и примените SQL для push_subscriptions, прежде чем включать это здесь.',
+      syncFailedNote:
+        'Сейчас не удалось подключить этот браузер к push-уведомлениям. Попробуйте ещё раз.',
     },
     inbox: {
       title: 'Чаты',
@@ -1190,6 +2345,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Архивные чаты только скрыты из списка. Сообщения остаются, и их можно вернуть в любой момент.',
       emptyMainTitle: 'Здесь пока нет чатов',
       emptyMainBody: 'Начните новый через кнопку +.',
+      messengerFreshTitle: 'Это пространство мессенджера начинается с нуля',
+      messengerFreshBody:
+        'Начните здесь первый личный чат или группу. История из TEST или любого другого пространства сюда не копируется.',
+      messengerFreshAdminBody:
+        'Сначала добавьте участников в это пространство, а затем начните здесь первый личный чат или группу. Ничего не копируется автоматически из TEST или любого другого пространства.',
+      messengerFreshMemberBody:
+        'В этом пространстве пока нет других видимых участников. Попросите администратора пространства добавить людей, прежде чем начинать первый чат.',
       emptyArchivedTitle: 'Архивных чатов нет',
       emptyArchivedBody: 'Сюда попадут чаты, которые вы скрыли из списка.',
       emptySearchTitle: 'Подходящих чатов нет',
@@ -1223,6 +2385,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         searchAria: 'Поиск людей',
         searchPlaceholder: 'Поиск людей',
         noUsers: 'Других зарегистрированных пользователей пока нет.',
+        noUsersAdmin:
+          'В этом пространстве пока нет других доступных участников. Сначала добавьте людей в это пространство, а затем вернитесь сюда, чтобы начать чаты.',
         existingDmOnly: 'Со всеми доступными людьми у вас уже есть личные чаты.',
         noMatches: 'Подходящих людей нет.',
         selected: 'Выбрано',
@@ -1342,6 +2506,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessageLoading: 'Голосовое сообщение загружается',
       voiceMessageUploading: 'Голосовое сообщение загружается',
       voiceMessageProcessing: 'Голосовое сообщение подготавливается',
+      voiceMessageRecovering: 'Голосовое сообщение восстанавливается',
       voiceMessageFailed: 'Голосовое сообщение сейчас недоступно.',
       voiceMessageUnavailable: 'Голосовое сообщение недоступно на этом устройстве.',
       encryptedMessage: 'Зашифрованное сообщение',
@@ -1354,6 +2519,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       file: 'Файл',
       unavailableRightNow: 'Сейчас недоступно',
       justNow: 'Только что',
+      messageQueued: 'В очереди на этом устройстве',
       sending: 'Отправляется…',
       sendFailed: 'Не отправилось',
       edited: 'Изменено',
@@ -1395,6 +2561,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceRecorderPermissionDenied: 'Нет доступа к микрофону.',
       voiceRecorderUnavailable: 'Запись голоса здесь недоступна.',
       voiceRecorderFailed: 'Не удалось завершить запись.',
+      voiceRecorderPreparingHint: 'Ждём доступ к микрофону.',
+      voiceRecorderRecordingHint:
+        'Нажмите «Стоп», когда будете готовы прослушать запись.',
+      voiceRecorderRecoveredDraftHint:
+        'Черновик восстановлен после обновления. Его можно отправить или отменить.',
+      voiceRecorderPermissionHint:
+        'Разрешите доступ к микрофону и попробуйте ещё раз.',
+      voiceRecorderUnavailableHint:
+        'На этом устройстве вместо этого используйте текст или файл.',
+      voiceRecorderRetryHint:
+        'Попробуйте ещё раз. Если сбой повторится, начните новую запись.',
+      voiceMessagePendingHint:
+        'Не закрывайте этот чат, пока аудио заканчивает синхронизироваться.',
+      voiceMessageRetryHint:
+        'Нажмите ещё раз, если аудио всё ещё не загружается.',
       mentionSuggestions: 'Подсказки упоминаний',
       clearAttachment: 'Убрать',
       attachmentSizeError: (maxSizeLabel) =>

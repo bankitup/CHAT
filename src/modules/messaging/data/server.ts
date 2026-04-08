@@ -35,6 +35,7 @@ import {
   applyConversationVisibility,
   isHiddenAtVisibilityRuntimeError,
 } from '@/modules/messaging/data/visibility';
+import { requireExactSpaceAccessForUser } from '@/modules/spaces/server';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeBootstrapDebugState,
@@ -915,6 +916,14 @@ function shouldLogVoiceSendDiagnostics() {
   );
 }
 
+function shouldLogChatThreadSnapshotDiagnostics() {
+  return (
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ||
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1' ||
+    process.env.CHAT_DEBUG_THREAD_SNAPSHOT === '1'
+  );
+}
+
 function logVoiceSendDiagnostics(
   stage: string,
   details?: Record<string, unknown>,
@@ -938,6 +947,10 @@ function logChatThreadSnapshotCheckpoint(
   stage: string,
   details?: Record<string, unknown>,
 ) {
+  if (!shouldLogChatThreadSnapshotDiagnostics()) {
+    return;
+  }
+
   if (details) {
     console.info('[chat-thread-snapshot]', stage, details);
     return;
@@ -1679,61 +1692,59 @@ async function mapInboxConversations(
       ),
     );
 
-  const mappedRows = await Promise.all(
-    rows.map(async (row) => {
-      const conversation = normalizeConversation(row.conversations);
-      const lastReadMessageSeq =
-        typeof row.last_read_message_seq === 'number'
-          ? row.last_read_message_seq
-          : null;
-      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
-        row.visible_from_seq,
-      );
-      const latestMessageSeq =
-        latestMessageSeqByConversation.get(row.conversation_id) ?? null;
-      const latestMessage = latestMessageByConversation.get(row.conversation_id);
-      const unreadCount =
-        unreadCountByConversation.get(row.conversation_id) ?? 0;
-      const latestMessageVisible =
-        latestMessageSeq !== null &&
-        (visibleFromSeq === null || latestMessageSeq >= visibleFromSeq);
+  const mappedRows = rows.map((row) => {
+    const conversation = normalizeConversation(row.conversations);
+    const lastReadMessageSeq =
+      typeof row.last_read_message_seq === 'number'
+        ? row.last_read_message_seq
+        : null;
+    const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+      row.visible_from_seq,
+    );
+    const latestMessageSeq =
+      latestMessageSeqByConversation.get(row.conversation_id) ?? null;
+    const latestMessage = latestMessageByConversation.get(row.conversation_id);
+    const unreadCount =
+      unreadCountByConversation.get(row.conversation_id) ?? 0;
+    const latestMessageVisible =
+      latestMessageSeq !== null &&
+      (visibleFromSeq === null || latestMessageSeq >= visibleFromSeq);
 
-      return {
-        conversationId: row.conversation_id,
-        spaceId: conversation?.space_id ?? null,
-        kind: conversation?.kind ?? null,
-        title: conversation?.title ?? null,
-        avatarPath: await resolveStoredAvatarPath(
-          supabase,
-          conversation?.avatar_path ?? null,
-        ),
-        createdBy: conversation?.created_by ?? null,
-        lastMessageAt: latestMessageVisible ? conversation?.last_message_at ?? null : null,
-        createdAt: conversation?.created_at ?? null,
-        hiddenAt: row.hidden_at ?? null,
-        lastReadMessageSeq,
-        lastReadAt: row.last_read_at ?? null,
-        latestMessageId: latestMessageVisible ? latestMessage?.id ?? null : null,
-        latestMessageSeq: latestMessageVisible ? latestMessageSeq : null,
-        latestMessageSenderId: latestMessageVisible
-          ? latestMessage?.senderId ?? null
+    return {
+      conversationId: row.conversation_id,
+      spaceId: conversation?.space_id ?? null,
+      kind: conversation?.kind ?? null,
+      title: conversation?.title ?? null,
+      avatarPath: resolveStoredAvatarPath(
+        supabase,
+        conversation?.avatar_path ?? null,
+      ),
+      createdBy: conversation?.created_by ?? null,
+      lastMessageAt: latestMessageVisible ? conversation?.last_message_at ?? null : null,
+      createdAt: conversation?.created_at ?? null,
+      hiddenAt: row.hidden_at ?? null,
+      lastReadMessageSeq,
+      lastReadAt: row.last_read_at ?? null,
+      latestMessageId: latestMessageVisible ? latestMessage?.id ?? null : null,
+      latestMessageSeq: latestMessageVisible ? latestMessageSeq : null,
+      latestMessageSenderId: latestMessageVisible
+        ? latestMessage?.senderId ?? null
+        : null,
+      latestMessageAttachmentKind:
+        latestMessageVisible && latestMessage?.id
+          ? latestMessageAttachmentKindByMessageId.get(latestMessage.id) ?? null
           : null,
-        latestMessageAttachmentKind:
-          latestMessageVisible && latestMessage?.id
-            ? latestMessageAttachmentKindByMessageId.get(latestMessage.id) ?? null
-            : null,
-        latestMessageBody: latestMessageVisible ? latestMessage?.body ?? null : null,
-        latestMessageKind: latestMessageVisible ? latestMessage?.kind ?? null : null,
-        latestMessageContentMode: latestMessageVisible
-          ? latestMessage?.contentMode ?? null
-          : null,
-        latestMessageDeletedAt: latestMessageVisible
-          ? latestMessage?.deletedAt ?? null
-          : null,
-        unreadCount,
-      };
-    }),
-  );
+      latestMessageBody: latestMessageVisible ? latestMessage?.body ?? null : null,
+      latestMessageKind: latestMessageVisible ? latestMessage?.kind ?? null : null,
+      latestMessageContentMode: latestMessageVisible
+        ? latestMessage?.contentMode ?? null
+        : null,
+      latestMessageDeletedAt: latestMessageVisible
+        ? latestMessage?.deletedAt ?? null
+        : null,
+      unreadCount,
+    };
+  });
 
   return mappedRows.sort((left, right) => {
     const leftValue = left.lastMessageAt ?? left.createdAt ?? '';
@@ -1770,6 +1781,9 @@ export async function getArchivedConversations(
   return getConversationsByVisibility(userId, true, options);
 }
 
+// Conversation-level read seam. Future access-checked companion metadata reads
+// should layer here or in wrappers around it, not inside message history
+// loaders.
 export async function getConversationForUser(
   conversationId: string,
   userId: string,
@@ -1920,6 +1934,9 @@ export async function getConversationForUser(
   };
 }
 
+// Conversation-summary read seam. Future nullable companion metadata reads can
+// layer here once conversation-level access and visibility checks are already
+// resolved.
 export async function getConversationSummaryForUser(
   conversationId: string,
   userId: string,
@@ -2610,7 +2627,7 @@ function getChatAttachmentBucketRequirementErrorMessage() {
 
 const avatarDiagnosticsEnabled = process.env.CHAT_DEBUG_AVATARS === '1';
 
-async function resolveStoredAvatarPath(
+function resolveStoredAvatarPath(
   _supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   value: string | null | undefined,
 ) {
@@ -2681,8 +2698,16 @@ function getAttachmentMessageKind(mimeType: string | null) {
   return 'text' as const;
 }
 
-export async function getProfileIdentities(userIds: string[]) {
+export async function getProfileIdentities(
+  userIds: string[],
+  options?: {
+    includeAvatarPath?: boolean;
+    includeStatuses?: boolean;
+  },
+) {
   const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
+  const includeAvatarPath = options?.includeAvatarPath !== false;
+  const includeStatuses = options?.includeStatuses !== false;
 
   if (uniqueUserIds.length === 0) {
     return [] as MessageSenderProfile[];
@@ -2694,46 +2719,63 @@ export async function getProfileIdentities(userIds: string[]) {
     client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
     ids: string[],
   ) => {
-    const withStatuses = await client
-      .from('profiles')
-      .select(
-        'user_id, display_name, username, email_local_part, avatar_path, status_emoji, status_text, status_updated_at',
-      )
-      .in('user_id', ids);
+    if (includeStatuses) {
+      const withStatusesProjection = [
+        'user_id',
+        'display_name',
+        'username',
+        'email_local_part',
+        ...(includeAvatarPath ? ['avatar_path'] : []),
+        'status_emoji',
+        'status_text',
+        'status_updated_at',
+      ].join(', ');
+      const withStatuses = await client
+        .from('profiles')
+        .select(withStatusesProjection)
+        .in('user_id', ids);
 
-    if (!withStatuses.error) {
-      const profiles = ((withStatuses.data ?? []) as {
-        user_id: string;
-        display_name: string | null;
-        username?: string | null;
-        email_local_part?: string | null;
-        avatar_path?: string | null;
-        status_emoji?: string | null;
-        status_text?: string | null;
-        status_updated_at?: string | null;
-      }[]);
+      if (!withStatuses.error) {
+        const profiles = ((withStatuses.data ?? []) as unknown as {
+          user_id: string;
+          display_name: string | null;
+          username?: string | null;
+          email_local_part?: string | null;
+          avatar_path?: string | null;
+          status_emoji?: string | null;
+          status_text?: string | null;
+          status_updated_at?: string | null;
+        }[]);
 
-      return Promise.all(
-        profiles.map(async (profile) => ({
+        return profiles.map((profile) => ({
           userId: profile.user_id,
           displayName: profile.display_name?.trim() || null,
           username: profile.username?.trim() || null,
           emailLocalPart: profile.email_local_part?.trim() || null,
-          avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
+          avatarPath: includeAvatarPath
+            ? resolveStoredAvatarPath(client, profile.avatar_path)
+            : null,
           statusEmoji: profile.status_emoji?.trim() || null,
           statusText: profile.status_text?.trim() || null,
           statusUpdatedAt: profile.status_updated_at?.trim() || null,
-        })),
-      );
+        }));
+      }
     }
 
+    const withIdentityProjection = [
+      'user_id',
+      'display_name',
+      'username',
+      'email_local_part',
+      ...(includeAvatarPath ? ['avatar_path'] : []),
+    ].join(', ');
     const withIdentityFallbacksAndAvatars = await client
       .from('profiles')
-      .select('user_id, display_name, username, email_local_part, avatar_path')
+      .select(withIdentityProjection)
       .in('user_id', ids);
 
     if (!withIdentityFallbacksAndAvatars.error) {
-      const profiles = ((withIdentityFallbacksAndAvatars.data ?? []) as {
+      const profiles = ((withIdentityFallbacksAndAvatars.data ?? []) as unknown as {
         user_id: string;
         display_name: string | null;
         username?: string | null;
@@ -2741,44 +2783,44 @@ export async function getProfileIdentities(userIds: string[]) {
         avatar_path?: string | null;
       }[]);
 
-      return Promise.all(
-        profiles.map(async (profile) => ({
-          userId: profile.user_id,
-          displayName: profile.display_name?.trim() || null,
-          username: profile.username?.trim() || null,
-          emailLocalPart: profile.email_local_part?.trim() || null,
-          avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
-          statusEmoji: null,
-          statusText: null,
-          statusUpdatedAt: null,
-        })),
-      );
+      return profiles.map((profile) => ({
+        userId: profile.user_id,
+        displayName: profile.display_name?.trim() || null,
+        username: profile.username?.trim() || null,
+        emailLocalPart: profile.email_local_part?.trim() || null,
+        avatarPath: includeAvatarPath
+          ? resolveStoredAvatarPath(client, profile.avatar_path)
+          : null,
+        statusEmoji: null,
+        statusText: null,
+        statusUpdatedAt: null,
+      }));
     }
 
-    const withDisplayNamesAndAvatars = await client
-      .from('profiles')
-      .select('user_id, display_name, avatar_path')
-      .in('user_id', ids);
+    if (includeAvatarPath) {
+      const withDisplayNamesAndAvatars = await client
+        .from('profiles')
+        .select('user_id, display_name, avatar_path')
+        .in('user_id', ids);
 
-    if (!withDisplayNamesAndAvatars.error) {
-      const profiles = ((withDisplayNamesAndAvatars.data ?? []) as {
-        user_id: string;
-        display_name: string | null;
-        avatar_path?: string | null;
-      }[]);
+      if (!withDisplayNamesAndAvatars.error) {
+        const profiles = ((withDisplayNamesAndAvatars.data ?? []) as {
+          user_id: string;
+          display_name: string | null;
+          avatar_path?: string | null;
+        }[]);
 
-      return Promise.all(
-        profiles.map(async (profile) => ({
+        return profiles.map((profile) => ({
           userId: profile.user_id,
           displayName: profile.display_name?.trim() || null,
           username: null,
           emailLocalPart: null,
-          avatarPath: await resolveStoredAvatarPath(client, profile.avatar_path),
+          avatarPath: resolveStoredAvatarPath(client, profile.avatar_path),
           statusEmoji: null,
           statusText: null,
           statusUpdatedAt: null,
-        })),
-      );
+        }));
+      }
     }
 
     const withIdentityFallbacks = await client
@@ -4742,55 +4784,53 @@ export async function getAvailableUsers(
   const supabase = await createSupabaseServerClient();
   let userIds: string[] = [];
   const source = options?.source ?? 'unknown';
+  const requestedSpaceId = options?.spaceId?.trim() || null;
 
-  if (options?.spaceId) {
-    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:start', {
-      source,
-      queryShape:
-        "from('space_members').select('user_id').eq('space_id', ?).neq('user_id', ?).order('user_id')",
-      spaceId: options.spaceId,
-    });
-    const { data, error } = await supabase
-      .from('space_members')
-      .select('user_id')
-      .eq('space_id', options.spaceId)
-      .neq('user_id', currentUserId)
-      .order('user_id', { ascending: true });
-
-    if (error) {
-      logSpaceMembershipDiagnostics('getAvailableUsers:space-members:error', {
-        source,
-        message: error.message,
-      });
-      if (isMissingRelationErrorMessage(error.message, 'space_members')) {
-        throw createSchemaRequirementError(
-          'Space-scoped user lookup requires public.space_members.',
-        );
-      }
-
-      throw new Error(error.message);
-    }
-
-    userIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
-    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:ok', {
-      source,
-      count: userIds.length,
-    });
-  } else {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('user_id')
-      .neq('user_id', currentUserId)
-      .order('user_id', { ascending: true });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    userIds = ((data ?? []) as { user_id: string }[]).map(
-      (profile) => profile.user_id,
+  if (!requestedSpaceId) {
+    throw new Error(
+      'Space-scoped user lookup requires an explicit current space.',
     );
   }
+
+  const exactSpaceAccess = await requireExactSpaceAccessForUser({
+    requestedSpaceId,
+    source: `${source}:available-users-space-access`,
+    userId: currentUserId,
+  });
+
+  logSpaceMembershipDiagnostics('getAvailableUsers:space-members:start', {
+    source,
+    queryShape:
+      "from('space_members').select('user_id').eq('space_id', ?).neq('user_id', ?).order('user_id')",
+    requestedSpaceId,
+    resolvedSpaceId: exactSpaceAccess.activeSpace.id,
+  });
+  const { data, error } = await supabase
+    .from('space_members')
+    .select('user_id')
+    .eq('space_id', exactSpaceAccess.activeSpace.id)
+    .neq('user_id', currentUserId)
+    .order('user_id', { ascending: true });
+
+  if (error) {
+    logSpaceMembershipDiagnostics('getAvailableUsers:space-members:error', {
+      source,
+      message: error.message,
+    });
+    if (isMissingRelationErrorMessage(error.message, 'space_members')) {
+      throw createSchemaRequirementError(
+        'Space-scoped user lookup requires public.space_members.',
+      );
+    }
+
+    throw new Error(error.message);
+  }
+
+  userIds = ((data ?? []) as { user_id: string }[]).map((row) => row.user_id);
+  logSpaceMembershipDiagnostics('getAvailableUsers:space-members:ok', {
+    source,
+    count: userIds.length,
+  });
 
   const identities = await getProfileIdentities(userIds);
   const identityByUserId = new Map<string, MessageSenderProfile>(
@@ -5016,6 +5056,9 @@ export async function getConversationParticipantIdentities(
   const memberships = await getActiveConversationMembershipRows(uniqueConversationIds);
   const identities = await getProfileIdentities(
     memberships.map((membership) => membership.user_id),
+    {
+      includeStatuses: false,
+    },
   );
   const identityByUserId = new Map<string, MessageSenderProfile>(
     identities.map((identity) => [identity.userId, identity] as const),
@@ -5221,6 +5264,9 @@ export async function findExistingActiveDmConversation(
   });
 }
 
+// Conversation shell creation seam. Future operational-thread creation should
+// wrap this helper rather than widening it with companion metadata writes
+// directly in place.
 export async function createConversationWithMembers(input: {
   kind: 'dm' | 'group';
   creatorUserId: string;
@@ -6054,6 +6100,9 @@ export async function getConversationHistoryWindowSizeForMessageTargets(input: {
   return countLookup.count ?? null;
 }
 
+// Message-history seam. Keep thread-level companion metadata out of this loader
+// during early backend integration phases; add it at conversation-level read
+// boundaries first.
 export async function getConversationHistorySnapshot(input: {
   afterSeqExclusive?: number | null;
   beforeSeqExclusive?: number | null;
@@ -6085,6 +6134,11 @@ export async function getConversationHistorySnapshot(input: {
     },
   );
   const messageIds = messages.map((message) => message.id);
+  const attachmentMessageIds = messages
+    .filter(
+      (message) => message.kind === 'attachment' || message.kind === 'voice',
+    )
+    .map((message) => message.id);
   const encryptedMessageIds = messages
     .filter(
       (message) =>
@@ -6134,7 +6188,7 @@ export async function getConversationHistorySnapshot(input: {
   logChatThreadSnapshotCheckpoint('attachment-voice-mapping-started', {
     conversationId: input.conversationId,
     debugRequestId: input.debugRequestId ?? null,
-    messageIdsCount: messageIds.length,
+    messageIdsCount: attachmentMessageIds.length,
   });
   logChatThreadSnapshotCheckpoint('encrypted-envelope-load-started', {
     conversationId: input.conversationId,
@@ -6147,9 +6201,12 @@ export async function getConversationHistorySnapshot(input: {
     attachmentsByMessageResult,
     e2eeEnvelopeHistoryResult,
   ] = await Promise.allSettled([
-    getMessageSenderProfiles(senderProfileIds),
+    getMessageSenderProfiles(senderProfileIds, {
+      includeAvatarPath: false,
+      includeStatuses: false,
+    }),
     getGroupedReactionsForMessages(messageIds, input.userId),
-    getMessageAttachments(messageIds),
+    getMessageAttachments(attachmentMessageIds),
     getCurrentUserDmE2eeEnvelopesForMessages({
       debugRequestId: input.debugRequestId ?? null,
       messageIds: encryptedMessageIds,
@@ -6405,8 +6462,14 @@ export async function getConversationHistorySnapshot(input: {
   };
 }
 
-export async function getMessageSenderProfiles(userIds: string[]) {
-  return getProfileIdentities(userIds);
+export async function getMessageSenderProfiles(
+  userIds: string[],
+  options?: {
+    includeAvatarPath?: boolean;
+    includeStatuses?: boolean;
+  },
+) {
+  return getProfileIdentities(userIds, options);
 }
 
 async function createSignedChatAttachmentUrl(input: {

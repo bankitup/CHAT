@@ -6,11 +6,13 @@ import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   getUserSpaces,
   isSpaceMembersSchemaCacheErrorMessage,
+  resolveSuperAdminGovernanceForUser,
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type SpacesPageProps = {
   searchParams: Promise<{
+    message?: string;
     space?: string;
   }>;
 };
@@ -40,6 +42,9 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
   }
 
   const query = await searchParams;
+  const superAdminGovernance = resolveSuperAdminGovernanceForUser({
+    userEmail: user.email ?? null,
+  });
 
   const language = await getRequestLanguage();
   const t = getTranslations(language);
@@ -65,10 +70,12 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
   }
 
   const requestedSpaceId = query.space?.trim() || null;
-  const currentSpaceId =
-    (requestedSpaceId && spaces.some((space) => space.id === requestedSpaceId)
-      ? requestedSpaceId
-      : spaces[0]?.id) ?? null;
+  const visibleMessage = query.message?.trim() || null;
+  const requestedSpace = requestedSpaceId
+    ? spaces.find((space) => space.id === requestedSpaceId)
+    : undefined;
+  const currentSpace = requestedSpace ?? spaces[0] ?? null;
+  const currentSpaceId = currentSpace?.id ?? null;
 
   return (
     <section className="stack spaces-screen">
@@ -78,17 +85,61 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
             <Link
               aria-label={t.spaces.backToChats}
               className="back-arrow-link spaces-back-link"
-              href={withSpaceParam('/inbox', currentSpaceId)}
+              href={withSpaceParam(
+                currentSpace?.defaultShellRoute ?? '/home',
+                currentSpaceId,
+              )}
             >
               <span aria-hidden="true">←</span>
             </Link>
           </div>
         ) : null}
 
-        <p className="eyebrow">{t.shell.chats}</p>
+        <p className="eyebrow">{t.shell.spaces}</p>
         <h1 className="settings-hero-title">{t.spaces.title}</h1>
         <p className="muted settings-hero-note">{t.spaces.subtitle}</p>
       </section>
+
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
+
+      {superAdminGovernance.canCreateSpaces ? (
+        <section className="card stack settings-surface spaces-surface">
+          <p className="eyebrow">{t.spaces.globalAdminEyebrow}</p>
+          <h2 className="card-title">{t.spaces.createSpaceTitle}</h2>
+          <p className="muted">{t.spaces.createSpaceBody}</p>
+          <div className="cluster">
+            <Link
+              className="button button-compact"
+              href={withSpaceParam('/spaces/new', currentSpaceId)}
+            >
+              {t.spaces.createSpaceAction}
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
+      {currentSpaceId && currentSpace?.canManageMembers ? (
+        <section className="card stack settings-surface spaces-surface">
+          <p className="eyebrow">{t.spaces.spaceAdminEyebrow}</p>
+          <h2 className="card-title">{t.spaces.manageMembersTitle}</h2>
+          <p className="muted">{t.spaces.manageMembersBody}</p>
+          <div className="cluster">
+            <Link
+              className="button button-secondary button-compact"
+              href={withSpaceParam('/spaces/members', currentSpaceId)}
+            >
+              {t.spaces.manageMembersAction}
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <section className="card stack settings-surface spaces-surface">
         {spacesTemporarilyUnavailable ? (
@@ -106,7 +157,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
                     ? 'space-card space-card-current'
                     : 'space-card'
                 }
-                href={withSpaceParam('/inbox', space.id)}
+                href={withSpaceParam(space.defaultShellRoute, space.id)}
               >
                 <div className="stack space-card-copy">
                   <div className="space-card-title-row">

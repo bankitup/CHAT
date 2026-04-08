@@ -1,7 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   formatPersonFallbackLabel,
   getLocaleForLanguage,
@@ -39,6 +48,7 @@ import { ThreadDeleteMessageConfirm } from './thread-delete-message-confirm';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
 import { ThreadInlineEditForm } from './thread-inline-edit-form';
 import { ThreadReactionGroups } from './thread-reaction-groups';
+import { ThreadReactionPicker } from './thread-reaction-picker';
 
 type ConversationMessageRow = {
   body: string | null;
@@ -117,7 +127,6 @@ type ThreadHistoryPageSnapshot = {
 };
 
 type ThreadHistoryViewportProps = {
-  activeActionMessageId: string | null;
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
   activeSpaceId: string;
@@ -184,7 +193,12 @@ const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
   'local-voice-send:retry-attachment-resolution';
+const VOICE_MESSAGE_REOPEN_RECOVERY_REASON =
+  'voice-reopen:retry-attachment-resolution';
 const VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS = [180, 700] as const;
+const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
+const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
+const MESSAGE_CLUSTER_MAX_GAP_MS = 5 * 60 * 1000;
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -421,6 +435,7 @@ function resolveVoiceMessageRenderReason(input: {
 function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
   return (
     reason === 'local-voice-send' ||
+    reason === VOICE_MESSAGE_REOPEN_RECOVERY_REASON ||
     reason === VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON
   );
 }
@@ -434,7 +449,6 @@ function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
 }
 
 function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
-  currentUserId: string;
   requestedMessageIds: string[];
   snapshot: ThreadHistoryPageSnapshot;
 }) {
@@ -445,18 +459,17 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
       entry.attachments,
     ] as const),
   );
-  const ownedVoiceMessageIds = input.snapshot.messages
+  const voiceMessageIds = input.snapshot.messages
     .filter(
       (message) =>
         requestedMessageIdSet.has(message.id) &&
-        message.kind === 'voice' &&
-        message.sender_id === input.currentUserId,
+        message.kind === 'voice',
     )
     .map((message) => message.id);
-  const ownedVoiceMessageIdSet = new Set(ownedVoiceMessageIds);
+  const voiceMessageIdSet = new Set(voiceMessageIds);
   const missingRequestedMessageIds = input.requestedMessageIds.filter(
     (messageId) => {
-      if (!ownedVoiceMessageIdSet.has(messageId)) {
+      if (!voiceMessageIdSet.has(messageId)) {
         return false;
       }
 
@@ -465,7 +478,7 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
       );
     },
   );
-  const presentRequestedMessageIds = ownedVoiceMessageIds.filter(
+  const presentRequestedMessageIds = voiceMessageIds.filter(
     (messageId) => !missingRequestedMessageIds.includes(messageId),
   );
 
@@ -473,6 +486,33 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
     missingRequestedMessageIds,
     presentRequestedMessageIds,
   };
+}
+
+function resolveRecentVoiceMessageIdsNeedingRecovery(input: {
+  attachmentsByMessage: Map<string, MessageAttachment[]>;
+  maxAgeMs: number;
+  messages: ConversationMessageRow[];
+}) {
+  const now = Date.now();
+
+  return input.messages
+    .filter((message) => message.kind === 'voice')
+    .filter((message) => {
+      const createdAt = message.created_at ? new Date(message.created_at) : null;
+
+      if (!createdAt || Number.isNaN(createdAt.getTime())) {
+        return false;
+      }
+
+      return now - createdAt.getTime() <= input.maxAgeMs;
+    })
+    .filter(
+      (message) =>
+        !hasPlaybackReadyVoiceAttachment(
+          input.attachmentsByMessage.get(message.id) ?? [],
+        ),
+    )
+    .map((message) => message.id);
 }
 
 function getVoiceMessageStateLabel(input: {
@@ -757,6 +797,26 @@ function getOutgoingMessageStatus(input: {
   return 'sent' as const;
 }
 
+function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.closest('[data-message-quick-actions-surface="true"]')) {
+    return true;
+  }
+
+  if (target.closest('.reaction-groups')) {
+    return true;
+  }
+
+  return Boolean(
+    target.closest(
+      'a, button, input, textarea, select, summary, details, audio, video',
+    ),
+  );
+}
+
 function ThreadVoiceMessageBubble({
   attachment,
   conversationId,
@@ -784,19 +844,27 @@ function ThreadVoiceMessageBubble({
   const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
     attachment?.signedUrl ?? null,
   );
+  const [didFailSignedUrlResolve, setDidFailSignedUrlResolve] = useState(false);
+  const [ignoredAttachmentSignedUrl, setIgnoredAttachmentSignedUrl] = useState<
+    string | null
+  >(null);
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
+  const attachmentSignedUrl = attachment?.signedUrl?.trim() || null;
+  const hasRecoverableAttachmentLocator = Boolean(
+    attachment?.id &&
+      attachment?.messageId &&
+      attachment?.bucket &&
+      attachment?.objectPath,
+  );
 
   const effectiveSignedUrl =
-    resolvedSignedUrl?.trim() || attachment?.signedUrl?.trim() || null;
+    resolvedSignedUrl?.trim() ||
+    (attachmentSignedUrl && attachmentSignedUrl !== ignoredAttachmentSignedUrl
+      ? attachmentSignedUrl
+      : null);
   const canResolveSignedUrl =
-    Boolean(
-      conversationId &&
-        attachment?.id &&
-        attachment?.messageId &&
-        attachment?.bucket &&
-        attachment?.objectPath,
-    ) && !effectiveSignedUrl;
+    Boolean(conversationId && hasRecoverableAttachmentLocator) && !effectiveSignedUrl;
   const effectiveStageHint =
     stageHint ??
     (isResolvingSignedUrl && !effectiveSignedUrl ? 'processing' : null);
@@ -827,11 +895,25 @@ function ThreadVoiceMessageBubble({
     playbackState === 'buffering'
       ? t.chat.voiceMessageLoading
       : t.chat.voiceMessage;
+  const isRecoveringVoiceMessage =
+    voiceState !== 'ready' &&
+    canResolveSignedUrl &&
+    (isResolvingSignedUrl ||
+      (ignoredAttachmentSignedUrl !== null && !didFailSignedUrlResolve));
   const stateLabel =
     voiceState === 'ready'
       ? readyStateLabel
-      : getVoiceMessageStateLabel({ state: voiceState, t });
-  const sizeLabel = formatAttachmentSize(attachment?.sizeBytes ?? null);
+      : isRecoveringVoiceMessage
+        ? t.chat.voiceMessageRecovering
+        : getVoiceMessageStateLabel({ state: voiceState, t });
+  const stateNote =
+    voiceState === 'ready'
+      ? null
+      : isRecoveringVoiceMessage
+        ? t.chat.voiceMessagePendingHint
+        : canResolveSignedUrl && didFailSignedUrlResolve && !isResolvingSignedUrl
+          ? t.chat.voiceMessageRetryHint
+          : null;
   const durationLabel =
     voiceState === 'ready'
       ? playbackState === 'playing' ||
@@ -842,6 +924,16 @@ function ThreadVoiceMessageBubble({
           )}`
         : formatVoiceDuration(resolvedDurationMs)
       : '--:--';
+  const playIconState =
+    voiceState !== 'ready'
+      ? voiceState === 'failed' || voiceState === 'unavailable'
+        ? 'error'
+        : 'loading'
+      : isBuffering
+        ? 'loading'
+        : isPlaying
+          ? 'pause'
+          : 'play';
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -860,6 +952,9 @@ function ThreadVoiceMessageBubble({
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? null);
     setResolvedSignedUrl(attachment?.signedUrl ?? null);
+    setDidFailSignedUrlResolve(false);
+    setIgnoredAttachmentSignedUrl(null);
+    setPlaybackFailed(false);
   }, [attachment?.durationMs, attachment?.id, attachment?.signedUrl]);
 
   const resolveSignedUrl = useCallback(async () => {
@@ -876,6 +971,7 @@ function ThreadVoiceMessageBubble({
 
     const promise = (async () => {
       setIsResolvingSignedUrl(true);
+      setDidFailSignedUrlResolve(false);
 
       try {
         const response = await fetch(
@@ -903,6 +999,9 @@ function ThreadVoiceMessageBubble({
             : null;
 
         if (nextSignedUrl) {
+          setIgnoredAttachmentSignedUrl(null);
+          setDidFailSignedUrlResolve(false);
+          setPlaybackFailed(false);
           setResolvedSignedUrl(nextSignedUrl);
         }
 
@@ -920,6 +1019,7 @@ function ThreadVoiceMessageBubble({
 
         return nextSignedUrl;
       } catch (error) {
+        setDidFailSignedUrlResolve(true);
         if (
           process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
           typeof window !== 'undefined'
@@ -996,6 +1096,26 @@ function ThreadVoiceMessageBubble({
     voiceState,
   ]);
 
+  useEffect(() => {
+    if (!effectiveSignedUrl) {
+      const audio = audioRef.current;
+
+      if (audio) {
+        audio.pause();
+        releaseActiveThreadVoicePlayback(messageId, audio);
+        audio.src = '';
+      }
+
+      setProgressMs(0);
+      setPlaybackState((current) => (current === 'failed' ? current : 'idle'));
+      return;
+    }
+
+    setPlaybackState((current) =>
+      current === 'failed' || current === 'buffering' ? current : 'idle',
+    );
+  }, [effectiveSignedUrl, messageId]);
+
   const togglePlayback = async () => {
     if (voiceState !== 'ready') {
       if (canResolveSignedUrl) {
@@ -1054,22 +1174,17 @@ function ThreadVoiceMessageBubble({
       <button
         aria-label={playButtonLabel}
         className="message-voice-play"
-        disabled={voiceState !== 'ready'}
+        disabled={voiceState !== 'ready' && !canResolveSignedUrl}
         onClick={() => {
           void togglePlayback();
         }}
         type="button"
       >
-        <span aria-hidden="true" className="message-voice-play-icon">
-          {voiceState !== 'ready'
-            ? voiceState === 'failed' || voiceState === 'unavailable'
-              ? '!'
-              : '...'
-            : isBuffering
-              ? '...'
-              : isPlaying
-                ? '||'
-                : '>'}
+        <span
+          aria-hidden="true"
+          className={`message-voice-play-icon message-voice-play-icon-${playIconState}`}
+        >
+          {playIconState === 'error' ? '!' : null}
         </span>
       </button>
       <div className="message-voice-copy">
@@ -1089,15 +1204,14 @@ function ThreadVoiceMessageBubble({
             }
           />
         </div>
-        <div className="message-voice-meta">
-          <span className="message-voice-state">{stateLabel}</span>
-          {voiceState === 'ready' && sizeLabel ? (
-            <span className="message-voice-meta-separator">·</span>
-          ) : null}
-          {voiceState === 'ready' && sizeLabel ? (
-            <span>{sizeLabel}</span>
-          ) : null}
-        </div>
+        {voiceState !== 'ready' ? (
+          <div className="message-voice-meta">
+            <span className="message-voice-state">{stateLabel}</span>
+            {stateNote ? (
+              <span className="message-voice-note">{stateNote}</span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {voiceState === 'ready' && effectiveSignedUrl ? (
         <audio
@@ -1111,6 +1225,19 @@ function ThreadVoiceMessageBubble({
           }}
           onError={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            event.currentTarget.pause();
+            event.currentTarget.currentTime = 0;
+            setProgressMs(0);
+
+            if (effectiveSignedUrl && hasRecoverableAttachmentLocator) {
+              setIgnoredAttachmentSignedUrl(effectiveSignedUrl);
+              setDidFailSignedUrlResolve(false);
+              setResolvedSignedUrl(null);
+              setPlaybackFailed(false);
+              setPlaybackState('idle');
+              return;
+            }
+
             setPlaybackFailed(true);
             setPlaybackState('failed');
           }}
@@ -1375,6 +1502,35 @@ function buildTimelineItems(input: {
   });
 }
 
+function canClusterAdjacentMessages(
+  left: ConversationMessageRow | null | undefined,
+  right: ConversationMessageRow | null | undefined,
+) {
+  if (!left || !right) {
+    return false;
+  }
+
+  if (!left.sender_id || left.sender_id !== right.sender_id) {
+    return false;
+  }
+
+  if (left.deleted_at || right.deleted_at) {
+    return false;
+  }
+
+  const leftCreatedAt = parseSafeDate(left.created_at);
+  const rightCreatedAt = parseSafeDate(right.created_at);
+
+  if (!leftCreatedAt || !rightCreatedAt) {
+    return false;
+  }
+
+  return (
+    Math.abs(rightCreatedAt.getTime() - leftCreatedAt.getTime()) <=
+    MESSAGE_CLUSTER_MAX_GAP_MS
+  );
+}
+
 function getSnapshotRevisionKey(snapshot: ThreadHistoryPageSnapshot) {
   return JSON.stringify({
     hasMoreOlder: snapshot.hasMoreOlder,
@@ -1585,7 +1741,6 @@ function mergeThreadHistoryState(input: {
 }
 
 type ThreadMessageRowProps = {
-  activeActionMessageId: string | null;
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
   activeSpaceId: string;
@@ -1595,6 +1750,8 @@ type ThreadMessageRowProps = {
   currentUserId: string;
   encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
   encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
+  isClusteredWithNext: boolean;
+  isClusteredWithPrevious: boolean;
   language: AppLanguage;
   latestVisibleMessageSeq: number | null;
   message: ConversationMessageRow;
@@ -1607,7 +1764,6 @@ type ThreadMessageRowProps = {
 };
 
 function ThreadMessageRow({
-  activeActionMessageId,
   activeDeleteMessageId,
   activeEditMessageId,
   activeSpaceId,
@@ -1617,6 +1773,8 @@ function ThreadMessageRow({
   currentUserId,
   encryptedEnvelopesByMessage,
   encryptedHistoryHintsByMessage,
+  isClusteredWithNext,
+  isClusteredWithPrevious,
   language,
   latestVisibleMessageSeq,
   message,
@@ -1628,11 +1786,15 @@ function ThreadMessageRow({
   threadClientDiagnostics,
 }: ThreadMessageRowProps) {
   const t = getTranslations(language);
+  const quickActionsContainerRef = useRef<HTMLDivElement | null>(null);
+  const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressPointerRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
   const isOwnMessage = message.sender_id === currentUserId;
-  const isMessageActionActive =
-    activeActionMessageId === message.id &&
-    !activeEditMessageId &&
-    !activeDeleteMessageId;
   const patchedBody = useThreadMessagePatchedBody(
     conversationId,
     message.id,
@@ -1710,6 +1872,155 @@ function ThreadMessageRow({
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
   const encryptedRenderBranch = normalizeEncryptedDmBranchLabel(isOwnMessage);
+  const canShowQuickActions =
+    !isDeletedMessage &&
+    !isMessageInEditMode &&
+    !isMessageInDeleteMode;
+  const replyActionHref = buildChatHref({
+    conversationId,
+    hash: '#message-composer',
+    replyToMessageId: message.id,
+    spaceId: activeSpaceId,
+  });
+
+  const clearLongPress = useCallback(() => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+
+    longPressPointerRef.current = null;
+  }, []);
+
+  const closeQuickActions = useCallback(() => {
+    setIsQuickActionsOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (canShowQuickActions) {
+      return;
+    }
+
+    clearLongPress();
+    const timeoutId = window.setTimeout(() => {
+      setIsQuickActionsOpen(false);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [canShowQuickActions, clearLongPress]);
+
+  useEffect(() => {
+    if (!isQuickActionsOpen) {
+      return;
+    }
+
+    const handlePointerDownOutside = (event: PointerEvent) => {
+      const nextTarget = event.target;
+
+      if (
+        quickActionsContainerRef.current &&
+        nextTarget instanceof Node &&
+        quickActionsContainerRef.current.contains(nextTarget)
+      ) {
+        return;
+      }
+
+      setIsQuickActionsOpen(false);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsQuickActionsOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDownOutside, true);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDownOutside, true);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isQuickActionsOpen]);
+
+  useEffect(() => {
+    return () => {
+      clearLongPress();
+    };
+  }, [clearLongPress]);
+
+  const handleBubblePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        !canShowQuickActions ||
+        event.button !== 0 ||
+        isMessageQuickActionInteractiveTarget(event.target)
+      ) {
+        return;
+      }
+
+      clearLongPress();
+      longPressPointerRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      longPressTimeoutRef.current = setTimeout(() => {
+        setIsQuickActionsOpen(true);
+        longPressTimeoutRef.current = null;
+      }, 280);
+    },
+    [canShowQuickActions, clearLongPress],
+  );
+
+  const handleBubblePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const activePointer = longPressPointerRef.current;
+
+      if (!activePointer || activePointer.pointerId !== event.pointerId) {
+        return;
+      }
+
+      if (
+        Math.abs(event.clientX - activePointer.startX) > 10 ||
+        Math.abs(event.clientY - activePointer.startY) > 10
+      ) {
+        clearLongPress();
+      }
+    },
+    [clearLongPress],
+  );
+
+  const handleBubblePointerEnd = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const activePointer = longPressPointerRef.current;
+
+      if (!activePointer || activePointer.pointerId !== event.pointerId) {
+        return;
+      }
+
+      clearLongPress();
+    },
+    [clearLongPress],
+  );
+
+  const handleBubbleContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (
+        !canShowQuickActions ||
+        isMessageQuickActionInteractiveTarget(event.target)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      clearLongPress();
+      setIsQuickActionsOpen(true);
+    },
+    [canShowQuickActions, clearLongPress],
+  );
 
   if (isEncryptedDmTextMessage(message)) {
     const encryptedInputIssues = getEncryptedDmServerRenderInputIssues({
@@ -1765,61 +2076,141 @@ function ThreadMessageRow({
 
   return (
     <article
-      className={isOwnMessage ? 'message-row message-row-own' : 'message-row'}
+      className={[
+        isOwnMessage ? 'message-row message-row-own' : 'message-row',
+        isClusteredWithPrevious
+          ? 'message-row-clustered-with-previous'
+          : null,
+        isClusteredWithNext ? 'message-row-clustered-with-next' : null,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       key={message.id}
     >
       <div
-        className={
+        className={[
           isDeletedMessage
             ? isOwnMessage
               ? 'message-card message-card-own message-card-deleted'
               : 'message-card message-card-deleted'
             : isOwnMessage
               ? 'message-card message-card-own'
-              : 'message-card'
-        }
+              : 'message-card',
+          isClusteredWithPrevious
+            ? 'message-card-clustered-with-previous'
+            : null,
+          isClusteredWithNext ? 'message-card-clustered-with-next' : null,
+        ]
+          .filter(Boolean)
+          .join(' ')}
         id={`message-${message.id}`}
       >
-        {!isDeletedMessage ? (
-          <div
-            className={
-              isOwnMessage
-                ? 'message-header message-header-own'
-                : 'message-header'
-            }
-          >
-            <div className="message-header-side">
+        <div
+          ref={quickActionsContainerRef}
+          className={
+            isOwnMessage
+              ? 'message-bubble-shell message-bubble-shell-own'
+              : 'message-bubble-shell'
+          }
+          onContextMenu={handleBubbleContextMenu}
+          onPointerCancel={handleBubblePointerEnd}
+          onPointerDown={handleBubblePointerDown}
+          onPointerLeave={handleBubblePointerEnd}
+          onPointerMove={handleBubblePointerMove}
+          onPointerUp={handleBubblePointerEnd}
+        >
+          {isQuickActionsOpen ? (
+            <div
+              className={
+                isOwnMessage
+                  ? 'message-quick-actions message-quick-actions-own'
+                  : 'message-quick-actions'
+              }
+              data-message-quick-actions-surface="true"
+            >
+              <ThreadReactionPicker
+                className="message-quick-actions-reactions"
+                conversationId={conversationId}
+                currentUserId={currentUserId}
+                emojis={MESSAGE_QUICK_REACTIONS}
+                initialReactions={reactionsByMessage.get(message.id) ?? []}
+                isOwnMessage={isOwnMessage}
+                messageId={message.id}
+                onReactionSelected={closeQuickActions}
+                showCounts={false}
+              />
               <Link
-                aria-label={t.chat.openMessageActions}
-                className={
-                  isMessageActionActive
-                    ? 'message-actions-trigger message-actions-trigger-active'
-                    : 'message-actions-trigger'
-                }
-                href={buildChatHref({
-                  actionMessageId: message.id,
-                  conversationId,
-                  hash: `#message-${message.id}`,
-                  spaceId: activeSpaceId,
-                })}
+                aria-label={t.chat.reply}
+                className="message-quick-actions-reply"
+                href={replyActionHref}
+                onClick={closeQuickActions}
                 prefetch={false}
+                title={t.chat.reply}
               >
-                <span aria-hidden="true">⋯</span>
+                <span
+                  aria-hidden="true"
+                  className="message-quick-actions-reply-icon"
+                >
+                  ↩
+                </span>
               </Link>
             </div>
-          </div>
-        ) : null}
-        <div
-          className={
-            message.reply_to_message_id && !isDeletedMessage
-              ? isOwnMessage
-                ? 'message-bubble message-bubble-own message-bubble-with-reply'
-                : 'message-bubble message-bubble-with-reply'
-              : isOwnMessage
-                ? 'message-bubble message-bubble-own'
-                : 'message-bubble'
-          }
-        >
+          ) : null}
+          <div
+            className={
+              message.reply_to_message_id && !isDeletedMessage
+                ? isOwnMessage
+                  ? [
+                      'message-bubble',
+                      'message-bubble-own',
+                      'message-bubble-with-reply',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  : [
+                      'message-bubble',
+                      'message-bubble-with-reply',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                : isOwnMessage
+                  ? [
+                      'message-bubble',
+                      'message-bubble-own',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                  : [
+                      'message-bubble',
+                      isClusteredWithPrevious
+                        ? 'message-bubble-clustered-with-previous'
+                        : null,
+                      isClusteredWithNext
+                        ? 'message-bubble-clustered-with-next'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+            }
+          >
           {message.reply_to_message_id && !isDeletedMessage ? (
             <div
               className={
@@ -2111,6 +2502,7 @@ function ThreadMessageRow({
             </div>
           ) : null}
         </div>
+        </div>
         <span
           className={
             isOwnMessage
@@ -2198,7 +2590,6 @@ function ThreadMessageRow({
 }
 
 export function ThreadHistoryViewport({
-  activeActionMessageId,
   activeDeleteMessageId,
   activeEditMessageId,
   activeSpaceId,
@@ -2241,6 +2632,7 @@ export function ThreadHistoryViewport({
   const voiceAttachmentRecoveryTimeoutsRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
+  const voiceReopenRecoveryRequestedRef = useRef(new Set<string>());
   const isSyncingRef = useRef(false);
   const historySyncDiagnosticsEnabled =
     typeof window !== 'undefined' &&
@@ -2273,6 +2665,10 @@ export function ThreadHistoryViewport({
   useEffect(() => {
     historyStateRef.current = historyState;
   }, [historyState]);
+
+  useEffect(() => {
+    voiceReopenRecoveryRequestedRef.current.clear();
+  }, [conversationId]);
 
   useEffect(() => {
     const nextSnapshotKey = getSnapshotRevisionKey(initialSnapshot);
@@ -2353,6 +2749,52 @@ export function ThreadHistoryViewport({
     () => historyState.messages.map((message) => message.id),
     [historyState.messages],
   );
+  const recentVoiceMessageIdsNeedingRecovery = useMemo(
+    () =>
+      resolveRecentVoiceMessageIdsNeedingRecovery({
+        attachmentsByMessage: historyState.attachmentsByMessage,
+        maxAgeMs: VOICE_MESSAGE_RECOVERY_MAX_AGE_MS,
+        messages: historyState.messages,
+      }),
+    [historyState.attachmentsByMessage, historyState.messages],
+  );
+
+  useEffect(() => {
+    const requestedRecoveries = voiceReopenRecoveryRequestedRef.current;
+    const activeRecoveryIds = new Set(recentVoiceMessageIdsNeedingRecovery);
+
+    for (const messageId of Array.from(requestedRecoveries)) {
+      if (!activeRecoveryIds.has(messageId)) {
+        requestedRecoveries.delete(messageId);
+      }
+    }
+
+    for (const messageId of recentVoiceMessageIdsNeedingRecovery) {
+      if (requestedRecoveries.has(messageId)) {
+        continue;
+      }
+
+      requestedRecoveries.add(messageId);
+
+      if (historySyncDiagnosticsEnabled) {
+        console.info('[chat-history]', 'voice-reopen-recovery:requested', {
+          conversationId,
+          messageId,
+          reason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON,
+        });
+      }
+
+      emitThreadHistorySyncRequest({
+        conversationId,
+        messageIds: [messageId],
+        reason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON,
+      });
+    }
+  }, [
+    conversationId,
+    historySyncDiagnosticsEnabled,
+    recentVoiceMessageIdsNeedingRecovery,
+  ]);
 
   const loadOlderMessages = useCallback(async () => {
     if (isLoadingOlder || !hasMoreOlder || oldestLoadedSeq === null) {
@@ -2707,7 +3149,6 @@ export function ThreadHistoryViewport({
         missingRequestedMessageIds,
         presentRequestedMessageIds,
       } = resolveVoiceMessageIdsNeedingAttachmentRecovery({
-        currentUserId,
         requestedMessageIds: input.requestedMessageIds,
         snapshot: input.snapshot,
       });
@@ -2795,7 +3236,7 @@ export function ThreadHistoryViewport({
         voiceAttachmentRecoveryTimeoutsRef.current.set(messageId, timeoutId);
       }
     },
-    [conversationId, currentUserId, historySyncDiagnosticsEnabled],
+    [conversationId, historySyncDiagnosticsEnabled],
   );
 
   useEffect(() => {
@@ -3101,7 +3542,7 @@ export function ThreadHistoryViewport({
           <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
         </div>
       ) : (
-        timelineItems.map((item) => {
+        timelineItems.map((item, index) => {
           if (item.type === 'separator') {
             return (
               <div
@@ -3127,10 +3568,20 @@ export function ThreadHistoryViewport({
           }
 
           if (item.type === 'message') {
+            const previousTimelineItem = timelineItems[index - 1];
+            const nextTimelineItem = timelineItems[index + 1];
+            const previousMessage =
+              previousTimelineItem?.type === 'message'
+                ? previousTimelineItem.message
+                : null;
+            const nextMessage =
+              nextTimelineItem?.type === 'message'
+                ? nextTimelineItem.message
+                : null;
+
             return (
               <ThreadMessageRow
                 key={item.key}
-                activeActionMessageId={activeActionMessageId}
                 activeDeleteMessageId={activeDeleteMessageId}
                 activeEditMessageId={activeEditMessageId}
                 activeSpaceId={activeSpaceId}
@@ -3140,6 +3591,14 @@ export function ThreadHistoryViewport({
                 currentUserId={currentUserId}
                 encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
                 encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
+                isClusteredWithNext={canClusterAdjacentMessages(
+                  item.message,
+                  nextMessage,
+                )}
+                isClusteredWithPrevious={canClusterAdjacentMessages(
+                  previousMessage,
+                  item.message,
+                )}
                 language={language}
                 latestVisibleMessageSeq={latestCommittedMessageSeq}
                 message={item.message}
@@ -3170,10 +3629,15 @@ export function ThreadHistoryViewport({
               delete: t.chat.delete,
               failed: t.chat.sendFailed,
               justNow: t.chat.justNow,
+              queued: t.chat.messageQueued,
               remove: t.chat.remove,
               retry: t.chat.retrySend,
               sending: t.chat.sending,
               sent: t.chat.sent,
+              voiceFailed: t.chat.voiceMessageFailed,
+              voicePendingHint: t.chat.voiceMessagePendingHint,
+              voiceProcessing: t.chat.voiceMessageProcessing,
+              voiceUploading: t.chat.voiceMessageUploading,
             }}
           />
         </DmThreadClientSubtree>
@@ -3186,10 +3650,15 @@ export function ThreadHistoryViewport({
             delete: t.chat.delete,
             failed: t.chat.sendFailed,
             justNow: t.chat.justNow,
+            queued: t.chat.messageQueued,
             remove: t.chat.remove,
             retry: t.chat.retrySend,
             sending: t.chat.sending,
             sent: t.chat.sent,
+            voiceFailed: t.chat.voiceMessageFailed,
+            voicePendingHint: t.chat.voiceMessagePendingHint,
+            voiceProcessing: t.chat.voiceMessageProcessing,
+            voiceUploading: t.chat.voiceMessageUploading,
           }}
         />
       )}

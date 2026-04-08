@@ -19,6 +19,7 @@ Related documents:
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
+- [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
@@ -277,8 +278,32 @@ Recommended timeline event categories:
 - inspection scheduled or completed
 - incident escalated or resolved
 - document added
-- thread opened, archived, or closed
+- thread opened, reopened, or closed
 - participant invited, joined, removed, or reassigned
+
+First-foundation note:
+
+- the longer-term timeline may include selected message-derived events
+- the first structured timeline foundation should start with operational/system
+  events and leave broad message mirroring for a later branch
+- the first committed event subset should stay even narrower:
+  - thread created
+  - thread metadata attached
+  - primary object linked
+  - meaningful status changed
+  - thread closed
+  - thread reopened
+
+Guardrail:
+
+- this longer-term category list must not be read as a first-pass emission
+  checklist
+- the initial timeline branch should not mirror all message traffic, upload
+  state, or UI/system noise into committed space history
+- thread-local system notices and space-wide committed history should stay as
+  separate concepts
+- per-user archive/hide state should not be collapsed into operational thread
+  lifecycle history
 
 Recommended target event fields:
 
@@ -291,17 +316,35 @@ Recommended target event fields:
 | `actor_user_id` | auditability |
 | `conversation_id` | optional thread context |
 | `message_id` | optional chat linkage |
-| `object_type` | operational reference |
-| `object_id` | operational reference |
+| `operational_object_type` | operational reference |
+| `operational_object_id` | operational reference |
 | `audience_mode` | internal-only vs external-visible control |
 | `summary_payload` | compact renderable details |
 | `search_text` or equivalent derived index input | future search support |
+
+First-foundation note:
+
+- the initial timeline foundation may start narrower than this full target
+  field set
+- the first additive SQL pass can reasonably focus on:
+  - `space_id`
+  - optional `conversation_id`
+  - optional `message_id`
+  - optional primary object ref
+  - `event_type`
+  - `source_kind`
+  - `occurred_at`
+  - `summary_payload`
+- audience/search derivations can be added later once access policy and search
+  strategy are clearer
 
 Recommended design rule:
 
 - timeline events should be append-oriented and audit-friendly
 - they should summarize meaningful state changes
 - they should not depend on loading blobs or replaying entire message history
+- later visibility should inherit from parent thread/object/space policy
+  boundaries rather than being guessed from generic thread role alone
 
 ## 6. Search and Indexing Implications
 

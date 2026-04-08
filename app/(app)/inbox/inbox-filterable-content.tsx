@@ -31,7 +31,7 @@ import {
   type InboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
 import { InboxConversationLiveRow } from './inbox-conversation-live-row';
-import { NewChatSheet } from './new-chat-sheet';
+import { NewChatSheet, type NewChatMode } from './new-chat-sheet';
 
 type InboxFilter = InboxPrimaryFilter;
 type InboxView = 'main' | 'archived';
@@ -133,9 +133,14 @@ const EMPTY_LIVE_SUMMARY: InboxConversationLiveSummary = {
 
 type InboxFilterableContentProps = {
   activeSpaceId: string;
+  activeSpaceName: string | null;
   availableDmUserEntries: AvailableUserEntry[];
   availableUserEntries: AvailableUserEntry[];
+  canManageMembers: boolean;
   createOpen: boolean;
+  createTargetsLoaded: boolean;
+  initialCreateMode: NewChatMode;
+  isMessengerSpace: boolean;
   currentUserId: string;
   initialFilter: InboxFilter;
   initialView: InboxView;
@@ -159,12 +164,14 @@ function normalizeSearchTerm(value: string) {
 
 function buildInboxHref({
   create,
+  createMode,
   filter,
   query,
   spaceId,
   view,
 }: {
   create?: boolean;
+  createMode?: NewChatMode;
   filter: InboxFilter;
   query?: string;
   spaceId?: string | null;
@@ -190,6 +197,10 @@ function buildInboxHref({
 
   if (create) {
     params.set('create', 'open');
+
+    if (createMode) {
+      params.set('createMode', createMode);
+    }
   }
 
   const href = params.toString();
@@ -535,11 +546,16 @@ function buildOrganizedConversationSectionsByFilter(input: {
 
 export function InboxFilterableContent({
   activeSpaceId,
+  activeSpaceName,
   archivedConversationItems,
   archivedSummaries,
   availableDmUserEntries,
   availableUserEntries,
+  canManageMembers,
   createOpen,
+  createTargetsLoaded,
+  initialCreateMode,
+  isMessengerSpace,
   currentUserId,
   initialFilter,
   initialView,
@@ -551,11 +567,7 @@ export function InboxFilterableContent({
   restoreAction,
 }: InboxFilterableContentProps) {
   const t = useMemo(() => getTranslations(language), [language]);
-  const deriveMainConversationItemsMemoized = useMemo(
-    () => createDerivedConversationItemsMemoizer(),
-    [],
-  );
-  const deriveArchivedConversationItemsMemoized = useMemo(
+  const deriveConversationItemsMemoized = useMemo(
     () => createDerivedConversationItemsMemoizer(),
     [],
   );
@@ -563,6 +575,8 @@ export function InboxFilterableContent({
   const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
   const [activeView, setActiveView] = useState<InboxView>(initialView);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(createOpen);
+  const [createSheetMode, setCreateSheetMode] =
+    useState<NewChatMode>(initialCreateMode);
   const [pullRefreshOffset, setPullRefreshOffset] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const touchGestureRef = useRef<{
@@ -590,6 +604,10 @@ export function InboxFilterableContent({
   useEffect(() => {
     setIsCreateSheetOpen(createOpen);
   }, [createOpen]);
+
+  useEffect(() => {
+    setCreateSheetMode(initialCreateMode);
+  }, [initialCreateMode]);
 
   const getInboxScrollTop = () => {
     if (typeof window === 'undefined') {
@@ -703,6 +721,7 @@ export function InboxFilterableContent({
 
     const nextHref = buildInboxHref({
       create: isCreateSheetOpen,
+      createMode: isCreateSheetOpen ? createSheetMode : undefined,
       filter: activeFilter,
       query: queryValue,
       spaceId: activeSpaceId,
@@ -714,7 +733,14 @@ export function InboxFilterableContent({
     }
 
     window.history.replaceState(window.history.state, '', nextHref);
-  }, [activeFilter, activeSpaceId, activeView, isCreateSheetOpen, queryValue]);
+  }, [
+    activeFilter,
+    activeSpaceId,
+    activeView,
+    createSheetMode,
+    isCreateSheetOpen,
+    queryValue,
+  ]);
 
   useEffect(() => {
     if (typeof document === 'undefined' || !isCreateSheetOpen) {
@@ -767,16 +793,19 @@ export function InboxFilterableContent({
       }),
     [availableUserEntries, searchTerm],
   );
-  const allSummaries = useMemo(
-    () => [...mainSummaries, ...archivedSummaries],
-    [archivedSummaries, mainSummaries],
-  );
-  const summariesByConversationId = useMemo(
+  const visibleConversationItems =
+    activeView === 'archived' ? archivedConversationItems : mainConversationItems;
+  const visibleConversationSummaries =
+    activeView === 'archived' ? archivedSummaries : mainSummaries;
+  const visibleSummariesByConversationId = useMemo(
     () =>
       new Map(
-        allSummaries.map((summary) => [summary.conversationId, summary] as const),
+        visibleConversationSummaries.map((summary) => [
+          summary.conversationId,
+          summary,
+        ] as const),
       ),
-    [allSummaries],
+    [visibleConversationSummaries],
   );
   const inboxSummaryRevision = useSyncExternalStore(
     subscribeToInboxSummaryRevision,
@@ -802,12 +831,12 @@ export function InboxFilterableContent({
     [t],
   );
   const liveSummariesByConversationId = useMemo(() => {
-    // Tie this snapshot map to store revision changes without forcing unrelated
-    // filter-state switches to rebuild it.
+    // Tie the visible snapshot map to store revision changes without forcing
+    // inactive archived/main lists to rebuild on every live inbox update.
     void inboxSummaryRevision;
     const nextMap = new Map<string, InboxConversationLiveSummary>();
 
-    for (const [conversationId, fallbackSummary] of summariesByConversationId) {
+    for (const [conversationId, fallbackSummary] of visibleSummariesByConversationId) {
       nextMap.set(
         conversationId,
         getInboxConversationSummarySnapshot(conversationId, fallbackSummary),
@@ -815,60 +844,34 @@ export function InboxFilterableContent({
     }
 
     return nextMap;
-  }, [inboxSummaryRevision, summariesByConversationId]);
-  const derivedMainConversationItems = useMemo(
+  }, [inboxSummaryRevision, visibleSummariesByConversationId]);
+  const derivedConversationItems = useMemo(
     () =>
-      deriveMainConversationItemsMemoized({
-        items: mainConversationItems,
+      deriveConversationItemsMemoized({
+        items: visibleConversationItems,
         labels: rowLabels,
         liveSummariesByConversationId,
         previewMode: preferences.previewMode,
-        visibility: 'main',
+        visibility: activeView,
       }),
     [
-      deriveMainConversationItemsMemoized,
-      liveSummariesByConversationId,
-      mainConversationItems,
-      preferences.previewMode,
-      rowLabels,
-    ],
-  );
-  const derivedArchivedConversationItems = useMemo(
-    () =>
-      deriveArchivedConversationItemsMemoized({
-        items: archivedConversationItems,
-        labels: rowLabels,
-        liveSummariesByConversationId,
-        previewMode: preferences.previewMode,
-        visibility: 'archived',
-      }),
-    [
-      archivedConversationItems,
-      deriveArchivedConversationItemsMemoized,
+      activeView,
+      deriveConversationItemsMemoized,
       liveSummariesByConversationId,
       preferences.previewMode,
       rowLabels,
+      visibleConversationItems,
     ],
   );
-  const mainBuckets = useMemo(
+  const activeBuckets = useMemo(
     () =>
       buildFilterBucket({
-        items: derivedMainConversationItems,
+        items: derivedConversationItems,
         searchTerm,
         t,
       }),
-    [derivedMainConversationItems, searchTerm, t],
+    [derivedConversationItems, searchTerm, t],
   );
-  const archivedBuckets = useMemo(
-    () =>
-      buildFilterBucket({
-        items: derivedArchivedConversationItems,
-        searchTerm,
-        t,
-      }),
-    [derivedArchivedConversationItems, searchTerm, t],
-  );
-  const activeBuckets = activeView === 'archived' ? archivedBuckets : mainBuckets;
   const organizedConversationSectionsByFilter = useMemo(
     () =>
       buildOrganizedConversationSectionsByFilter({
@@ -889,13 +892,43 @@ export function InboxFilterableContent({
   const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
   const organizedConversationSections =
     organizedConversationSectionsByFilter[activeFilter];
-  const activeConversationSourceCount =
+  const activeConversationSourceCount = derivedConversationItems.length;
+  const archivedConversationCount =
     activeView === 'archived'
-      ? derivedArchivedConversationItems.length
-      : derivedMainConversationItems.length;
-  const archivedConversationCount = derivedArchivedConversationItems.length;
+      ? derivedConversationItems.length
+      : archivedConversationItems.length;
+  const messengerFreshSpaceEmpty =
+    isMessengerSpace &&
+    activeView === 'main' &&
+    activeConversationSourceCount === 0 &&
+    !searchTerm;
   const isPrimaryChatsView = activeView === 'main';
   const isDmFilter = activeFilter === 'dm';
+  const manageMembersHref = canManageMembers
+    ? `/spaces/members?space=${encodeURIComponent(activeSpaceId)}`
+    : null;
+  const openCreateDmHref = buildInboxHref({
+    create: true,
+    createMode: 'dm',
+    filter: activeFilter,
+    query: queryValue,
+    spaceId: activeSpaceId,
+    view: activeView,
+  });
+  const openCreateGroupHref = buildInboxHref({
+    create: true,
+    createMode: 'group',
+    filter: activeFilter,
+    query: queryValue,
+    spaceId: activeSpaceId,
+    view: activeView,
+  });
+  const messengerFreshBody =
+    !createTargetsLoaded || availableUserEntries.length > 0
+      ? t.inbox.messengerFreshBody
+      : canManageMembers
+        ? t.inbox.messengerFreshAdminBody
+        : t.inbox.messengerFreshMemberBody;
   const searchAria = isDmFilter ? t.inbox.searchDmAria : t.inbox.searchAria;
   const searchPlaceholder = isDmFilter
     ? t.inbox.searchDmPlaceholder
@@ -1052,16 +1085,15 @@ export function InboxFilterableContent({
                 ⚙
               </span>
             </Link>
-            <button
+            <Link
               aria-label={t.inbox.createAria}
               className="inbox-compose-trigger inbox-topbar-action-button"
-              onClick={() => setIsCreateSheetOpen(true)}
-              type="button"
+              href={openCreateDmHref}
             >
               <span aria-hidden="true" className="inbox-topbar-action-icon">
                 +
               </span>
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -1192,7 +1224,57 @@ export function InboxFilterableContent({
         </section>
       ) : null}
 
-      {activeConversationSourceCount === 0 ? (
+      {messengerFreshSpaceEmpty ? (
+        <section className="card stack empty-card inbox-empty-state inbox-empty-state-messenger">
+          <div className="stack inbox-empty-copy">
+            <h2 className="card-title">{t.inbox.messengerFreshTitle}</h2>
+            <p className="muted">{messengerFreshBody}</p>
+            {activeSpaceName ? (
+              <div className="keepcozy-meta-row">
+                <span className="keepcozy-meta-pill">
+                  {t.settings.currentSpaceLabel}: {activeSpaceName}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="inbox-empty-actions">
+            {createTargetsLoaded ? (
+              availableDmUserEntries.length > 0 ? (
+                <Link className="button" href={openCreateDmHref}>
+                  {t.inbox.create.createDm}
+                </Link>
+              ) : null
+            ) : (
+              <Link className="button" href={openCreateDmHref}>
+                {t.inbox.create.createDm}
+              </Link>
+            )}
+            {createTargetsLoaded ? (
+              availableUserEntries.length > 0 ? (
+                <Link className="button button-secondary" href={openCreateGroupHref}>
+                  {t.inbox.create.createGroup}
+                </Link>
+              ) : null
+            ) : (
+              <Link className="button button-secondary" href={openCreateGroupHref}>
+                {t.inbox.create.createGroup}
+              </Link>
+            )}
+            {manageMembersHref ? (
+              <Link className="pill" href={manageMembersHref}>
+                {t.spaces.manageMembersAction}
+              </Link>
+            ) : null}
+            <Link
+              className="pill"
+              href={`/spaces?space=${encodeURIComponent(activeSpaceId)}`}
+            >
+              {t.settings.chooseAnotherSpace}
+            </Link>
+          </div>
+        </section>
+      ) : activeConversationSourceCount === 0 ? (
         <section className="card stack empty-card inbox-empty-state">
           <h2 className="card-title">
             {activeView === 'archived'
@@ -1257,7 +1339,7 @@ export function InboxFilterableContent({
                   activeSpaceId={activeSpaceId}
                   currentUserId={currentUserId}
                   initialSummary={
-                    summariesByConversationId.get(conversation.conversationId) ?? {
+                    visibleSummariesByConversationId.get(conversation.conversationId) ?? {
                       conversationId: conversation.conversationId,
                       createdAt: null,
                       hiddenAt: null,
@@ -1305,8 +1387,11 @@ export function InboxFilterableContent({
             availableGroupUsers={availableUserEntriesFiltered}
             hasAnyDmUsers={availableDmUserEntries.length > 0}
             hasAnyUsers={availableUserEntries.length > 0}
+            initialMode={createSheetMode}
             language={language}
+            manageMembersHref={manageMembersHref}
             onClose={() => setIsCreateSheetOpen(false)}
+            onModeChange={setCreateSheetMode}
             spaceId={activeSpaceId}
           />
         </section>

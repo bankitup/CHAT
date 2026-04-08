@@ -4,18 +4,18 @@ import { getCookieLanguage } from '@/modules/i18n/server';
 import './globals.css';
 
 export const metadata: Metadata = {
-  applicationName: 'CHAT',
+  applicationName: 'BWC Products',
   title: {
-    default: 'CHAT',
-    template: '%s | CHAT',
+    default: 'BWC Products',
+    template: '%s | BWC Products',
   },
   description:
-    'A mobile-first PWA messenger built as a reusable messaging-core and active product shell.',
+    'A mobile-first shared entry for Build With Care products, spaces, and messaging-powered workflows.',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'CHAT',
+    title: 'BWC Products',
   },
   formatDetection: {
     telephone: false,

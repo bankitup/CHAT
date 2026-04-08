@@ -1,8 +1,22 @@
-# CHAT
+# KeepCozy + CHAT Foundation
 
-CHAT is a mobile-first PWA messenger built on a reusable messaging module foundation. The current product shell is a Next.js application deployed through Vercel, with Supabase as the backend source of truth for auth, data, and access control.
+KeepCozy is the current product focus in a mobile-first PWA repository built on
+a reusable messaging module foundation. CHAT remains the shared communication
+core, and the current product shell is a Next.js application deployed through
+Vercel with Supabase as the backend source of truth for auth, data, and access
+control.
 
 This repository should be treated as `messaging-core + current product shell`, not as a one-off chat UI and not as a placeholder for separate native apps.
+
+Current focus update:
+
+- KeepCozy is now the primary product focus inside this shared repository.
+- CHAT remains the reusable communication core and shared Supabase/runtime
+  foundation beside that product work.
+- The current KeepCozy MVP boundary is documented in
+  [docs/keepcozy-mvp-boundary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-boundary.md)
+  and
+  [docs/keepcozy-mvp-schema-runtime-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-schema-runtime-alignment.md).
 
 ## Product Direction
 
@@ -50,7 +64,20 @@ Current implementation priority is foundation first:
 
 ## Current Scope
 
-Current scope is chat only. The repository is focused on establishing the base product and architectural layers required for messaging, without expanding into adjacent communication features or speculative client strategies.
+Current scope is shared foundation plus the first KeepCozy MVP slice.
+
+The repository still carries a reusable messaging core, but chat is no longer
+the standalone product direction. The current product boundary is centered on:
+
+- home
+- room
+- issue
+- task
+- update/history
+- resolution
+
+Broader home-ops domains and richer chat-centric expansion should not redefine
+the current product slice ahead of that loop.
 
 ## Explicitly Out of Scope
 

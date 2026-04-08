@@ -1,5 +1,11 @@
 node_modules
 .next
+.turbo
+.playwright-cli/
+*.tsbuildinfo
+.eslintcache
 .env.local
+Keys.env.local.rtf
 .DS_Store
 .codex
+*.tsbuildinfo

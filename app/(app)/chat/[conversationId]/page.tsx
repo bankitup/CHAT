@@ -21,7 +21,6 @@ import {
   getConversationParticipants,
   getConversationReadState,
   getMessageSenderProfiles,
-  STARTER_REACTIONS,
 } from '@/modules/messaging/data/server';
 import {
   canAddParticipantsToGroupConversation,
@@ -75,7 +74,6 @@ import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { GroupChatSettingsForm } from './group-chat-settings-form';
 import { PlaintextChatComposerForm } from './plaintext-chat-composer-form';
-import { ThreadReactionPicker } from './thread-reaction-picker';
 import { ThreadLiveStateHydrator } from '@/modules/messaging/realtime/thread-live-state-store';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
@@ -112,24 +110,6 @@ function formatLongDate(value: string | null, language: AppLanguage, t: ReturnTy
   }).format(parsedDate);
 }
 
-function getMessageSnippet(
-  value: unknown,
-  t: ReturnType<typeof getTranslations>,
-  maxLength = 90,
-) {
-  const normalized = normalizeMessageBodyText(value) ?? '';
-
-  if (!normalized) {
-    return t.chat.emptyMessage;
-  }
-
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, maxLength).trimEnd()}...`;
-}
-
 function getMessageSeq(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
 }
@@ -154,15 +134,6 @@ function parseSafeDate(value: unknown) {
   return parsedDate;
 }
 
-function normalizeMessageBodyText(value: unknown) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-
 function looksLikeUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
@@ -180,11 +151,22 @@ function logThreadRenderDiagnostics(
   console.info('[chat-thread-render]', stage, details);
 }
 
+function shouldLogThreadRenderCheckpoint() {
+  return (
+    process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ||
+    process.env.CHAT_DEBUG_THREAD_RENDER === '1'
+  );
+}
+
 function logThreadRenderCheckpoint(
   stage: string,
   details?: Record<string, unknown>,
   level: 'info' | 'error' = 'info',
 ) {
+  if (level !== 'error' && !shouldLogThreadRenderCheckpoint()) {
+    return;
+  }
+
   if (details) {
     console[level]('[chat-thread-checkpoint]', stage, details);
     return;
@@ -459,6 +441,7 @@ export default async function ChatPage({
       try {
         activeSpaceState = await resolveActiveSpaceForUser({
           userId: user.id,
+          userEmail: user.email ?? null,
           requestedSpaceId: fallbackRequestedSpaceId,
           source: 'chat-page',
         });
@@ -626,15 +609,17 @@ export default async function ChatPage({
       },
       () => getConversationReadState(conversationId, user.id),
     ),
-    resolveThreadRenderStage(
-      'member-read-states-load',
-      {
-        conversationId,
-        debugRequestId: threadRenderRequestId,
-        kind: conversation.kind,
-      },
-      () => getConversationMemberReadStates(conversationId),
-    ),
+    conversation.kind === 'dm'
+      ? resolveThreadRenderStage(
+          'member-read-states-load',
+          {
+            conversationId,
+            debugRequestId: threadRenderRequestId,
+            kind: conversation.kind,
+          },
+          () => getConversationMemberReadStates(conversationId),
+        )
+      : Promise.resolve([]),
     resolveThreadRenderStage(
       'participants-load',
       {
@@ -734,6 +719,10 @@ export default async function ChatPage({
         ] as const),
       ),
   );
+  const reactionsByMessageEntries = messageIds.map((messageId) => ({
+    messageId,
+    reactions: reactionsByMessage.get(messageId) ?? [],
+  }));
   const e2eeEnvelopeHistory = {
     activeDeviceCreatedAt:
       threadHistorySnapshot.dmE2ee?.activeDeviceCreatedAt ?? null,
@@ -995,11 +984,6 @@ export default async function ChatPage({
   );
   const activeEditMessageId = query.editMessageId?.trim() || null;
   const activeDeleteMessageId = query.deleteMessageId?.trim() || null;
-  const activeActionMessageId = query.actionMessageId?.trim() || null;
-  const activeActionMessage =
-    activeActionMessageId && !activeEditMessageId && !activeDeleteMessageId
-      ? messagesById.get(activeActionMessageId) ?? null
-      : null;
   const currentUserGroupRole =
     conversation.kind === 'group'
       ? participants.find((participant) => participant.userId === user.id)?.role ?? 'member'
@@ -1063,14 +1047,6 @@ export default async function ChatPage({
       : null;
   const otherParticipantUserId =
     conversation.kind === 'dm' ? otherParticipants[0]?.userId ?? null : null;
-  const activeActionMessageSenderLabel = activeActionMessage
-    ? senderNames.get(activeActionMessage.sender_id ?? '') || t.chat.unknownUser
-    : null;
-  const activeActionMessageIsOwn =
-    activeActionMessage?.sender_id === user.id && !activeActionMessage.deleted_at;
-  const activeActionReactions = activeActionMessage
-    ? reactionsByMessage.get(activeActionMessage.id) ?? []
-    : [];
   const firstMessageCreatedAtValid = firstMessage
     ? Boolean(parseSafeDate(firstMessage.created_at))
     : null;
@@ -1187,7 +1163,6 @@ export default async function ChatPage({
     ...threadDeploymentMarker,
     conversationId,
     debugRequestId: threadRenderRequestId,
-    hasActiveActionMessage: Boolean(activeActionMessage),
     hasActiveReplyTarget: Boolean(activeReplyTarget),
     kind: conversation.kind,
     messageCount: messages.length,
@@ -1217,24 +1192,21 @@ export default async function ChatPage({
           <ActiveChatRealtimeSync
             conversationId={conversationId}
             currentUserId={user.id}
-            messageIds={messages.map((message) => message.id)}
+            messageIds={messageIds}
           />
         </DmThreadClientSubtree>
       ) : (
         <ActiveChatRealtimeSync
           conversationId={conversationId}
           currentUserId={user.id}
-          messageIds={messages.map((message) => message.id)}
+          messageIds={messageIds}
         />
       )}
       <ThreadLiveStateHydrator
         conversationId={conversationId}
         currentUserReadSeq={readState.lastReadMessageSeq}
         otherParticipantReadSeq={otherParticipantReadState?.lastReadMessageSeq ?? null}
-        reactionsByMessage={messageIds.map((messageId) => ({
-          messageId,
-          reactions: reactionsByMessage.get(messageId) ?? [],
-        }))}
+        reactionsByMessage={reactionsByMessageEntries}
       />
       {conversation.kind === 'dm' ? (
         <DmThreadClientSubtree
@@ -1268,7 +1240,40 @@ export default async function ChatPage({
             <span aria-hidden="true">←</span>
           </Link>
 
-          <div className="chat-header-identity">
+          <Link
+            aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
+            className="chat-header-main-link"
+            href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
+            prefetch={false}
+          >
+            <div className="stack chat-header-copy">
+              <h1 className="conversation-screen-title">
+                {directConversationDisplayTitle}
+              </h1>
+              {conversation.kind === 'group' ? (
+                <p className="muted chat-member-summary">{groupMemberSummary}</p>
+              ) : hasIdentityStatus(directParticipantIdentity) || otherParticipants[0] ? (
+                <div className="chat-header-meta">
+                  <IdentityStatusInline
+                    className="chat-header-status"
+                    identity={directParticipantIdentity}
+                  />
+                  {otherParticipants[0] ? (
+                    <DmThreadClientSubtree
+                      conversationId={conversationId}
+                      {...threadClientDiagnostics}
+                      fallback={null}
+                      surface="conversation-presence-status"
+                    >
+                      <ConversationPresenceStatus language={language} />
+                    </DmThreadClientSubtree>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </Link>
+
+          <div className="chat-header-avatar-slot">
             <ChatHeaderAvatarPreviewTrigger
               closeLabel={t.chat.closeAvatarPreview}
               conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
@@ -1285,39 +1290,6 @@ export default async function ChatPage({
               }
               title={directConversationDisplayTitle}
             />
-
-            <Link
-              aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
-              className="chat-header-main-link"
-              href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
-              prefetch={false}
-            >
-              <div className="stack chat-header-copy">
-                <h1 className="conversation-screen-title">
-                  {directConversationDisplayTitle}
-                </h1>
-                {conversation.kind === 'group' ? (
-                  <p className="muted chat-member-summary">{groupMemberSummary}</p>
-                ) : hasIdentityStatus(directParticipantIdentity) || otherParticipants[0] ? (
-                  <div className="chat-header-meta">
-                    <IdentityStatusInline
-                      className="chat-header-status"
-                      identity={directParticipantIdentity}
-                    />
-                    {otherParticipants[0] ? (
-                      <DmThreadClientSubtree
-                        conversationId={conversationId}
-                        {...threadClientDiagnostics}
-                        fallback={null}
-                        surface="conversation-presence-status"
-                      >
-                        <ConversationPresenceStatus language={language} />
-                      </DmThreadClientSubtree>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </Link>
           </div>
         </section>
       </section>
@@ -1329,7 +1301,6 @@ export default async function ChatPage({
       <section className="chat-main">
         <section className="message-thread" id="message-thread-scroll">
           <ThreadHistoryViewport
-            activeActionMessageId={activeActionMessageId}
             activeDeleteMessageId={activeDeleteMessageId}
             activeEditMessageId={activeEditMessageId}
             activeSpaceId={activeSpaceId}
@@ -1955,162 +1926,6 @@ export default async function ChatPage({
         </section>
       ) : null}
 
-      {activeActionMessage && !activeActionMessage.deleted_at ? (
-        <section className="message-sheet-overlay" aria-label={t.chat.openMessageActions}>
-          <Link
-            aria-label={t.chat.closeMessageActions}
-            className="message-sheet-backdrop"
-            href={buildChatHref({
-              conversationId,
-              hash: `#message-${activeActionMessage.id}`,
-              spaceId: activeSpaceId,
-            })}
-            prefetch={false}
-          />
-          <section className="message-sheet-card card stack">
-            <div className="message-sheet-header">
-              <div className="stack message-sheet-copy">
-                <span className="message-sheet-title">
-                  {activeActionMessageSenderLabel}
-                </span>
-                <span className="message-sheet-snippet">
-                  {isEncryptedDmTextMessage(activeActionMessage)
-                    ? t.chat.encryptedMessage
-                    : normalizeMessageBodyText(activeActionMessage.body)
-                    ? getMessageSnippet(activeActionMessage.body, t, 96)
-                    : activeActionMessage.kind === 'voice'
-                      ? t.chat.voiceMessage
-                    : activeActionMessage.reply_to_message_id
-                      ? t.chat.replyMessage
-                      : t.chat.chooseAction}
-                </span>
-              </div>
-              <Link
-                aria-label={t.chat.closeMessageActions}
-                className="message-sheet-close"
-                href={buildChatHref({
-                  conversationId,
-                  hash: `#message-${activeActionMessage.id}`,
-                  spaceId: activeSpaceId,
-                })}
-                prefetch={false}
-              >
-                <span aria-hidden="true">×</span>
-              </Link>
-            </div>
-
-            <div className="stack message-sheet-section">
-              <ThreadReactionPicker
-                conversationId={conversationId}
-                currentUserId={user.id}
-                emojis={STARTER_REACTIONS}
-                initialReactions={activeActionReactions}
-                isOwnMessage={activeActionMessage.sender_id === user.id}
-                messageId={activeActionMessage.id}
-              />
-            </div>
-
-            <div className="stack message-sheet-section">
-              <div className="message-sheet-action-list">
-                <Link
-                  className="message-sheet-action"
-                  href={buildChatHref({
-                    conversationId,
-                    hash: '#message-composer',
-                    replyToMessageId: activeActionMessage.id,
-                    spaceId: activeSpaceId,
-                  })}
-                  prefetch={false}
-                >
-                  <span className="message-sheet-action-icon" aria-hidden="true">
-                    ↩
-                  </span>
-                  <span className="message-sheet-action-copy">
-                    <span className="message-sheet-action-label">{t.chat.reply}</span>
-                    {isEncryptedDmTextMessage(activeActionMessage) ? (
-                      <span className="message-sheet-action-note">
-                        {t.chat.encryptedReplyInfo}
-                      </span>
-                    ) : null}
-                  </span>
-                </Link>
-
-                {activeActionMessageIsOwn && isEncryptedDmTextMessage(activeActionMessage) ? (
-                  <>
-                    <div className="message-sheet-action message-sheet-action-disabled">
-                      <span className="message-sheet-action-icon" aria-hidden="true">
-                        ✎
-                      </span>
-                      <span className="message-sheet-action-copy">
-                        <span className="message-sheet-action-label">{t.chat.edit}</span>
-                        <span className="message-sheet-action-note">
-                          {t.chat.encryptedEditUnavailable}
-                        </span>
-                      </span>
-                    </div>
-
-                    <Link
-                      className="message-sheet-action message-sheet-action-danger"
-                      href={buildChatHref({
-                        conversationId,
-                        deleteMessageId: activeActionMessage.id,
-                        hash: `#message-${activeActionMessage.id}`,
-                        spaceId: activeSpaceId,
-                      })}
-                      prefetch={false}
-                    >
-                      <span className="message-sheet-action-icon" aria-hidden="true">
-                        🗑
-                      </span>
-                      <span className="message-sheet-action-copy">
-                        <span className="message-sheet-action-label">{t.chat.delete}</span>
-                      </span>
-                    </Link>
-                  </>
-                ) : activeActionMessageIsOwn && !isEncryptedDmTextMessage(activeActionMessage) ? (
-                  <>
-                    <Link
-                      className="message-sheet-action"
-                      href={buildChatHref({
-                        conversationId,
-                        editMessageId: activeActionMessage.id,
-                        hash: `#message-${activeActionMessage.id}`,
-                        spaceId: activeSpaceId,
-                      })}
-                      prefetch={false}
-                    >
-                      <span className="message-sheet-action-icon" aria-hidden="true">
-                        ✎
-                      </span>
-                      <span className="message-sheet-action-copy">
-                        <span className="message-sheet-action-label">{t.chat.edit}</span>
-                      </span>
-                    </Link>
-
-                    <Link
-                      className="message-sheet-action message-sheet-action-danger"
-                      href={buildChatHref({
-                        conversationId,
-                        deleteMessageId: activeActionMessage.id,
-                        hash: `#message-${activeActionMessage.id}`,
-                        spaceId: activeSpaceId,
-                      })}
-                      prefetch={false}
-                    >
-                      <span className="message-sheet-action-icon" aria-hidden="true">
-                        🗑
-                      </span>
-                      <span className="message-sheet-action-copy">
-                        <span className="message-sheet-action-label">{t.chat.delete}</span>
-                      </span>
-                    </Link>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </section>
-        </section>
-      ) : null}
     </section>
   );
 }

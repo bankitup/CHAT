@@ -19,7 +19,6 @@ import {
   getDirectMessageDisplayName,
   getConversationParticipantIdentities,
   getExistingActiveDmPartnerUserIds,
-  getExistingActiveDmPartnerUserIdsForCandidates,
   getInboxConversations,
   getInboxConversationsStable,
   type InboxConversation,
@@ -44,10 +43,12 @@ import { redirect } from 'next/navigation';
 import {
   restoreConversationAction,
 } from './actions';
+import type { NewChatMode } from './new-chat-sheet';
 
 type InboxPageProps = {
   searchParams: Promise<{
     create?: string;
+    createMode?: string;
     error?: string;
     filter?: string;
     q?: string;
@@ -84,6 +85,10 @@ function normalizeView(value: string | undefined): InboxView {
   return value === 'archived' ? 'archived' : 'main';
 }
 
+function normalizeCreateMode(value: string | undefined): NewChatMode {
+  return value === 'group' ? 'group' : 'dm';
+}
+
 export default async function InboxPage({ searchParams }: InboxPageProps) {
   const diagnosticsEnabled = process.env.CHAT_DEBUG_INBOX_SSR === '1';
   const diagnosticsLabel = '[inbox-ssr]';
@@ -108,6 +113,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   });
   const activeView = normalizeView(query.view);
   const isCreateOpen = query.create === 'open';
+  const initialCreateMode = normalizeCreateMode(query.createMode);
   const [user, language, inboxPreferences] = await Promise.all([
     getRequestViewer(),
     getRequestLanguage(),
@@ -122,6 +128,9 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   logDiagnostics('auth-ok');
 
   let activeSpaceId: string;
+  let activeSpaceName: string | null = null;
+  let canManageMembers = false;
+  let isMessengerSpace = false;
   const explicitV1TestSpace = await resolveV1TestSpaceFallback({
     requestedSpaceId: query.space,
     source: 'inbox-page-explicit-v1-test-bypass',
@@ -132,6 +141,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
     // Remove once membership resolution via space_members is stable again.
     activeSpaceId = explicitV1TestSpace.id;
+    activeSpaceName = explicitV1TestSpace.name;
     logDiagnostics('active-space-bypass-v1-test', {
       spaceId: explicitV1TestSpace.id,
     });
@@ -139,6 +149,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     try {
       const activeSpaceState = await resolveActiveSpaceForUser({
         userId: user.id,
+        userEmail: user.email ?? null,
         requestedSpaceId: query.space,
         source: 'inbox-page',
       });
@@ -154,6 +165,9 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       }
 
       activeSpaceId = activeSpaceState.activeSpace.id;
+      activeSpaceName = activeSpaceState.activeSpace.name;
+      canManageMembers = activeSpaceState.activeSpace.canManageMembers;
+      isMessengerSpace = activeSpaceState.activeSpace.profile === 'messenger_full';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -168,6 +182,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         }
 
         activeSpaceId = fallbackSpace.id;
+        activeSpaceName = fallbackSpace.name;
         logDiagnostics('active-space-fallback-v1-test', {
           spaceId: fallbackSpace.id,
         });
@@ -236,10 +251,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return [] as Awaited<ReturnType<typeof getInboxConversations>>;
       }),
     archivedConversationsPromise,
-    getAvailableUsers(user.id, {
-      spaceId: activeSpaceId,
-      source: isV1TestBypass ? 'inbox-page-v1-test-bypass' : 'inbox-page',
-    })
+    isCreateOpen
+      ? getAvailableUsers(user.id, {
+          spaceId: activeSpaceId,
+          source: isV1TestBypass ? 'inbox-page-v1-test-bypass' : 'inbox-page',
+        })
           .then((value) => {
             logDiagnostics('loader:users-ok', { count: value.length });
             return value;
@@ -254,20 +270,23 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             }
 
             throw error;
-          }),
-    getExistingActiveDmPartnerUserIds(user.id, {
-      spaceId: activeSpaceId,
-    })
-      .then((value) => {
-        logDiagnostics('loader:existing-dm-users-ok', { count: value.length });
-        return value;
-      })
-      .catch((error) => {
-        logDiagnostics('loader:existing-dm-users-error', {
-          message: error instanceof Error ? error.message : String(error),
-        });
-        return [] as string[];
-      }),
+          })
+      : Promise.resolve([] as Awaited<ReturnType<typeof getAvailableUsers>>),
+    isCreateOpen
+      ? getExistingActiveDmPartnerUserIds(user.id, {
+          spaceId: activeSpaceId,
+        })
+          .then((value) => {
+            logDiagnostics('loader:existing-dm-users-ok', { count: value.length });
+            return value;
+          })
+          .catch((error) => {
+            logDiagnostics('loader:existing-dm-users-error', {
+              message: error instanceof Error ? error.message : String(error),
+            });
+            return [] as string[];
+          })
+      : Promise.resolve([] as string[]),
   ]);
   logDiagnostics('loader:all-ok');
   const allVisibleConversations = [...conversations, ...archivedConversations];
@@ -290,18 +309,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ...availableUser,
     label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
   }));
-  const exactExistingDmPartnerUserIds = await getExistingActiveDmPartnerUserIdsForCandidates(
-    user.id,
-    availableUserEntries.map((availableUser) => availableUser.userId),
-    {
-      spaceId: activeSpaceId,
-    },
-  ).catch((error) => {
-    logDiagnostics('loader:existing-dm-candidate-verify-error', {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return [] as string[];
-  });
   const visibleExistingDmPartnerUserIds = new Set(
     allVisibleConversations.flatMap((conversation) => {
       if (conversation.kind !== 'dm') {
@@ -318,7 +325,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   );
   const existingDmPartnerUserIdsSet = new Set([
     ...existingDmPartnerUserIds,
-    ...exactExistingDmPartnerUserIds,
     ...visibleExistingDmPartnerUserIds,
   ]);
   const availableDmUserEntries = availableUserEntries.filter(
@@ -331,6 +337,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       const otherParticipants = participantOptions.filter(
         (participant) => participant.userId !== user.id,
       );
+      const primaryOtherParticipant = otherParticipants[0] ?? null;
       const otherParticipantLabels = otherParticipants.map((participant) =>
         resolvePublicIdentityLabel(participant, t.chat.unknownUser),
       );
@@ -377,7 +384,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         latestMessageContentMode: conversation.latestMessageContentMode,
         latestMessageDeletedAt: conversation.latestMessageDeletedAt,
         metaLabels,
-        participants: otherParticipants,
+        participants: primaryOtherParticipant ? [primaryOtherParticipant] : [],
         participantLabels: otherParticipantLabels,
         hasUnread,
       } satisfies ConversationListItem;
@@ -419,14 +426,19 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
       <InboxFilterableContent
         activeSpaceId={activeSpaceId}
+        activeSpaceName={activeSpaceName}
         archivedConversationItems={archivedConversationItems}
         archivedSummaries={archivedSummaries}
         availableDmUserEntries={availableDmUserEntries}
         availableUserEntries={availableUserEntries}
+        canManageMembers={canManageMembers}
         createOpen={isCreateOpen}
+        createTargetsLoaded={isCreateOpen}
         currentUserId={user.id}
+        initialCreateMode={initialCreateMode}
         initialFilter={activeFilter}
         initialView={activeView}
+        isMessengerSpace={isMessengerSpace}
         language={language}
         mainConversationItems={mainConversationItems}
         mainSummaries={mainSummaries}

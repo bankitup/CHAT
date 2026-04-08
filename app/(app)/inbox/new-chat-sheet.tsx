@@ -1,6 +1,7 @@
 'use client';
 
-import { useDeferredValue, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   getTranslations,
   type AppLanguage,
@@ -25,24 +26,30 @@ type NewChatSheetProps = {
   availableGroupUsers: NewChatSheetUser[];
   hasAnyDmUsers: boolean;
   hasAnyUsers: boolean;
+  initialMode: NewChatMode;
   onClose: () => void;
+  onModeChange?: (mode: NewChatMode) => void;
   language: AppLanguage;
+  manageMembersHref?: string | null;
   spaceId: string;
 };
 
-type NewChatMode = 'dm' | 'group';
+export type NewChatMode = 'dm' | 'group';
 
 export function NewChatSheet({
   availableDmUsers,
   availableGroupUsers,
   hasAnyDmUsers,
   hasAnyUsers,
+  initialMode,
   onClose,
+  onModeChange,
   language,
+  manageMembersHref,
   spaceId,
 }: NewChatSheetProps) {
   const t = getTranslations(language);
-  const [mode, setMode] = useState<NewChatMode>('dm');
+  const [mode, setMode] = useState<NewChatMode>(initialMode);
   const [peopleSearch, setPeopleSearch] = useState('');
   const [selectedDmUserId, setSelectedDmUserId] = useState<string | null>(null);
   const [selectedGroupUserIds, setSelectedGroupUserIds] = useState<string[]>([]);
@@ -88,8 +95,13 @@ export function NewChatSheet({
   const isGroupReady =
     selectedGroupUserIds.length > 0 && groupTitle.trim().length > 0;
 
+  useEffect(() => {
+    setMode(initialMode);
+  }, [initialMode]);
+
   function handleModeChange(nextMode: NewChatMode) {
     setMode(nextMode);
+    onModeChange?.(nextMode);
   }
 
   function toggleGroupUser(userId: string) {
@@ -185,9 +197,18 @@ export function NewChatSheet({
           </div>
 
           {!hasAnyUsers ? (
-            <p className="muted inbox-compose-empty">
-              {t.inbox.create.noUsers}
-            </p>
+            <div className="stack inbox-compose-empty-state">
+              <p className="muted inbox-compose-empty">
+                {manageMembersHref
+                  ? t.inbox.create.noUsersAdmin
+                  : t.inbox.create.noUsers}
+              </p>
+              {manageMembersHref ? (
+                <Link className="button button-secondary" href={manageMembersHref}>
+                  {t.spaces.manageMembersAction}
+                </Link>
+              ) : null}
+            </div>
           ) : !hasAnyDmUsers ? (
             <p className="muted inbox-compose-empty">
               {t.inbox.create.existingDmOnly}
@@ -307,9 +328,18 @@ export function NewChatSheet({
             </label>
 
             {!hasAnyUsers ? (
-              <p className="muted inbox-compose-empty">
-                {t.inbox.create.noUsers}
-              </p>
+              <div className="stack inbox-compose-empty-state">
+                <p className="muted inbox-compose-empty">
+                  {manageMembersHref
+                    ? t.inbox.create.noUsersAdmin
+                    : t.inbox.create.noUsers}
+                </p>
+                {manageMembersHref ? (
+                  <Link className="button button-secondary" href={manageMembersHref}>
+                    {t.spaces.manageMembersAction}
+                  </Link>
+                ) : null}
+              </div>
           ) : filteredGroupUsers.length === 0 ? (
             <p className="muted inbox-compose-empty">
               {t.inbox.create.noMatches}

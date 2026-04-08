@@ -18,11 +18,21 @@ without destabilizing the current CHAT runtime.
 
 Related documents:
 
+- [keepcozy-mvp-boundary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-boundary.md)
+- [keepcozy-mvp-schema-runtime-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-schema-runtime-alignment.md)
 - [keepcozy-space-model-spec.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-model-spec.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
+- [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+- [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-data-flow.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-data-flow.md)
+- [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
+- [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
+- [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
+- [keepcozy-space-schema-companion-metadata.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-companion-metadata.md)
+- [keepcozy-space-schema-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-schema-runtime-boundaries.md)
+- [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
 - [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
 - [schema-requirements.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-requirements.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
@@ -41,6 +51,47 @@ direction:
 - treat private messaging as a separate trust mode, including current DM E2EE
 - make `space` the operational memory unit, not just the chat filter
 - prefer first-class operational tables for major business records
+
+## Current Execution State
+
+The following foundation branches should now be treated as completed baseline
+work on `develop`:
+
+- `feature/space-model-foundation`
+- `feature/space-contract-types`
+- `feature/space-schema-companion-metadata`
+- `feature/space-backend-thread-object-links`
+- `feature/space-timeline-foundation`
+- `feature/space-access-mapping-prep`
+- `feature/space-policy-matrix`
+- `feature/space-rls-hardening`
+
+Current runtime intentionally remains unchanged across those branches:
+
+- `public.conversations.kind` still means only `dm | group`
+- current active space and conversation role enums remain generic
+- `public.messages` remains the durable user-message history shell
+- `conversation_members.hidden_at` remains per-user archive/hide state
+- current production RLS and DM privacy behavior remain untouched
+
+Later branches should not repeat the following already-completed foundation
+work:
+
+- re-arguing the companion-metadata pattern instead of overloading core
+  conversation fields
+- re-opening the first-pass decision to store only one primary object ref in
+  companion metadata
+- re-defining the separation between user messages, thread-local system events,
+  and committed space timeline events
+- re-collapsing global role, space role, and thread participation/moderation
+  role into one layer
+- re-inventing alternate visibility vocabulary outside the existing
+  access-mapping prep contracts and docs
+
+Recommended exact remaining branch order from the current state:
+
+1. `feature/space-first-operational-object`
+2. `feature/keepcozy-space-ui-shell`
 
 ## 1. Current State Summary
 
@@ -137,7 +188,7 @@ space the full operational boundary around it.
 
 ### Product/process gaps
 
-- no agreed policy matrix yet
+- no enforced policy matrix in active runtime yet
 - no audited operator-visibility exception model
 - no defined branch sequence for introducing these capabilities safely
 
@@ -200,6 +251,12 @@ Risk:
 
 - low
 
+Current branch note:
+
+- the intended outputs of this phase now have a first concrete draft in
+  [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
+  and [types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/types.ts)
+
 ### Phase 2. Additive schema foundations for KeepCozy metadata
 
 Goal:
@@ -252,6 +309,24 @@ Risk:
 
 - medium
 
+Recommended feature branch:
+
+- `feature/space-backend-thread-object-links`
+
+Current branch note:
+
+- the first low-level backend helper boundary now exists in
+  [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
+  with a narrow read composition seam in
+  [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+  and is documented in
+  [keepcozy-space-backend-thread-object-links.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-backend-thread-object-links.md)
+
+Phase 3 guardrail:
+
+- this backend phase may expose optional operational thread context
+- it must not emit timeline history or enforce final audience/access policy yet
+
 ### Phase 4. Policy-prep and access-resolution groundwork
 
 Goal:
@@ -280,6 +355,43 @@ Risk:
 
 - medium to high if it touches active authorization paths
 
+Branch ownership note:
+
+- `feature/space-access-mapping-prep` should own role-layer resolution,
+  internal-only vs restricted-external interpretation, and assignment-aware
+  visibility rules
+- it should not widen the current backend link layer into a general-purpose
+  authorization shortcut
+
+Current branch note:
+
+- the first access-mapping preparation layer now has a dedicated branch-level
+  doc in
+  [keepcozy-space-access-mapping-prep.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-mapping-prep.md)
+  and a small shared TypeScript vocabulary in
+  [types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/types.ts)
+- this prep work names policy inputs and interpretation order without changing
+  current runtime authorization behavior
+
+Phase 4 guardrails:
+
+- it must not be treated as final authorization enforcement
+- it must not collapse operational role semantics into current
+  `owner/admin/member` moderation fields
+- it must not treat companion metadata as the only access truth
+- it must not assume timeline visibility is always identical to parent thread
+  visibility
+- it must not change current `dm | group` runtime semantics
+- it must not turn UI presentation assumptions into backend policy shortcuts
+
+Phase 4 handoff note:
+
+- the next branch after this prep work should be `feature/space-policy-matrix`
+- `feature/space-rls-hardening` should stay a separate follow-on branch once
+  the matrix is frozen
+- do not merge policy interpretation and RLS hardening into one large branch if
+  narrower review is still possible
+
 ### Phase 5. Timeline and operational object foundation
 
 Goal:
@@ -302,6 +414,39 @@ Work type:
 Risk:
 
 - medium
+
+Current branch note:
+
+- the first structured timeline foundation now has a concrete doc and SQL
+  draft in
+  [keepcozy-space-timeline-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-foundation.md)
+  and
+  [2026-04-07-space-timeline-events-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-07-space-timeline-events-foundation.sql)
+- this branch defines additive event vocabulary and schema direction without
+  changing chat runtime behavior
+- the branch also now defines future emission seams in
+  [keepcozy-space-timeline-runtime-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-timeline-runtime-boundaries.md)
+  and keeps the low-level builder boundary in
+  [space-timeline-events.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/space-timeline-events.ts)
+  separate from ordinary chat send flows
+
+Branch ownership note:
+
+- `feature/space-timeline-foundation` should own structured event vocabulary,
+  additive timeline schema direction, and later durable event-writing seams
+- later access/policy work should build on this event model rather than trying
+  to redefine the timeline shape ad hoc
+
+Phase 5 guardrails:
+
+- it must not treat all chat messages as timeline rows by default
+- it must not mix operational state transitions with transport/UI/runtime
+  diagnostics
+- it must not fold thread-local system notices into committed space history
+- it must not ship notification fan-out or automation execution as part of the
+  first timeline pass
+- it must not widen current `dm | group` runtime semantics to make timeline
+  work
 
 ### Phase 6. Controlled user-facing KeepCozy thread experience
 
@@ -350,21 +495,31 @@ Risk:
 
 - high
 
+Current branch note:
+
+- the first full policy-definition layer now lives in
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+- this branch turns the completed role-layering, companion-metadata,
+  backend-link, timeline, and access-mapping groundwork into one explicit,
+  reviewable matrix
+- the exact next branch after this policy-definition pass should be
+  `feature/space-rls-hardening`
+- the first conservative SQL/RLS translation layer for that matrix now lives
+  in
+  [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
+  and its related SQL drafts
+
 ## 5. Suggested Order of Execution
 
-Recommended sequence:
+From the current state on `develop`, the remaining recommended sequence is:
 
-1. finish docs and terminology alignment
-2. add shared type and contract scaffolding for thread metadata, audience
-   modes, and role-layer translation
-3. add additive schema for companion metadata, invitations/assignments, and
-   timeline events
-4. add backend read/write helpers for space/thread/object linkage
-5. add non-user-facing event generation and object-link scaffolding
-6. prepare the role and audience resolution layer
-7. ship one narrow operational-object plus thread linkage path
-8. ship limited KeepCozy UI once backend contracts are stable
-9. only then start policy matrix and RLS hardening work
+1. freeze the formal policy matrix on top of the completed role-layer,
+   companion-metadata, backend-link, timeline, and access-mapping foundations
+2. translate that agreed matrix into review-heavy backend and RLS hardening
+3. implement one narrow operational-object plus thread linkage path on top of
+   the now-explicit policy and schema foundation
+4. ship limited KeepCozy UI only after backend contracts and enforcement are
+   stable
 
 Key rule:
 
@@ -412,7 +567,7 @@ Key rule:
 
 ## 8. What Should Happen Before Policy Matrix Work
 
-Before formal policy matrix work begins, the project should first decide:
+Before formal policy matrix work, the project first needed to decide:
 
 - the canonical KeepCozy space role set
 - the canonical split between space role and thread participation/moderation role
@@ -424,6 +579,13 @@ Before formal policy matrix work begins, the project should first decide:
 - how operator oversight interacts with future private-thread exceptions
 
 Policy matrix work should start only once those modeling choices are stable.
+
+Current branch note:
+
+- the first full policy matrix now exists in
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+- the remaining work is enforcement and operational-object implementation, not
+  reopening these prerequisite questions without a concrete new constraint
 
 ## 9. What Should Happen Before Shipping Any User-Facing KeepCozy Integration
 
@@ -444,17 +606,21 @@ Before shipping any KeepCozy-facing UI or workflow:
 Use smaller feature branches that each change one architectural layer at a
 time.
 
-Recommended next branches:
+Completed foundational branches:
 
+- `feature/space-model-foundation`
 - `feature/space-contract-types`
 - `feature/space-schema-companion-metadata`
 - `feature/space-backend-thread-object-links`
 - `feature/space-timeline-foundation`
 - `feature/space-access-mapping-prep`
-- `feature/space-first-operational-object`
-- `feature/keepcozy-space-ui-shell`
 - `feature/space-policy-matrix`
 - `feature/space-rls-hardening`
+
+Recommended remaining branches from the current state:
+
+- `feature/space-first-operational-object`
+- `feature/keepcozy-space-ui-shell`
 
 Recommended strategy:
 
@@ -466,17 +632,18 @@ Recommended strategy:
 
 ## 11. Quick Wins
 
-The fastest low-risk wins are:
+The fastest remaining low-risk wins are:
 
-- add shared TypeScript types for `thread_type`, `audience_mode`, and
-  operational object references
-- decide whether thread metadata belongs in a companion table or other
-  companion layer
-- add a draft `space_timeline_events` schema doc before implementation
-- add explicit backend helper boundaries for thread metadata and object links
-- document operator-visibility and private-thread exception assumptions before
-  policy work
+- keep the first explicit policy matrix and conservative RLS drafts stable while
+  introducing the first real operational object path
+- enumerate audited exception cases for `platform_admin` and `support_staff`
+  before widening beyond the current conservative enforcement drafts
+- choose the first operational object type that will exercise the companion
+  metadata and timeline foundations end-to-end
 - keep operational role semantics out of current conversation moderation enums
+  while the first object and UI phases are being designed
+- keep current conversation/message runtime stable while runtime adoption of the
+  reviewed hardening pass is still selective
 
 ## 12. Highest-Risk Changes
 
@@ -491,11 +658,16 @@ The changes most likely to cause regressions are:
 
 ## 13. Recommended Immediate Next Step
 
-The next practical step should be:
+From the completed `feature/space-rls-hardening` branch, the next practical
+step should now be:
 
-- keep this branch documentation-only
-- open the next branch for type-level and contract-level metadata foundation
-- avoid user-facing KeepCozy UI until the metadata and event layers exist
-
-That gives the project the best chance of making KeepCozy reusable without
-breaking the restored CHAT runtime.
+- open `feature/space-first-operational-object`
+- use
+  [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
+  plus
+  [keepcozy-space-rls-hardening.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-rls-hardening.md)
+  as the semantic and conservative enforcement baseline
+- add one real operational object path without reopening current `dm | group`
+  semantics, role-layer separation, or the companion-metadata-as-input model
+- keep user-facing KeepCozy UI selective until the first object path and its
+  audited visibility behavior are stable

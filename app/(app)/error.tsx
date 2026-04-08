@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { getTranslations, normalizeLanguage } from '@/modules/i18n';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type AppRouteErrorBoundaryProps = {
@@ -16,6 +17,10 @@ export default function AppRouteErrorBoundary({
 }: AppRouteErrorBoundaryProps) {
   const searchParams = useSearchParams();
   const spaceId = searchParams.get('space');
+  const language = normalizeLanguage(
+    typeof document === 'undefined' ? null : document.documentElement.lang,
+  );
+  const t = getTranslations(language);
 
   useEffect(() => {
     console.error('[route-error-boundary]', 'app', {
@@ -28,25 +33,25 @@ export default function AppRouteErrorBoundary({
     <section className="page page-mobile">
       <section className="card stack route-error-card">
         <div className="stack route-error-copy">
-          <h1 className="section-title">Couldn&apos;t load this screen</h1>
-          <p className="muted">
-            Please try again. If it keeps happening, go back to Chats or Home.
-          </p>
+          <p className="eyebrow">{t.shell.contextLabel}</p>
+          <h1 className="section-title">{t.shell.errorTitle}</h1>
+          <p className="muted">{t.shell.errorBody}</p>
+          <p className="muted route-error-note">{t.shell.errorProofPathBody}</p>
         </div>
 
         <div className="cluster route-error-actions">
           <button className="button" onClick={reset} type="button">
-            Try again
+            {t.shell.retry}
           </button>
           <Link
             className="button button-secondary"
-            href={withSpaceParam('/inbox', spaceId)}
+            href={withSpaceParam('/home', spaceId)}
             prefetch={false}
           >
-            Chats
+            {t.shell.home}
           </Link>
-          <Link className="pill" href="/settings" prefetch={false}>
-            Home
+          <Link className="pill" href={withSpaceParam('/spaces', spaceId)} prefetch={false}>
+            {t.spaces.title}
           </Link>
         </div>
       </section>

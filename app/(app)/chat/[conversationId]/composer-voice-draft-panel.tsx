@@ -10,6 +10,7 @@ type ComposerVoiceDraftPanelProps = {
   draft: MessagingVoiceMessageDraftRecord | null;
   elapsedMs: number;
   errorCode: 'unsupported' | 'permission-denied' | 'capture-failed' | null;
+  isRestoredDraft: boolean;
   language: AppLanguage;
   onCancel: () => void;
   onRetry: () => Promise<void>;
@@ -42,6 +43,7 @@ export function ComposerVoiceDraftPanel({
   draft,
   elapsedMs,
   errorCode,
+  isRestoredDraft,
   language,
   onCancel,
   onRetry,
@@ -82,6 +84,20 @@ export function ComposerVoiceDraftPanel({
               : t.chat.voiceRecorderFailed
           : t.chat.voiceRecorderDraftReady;
   const metaLabel = [statusLabel, durationLabel].filter(Boolean).join(' · ');
+  const noteLabel =
+    captureState === 'requesting-permission'
+      ? t.chat.voiceRecorderPreparingHint
+      : captureState === 'recording'
+        ? t.chat.voiceRecorderRecordingHint
+        : captureState === 'failed'
+          ? errorCode === 'permission-denied'
+            ? t.chat.voiceRecorderPermissionHint
+            : errorCode === 'unsupported'
+              ? t.chat.voiceRecorderUnavailableHint
+              : t.chat.voiceRecorderRetryHint
+          : draft && isRestoredDraft
+            ? t.chat.voiceRecorderRecoveredDraftHint
+            : null;
 
   return (
     <div
@@ -106,6 +122,9 @@ export function ComposerVoiceDraftPanel({
         <div className="composer-voice-panel-copy">
           <span className="composer-voice-panel-title">{t.chat.voiceMessage}</span>
           <span className="composer-voice-panel-meta">{metaLabel}</span>
+          {noteLabel ? (
+            <span className="composer-voice-panel-note">{noteLabel}</span>
+          ) : null}
         </div>
       </div>
 

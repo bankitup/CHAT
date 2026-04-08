@@ -1,0 +1,277 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { appendTaskUpdateAction } from '../actions';
+import {
+  getKeepCozyTaskDetailData,
+  isKeepCozyPrimaryTestHomeName,
+  isKeepCozyPrimaryTestTaskId,
+  requireKeepCozyContext,
+} from '@/modules/keepcozy/server';
+import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
+import { withSpaceParam } from '@/modules/spaces/url';
+
+type TaskDetailPageProps = {
+  params: Promise<{
+    taskId: string;
+  }>;
+  searchParams: Promise<{
+    body?: string;
+    error?: string;
+    label?: string;
+    message?: string;
+    space?: string;
+    status?: string;
+  }>;
+};
+
+export default async function TaskDetailPage({
+  params,
+  searchParams,
+}: TaskDetailPageProps) {
+  const [{ taskId }, query] = await Promise.all([params, searchParams]);
+  const { activeSpace, language, t } = await requireKeepCozyContext({
+    requestedSpaceId: query.space,
+    source: 'keepcozy-task-detail-page',
+  });
+  const { issue, room, task } = await getKeepCozyTaskDetailData({
+    language,
+    spaceId: activeSpace.id,
+    taskId,
+  });
+
+  if (!task) {
+    notFound();
+  }
+
+  const visibleError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: t.tasks.updateFailed,
+        language,
+        rawMessage: query.error,
+      })
+    : null;
+  const visibleMessage = query.message?.trim() || null;
+  const draft = {
+    body: query.body ?? '',
+    label: query.label ?? '',
+    status: query.status ?? '',
+  };
+  const showPrimaryFlow =
+    isKeepCozyPrimaryTestHomeName(activeSpace.name) && isKeepCozyPrimaryTestTaskId(task.id);
+
+  return (
+    <section className="stack settings-screen settings-shell keepcozy-page">
+      <section className="stack settings-hero keepcozy-hero">
+        <div className="keepcozy-route-header keepcozy-route-header-spread">
+          <Link
+            aria-label={t.tasks.browseTasks}
+            className="back-arrow-link spaces-back-link"
+            href={withSpaceParam('/tasks', activeSpace.id)}
+            prefetch={false}
+          >
+            <span aria-hidden="true">←</span>
+          </Link>
+          {issue ? (
+            <Link
+              className="pill"
+              href={withSpaceParam(`/issues/${issue.id}`, activeSpace.id)}
+              prefetch={false}
+            >
+              {t.tasks.viewIssue}
+            </Link>
+          ) : null}
+        </div>
+
+        <p className="eyebrow">{t.tasks.title}</p>
+        <h1 className="settings-hero-title">{task.title}</h1>
+        <p className="muted settings-hero-note">{task.summary || t.tasks.detailBody}</p>
+      </section>
+
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
+
+      <section className="card stack settings-surface keepcozy-surface">
+        <section className="keepcozy-focus-card">
+          <div className="stack keepcozy-focus-copy">
+            <span className="activity-focus-kicker">{task.status}</span>
+            <h2 className="activity-focus-title">{t.tasks.updatesTitle}</h2>
+            <p className="muted activity-focus-body">{t.tasks.detailBody}</p>
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">
+                {t.tasks.currentStatusLabel}: {task.status}
+              </span>
+              {issue ? (
+                <span className="keepcozy-meta-pill">
+                  {t.tasks.fieldIssue}: {issue.title}
+                </span>
+              ) : null}
+              {room ? (
+                <span className="keepcozy-meta-pill">
+                  {t.tasks.viewRoom}: {room.name}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="keepcozy-card-actions keepcozy-focus-actions">
+            {room ? (
+              <Link
+                className="button button-secondary keepcozy-focus-action"
+                href={withSpaceParam(`/rooms/${room.id}`, activeSpace.id)}
+                prefetch={false}
+              >
+                {t.tasks.viewRoom}
+              </Link>
+            ) : null}
+            <Link
+              className="button button-secondary keepcozy-focus-action"
+              href={withSpaceParam('/activity', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.homeDashboard.openHistory}
+            </Link>
+          </div>
+        </section>
+
+        {showPrimaryFlow ? (
+          <section className="empty-card keepcozy-preview-card">
+            <div className="keepcozy-preview-header">
+              <span className="summary-pill summary-pill-muted">{t.homeDashboard.testFlowTitle}</span>
+              <span className="keepcozy-context-label">{activeSpace.name}</span>
+            </div>
+            <p className="muted">{t.homeDashboard.testFlowBody}</p>
+            <div className="keepcozy-meta-row">
+              {room ? <span className="keepcozy-meta-pill">{room.name}</span> : null}
+              {issue ? <span className="keepcozy-meta-pill">{issue.title}</span> : null}
+              <span className="keepcozy-meta-pill">{task.title}</span>
+            </div>
+            <div className="keepcozy-card-actions">
+              {issue ? (
+                <Link
+                  className="pill"
+                  href={withSpaceParam(`/issues/${issue.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.tasks.viewIssue}
+                </Link>
+              ) : null}
+              {room ? (
+                <Link
+                  className="button button-secondary"
+                  href={withSpaceParam(`/rooms/${room.id}`, activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.tasks.viewRoom}
+                </Link>
+              ) : null}
+              <Link
+                className="button button-secondary"
+                href={withSpaceParam('/activity', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.homeDashboard.openHistory}
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="stack settings-section keepcozy-section">
+          <div className="stack keepcozy-section-copy">
+            <h2 className="card-title">{t.tasks.appendTitle}</h2>
+            <p className="muted">{t.tasks.appendBody}</p>
+          </div>
+
+          <form action={appendTaskUpdateAction} className="stack">
+            <input name="spaceId" type="hidden" value={activeSpace.id} />
+            <input name="taskId" type="hidden" value={task.id} />
+
+            <label className="field">
+              <span>{t.tasks.fieldUpdateLabel}</span>
+              <input className="input" defaultValue={draft.label} name="label" />
+              <p className="muted keepcozy-field-note">{t.tasks.labelOptionalHint}</p>
+            </label>
+
+            <label className="field">
+              <span>{t.tasks.fieldStatus}</span>
+              <select className="input" defaultValue={draft.status} name="status">
+                <option value="">{t.tasks.statusKeepCurrent}</option>
+                <option value="planned">{t.tasks.statusPlanned}</option>
+                <option value="active">{t.tasks.statusActive}</option>
+                <option value="waiting">{t.tasks.statusWaiting}</option>
+                <option value="done">{t.tasks.statusDone}</option>
+                <option value="cancelled">{t.tasks.statusCancelled}</option>
+              </select>
+              <p className="muted keepcozy-field-note">{t.tasks.statusIntentHint}</p>
+            </label>
+
+            <label className="field">
+              <span>{t.tasks.fieldUpdateBody}</span>
+              <textarea
+                className="input textarea"
+                defaultValue={draft.body}
+                name="body"
+                required
+              />
+            </label>
+
+            <button className="button keepcozy-form-submit" type="submit">
+              {t.tasks.submitUpdate}
+            </button>
+          </form>
+        </section>
+
+        <section className="stack settings-section keepcozy-section">
+          <div className="stack keepcozy-section-copy">
+            <h2 className="card-title">{t.tasks.updatesTitle}</h2>
+            <p className="muted">{t.tasks.updatesBody}</p>
+          </div>
+
+          <div className="keepcozy-timeline">
+            {task.updates.length > 0 ? (
+              task.updates.map((update) => (
+                <article key={update.id} className="keepcozy-timeline-item">
+                  <div className="keepcozy-timeline-topline">
+                    <h3 className="card-title">{update.label}</h3>
+                    <span className="keepcozy-timestamp">{update.timestamp}</span>
+                  </div>
+                  <p className="muted">{update.note}</p>
+                </article>
+              ))
+            ) : (
+              <section className="empty-card">
+                <p className="muted">{t.tasks.updatesBody}</p>
+              </section>
+            )}
+          </div>
+        </section>
+
+        {issue ? (
+          <section className="stack settings-section keepcozy-section">
+            <div className="stack keepcozy-section-copy">
+              <h2 className="card-title">{t.tasks.viewIssue}</h2>
+              <p className="muted">{issue.summary || t.issues.detailBody}</p>
+            </div>
+            <Link
+              className="keepcozy-secondary-card"
+              href={withSpaceParam(`/issues/${issue.id}`, activeSpace.id)}
+              prefetch={false}
+            >
+              <div className="stack keepcozy-link-copy">
+                <h3 className="card-title">{issue.title}</h3>
+                <p className="muted">{issue.nextStep || t.issues.tasksBody}</p>
+              </div>
+              <span className="summary-pill summary-pill-muted">{issue.status}</span>
+            </Link>
+          </section>
+        ) : null}
+      </section>
+    </section>
+  );
+}

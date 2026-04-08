@@ -10,7 +10,7 @@ import {
 import { DmE2eePublicBoundaryCleanup } from '@/modules/messaging/e2ee/local-state-boundary';
 
 type PublicHomeScreenProps = {
-  authenticatedHomeHref: string | null;
+  authenticatedEntryHref: string | null;
   initialLanguage: AppLanguage;
   isAuthenticated: boolean;
 };
@@ -20,7 +20,7 @@ function persistLanguage(language: AppLanguage) {
 }
 
 export function PublicHomeScreen({
-  authenticatedHomeHref,
+  authenticatedEntryHref,
   initialLanguage,
   isAuthenticated,
 }: PublicHomeScreenProps) {
@@ -63,7 +63,7 @@ export function PublicHomeScreen({
       </div>
 
       <section className="stack public-home-hero">
-        <p className="public-home-name">Chat</p>
+        <p className="public-home-name">{t.publicHome.eyebrow}</p>
         <h1 className="title public-home-title">{t.publicHome.title}</h1>
         <p className="subtitle public-home-subtitle">
           {t.publicHome.subtitle}
@@ -77,7 +77,7 @@ export function PublicHomeScreen({
           {isAuthenticated ? (
             <Link
               className="pill pill-accent public-home-action-primary"
-              href={authenticatedHomeHref ?? '/spaces'}
+              href={authenticatedEntryHref ?? '/spaces'}
             >
               {t.publicHome.openChats}
             </Link>

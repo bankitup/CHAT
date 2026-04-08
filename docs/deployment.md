@@ -109,6 +109,8 @@ push work, but it does not yet include:
 - backend-triggered push delivery
 - production notification routing logic
 
+See [push-notifications-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/push-notifications-foundation.md) for the first real chat-push implementation slice.
+
 Vercel already serves the app over HTTPS, which is required for browser
 notifications and service workers outside localhost.
 
