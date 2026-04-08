@@ -12,6 +12,7 @@ type LanguageDictionary = {
     label: string;
   };
   publicHome: {
+    eyebrow: string;
     title: string;
     subtitle: string;
     openChats: string;
@@ -792,13 +793,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Language',
     },
     publicHome: {
-      title: 'Open your workspace',
+      eyebrow: 'Build With Care',
+      title: 'BWC Products',
       subtitle:
-        'A calm place to enter the spaces you already have access to and keep work moving.',
-      openChats: 'Open workspace',
+        'A shared entry for the spaces and product surfaces you already have access to.',
+      openChats: 'Continue',
       openSettings: 'Open settings',
       logIn: 'Log in',
-      watermark: 'KeepCozy by Build With Care',
+      watermark: 'Shared entry for your spaces',
       authActionsAria: 'Primary actions',
       guestActionsAria: 'Get started',
     },
@@ -1661,13 +1663,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       label: 'Язык',
     },
     publicHome: {
-      title: 'Откройте рабочее пространство',
+      eyebrow: 'Build With Care',
+      title: 'BWC Products',
       subtitle:
-        'Спокойное пространство, чтобы войти в доступные вам пространства и держать работу в движении.',
-      openChats: 'Открыть пространство',
+        'Общий вход для пространств и продуктовых поверхностей, к которым у вас уже есть доступ.',
+      openChats: 'Продолжить',
       openSettings: 'Открыть профиль',
       logIn: 'Войти',
-      watermark: 'KeepCozy by Build With Care',
+      watermark: 'Общий вход для ваших пространств',
       authActionsAria: 'Основные действия',
       guestActionsAria: 'Начало работы',
     },

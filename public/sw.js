@@ -12,7 +12,7 @@ self.addEventListener('push', (event) => {
   }
 
   let payload = {
-    title: 'CHAT',
+    title: 'BWC Products',
     body: 'You have a new update.',
     url: '/inbox',
   };
