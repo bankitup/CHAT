@@ -9,7 +9,10 @@ import {
   type SpaceProfile,
   type SpaceRole,
 } from './model';
-import { resolveSuperAdminGovernanceForUser } from './server';
+import {
+  requireSpaceMemberManagementForUser,
+  resolveSuperAdminGovernanceForUser,
+} from './server';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -197,11 +200,10 @@ async function resolveProvisionUsers(
   };
 }
 
-function buildInitialMembershipRows(input: {
+function buildResolvedUserOrder(input: {
   adminIdentifiers: ParsedSpaceIdentifier[];
   participantIdentifiers: ParsedSpaceIdentifier[];
   resolvedByIdentifier: Map<string, ResolvedProvisionUser>;
-  spaceId: string;
 }) {
   const orderedUsers = new Map<string, ResolvedProvisionUser>();
 
@@ -217,6 +219,17 @@ function buildInitialMembershipRows(input: {
 
     orderedUsers.set(resolvedUser.userId, resolvedUser);
   }
+
+  return orderedUsers;
+}
+
+function buildInitialMembershipRows(input: {
+  adminIdentifiers: ParsedSpaceIdentifier[];
+  participantIdentifiers: ParsedSpaceIdentifier[];
+  resolvedByIdentifier: Map<string, ResolvedProvisionUser>;
+  spaceId: string;
+}) {
+  const orderedUsers = buildResolvedUserOrder(input);
 
   const seenAdminIds = new Set<string>();
 
@@ -419,4 +432,149 @@ export async function createGovernedSpace(input: {
     await serviceClient.from('spaces').delete().eq('id', createdSpace.id);
     throw error;
   }
+}
+
+export async function addMembersToGovernedSpace(input: {
+  adminIdentifiers: string;
+  participantIdentifiers: string;
+  spaceId: string;
+}) {
+  const viewer = await requireRequestViewer('spaces:manage-members');
+  const exactSpaceAccess = await requireSpaceMemberManagementForUser({
+    requestedSpaceId: input.spaceId,
+    source: 'spaces:manage-members',
+    userEmail: viewer.email ?? null,
+    userId: viewer.id,
+  });
+  const serviceClient = await requireServiceRoleClient();
+  const participantIdentifiers = parseSpaceUserIdentifiers(input.participantIdentifiers);
+  const adminIdentifiers = parseSpaceUserIdentifiers(input.adminIdentifiers);
+
+  if (participantIdentifiers.invalid.length > 0) {
+    throw new Error(
+      `Space members must be entered as one email or user ID per line. Invalid: ${participantIdentifiers.invalid.join(', ')}`,
+    );
+  }
+
+  if (adminIdentifiers.invalid.length > 0) {
+    throw new Error(
+      `Space admins must be entered as one email or user ID per line. Invalid: ${adminIdentifiers.invalid.join(', ')}`,
+    );
+  }
+
+  if (
+    participantIdentifiers.valid.length === 0 &&
+    adminIdentifiers.valid.length === 0
+  ) {
+    throw new Error('Add at least one member or admin.');
+  }
+
+  const allIdentifiers = [
+    ...participantIdentifiers.valid,
+    ...adminIdentifiers.valid,
+  ];
+  const { resolvedByIdentifier, unresolvedIdentifiers } = await resolveProvisionUsers(
+    allIdentifiers,
+    serviceClient,
+  );
+
+  if (unresolvedIdentifiers.length > 0) {
+    throw new Error(
+      `Unable to find these people yet: ${unresolvedIdentifiers.join(', ')}.`,
+    );
+  }
+
+  const orderedUsers = buildResolvedUserOrder({
+    adminIdentifiers: adminIdentifiers.valid,
+    participantIdentifiers: participantIdentifiers.valid,
+    resolvedByIdentifier,
+  });
+  const adminUserIds = new Set<string>();
+
+  for (const identifier of adminIdentifiers.valid) {
+    const resolvedUser = resolvedByIdentifier.get(identifier.normalized);
+
+    if (resolvedUser?.userId) {
+      adminUserIds.add(resolvedUser.userId);
+    }
+  }
+
+  const targetUserIds = Array.from(orderedUsers.keys());
+  const { data: existingMemberships, error: existingMembershipsError } =
+    targetUserIds.length > 0
+      ? await serviceClient
+          .from('space_members')
+          .select('user_id, role')
+          .eq('space_id', exactSpaceAccess.activeSpace.id)
+          .in('user_id', targetUserIds)
+      : { data: [], error: null };
+
+  if (existingMembershipsError) {
+    throw new Error(existingMembershipsError.message);
+  }
+
+  const existingByUserId = new Map(
+    ((existingMemberships ?? []) as Array<{
+      role: SpaceRole;
+      user_id: string;
+    }>).map((membership) => [membership.user_id, membership.role]),
+  );
+  const insertRows: Array<{
+    role: SpaceRole;
+    space_id: string;
+    user_id: string;
+  }> = [];
+  const promoteToAdminUserIds: string[] = [];
+
+  for (const resolvedUser of orderedUsers.values()) {
+    const existingRole = existingByUserId.get(resolvedUser.userId) ?? null;
+
+    if (!existingRole) {
+      insertRows.push({
+        role: adminUserIds.has(resolvedUser.userId) ? 'admin' : 'member',
+        space_id: exactSpaceAccess.activeSpace.id,
+        user_id: resolvedUser.userId,
+      });
+      continue;
+    }
+
+    if (existingRole === 'member' && adminUserIds.has(resolvedUser.userId)) {
+      promoteToAdminUserIds.push(resolvedUser.userId);
+    }
+  }
+
+  if (insertRows.length > 0) {
+    const insertMemberships = await serviceClient
+      .from('space_members')
+      .insert(insertRows);
+
+    if (insertMemberships.error) {
+      throw new Error(insertMemberships.error.message);
+    }
+  }
+
+  if (promoteToAdminUserIds.length > 0) {
+    const promotionResults = await Promise.all(
+      promoteToAdminUserIds.map((userId) =>
+        serviceClient
+          .from('space_members')
+          .update({ role: 'admin' })
+          .eq('space_id', exactSpaceAccess.activeSpace.id)
+          .eq('user_id', userId),
+      ),
+    );
+
+    const failedPromotion = promotionResults.find((result) => result.error);
+
+    if (failedPromotion?.error) {
+      throw new Error(failedPromotion.error.message);
+    }
+  }
+
+  return {
+    addedCount: insertRows.length,
+    promotedCount: promoteToAdminUserIds.length,
+    spaceId: exactSpaceAccess.activeSpace.id,
+    spaceName: exactSpaceAccess.activeSpace.name,
+  };
 }

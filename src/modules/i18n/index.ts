@@ -103,6 +103,16 @@ type LanguageDictionary = {
     createSpaceSuccessNoAccess: string;
     createSpaceSuccessProfileDeferred: string;
     createSpaceSuccessNoAccessProfileDeferred: string;
+    spaceAdminEyebrow: string;
+    manageMembersTitle: string;
+    manageMembersBody: string;
+    manageMembersAction: string;
+    manageMembersRouteTitle: string;
+    manageMembersRouteSubtitle: string;
+    manageMembersRouteBody: string;
+    membersOrAdminsRequired: string;
+    manageMembersFailed: string;
+    manageMembersSuccess: string;
   };
   settings: {
     backToChats: string;
@@ -839,6 +849,22 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Space created. Profile storage is not live here yet, so this space will use the default shell until the space-profile migration is applied.',
       createSpaceSuccessNoAccessProfileDeferred:
         'Space created. It will not appear in this list until you add yourself as a member, and its selected mode will stay on the default shell until the space-profile migration is applied.',
+      spaceAdminEyebrow: 'Space admin',
+      manageMembersTitle: 'Manage current space members',
+      manageMembersBody:
+        'Add testers to only this space by exact email or user ID, and promote selected people to space admin without exposing a broader people browser.',
+      manageMembersAction: 'Manage members',
+      manageMembersRouteTitle: 'Manage members',
+      manageMembersRouteSubtitle:
+        'Add testers to this space by explicit email or user ID only.',
+      manageMembersRouteBody:
+        'This page changes membership only for the current space. It does not browse or reveal people from other spaces.',
+      membersOrAdminsRequired:
+        'Add at least one member or admin to continue.',
+      manageMembersFailed:
+        'Unable to update space members right now.',
+      manageMembersSuccess:
+        'Space members updated for this space.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -1631,6 +1657,22 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Пространство создано. Здесь ещё не включено сохранение профиля пространства, поэтому пока оно будет открываться в стандартной оболочке, пока не будет применена миграция профиля пространства.',
       createSpaceSuccessNoAccessProfileDeferred:
         'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника, а выбранный режим останется на стандартной оболочке, пока не будет применена миграция профиля пространства.',
+      spaceAdminEyebrow: 'Админ пространства',
+      manageMembersTitle: 'Управлять участниками текущего пространства',
+      manageMembersBody:
+        'Добавляйте тестировщиков только в это пространство по точному email или user ID и повышайте выбранных людей до админов пространства без широкого браузера людей.',
+      manageMembersAction: 'Управлять участниками',
+      manageMembersRouteTitle: 'Управлять участниками',
+      manageMembersRouteSubtitle:
+        'Добавляйте тестировщиков в это пространство только по явному email или user ID.',
+      manageMembersRouteBody:
+        'Эта страница меняет состав только для текущего пространства. Она не просматривает и не раскрывает людей из других пространств.',
+      membersOrAdminsRequired:
+        'Добавьте хотя бы одного участника или админа, чтобы продолжить.',
+      manageMembersFailed:
+        'Сейчас не удалось обновить участников пространства.',
+      manageMembersSuccess:
+        'Состав участников этого пространства обновлен.',
     },
     settings: {
       backToChats: 'Назад к чатам',

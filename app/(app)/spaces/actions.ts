@@ -9,7 +9,10 @@ import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
 } from '@/modules/messaging/ui/user-facing-errors';
-import { createGovernedSpace } from '@/modules/spaces/write-server';
+import {
+  addMembersToGovernedSpace,
+  createGovernedSpace,
+} from '@/modules/spaces/write-server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 function readText(formData: FormData, key: string) {
@@ -59,6 +62,27 @@ function redirectToSpacesSurface(input: {
 
   const href = params.toString() ? `/spaces?${params.toString()}` : '/spaces';
   redirect(withSpaceParam(href, input.spaceId));
+}
+
+function redirectToManageSpaceMembersSurface(input: {
+  adminIdentifiers?: string | null;
+  error?: string | null;
+  memberIdentifiers?: string | null;
+  message?: string | null;
+  spaceId?: string | null;
+}): never {
+  const params = new URLSearchParams();
+
+  setTextParam(params, 'space', input.spaceId);
+  setTextParam(params, 'members', input.memberIdentifiers);
+  setTextParam(params, 'admins', input.adminIdentifiers);
+  setTextParam(params, 'error', input.error);
+  setTextParam(params, 'message', input.message);
+
+  const href = params.toString()
+    ? `/spaces/members?${params.toString()}`
+    : '/spaces/members';
+  redirect(href);
 }
 
 function getFriendlyCreateSpaceErrorMessage(input: {
@@ -152,6 +176,62 @@ export async function createSpaceAction(formData: FormData) {
       error: getFriendlyCreateSpaceErrorMessage({
         error,
         fallback: t.spaces.createSpaceFailed,
+        language,
+      }),
+      ...draft,
+    });
+  }
+}
+
+export async function addSpaceMembersAction(formData: FormData) {
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
+  const spaceId = readText(formData, 'spaceId');
+  const memberIdentifiers = readText(formData, 'memberIdentifiers');
+  const adminIdentifiers = readText(formData, 'adminIdentifiers');
+  const draft = {
+    adminIdentifiers,
+    memberIdentifiers,
+    spaceId,
+  };
+
+  if (!spaceId) {
+    redirectToSpacesSurface({
+      message: t.spaces.manageMembersFailed,
+    });
+  }
+
+  if (!memberIdentifiers && !adminIdentifiers) {
+    redirectToManageSpaceMembersSurface({
+      error: t.spaces.membersOrAdminsRequired,
+      ...draft,
+    });
+  }
+
+  try {
+    await addMembersToGovernedSpace({
+      adminIdentifiers,
+      participantIdentifiers: memberIdentifiers,
+      spaceId,
+    });
+
+    revalidatePath('/spaces');
+    revalidatePath('/home');
+    revalidatePath('/inbox');
+
+    redirectToManageSpaceMembersSurface({
+      message: t.spaces.manageMembersSuccess,
+      spaceId,
+    });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    redirectToManageSpaceMembersSurface({
+      error: getFriendlyCreateSpaceErrorMessage({
+        error,
+        fallback: t.spaces.manageMembersFailed,
         language,
       }),
       ...draft,
