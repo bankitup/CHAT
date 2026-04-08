@@ -206,6 +206,14 @@ type LanguageDictionary = {
     subtitle: string;
     overviewTitle: string;
     overviewBody: string;
+    settingsAction: string;
+    filtersLabel: string;
+    filterAttention: string;
+    filterRecent: string;
+    filterDirect: string;
+    filterGroups: string;
+    attentionBadge: string;
+    recentBadge: string;
     unreadSectionTitle: string;
     unreadSectionBody: string;
     recentSectionTitle: string;
@@ -1029,19 +1037,27 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     messengerActivity: {
       subtitle:
         'Follow unread conversations and recent message movement for this space.',
-      overviewTitle: 'Message activity',
+      overviewTitle: 'Notifications',
       overviewBody:
-        'Use this view to catch up on unread chats, scan recent movement, and reopen archived conversations when they matter again.',
-      unreadSectionTitle: 'Unread chats',
+        'Catch up on unread replies and recent conversation movement here, then jump straight into the exact message that needs you.',
+      settingsAction: 'Notification settings',
+      filtersLabel: 'Activity filters',
+      filterAttention: 'Needs reply',
+      filterRecent: 'Recent',
+      filterDirect: 'Direct',
+      filterGroups: 'Groups',
+      attentionBadge: 'Needs reply',
+      recentBadge: 'Recent',
+      unreadSectionTitle: 'Needs reply',
       unreadSectionBody:
-        'The conversations that need attention first in this space.',
-      recentSectionTitle: 'Recent chats',
+        'Unread conversations that deserve attention first in this space.',
+      recentSectionTitle: 'Recent movement',
       recentSectionBody:
-        'The latest conversation movement across this space, newest first.',
+        'Latest conversation movement across this space after the reply queue.',
       quietTitle: 'Nothing needs attention right now',
       quietBody:
         'Unread conversations will appear here when something in this space needs a reply.',
-      recentEmptyTitle: 'No recent chat movement yet',
+      recentEmptyTitle: 'No recent movement yet',
       recentEmptyBody:
         'Recent conversation activity will appear here after this space starts being used.',
     },
@@ -1923,19 +1939,27 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     messengerActivity: {
       subtitle:
         'Следите за непрочитанными чатами и недавним движением сообщений в этом пространстве.',
-      overviewTitle: 'Активность сообщений',
+      overviewTitle: 'Уведомления',
       overviewBody:
-        'Используйте этот экран, чтобы разбирать непрочитанные чаты, быстро просматривать недавнее движение и возвращаться к архивным разговорам, когда это снова важно.',
-      unreadSectionTitle: 'Непрочитанные чаты',
+        'Разбирайте здесь непрочитанные ответы и недавнее движение разговоров, а затем переходите сразу к тому сообщению, которое требует внимания.',
+      settingsAction: 'Настройки уведомлений',
+      filtersLabel: 'Фильтры активности',
+      filterAttention: 'Нужен ответ',
+      filterRecent: 'Недавнее',
+      filterDirect: 'Личные',
+      filterGroups: 'Группы',
+      attentionBadge: 'Нужен ответ',
+      recentBadge: 'Недавнее',
+      unreadSectionTitle: 'Нужен ответ',
       unreadSectionBody:
-        'Разговоры в этом пространстве, которым прежде всего нужно внимание.',
-      recentSectionTitle: 'Недавние чаты',
+        'Непрочитанные разговоры в этом пространстве, которым прежде всего нужно внимание.',
+      recentSectionTitle: 'Недавнее движение',
       recentSectionBody:
-        'Последнее движение разговоров по этому пространству, сначала самые новые.',
+        'Последнее движение разговоров по этому пространству после очереди ответов.',
       quietTitle: 'Сейчас ничего не требует внимания',
       quietBody:
         'Непрочитанные разговоры появятся здесь, когда в этом пространстве понадобится ответ.',
-      recentEmptyTitle: 'Пока нет недавней активности в чатах',
+      recentEmptyTitle: 'Пока нет недавнего движения',
       recentEmptyBody:
         'Недавняя активность разговоров появится здесь после того, как это пространство начнёт использоваться.',
     },

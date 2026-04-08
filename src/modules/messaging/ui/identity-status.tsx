@@ -23,10 +23,18 @@ function normalizeStatusPart(value: string | null | undefined) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+export function resolveIdentityStatusParts(identity?: IdentityStatusRecord | null) {
+  return {
+    emoji: normalizeStatusPart(identity?.statusEmoji),
+    text: normalizeStatusPart(identity?.statusText),
+  };
+}
+
 export function hasIdentityStatus(identity?: IdentityStatusRecord | null) {
+  const normalizedStatus = resolveIdentityStatusParts(identity);
+
   return Boolean(
-    normalizeStatusPart(identity?.statusEmoji) ||
-      normalizeStatusPart(identity?.statusText),
+    normalizedStatus.emoji || normalizedStatus.text,
   );
 }
 

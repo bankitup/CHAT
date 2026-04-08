@@ -544,11 +544,13 @@ export default async function ChatSettingsPage({
                     size="sm"
                   />
                   <div className="stack conversation-member-copy">
-                    <span className="user-label">{participant.label}</span>
-                    <IdentityStatusInline
-                      className="conversation-member-status"
-                      identity={participant.identity}
-                    />
+                    <div className="conversation-member-title-row">
+                      <span className="user-label">{participant.label}</span>
+                      <IdentityStatusInline
+                        className="conversation-member-status"
+                        identity={participant.identity}
+                      />
+                    </div>
                     <div className="conversation-member-meta">
                       {conversation.kind === 'group' ? (
                         <span className="conversation-role-chip">
