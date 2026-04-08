@@ -47,6 +47,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   try {
     const activeSpaceState = await resolveActiveSpaceForUser({
       userId: user.id,
+      userEmail: user.email ?? null,
       requestedSpaceId: activeSpaceId,
       source: 'settings-page',
     });

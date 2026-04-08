@@ -756,6 +756,7 @@ export async function requireKeepCozyContext(
         requestedSpaceId: input.requestedSpaceId,
         source: input.source,
         userId: user.id,
+        userEmail: user.email ?? null,
       });
 
       if (!activeSpaceState.activeSpace) {

@@ -3,9 +3,13 @@ import 'server-only';
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import type {
   ResolvedSpaceProfile,
+  ResolvedSpaceGovernanceGlobalRole,
+  ResolvedSpaceGovernanceRole,
+  ResolvedSpaceGovernanceState,
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
   SpaceProfileSource,
+  SpaceGovernanceRoleSource,
   SpaceRecord,
   SpaceRole,
 } from './model';
@@ -13,10 +17,28 @@ import { withSpaceParam } from './url';
 
 export type UserSpaceRecord = SpaceRecord & {
   role: SpaceRole;
+  governanceRole: ResolvedSpaceGovernanceRole['governanceRole'];
+  governanceRoleSource: ResolvedSpaceGovernanceRole['governanceRoleSource'];
+  canManageMembers: boolean;
   profile: SpaceProfile;
   profileSource: SpaceProfileSource;
   defaultShellRoute: SpaceProfileDefaultShellRoute;
 };
+
+export type ResolvedActiveSpaceState = {
+  spaces: UserSpaceRecord[];
+  activeSpace: UserSpaceRecord | null;
+  activeSpaceGovernance: ResolvedSpaceGovernanceState | null;
+  activeSpaceProfile: ResolvedSpaceProfile | null;
+  globalGovernance: ResolvedSpaceGovernanceGlobalRole;
+  requestedSpaceId: string | null;
+  requestedSpaceWasInvalid: boolean;
+};
+
+const INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST = new Set([
+  'dmtest1@chat.local',
+  'dmtest2@chat.local',
+]);
 
 function getDefaultShellRouteForSpaceProfile(
   profile: SpaceProfile,
@@ -63,6 +85,51 @@ export function resolveSpaceProfileShellHref(input: {
     getDefaultShellRouteForSpaceProfile(input.profile),
     input.spaceId,
   );
+}
+
+function normalizeGovernanceEmail(value: string | null | undefined) {
+  const normalizedValue = value?.trim().toLowerCase() ?? null;
+  return normalizedValue && normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+export function resolveSuperAdminGovernanceForUser(input: {
+  userEmail?: string | null;
+}): ResolvedSpaceGovernanceGlobalRole {
+  const normalizedEmail = normalizeGovernanceEmail(input.userEmail);
+  const isSuperAdmin = normalizedEmail
+    ? INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST.has(normalizedEmail)
+    : false;
+
+  return {
+    globalRole: isSuperAdmin ? 'super_admin' : null,
+    globalRoleSource: isSuperAdmin
+      ? 'initial_email_allowlist'
+      : 'not_super_admin',
+    canCreateSpaces: isSuperAdmin,
+  };
+}
+
+export function resolveSpaceGovernanceRoleForRuntimeSpaceRole(
+  role: SpaceRole,
+): ResolvedSpaceGovernanceRole {
+  let governanceRole: ResolvedSpaceGovernanceRole['governanceRole'] =
+    'space_member';
+  let governanceRoleSource: SpaceGovernanceRoleSource =
+    'runtime_space_role_member';
+
+  if (role === 'owner') {
+    governanceRole = 'space_admin';
+    governanceRoleSource = 'runtime_space_role_owner';
+  } else if (role === 'admin') {
+    governanceRole = 'space_admin';
+    governanceRoleSource = 'runtime_space_role_admin';
+  }
+
+  return {
+    governanceRole,
+    governanceRoleSource,
+    canManageMembers: governanceRole === 'space_admin',
+  };
 }
 
 function getSafeSupabaseHostFragment() {
@@ -295,10 +362,16 @@ export async function getUserSpaces(
         spaceId: space.id,
         spaceName: space.name,
       });
+      const governanceResolution = resolveSpaceGovernanceRoleForRuntimeSpaceRole(
+        membership.role,
+      );
 
       return {
         ...space,
+        canManageMembers: governanceResolution.canManageMembers,
         defaultShellRoute: profileResolution.defaultShellRoute,
+        governanceRole: governanceResolution.governanceRole,
+        governanceRoleSource: governanceResolution.governanceRoleSource,
         profile: profileResolution.profile,
         profileSource: profileResolution.source,
         role: membership.role,
@@ -325,9 +398,10 @@ export async function getUserSpaces(
 
 export async function resolveActiveSpaceForUser(input: {
   userId: string;
+  userEmail?: string | null;
   requestedSpaceId?: string | null;
   source?: string;
-}) {
+}): Promise<ResolvedActiveSpaceState> {
   logSpacesDiagnostics('resolveActiveSpaceForUser:start', {
     source: input.source ?? 'unknown',
     hasRequestedSpaceId: Boolean(input.requestedSpaceId?.trim()),
@@ -341,6 +415,19 @@ export async function resolveActiveSpaceForUser(input: {
       ? spaces.find((space) => space.id === requestedSpaceId) ?? null
       : null;
   const activeSpace = requestedSpace ?? spaces[0] ?? null;
+  const globalGovernance = resolveSuperAdminGovernanceForUser({
+    userEmail: input.userEmail ?? null,
+  });
+  const activeSpaceGovernance = activeSpace
+    ? ({
+        canCreateSpaces: globalGovernance.canCreateSpaces,
+        canManageMembers: activeSpace.canManageMembers,
+        globalRole: globalGovernance.globalRole,
+        globalRoleSource: globalGovernance.globalRoleSource,
+        governanceRole: activeSpace.governanceRole,
+        governanceRoleSource: activeSpace.governanceRoleSource,
+      } satisfies ResolvedSpaceGovernanceState)
+    : null;
   const activeSpaceProfile = activeSpace
     ? ({
         defaultShellRoute: activeSpace.defaultShellRoute,
@@ -352,7 +439,9 @@ export async function resolveActiveSpaceForUser(input: {
   logSpacesDiagnostics('resolveActiveSpaceForUser:done', {
     source: input.source ?? 'unknown',
     activeSpaceDefaultShellRoute: activeSpace?.defaultShellRoute ?? null,
+    activeSpaceGovernanceRole: activeSpace?.governanceRole ?? null,
     activeSpaceProfile: activeSpace?.profile ?? null,
+    globalGovernanceRole: globalGovernance.globalRole,
     spaceCount: spaces.length,
     hasActiveSpace: Boolean(activeSpace),
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
@@ -361,7 +450,9 @@ export async function resolveActiveSpaceForUser(input: {
   return {
     spaces,
     activeSpace,
+    activeSpaceGovernance,
     activeSpaceProfile,
+    globalGovernance,
     requestedSpaceId,
     requestedSpaceWasInvalid: Boolean(requestedSpaceId && !requestedSpace),
   };
