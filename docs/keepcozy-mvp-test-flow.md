@@ -117,6 +117,8 @@ The first proof path should be checked in this order:
    [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx) and
    confirm the flow points to `Kitchen`, the faucet issue, the linked task, and
    history.
+   The shared shell should also show `TEST` as the active home and keep the
+   five-step MVP loop visible while you move between sections.
    If another home is active, the app should ask the reviewer to switch to
    `TEST` instead of pretending the canonical proof path applies there.
    If the card is missing while `TEST` is active, confirm the persisted
@@ -205,6 +207,9 @@ This branch keeps implementation support intentionally small:
   [mvp-preview.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/mvp-preview.ts)
 - the home dashboard explicitly exposes the first proof path in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
+- the shared app shell now keeps the active home, current section, next step,
+  and the core `home -> room -> issue -> task -> history` loop visible while
+  reviewers move between top-level routes
 - the canonical room, issue, and task detail routes now echo the same TEST-home
   proof-path cues so reviewers can confirm they are still following the Kitchen
   -> faucet issue -> linked task path
@@ -218,6 +223,8 @@ This branch keeps implementation support intentionally small:
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/tasks/[taskId]/page.tsx)
 - the history screen exposes the combined issue/task proof path in
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+- loading, empty, and error shell states now include more direct recovery paths
+  back to `Home`, `Choose home`, and the canonical TEST-home proof flow
 - the canonical TEST-home seed preserves the same room, issue, and task slugs
   as the preview-backed shell so the mental model does not change
 

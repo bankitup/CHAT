@@ -52,18 +52,46 @@ The current shell already has useful foundation:
 
 The biggest shell gaps are now about coherence, not missing features:
 
-- active home context is resolved on every route, but mostly displayed inside
-  page-local cards instead of the shared shell
-- `/rooms`, `/issues`, `/tasks`, and `/activity` still carry some
-  transition-era framing such as `MVP slice` pills and preview-style setup copy
-- page-to-page continuity depends on repeated local back arrows and pills more
-  than on a consistent shell-level pattern
-- the canonical `TEST -> Kitchen -> faucet issue -> linked task -> history`
-  proof path is clear on selected pages, but not yet reinforced consistently by
-  the shell itself
+- the shared shell now carries active home context, current section framing,
+  and the core MVP loop strip above the page body
+- `/rooms`, `/issues`, `/tasks`, and `/activity` now include stronger section
+  entry cards with clearer next-step actions
 - [loading.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/loading.tsx) and
-  [error.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/error.tsx) are safe
-  defaults, but not especially KeepCozy-specific
+  [error.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/error.tsx) now read as
+  KeepCozy shell states instead of generic app scaffolding
+- empty, wrong-home, and TEST-home mismatch states now give more practical
+  recovery actions from the shell level
+
+Remaining shell gaps are intentionally narrower:
+
+- some top-level route copy still carries transitional MVP wording that can be
+  tightened later
+- create/detail routes are improved indirectly by the shell, but they are not
+  yet fully aligned to the same shell-state language
+- secondary settings and chat surfaces remain deliberately outside the main
+  five-section shell
+
+## Delivered In This Branch
+
+This branch now delivers the following shell-level changes:
+
+- a shared home-context shell bar in
+  [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
+  that shows the active home, current section, next section, and core loop
+- a stronger home-scoped action hierarchy across
+  [home/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx),
+  [rooms/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/rooms/page.tsx),
+  [issues/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/issues/page.tsx),
+  [tasks/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/tasks/page.tsx),
+  and [activity/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+- KeepCozy-shaped loading and error shells in
+  [loading.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/loading.tsx) and
+  [error.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/error.tsx)
+- clearer empty and mismatch recovery states for the current home context and
+  the canonical TEST-home proof path
+- supporting shell copy and styling in
+  [index.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/i18n/index.ts) and
+  [globals.css](/Users/danya/IOS%20-%20Apps/CHAT/app/globals.css)
 
 ## Priority Order
 

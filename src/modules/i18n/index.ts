@@ -36,6 +36,10 @@ type LanguageDictionary = {
     contextLabel: string;
     loadingTitle: string;
     loadingBody: string;
+    errorTitle: string;
+    errorBody: string;
+    errorProofPathBody: string;
+    retry: string;
     home: string;
     rooms: string;
     issues: string;
@@ -724,6 +728,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       contextLabel: 'KeepCozy shell context',
       loadingTitle: 'Opening this home',
       loadingBody: 'Preparing the current home, the main sections, and the next operational steps.',
+      errorTitle: "Couldn't load this home view",
+      errorBody:
+        'Try again first. If this still fails, go back to Home or choose a different home context before reopening the current section.',
+      errorProofPathBody:
+        'If you are validating the canonical TEST-home proof path, choose TEST again from the home picker before retrying.',
+      retry: 'Try again',
       home: 'Home',
       rooms: 'Rooms',
       issues: 'Issues',
@@ -1465,6 +1475,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       contextLabel: 'Контекст оболочки KeepCozy',
       loadingTitle: 'Открываем этот дом',
       loadingBody: 'Подготавливаем текущий дом, главные разделы и следующие операционные шаги.',
+      errorTitle: 'Не удалось открыть этот вид дома',
+      errorBody:
+        'Сначала попробуйте снова. Если ошибка повторится, вернитесь на главную или выберите другой контекст дома, прежде чем снова открывать этот раздел.',
+      errorProofPathBody:
+        'Если вы проверяете канонический TEST-сценарий, снова выберите TEST в переключателе домов перед повторной попыткой.',
+      retry: 'Попробовать снова',
       home: 'Главная',
       rooms: 'Комнаты',
       issues: 'Проблемы',
