@@ -329,6 +329,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   ).length;
   const messengerHasVisibleNotifications =
     filteredMessengerAttentionItems.length > 0 || filteredMessengerRecentItems.length > 0;
+  const visibleNotificationCount =
+    filteredMessengerAttentionItems.length + filteredMessengerRecentItems.length;
   const { counts, primaryFlow } =
     activeSpace.profile === 'keepcozy_ops'
       ? await getKeepCozyActivityData({
@@ -381,48 +383,66 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         />
 
         <section className="stack settings-hero activity-hero messenger-activity-head">
-          <div className="stack activity-focus-copy messenger-activity-copy">
-            <span className="activity-focus-kicker">{t.shell.messengerActivity}</span>
-            <h2 className="activity-focus-title">
-              {t.messengerActivity.overviewTitle}
-            </h2>
-            <p className="muted activity-focus-body">
-              {t.messengerActivity.overviewBody}
-            </p>
-            <div className="keepcozy-meta-row messenger-activity-meta">
-              <span className="keepcozy-meta-pill">
-                {t.settings.currentSpaceLabel}: {activeSpace.name}
-              </span>
-              <span className="keepcozy-meta-pill">
-                {t.messengerActivity.unreadSectionTitle}: {unreadChatCount}
-              </span>
+          <div className="messenger-activity-head-row">
+            <div className="stack activity-focus-copy messenger-activity-copy">
+              <span className="activity-focus-kicker">{t.shell.messengerActivity}</span>
+              <h1 className="activity-focus-title">
+                {t.messengerActivity.overviewTitle}
+              </h1>
+              <p className="muted activity-focus-body">
+                {t.messengerActivity.subtitle}
+              </p>
+            </div>
+
+            <div className="messenger-activity-head-actions">
+              <Link
+                className="pill messenger-activity-head-pill"
+                href={withSpaceParam('/settings', activeSpace.id)}
+                prefetch={false}
+              >
+                {t.messengerActivity.settingsAction}
+              </Link>
+              {archivedConversations.length > 0 ? (
+                <Link
+                  className="pill messenger-activity-head-pill"
+                  href={buildInboxHref({
+                    spaceId: activeSpace.id,
+                    view: 'archived',
+                  })}
+                  prefetch={false}
+                >
+                  {t.activity.openArchived}
+                </Link>
+              ) : null}
             </div>
           </div>
 
-          <div className="messenger-activity-head-actions">
-            <Link
-              className="pill"
-              href={withSpaceParam('/settings', activeSpace.id)}
-              prefetch={false}
-            >
-              {t.messengerActivity.settingsAction}
-            </Link>
-            {archivedConversations.length > 0 ? (
-              <Link
-                className="pill"
-                href={buildInboxHref({
-                  spaceId: activeSpace.id,
-                  view: 'archived',
-                })}
-                prefetch={false}
-              >
-                {t.activity.openArchived}
-              </Link>
+          <div className="keepcozy-meta-row messenger-activity-meta">
+            <span className="keepcozy-meta-pill">
+              {t.settings.currentSpaceLabel}: {activeSpace.name}
+            </span>
+            <span className="keepcozy-meta-pill">
+              {t.messengerActivity.unreadSectionTitle}: {unreadChatCount}
+            </span>
+            {unreadDmCount > 0 ? (
+              <span className="keepcozy-meta-pill">
+                {t.messengerActivity.filterDirect}: {unreadDmCount}
+              </span>
+            ) : null}
+            {visibleNotificationCount > 0 ? (
+              <span className="keepcozy-meta-pill">
+                {t.messengerActivity.filterRecent}: {visibleNotificationCount}
+              </span>
             ) : null}
           </div>
         </section>
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
+          <div className="stack messenger-activity-surface-copy">
+            <h2 className="card-title">{t.messengerActivity.surfaceTitle}</h2>
+            <p className="muted">{t.messengerActivity.surfaceBody}</p>
+          </div>
+
           <nav className="messenger-activity-filter-row" aria-label={t.messengerActivity.filtersLabel}>
             <Link
               className={
