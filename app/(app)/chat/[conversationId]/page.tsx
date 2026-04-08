@@ -1240,7 +1240,40 @@ export default async function ChatPage({
             <span aria-hidden="true">←</span>
           </Link>
 
-          <div className="chat-header-identity">
+          <Link
+            aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
+            className="chat-header-main-link"
+            href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
+            prefetch={false}
+          >
+            <div className="stack chat-header-copy">
+              <h1 className="conversation-screen-title">
+                {directConversationDisplayTitle}
+              </h1>
+              {conversation.kind === 'group' ? (
+                <p className="muted chat-member-summary">{groupMemberSummary}</p>
+              ) : hasIdentityStatus(directParticipantIdentity) || otherParticipants[0] ? (
+                <div className="chat-header-meta">
+                  <IdentityStatusInline
+                    className="chat-header-status"
+                    identity={directParticipantIdentity}
+                  />
+                  {otherParticipants[0] ? (
+                    <DmThreadClientSubtree
+                      conversationId={conversationId}
+                      {...threadClientDiagnostics}
+                      fallback={null}
+                      surface="conversation-presence-status"
+                    >
+                      <ConversationPresenceStatus language={language} />
+                    </DmThreadClientSubtree>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </Link>
+
+          <div className="chat-header-avatar-slot">
             <ChatHeaderAvatarPreviewTrigger
               closeLabel={t.chat.closeAvatarPreview}
               conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
@@ -1257,39 +1290,6 @@ export default async function ChatPage({
               }
               title={directConversationDisplayTitle}
             />
-
-            <Link
-              aria-label={t.chat.openInfoAria(directConversationDisplayTitle)}
-              className="chat-header-main-link"
-              href={withSpaceParam(`/chat/${conversationId}/settings`, activeSpaceId)}
-              prefetch={false}
-            >
-              <div className="stack chat-header-copy">
-                <h1 className="conversation-screen-title">
-                  {directConversationDisplayTitle}
-                </h1>
-                {conversation.kind === 'group' ? (
-                  <p className="muted chat-member-summary">{groupMemberSummary}</p>
-                ) : hasIdentityStatus(directParticipantIdentity) || otherParticipants[0] ? (
-                  <div className="chat-header-meta">
-                    <IdentityStatusInline
-                      className="chat-header-status"
-                      identity={directParticipantIdentity}
-                    />
-                    {otherParticipants[0] ? (
-                      <DmThreadClientSubtree
-                        conversationId={conversationId}
-                        {...threadClientDiagnostics}
-                        fallback={null}
-                        surface="conversation-presence-status"
-                      >
-                        <ConversationPresenceStatus language={language} />
-                      </DmThreadClientSubtree>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </Link>
           </div>
         </section>
       </section>

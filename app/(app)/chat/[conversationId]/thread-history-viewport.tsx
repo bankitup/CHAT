@@ -898,7 +898,6 @@ function ThreadVoiceMessageBubble({
     voiceState === 'ready'
       ? readyStateLabel
       : getVoiceMessageStateLabel({ state: voiceState, t });
-  const sizeLabel = formatAttachmentSize(attachment?.sizeBytes ?? null);
   const durationLabel =
     voiceState === 'ready'
       ? playbackState === 'playing' ||
@@ -909,6 +908,16 @@ function ThreadVoiceMessageBubble({
           )}`
         : formatVoiceDuration(resolvedDurationMs)
       : '--:--';
+  const playIconState =
+    voiceState !== 'ready'
+      ? voiceState === 'failed' || voiceState === 'unavailable'
+        ? 'error'
+        : 'loading'
+      : isBuffering
+        ? 'loading'
+        : isPlaying
+          ? 'pause'
+          : 'play';
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -1151,16 +1160,11 @@ function ThreadVoiceMessageBubble({
         }}
         type="button"
       >
-        <span aria-hidden="true" className="message-voice-play-icon">
-          {voiceState !== 'ready'
-            ? voiceState === 'failed' || voiceState === 'unavailable'
-              ? '!'
-              : '...'
-            : isBuffering
-              ? '...'
-              : isPlaying
-                ? '||'
-                : '>'}
+        <span
+          aria-hidden="true"
+          className={`message-voice-play-icon message-voice-play-icon-${playIconState}`}
+        >
+          {playIconState === 'error' ? '!' : null}
         </span>
       </button>
       <div className="message-voice-copy">
@@ -1180,15 +1184,11 @@ function ThreadVoiceMessageBubble({
             }
           />
         </div>
-        <div className="message-voice-meta">
-          <span className="message-voice-state">{stateLabel}</span>
-          {voiceState === 'ready' && sizeLabel ? (
-            <span className="message-voice-meta-separator">·</span>
-          ) : null}
-          {voiceState === 'ready' && sizeLabel ? (
-            <span>{sizeLabel}</span>
-          ) : null}
-        </div>
+        {voiceState !== 'ready' ? (
+          <div className="message-voice-meta">
+            <span className="message-voice-state">{stateLabel}</span>
+          </div>
+        ) : null}
       </div>
       {voiceState === 'ready' && effectiveSignedUrl ? (
         <audio
