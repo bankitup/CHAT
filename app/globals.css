@@ -637,6 +637,11 @@ main {
   pointer-events: none;
 }
 
+.app-bottom-nav-messenger {
+  width: min(calc(100% - 44px), 420px);
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
 .app-bottom-nav-shell {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -651,6 +656,21 @@ main {
   pointer-events: auto;
 }
 
+.app-bottom-nav-shell-messenger {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px 10px;
+  border-color: rgba(218, 226, 237, 0.82);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 249, 255, 0.8));
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.04),
+    0 18px 42px rgba(17, 24, 39, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(22px) saturate(1.08);
+}
+
 .app-bottom-nav-link {
   display: flex;
   align-items: center;
@@ -662,16 +682,37 @@ main {
   text-align: center;
 }
 
+.app-bottom-nav-link-messenger {
+  min-height: 46px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: rgba(76, 85, 98, 0.88);
+}
+
 .app-bottom-nav-link-active {
   background: rgba(31, 111, 235, 0.08);
   color: rgba(17, 24, 39, 0.94);
   box-shadow: inset 0 0 0 1px rgba(31, 111, 235, 0.08);
 }
 
+.app-bottom-nav-link-messenger.app-bottom-nav-link-active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 251, 255, 0.8));
+  box-shadow:
+    inset 0 0 0 1px rgba(31, 111, 235, 0.12),
+    0 8px 18px rgba(31, 111, 235, 0.08);
+  color: rgba(18, 27, 39, 0.96);
+}
+
 .app-bottom-nav-label {
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.05;
+}
+
+.app-bottom-nav-link-messenger .app-bottom-nav-label {
+  font-size: 0.74rem;
+  letter-spacing: 0.01em;
 }
 
 @media (min-width: 700px) {
