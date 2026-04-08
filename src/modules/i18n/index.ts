@@ -48,6 +48,7 @@ type LanguageDictionary = {
     spaces: string;
     settings: string;
     activity: string;
+    messengerActivity: string;
     activeHomeLabel: string;
     currentSectionLabel: string;
     homeScopeBody: string;
@@ -64,6 +65,7 @@ type LanguageDictionary = {
     openSpaces: string;
     openSettings: string;
     openActivity: string;
+    openMessengerActivity: string;
   };
   spaces: {
     title: string;
@@ -176,6 +178,39 @@ type LanguageDictionary = {
     logoutButton: string;
     profileUpdated: string;
     languageUpdated: string;
+  };
+  messengerHome: {
+    eyebrow: string;
+    subtitle: string;
+    overviewTitle: string;
+    overviewBody: string;
+    activeChatsTitle: string;
+    activeChatsBody: string;
+    unreadChatsBody: string;
+    archivedChatsBody: string;
+    recentTitle: string;
+    recentBody: string;
+    profileTitle: string;
+    profileBody: string;
+    unreadBadgeLabel: string;
+    groupBadgeLabel: string;
+    openProfileAction: string;
+    recentEmptyBody: string;
+    emptyTitle: string;
+    emptyBody: string;
+  };
+  messengerActivity: {
+    subtitle: string;
+    overviewTitle: string;
+    overviewBody: string;
+    unreadSectionTitle: string;
+    unreadSectionBody: string;
+    recentSectionTitle: string;
+    recentSectionBody: string;
+    quietTitle: string;
+    quietBody: string;
+    recentEmptyTitle: string;
+    recentEmptyBody: string;
   };
   homeDashboard: {
     eyebrow: string;
@@ -503,6 +538,10 @@ type LanguageDictionary = {
     archivedNote: string;
     emptyMainTitle: string;
     emptyMainBody: string;
+    messengerFreshTitle: string;
+    messengerFreshBody: string;
+    messengerFreshAdminBody: string;
+    messengerFreshMemberBody: string;
     emptyArchivedTitle: string;
     emptyArchivedBody: string;
     emptySearchTitle: string;
@@ -536,6 +575,7 @@ type LanguageDictionary = {
       searchAria: string;
       searchPlaceholder: string;
       noUsers: string;
+      noUsersAdmin: string;
       existingDmOnly: string;
       noMatches: string;
       selected: string;
@@ -783,6 +823,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaces: 'Spaces',
       settings: 'Settings',
       activity: 'History',
+      messengerActivity: 'Activity',
       activeHomeLabel: 'Active home',
       currentSectionLabel: 'Current section',
       homeScopeBody: 'All top-level sections stay inside this home until you switch context.',
@@ -799,6 +840,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openSpaces: 'Open spaces',
       openSettings: 'Open settings',
       openActivity: 'Open history',
+      openMessengerActivity: 'Open activity',
     },
     spaces: {
       title: 'Choose a space',
@@ -928,6 +970,50 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       logoutButton: 'Log out',
       profileUpdated: 'Profile updated.',
       languageUpdated: 'Language updated.',
+    },
+    messengerHome: {
+      eyebrow: 'Messenger space',
+      subtitle:
+        'Use this space for conversations first, then check recent chat movement without leaving the current workspace.',
+      overviewTitle: 'Chat-first workspace',
+      overviewBody:
+        'Open chats to start talking, review recent activity when you need context, and switch spaces only when you want a different workspace.',
+      activeChatsTitle: 'Active chats',
+      activeChatsBody: 'Current conversations that belong to this space.',
+      unreadChatsBody: 'Chats in this space that still need attention.',
+      archivedChatsBody: 'Hidden chats stay reachable without leaving the space.',
+      recentTitle: 'Resume chats',
+      recentBody:
+        'Jump back into the conversations that are already moving in this space.',
+      profileTitle: 'Profile and space',
+      profileBody:
+        'Keep profile details and space switching nearby without turning them into the main shell.',
+      unreadBadgeLabel: 'Unread',
+      groupBadgeLabel: 'Group',
+      openProfileAction: 'Open profile',
+      recentEmptyBody: 'Open chats to start the next conversation in this space.',
+      emptyTitle: 'This messenger space starts clean',
+      emptyBody:
+        'Open Chats to start the first conversation here. No history or participants are copied in automatically from TEST or any other space.',
+    },
+    messengerActivity: {
+      subtitle:
+        'Follow unread conversations and recent message movement for this space.',
+      overviewTitle: 'Message activity',
+      overviewBody:
+        'Use this view to catch up on unread chats, scan recent movement, and reopen archived conversations when they matter again.',
+      unreadSectionTitle: 'Unread chats',
+      unreadSectionBody:
+        'The conversations that need attention first in this space.',
+      recentSectionTitle: 'Recent chats',
+      recentSectionBody:
+        'The latest conversation movement across this space, newest first.',
+      quietTitle: 'Nothing needs attention right now',
+      quietBody:
+        'Unread conversations will appear here when something in this space needs a reply.',
+      recentEmptyTitle: 'No recent chat movement yet',
+      recentEmptyBody:
+        'Recent conversation activity will appear here after this space starts being used.',
     },
     homeDashboard: {
       eyebrow: 'Home dashboard',
@@ -1294,6 +1380,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Archived chats are only hidden from your inbox. They still keep their messages and can return anytime.',
       emptyMainTitle: 'No chats here',
       emptyMainBody: 'Start one from the + button.',
+      messengerFreshTitle: 'This messenger space starts clean',
+      messengerFreshBody:
+        'Start the first direct message or group here. This space begins with no copied history from TEST or any other workspace.',
+      messengerFreshAdminBody:
+        'Add members to this space first, then start the first direct message or group here. Nothing is copied in automatically from TEST or any other workspace.',
+      messengerFreshMemberBody:
+        'This space has no other visible members yet. Ask a space admin to add people here before starting the first chat.',
       emptyArchivedTitle: 'No archived chats',
       emptyArchivedBody: 'Chats you hide from your inbox will appear here.',
       emptySearchTitle: 'No matching chats',
@@ -1327,6 +1420,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         searchAria: 'Search people',
         searchPlaceholder: 'Search people',
         noUsers: 'No other registered users are available yet.',
+        noUsersAdmin:
+          'No other members are available in this space yet. Add people to this space first, then come back to start chats.',
         existingDmOnly: 'Everyone here already has a direct chat with you.',
         noMatches: 'No matching people yet.',
         selected: 'Selected',
@@ -1588,6 +1683,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaces: 'Пространства',
       settings: 'Настройки',
       activity: 'История',
+      messengerActivity: 'Активность',
       activeHomeLabel: 'Активный дом',
       currentSectionLabel: 'Текущий раздел',
       homeScopeBody: 'Все верхнеуровневые разделы остаются внутри этого дома, пока вы не смените контекст.',
@@ -1604,6 +1700,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openSpaces: 'Открыть пространства',
       openSettings: 'Открыть настройки',
       openActivity: 'Открыть историю',
+      openMessengerActivity: 'Открыть активность',
     },
     spaces: {
       title: 'Выберите пространство',
@@ -1737,6 +1834,50 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       logoutButton: 'Выйти',
       profileUpdated: 'Профиль обновлён.',
       languageUpdated: 'Язык обновлён.',
+    },
+    messengerHome: {
+      eyebrow: 'Пространство мессенджера',
+      subtitle:
+        'Используйте это пространство прежде всего для чатов, а затем проверяйте недавнюю активность, не выходя из текущего контекста.',
+      overviewTitle: 'Чат-ориентированное пространство',
+      overviewBody:
+        'Открывайте чаты, чтобы начать общение, просматривайте недавнюю активность, когда нужен контекст, и переключайте пространство только когда нужен другой рабочий контур.',
+      activeChatsTitle: 'Активные чаты',
+      activeChatsBody: 'Текущие разговоры, которые относятся к этому пространству.',
+      unreadChatsBody: 'Чаты в этом пространстве, которые ещё требуют внимания.',
+      archivedChatsBody: 'Скрытые чаты остаются доступными, не покидая пространство.',
+      recentTitle: 'Продолжить чаты',
+      recentBody:
+        'Быстро возвращайтесь в разговоры, которые уже движутся внутри этого пространства.',
+      profileTitle: 'Профиль и пространство',
+      profileBody:
+        'Держите профиль и переключение пространства рядом, не превращая их в главный слой оболочки.',
+      unreadBadgeLabel: 'Непрочитано',
+      groupBadgeLabel: 'Группа',
+      openProfileAction: 'Открыть профиль',
+      recentEmptyBody: 'Откройте Чаты, чтобы начать следующий разговор в этом пространстве.',
+      emptyTitle: 'Это пространство мессенджера начинается с нуля',
+      emptyBody:
+        'Откройте Чаты, чтобы начать здесь первый разговор. История и участники не копируются автоматически из TEST или любого другого пространства.',
+    },
+    messengerActivity: {
+      subtitle:
+        'Следите за непрочитанными чатами и недавним движением сообщений в этом пространстве.',
+      overviewTitle: 'Активность сообщений',
+      overviewBody:
+        'Используйте этот экран, чтобы разбирать непрочитанные чаты, быстро просматривать недавнее движение и возвращаться к архивным разговорам, когда это снова важно.',
+      unreadSectionTitle: 'Непрочитанные чаты',
+      unreadSectionBody:
+        'Разговоры в этом пространстве, которым прежде всего нужно внимание.',
+      recentSectionTitle: 'Недавние чаты',
+      recentSectionBody:
+        'Последнее движение разговоров по этому пространству, сначала самые новые.',
+      quietTitle: 'Сейчас ничего не требует внимания',
+      quietBody:
+        'Непрочитанные разговоры появятся здесь, когда в этом пространстве понадобится ответ.',
+      recentEmptyTitle: 'Пока нет недавней активности в чатах',
+      recentEmptyBody:
+        'Недавняя активность разговоров появится здесь после того, как это пространство начнёт использоваться.',
     },
     homeDashboard: {
       eyebrow: 'Главная дома',
@@ -2129,6 +2270,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Архивные чаты только скрыты из списка. Сообщения остаются, и их можно вернуть в любой момент.',
       emptyMainTitle: 'Здесь пока нет чатов',
       emptyMainBody: 'Начните новый через кнопку +.',
+      messengerFreshTitle: 'Это пространство мессенджера начинается с нуля',
+      messengerFreshBody:
+        'Начните здесь первый личный чат или группу. История из TEST или любого другого пространства сюда не копируется.',
+      messengerFreshAdminBody:
+        'Сначала добавьте участников в это пространство, а затем начните здесь первый личный чат или группу. Ничего не копируется автоматически из TEST или любого другого пространства.',
+      messengerFreshMemberBody:
+        'В этом пространстве пока нет других видимых участников. Попросите администратора пространства добавить людей, прежде чем начинать первый чат.',
       emptyArchivedTitle: 'Архивных чатов нет',
       emptyArchivedBody: 'Сюда попадут чаты, которые вы скрыли из списка.',
       emptySearchTitle: 'Подходящих чатов нет',
@@ -2162,6 +2310,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         searchAria: 'Поиск людей',
         searchPlaceholder: 'Поиск людей',
         noUsers: 'Других зарегистрированных пользователей пока нет.',
+        noUsersAdmin:
+          'В этом пространстве пока нет других доступных участников. Сначала добавьте людей в это пространство, а затем вернитесь сюда, чтобы начать чаты.',
         existingDmOnly: 'Со всеми доступными людьми у вас уже есть личные чаты.',
         noMatches: 'Подходящих людей нет.',
         selected: 'Выбрано',

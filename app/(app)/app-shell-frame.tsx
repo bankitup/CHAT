@@ -57,7 +57,7 @@ export function AppShellFrame({
   const showBottomNav =
     !isChatRoute && !(isSpacesRoute && activeSpaceProfile !== 'messenger_full');
   let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
-  let messengerActiveTab: 'chats' | 'spaces' | 'settings' | null = null;
+  let messengerActiveTab: 'activity' | 'chats' | 'home' | null = null;
 
   if (isActivityRoute) {
     activeTab = 'activity';
@@ -71,12 +71,12 @@ export function AppShellFrame({
     activeTab = 'home';
   }
 
-  if (pathname.startsWith('/inbox')) {
+  if (isHomeRoute) {
+    messengerActiveTab = 'home';
+  } else if (pathname.startsWith('/inbox')) {
     messengerActiveTab = 'chats';
-  } else if (isSpacesRoute) {
-    messengerActiveTab = 'spaces';
-  } else if (isSettingsRoute) {
-    messengerActiveTab = 'settings';
+  } else if (isActivityRoute) {
+    messengerActiveTab = 'activity';
   }
 
   return (
@@ -101,6 +101,19 @@ export function AppShellFrame({
             {activeSpaceProfile === 'messenger_full' ? (
               <>
                 <Link
+                  aria-label={t.shell.openHome}
+                  className={
+                    messengerActiveTab === 'home'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/home')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.home}</span>
+                </Link>
+
+                <Link
                   aria-label={t.shell.openChats}
                   className={
                     messengerActiveTab === 'chats'
@@ -114,29 +127,18 @@ export function AppShellFrame({
                 </Link>
 
                 <Link
-                  aria-label={t.shell.openSpaces}
+                  aria-label={t.shell.openMessengerActivity}
                   className={
-                    messengerActiveTab === 'spaces'
+                    messengerActiveTab === 'activity'
                       ? 'app-bottom-nav-link app-bottom-nav-link-active'
                       : 'app-bottom-nav-link'
                   }
-                  href={navSpaceHref('/spaces')}
+                  href={navSpaceHref('/activity')}
                   prefetch={false}
                 >
-                  <span className="app-bottom-nav-label">{t.shell.spaces}</span>
-                </Link>
-
-                <Link
-                  aria-label={t.shell.openSettings}
-                  className={
-                    messengerActiveTab === 'settings'
-                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                      : 'app-bottom-nav-link'
-                  }
-                  href={navSpaceHref('/settings')}
-                  prefetch={false}
-                >
-                  <span className="app-bottom-nav-label">{t.shell.settings}</span>
+                  <span className="app-bottom-nav-label">
+                    {t.shell.messengerActivity}
+                  </span>
                 </Link>
               </>
             ) : (

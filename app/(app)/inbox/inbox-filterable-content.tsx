@@ -31,7 +31,7 @@ import {
   type InboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
 import { InboxConversationLiveRow } from './inbox-conversation-live-row';
-import { NewChatSheet } from './new-chat-sheet';
+import { NewChatSheet, type NewChatMode } from './new-chat-sheet';
 
 type InboxFilter = InboxPrimaryFilter;
 type InboxView = 'main' | 'archived';
@@ -133,9 +133,13 @@ const EMPTY_LIVE_SUMMARY: InboxConversationLiveSummary = {
 
 type InboxFilterableContentProps = {
   activeSpaceId: string;
+  activeSpaceName: string | null;
   availableDmUserEntries: AvailableUserEntry[];
   availableUserEntries: AvailableUserEntry[];
+  canManageMembers: boolean;
   createOpen: boolean;
+  initialCreateMode: NewChatMode;
+  isMessengerSpace: boolean;
   currentUserId: string;
   initialFilter: InboxFilter;
   initialView: InboxView;
@@ -159,12 +163,14 @@ function normalizeSearchTerm(value: string) {
 
 function buildInboxHref({
   create,
+  createMode,
   filter,
   query,
   spaceId,
   view,
 }: {
   create?: boolean;
+  createMode?: NewChatMode;
   filter: InboxFilter;
   query?: string;
   spaceId?: string | null;
@@ -190,6 +196,10 @@ function buildInboxHref({
 
   if (create) {
     params.set('create', 'open');
+
+    if (createMode) {
+      params.set('createMode', createMode);
+    }
   }
 
   const href = params.toString();
@@ -535,11 +545,15 @@ function buildOrganizedConversationSectionsByFilter(input: {
 
 export function InboxFilterableContent({
   activeSpaceId,
+  activeSpaceName,
   archivedConversationItems,
   archivedSummaries,
   availableDmUserEntries,
   availableUserEntries,
+  canManageMembers,
   createOpen,
+  initialCreateMode,
+  isMessengerSpace,
   currentUserId,
   initialFilter,
   initialView,
@@ -563,6 +577,8 @@ export function InboxFilterableContent({
   const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
   const [activeView, setActiveView] = useState<InboxView>(initialView);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(createOpen);
+  const [createSheetMode, setCreateSheetMode] =
+    useState<NewChatMode>(initialCreateMode);
   const [pullRefreshOffset, setPullRefreshOffset] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const touchGestureRef = useRef<{
@@ -590,6 +606,10 @@ export function InboxFilterableContent({
   useEffect(() => {
     setIsCreateSheetOpen(createOpen);
   }, [createOpen]);
+
+  useEffect(() => {
+    setCreateSheetMode(initialCreateMode);
+  }, [initialCreateMode]);
 
   const getInboxScrollTop = () => {
     if (typeof window === 'undefined') {
@@ -703,6 +723,7 @@ export function InboxFilterableContent({
 
     const nextHref = buildInboxHref({
       create: isCreateSheetOpen,
+      createMode: isCreateSheetOpen ? createSheetMode : undefined,
       filter: activeFilter,
       query: queryValue,
       spaceId: activeSpaceId,
@@ -714,7 +735,14 @@ export function InboxFilterableContent({
     }
 
     window.history.replaceState(window.history.state, '', nextHref);
-  }, [activeFilter, activeSpaceId, activeView, isCreateSheetOpen, queryValue]);
+  }, [
+    activeFilter,
+    activeSpaceId,
+    activeView,
+    createSheetMode,
+    isCreateSheetOpen,
+    queryValue,
+  ]);
 
   useEffect(() => {
     if (typeof document === 'undefined' || !isCreateSheetOpen) {
@@ -894,8 +922,38 @@ export function InboxFilterableContent({
       ? derivedArchivedConversationItems.length
       : derivedMainConversationItems.length;
   const archivedConversationCount = derivedArchivedConversationItems.length;
+  const messengerFreshSpaceEmpty =
+    isMessengerSpace &&
+    activeView === 'main' &&
+    activeConversationSourceCount === 0 &&
+    !searchTerm;
   const isPrimaryChatsView = activeView === 'main';
   const isDmFilter = activeFilter === 'dm';
+  const manageMembersHref = canManageMembers
+    ? `/spaces/members?space=${encodeURIComponent(activeSpaceId)}`
+    : null;
+  const openCreateDmHref = buildInboxHref({
+    create: true,
+    createMode: 'dm',
+    filter: activeFilter,
+    query: queryValue,
+    spaceId: activeSpaceId,
+    view: activeView,
+  });
+  const openCreateGroupHref = buildInboxHref({
+    create: true,
+    createMode: 'group',
+    filter: activeFilter,
+    query: queryValue,
+    spaceId: activeSpaceId,
+    view: activeView,
+  });
+  const messengerFreshBody =
+    availableUserEntries.length > 0
+      ? t.inbox.messengerFreshBody
+      : canManageMembers
+        ? t.inbox.messengerFreshAdminBody
+        : t.inbox.messengerFreshMemberBody;
   const searchAria = isDmFilter ? t.inbox.searchDmAria : t.inbox.searchAria;
   const searchPlaceholder = isDmFilter
     ? t.inbox.searchDmPlaceholder
@@ -1055,7 +1113,10 @@ export function InboxFilterableContent({
             <button
               aria-label={t.inbox.createAria}
               className="inbox-compose-trigger inbox-topbar-action-button"
-              onClick={() => setIsCreateSheetOpen(true)}
+              onClick={() => {
+                setCreateSheetMode('dm');
+                setIsCreateSheetOpen(true);
+              }}
               type="button"
             >
               <span aria-hidden="true" className="inbox-topbar-action-icon">
@@ -1192,7 +1253,45 @@ export function InboxFilterableContent({
         </section>
       ) : null}
 
-      {activeConversationSourceCount === 0 ? (
+      {messengerFreshSpaceEmpty ? (
+        <section className="card stack empty-card inbox-empty-state inbox-empty-state-messenger">
+          <div className="stack inbox-empty-copy">
+            <h2 className="card-title">{t.inbox.messengerFreshTitle}</h2>
+            <p className="muted">{messengerFreshBody}</p>
+            {activeSpaceName ? (
+              <div className="keepcozy-meta-row">
+                <span className="keepcozy-meta-pill">
+                  {t.settings.currentSpaceLabel}: {activeSpaceName}
+                </span>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="inbox-empty-actions">
+            {availableDmUserEntries.length > 0 ? (
+              <Link className="button" href={openCreateDmHref}>
+                {t.inbox.create.createDm}
+              </Link>
+            ) : null}
+            {availableUserEntries.length > 0 ? (
+              <Link className="button button-secondary" href={openCreateGroupHref}>
+                {t.inbox.create.createGroup}
+              </Link>
+            ) : null}
+            {manageMembersHref ? (
+              <Link className="pill" href={manageMembersHref}>
+                {t.spaces.manageMembersAction}
+              </Link>
+            ) : null}
+            <Link
+              className="pill"
+              href={`/spaces?space=${encodeURIComponent(activeSpaceId)}`}
+            >
+              {t.settings.chooseAnotherSpace}
+            </Link>
+          </div>
+        </section>
+      ) : activeConversationSourceCount === 0 ? (
         <section className="card stack empty-card inbox-empty-state">
           <h2 className="card-title">
             {activeView === 'archived'
@@ -1305,8 +1404,11 @@ export function InboxFilterableContent({
             availableGroupUsers={availableUserEntriesFiltered}
             hasAnyDmUsers={availableDmUserEntries.length > 0}
             hasAnyUsers={availableUserEntries.length > 0}
+            initialMode={createSheetMode}
             language={language}
+            manageMembersHref={manageMembersHref}
             onClose={() => setIsCreateSheetOpen(false)}
+            onModeChange={setCreateSheetMode}
             spaceId={activeSpaceId}
           />
         </section>

@@ -1213,6 +1213,10 @@ main {
   font-size: 0.84rem;
 }
 
+.inbox-compose-empty-state {
+  gap: 10px;
+}
+
 .inbox-compose-user-list {
   display: grid;
   gap: 4px;
@@ -2310,6 +2314,20 @@ main {
   padding: 16px;
 }
 
+.inbox-empty-state-messenger {
+  gap: 12px;
+}
+
+.inbox-empty-copy {
+  gap: 8px;
+}
+
+.inbox-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .inbox-archived-note {
   gap: 0;
   padding: 11px 14px;
@@ -2659,6 +2677,11 @@ main {
   border-radius: 18px;
   background: rgba(252, 253, 255, 0.92);
   box-shadow: 0 10px 24px rgba(17, 24, 39, 0.04);
+}
+
+.activity-item-link {
+  color: inherit;
+  text-decoration: none;
 }
 
 .activity-item-recent {
