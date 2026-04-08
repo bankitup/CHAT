@@ -138,6 +138,7 @@ type InboxFilterableContentProps = {
   availableUserEntries: AvailableUserEntry[];
   canManageMembers: boolean;
   createOpen: boolean;
+  createTargetsLoaded: boolean;
   initialCreateMode: NewChatMode;
   isMessengerSpace: boolean;
   currentUserId: string;
@@ -552,6 +553,7 @@ export function InboxFilterableContent({
   availableUserEntries,
   canManageMembers,
   createOpen,
+  createTargetsLoaded,
   initialCreateMode,
   isMessengerSpace,
   currentUserId,
@@ -949,7 +951,7 @@ export function InboxFilterableContent({
     view: activeView,
   });
   const messengerFreshBody =
-    availableUserEntries.length > 0
+    !createTargetsLoaded || availableUserEntries.length > 0
       ? t.inbox.messengerFreshBody
       : canManageMembers
         ? t.inbox.messengerFreshAdminBody
@@ -1110,19 +1112,15 @@ export function InboxFilterableContent({
                 ⚙
               </span>
             </Link>
-            <button
+            <Link
               aria-label={t.inbox.createAria}
               className="inbox-compose-trigger inbox-topbar-action-button"
-              onClick={() => {
-                setCreateSheetMode('dm');
-                setIsCreateSheetOpen(true);
-              }}
-              type="button"
+              href={openCreateDmHref}
             >
               <span aria-hidden="true" className="inbox-topbar-action-icon">
                 +
               </span>
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -1268,16 +1266,28 @@ export function InboxFilterableContent({
           </div>
 
           <div className="inbox-empty-actions">
-            {availableDmUserEntries.length > 0 ? (
+            {createTargetsLoaded ? (
+              availableDmUserEntries.length > 0 ? (
+                <Link className="button" href={openCreateDmHref}>
+                  {t.inbox.create.createDm}
+                </Link>
+              ) : null
+            ) : (
               <Link className="button" href={openCreateDmHref}>
                 {t.inbox.create.createDm}
               </Link>
-            ) : null}
-            {availableUserEntries.length > 0 ? (
+            )}
+            {createTargetsLoaded ? (
+              availableUserEntries.length > 0 ? (
+                <Link className="button button-secondary" href={openCreateGroupHref}>
+                  {t.inbox.create.createGroup}
+                </Link>
+              ) : null
+            ) : (
               <Link className="button button-secondary" href={openCreateGroupHref}>
                 {t.inbox.create.createGroup}
               </Link>
-            ) : null}
+            )}
             {manageMembersHref ? (
               <Link className="pill" href={manageMembersHref}>
                 {t.spaces.manageMembersAction}
