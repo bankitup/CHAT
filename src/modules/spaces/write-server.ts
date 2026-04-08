@@ -1,0 +1,416 @@
+import 'server-only';
+
+import type { User } from '@supabase/supabase-js';
+import { requireRequestViewer } from '@/lib/request-context/server';
+import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
+import {
+  getDefaultShellRouteForSpaceProfile,
+  normalizeSpaceProfile,
+  type SpaceProfile,
+  type SpaceRole,
+} from './model';
+import { resolveSuperAdminGovernanceForUser } from './server';
+
+const SPACE_PROFILE_STORAGE_SETUP_PATH =
+  '/Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-08-spaces-profile-column.sql';
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+type ParsedSpaceIdentifier = {
+  kind: 'email' | 'user_id';
+  normalized: string;
+  raw: string;
+};
+
+type ResolvedProvisionUser = {
+  userId: string;
+};
+
+function trimToNullable(value: string | null | undefined) {
+  const normalized = value?.trim() ?? '';
+  return normalized ? normalized : null;
+}
+
+function isMissingColumnErrorMessage(message: string, columnName: string) {
+  const normalizedMessage = message.toLowerCase();
+  const normalizedColumnName = columnName.toLowerCase();
+
+  return (
+    normalizedMessage.includes(normalizedColumnName) &&
+    (normalizedMessage.includes('column') ||
+      normalizedMessage.includes('schema cache') ||
+      normalizedMessage.includes('could not find'))
+  );
+}
+
+function parseSpaceUserIdentifiers(rawValue: string | null | undefined) {
+  const unique = new Set<string>();
+  const valid: ParsedSpaceIdentifier[] = [];
+  const invalid: string[] = [];
+
+  for (const rawPart of String(rawValue ?? '').split(/[\n,]+/)) {
+    const raw = rawPart.trim();
+
+    if (!raw) {
+      continue;
+    }
+
+    if (raw.includes('@')) {
+      const normalized = raw.toLowerCase();
+
+      if (!EMAIL_PATTERN.test(normalized)) {
+        invalid.push(raw);
+        continue;
+      }
+
+      const key = `email:${normalized}`;
+
+      if (!unique.has(key)) {
+        unique.add(key);
+        valid.push({
+          kind: 'email',
+          normalized,
+          raw,
+        });
+      }
+
+      continue;
+    }
+
+    if (!UUID_PATTERN.test(raw)) {
+      invalid.push(raw);
+      continue;
+    }
+
+    const normalized = raw.toLowerCase();
+    const key = `user_id:${normalized}`;
+
+    if (!unique.has(key)) {
+      unique.add(key);
+      valid.push({
+        kind: 'user_id',
+        normalized,
+        raw,
+      });
+    }
+  }
+
+  return { invalid, valid };
+}
+
+async function listUsersByEmail(input: {
+  emails: string[];
+  serviceClient: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
+}) {
+  const remainingEmails = new Set(input.emails.map((email) => email.toLowerCase()));
+  const resolvedByEmail = new Map<string, User>();
+  let page = 1;
+  let lastPage = 1;
+
+  while (remainingEmails.size > 0 && page <= lastPage) {
+    const response = await input.serviceClient.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+
+    if (response.error) {
+      throw new Error(response.error.message);
+    }
+
+    lastPage = response.data.lastPage || 1;
+
+    for (const user of response.data.users) {
+      const normalizedEmail = user.email?.trim().toLowerCase() ?? null;
+
+      if (!normalizedEmail || !remainingEmails.has(normalizedEmail)) {
+        continue;
+      }
+
+      resolvedByEmail.set(normalizedEmail, user);
+      remainingEmails.delete(normalizedEmail);
+    }
+
+    page += 1;
+  }
+
+  return resolvedByEmail;
+}
+
+async function resolveProvisionUsers(
+  identifiers: ParsedSpaceIdentifier[],
+  serviceClient: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>,
+) {
+  const emailIdentifiers = identifiers.filter((identifier) => identifier.kind === 'email');
+  const userIdIdentifiers = identifiers.filter(
+    (identifier) => identifier.kind === 'user_id',
+  );
+  const resolvedByIdentifier = new Map<string, ResolvedProvisionUser>();
+  const unresolvedIdentifiers: string[] = [];
+
+  if (emailIdentifiers.length > 0) {
+    const usersByEmail = await listUsersByEmail({
+      emails: emailIdentifiers.map((identifier) => identifier.normalized),
+      serviceClient,
+    });
+
+    for (const identifier of emailIdentifiers) {
+      const user = usersByEmail.get(identifier.normalized);
+
+      if (!user?.id) {
+        unresolvedIdentifiers.push(identifier.raw);
+        continue;
+      }
+
+      resolvedByIdentifier.set(identifier.normalized, {
+        userId: user.id,
+      });
+    }
+  }
+
+  if (userIdIdentifiers.length > 0) {
+    const responses = await Promise.all(
+      userIdIdentifiers.map(async (identifier) => ({
+        identifier,
+        response: await serviceClient.auth.admin.getUserById(identifier.normalized),
+      })),
+    );
+
+    for (const { identifier, response } of responses) {
+      if (response.error || !response.data.user?.id) {
+        unresolvedIdentifiers.push(identifier.raw);
+        continue;
+      }
+
+      resolvedByIdentifier.set(identifier.normalized, {
+        userId: response.data.user.id,
+      });
+    }
+  }
+
+  return {
+    resolvedByIdentifier,
+    unresolvedIdentifiers,
+  };
+}
+
+function buildInitialMembershipRows(input: {
+  adminIdentifiers: ParsedSpaceIdentifier[];
+  participantIdentifiers: ParsedSpaceIdentifier[];
+  resolvedByIdentifier: Map<string, ResolvedProvisionUser>;
+  spaceId: string;
+}) {
+  const orderedUsers = new Map<string, ResolvedProvisionUser>();
+
+  for (const identifier of [
+    ...input.participantIdentifiers,
+    ...input.adminIdentifiers,
+  ]) {
+    const resolvedUser = input.resolvedByIdentifier.get(identifier.normalized);
+
+    if (!resolvedUser || orderedUsers.has(resolvedUser.userId)) {
+      continue;
+    }
+
+    orderedUsers.set(resolvedUser.userId, resolvedUser);
+  }
+
+  const seenAdminIds = new Set<string>();
+
+  for (const identifier of input.adminIdentifiers) {
+    const resolvedUser = input.resolvedByIdentifier.get(identifier.normalized);
+
+    if (!resolvedUser || seenAdminIds.has(resolvedUser.userId)) {
+      continue;
+    }
+
+    seenAdminIds.add(resolvedUser.userId);
+  }
+
+  if (seenAdminIds.size === 0) {
+    throw new Error('At least one initial space admin is required.');
+  }
+
+  const ownerUserId = Array.from(seenAdminIds)[0] ?? null;
+  const rows = Array.from(orderedUsers.values()).map((resolvedUser) => {
+    let role: SpaceRole = 'member';
+
+    if (resolvedUser.userId === ownerUserId) {
+      role = 'owner';
+    } else if (seenAdminIds.has(resolvedUser.userId)) {
+      role = 'admin';
+    }
+
+    return {
+      role,
+      space_id: input.spaceId,
+      user_id: resolvedUser.userId,
+    };
+  });
+
+  return {
+    rows,
+  };
+}
+
+async function requireServiceRoleClient() {
+  const serviceClient = createSupabaseServiceRoleClient();
+
+  if (!serviceClient) {
+    throw new Error(
+      'Space creation is not configured right now. Missing Supabase service role access.',
+    );
+  }
+
+  return serviceClient;
+}
+
+async function assertSuperAdminViewer(surface: string) {
+  const viewer = await requireRequestViewer(surface);
+  const globalGovernance = resolveSuperAdminGovernanceForUser({
+    userEmail: viewer.email ?? null,
+  });
+
+  if (!globalGovernance.canCreateSpaces) {
+    throw new Error('Only a super admin may create a new space.');
+  }
+
+  return viewer;
+}
+
+async function insertSpaceRow(input: {
+  createdBy: string;
+  name: string;
+  profile: SpaceProfile;
+  serviceClient: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
+}) {
+  const now = new Date().toISOString();
+  let response = await input.serviceClient
+    .from('spaces')
+    .insert({
+      created_by: input.createdBy,
+      name: input.name,
+      profile: input.profile,
+      updated_at: now,
+    })
+    .select('id, name')
+    .single();
+
+  if (
+    response.error &&
+    isMissingColumnErrorMessage(response.error.message, 'profile')
+  ) {
+    if (input.profile !== 'messenger_full') {
+      throw new Error(
+        `Persisted space profiles are not configured yet. Apply ${SPACE_PROFILE_STORAGE_SETUP_PATH} before provisioning a KeepCozy operational space.`,
+      );
+    }
+
+    response = await input.serviceClient
+      .from('spaces')
+      .insert({
+        created_by: input.createdBy,
+        name: input.name,
+        updated_at: now,
+      })
+      .select('id, name')
+      .single();
+  }
+
+  if (response.error || !response.data?.id) {
+    throw new Error(response.error?.message ?? 'Unable to create the new space.');
+  }
+
+  return {
+    id: response.data.id,
+    name: response.data.name ?? input.name,
+  };
+}
+
+export async function createGovernedSpace(input: {
+  adminIdentifiers: string;
+  participantIdentifiers: string;
+  profile: string;
+  spaceName: string;
+}) {
+  const viewer = await assertSuperAdminViewer('spaces:create-space');
+  const serviceClient = await requireServiceRoleClient();
+  const spaceName = trimToNullable(input.spaceName);
+  const profile = normalizeSpaceProfile(input.profile) ?? 'messenger_full';
+  const participantIdentifiers = parseSpaceUserIdentifiers(input.participantIdentifiers);
+  const adminIdentifiers = parseSpaceUserIdentifiers(input.adminIdentifiers);
+
+  if (!spaceName) {
+    throw new Error('Space name is required.');
+  }
+
+  if (participantIdentifiers.invalid.length > 0) {
+    throw new Error(
+      `Initial participants must be entered as one email or user ID per line. Invalid: ${participantIdentifiers.invalid.join(', ')}`,
+    );
+  }
+
+  if (adminIdentifiers.invalid.length > 0) {
+    throw new Error(
+      `Initial space admins must be entered as one email or user ID per line. Invalid: ${adminIdentifiers.invalid.join(', ')}`,
+    );
+  }
+
+  if (adminIdentifiers.valid.length === 0) {
+    throw new Error('At least one initial space admin is required.');
+  }
+
+  const allIdentifiers = [
+    ...participantIdentifiers.valid,
+    ...adminIdentifiers.valid,
+  ];
+  const { resolvedByIdentifier, unresolvedIdentifiers } = await resolveProvisionUsers(
+    allIdentifiers,
+    serviceClient,
+  );
+
+  if (unresolvedIdentifiers.length > 0) {
+    throw new Error(
+      `Unable to find these people yet: ${unresolvedIdentifiers.join(', ')}.`,
+    );
+  }
+
+  const createdSpace = await insertSpaceRow({
+    createdBy: viewer.id,
+    name: spaceName,
+    profile,
+    serviceClient,
+  });
+
+  try {
+    const membershipRows = buildInitialMembershipRows({
+      adminIdentifiers: adminIdentifiers.valid,
+      participantIdentifiers: participantIdentifiers.valid,
+      resolvedByIdentifier,
+      spaceId: createdSpace.id,
+    });
+
+    const membershipInsert = await serviceClient
+      .from('space_members')
+      .insert(membershipRows.rows);
+
+    if (membershipInsert.error) {
+      throw new Error(membershipInsert.error.message);
+    }
+
+    const creatorIsMember = membershipRows.rows.some((row) => row.user_id === viewer.id);
+
+    return {
+      creatorIsMember,
+      defaultShellRoute: getDefaultShellRouteForSpaceProfile(profile),
+      profile,
+      spaceId: createdSpace.id,
+      spaceName: createdSpace.name,
+    };
+  } catch (error) {
+    await serviceClient.from('spaces').delete().eq('id', createdSpace.id);
+    throw error;
+  }
+}

@@ -226,6 +226,7 @@ export default async function ChatSettingsPage({
       try {
         activeSpaceState = await resolveActiveSpaceForUser({
           userId: user.id,
+          userEmail: user.email ?? null,
           requestedSpaceId: fallbackRequestedSpaceId,
           source: 'chat-settings-page',
         });
