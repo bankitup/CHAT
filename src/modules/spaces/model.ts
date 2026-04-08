@@ -35,11 +35,32 @@ export const SPACE_PROFILES = [
   'keepcozy_ops',
 ] as const satisfies readonly SpaceProfile[];
 
+export function normalizeSpaceProfile(
+  value: string | null | undefined,
+): SpaceProfile | null {
+  const normalized = value?.trim() ?? '';
+
+  if (!normalized) {
+    return null;
+  }
+
+  return SPACE_PROFILES.includes(normalized as SpaceProfile)
+    ? (normalized as SpaceProfile)
+    : null;
+}
+
 export type SpaceProfileSource =
+  | 'persisted_space_profile'
   | 'space_name_test_default'
   | 'fallback_messenger_default';
 
 export type SpaceProfileDefaultShellRoute = '/inbox' | '/home';
+
+export function getDefaultShellRouteForSpaceProfile(
+  profile: SpaceProfile,
+): SpaceProfileDefaultShellRoute {
+  return profile === 'keepcozy_ops' ? '/home' : '/inbox';
+}
 
 export type ResolvedSpaceProfile = {
   profile: SpaceProfile;
@@ -50,6 +71,7 @@ export type ResolvedSpaceProfile = {
 export type SpaceRecord = {
   id: string;
   name: string;
+  profile: SpaceProfile | null;
   createdBy: string;
   createdAt: string | null;
   updatedAt: string | null;

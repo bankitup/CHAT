@@ -84,6 +84,22 @@ type LanguageDictionary = {
     createSpaceRouteTitle: string;
     createSpaceRouteSubtitle: string;
     createSpaceRouteBody: string;
+    fieldSpaceName: string;
+    fieldSpaceProfile: string;
+    fieldParticipantIdentifiers: string;
+    fieldAdminIdentifiers: string;
+    profileMessengerFull: string;
+    profileKeepCozyOps: string;
+    profileHint: string;
+    participantIdentifiersHint: string;
+    adminIdentifiersHint: string;
+    includeYourselfHint: string;
+    submitCreateSpace: string;
+    nameRequired: string;
+    adminIdentifiersRequired: string;
+    createSpaceFailed: string;
+    createSpaceSuccess: string;
+    createSpaceSuccessNoAccess: string;
   };
   settings: {
     backToChats: string;
@@ -786,13 +802,34 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       globalAdminEyebrow: 'Global admin',
       createSpaceTitle: 'Create a new space',
       createSpaceBody:
-        'This action is reserved for super admins and opens the first global space-creation entry point.',
+        'This action is reserved for super admins and provisions a new governed space with its first members and admins.',
       createSpaceAction: 'Create space',
       createSpaceRouteTitle: 'Create a space',
       createSpaceRouteSubtitle:
-        'This entry point is reserved for super admins and will host space provisioning next.',
+        'Create a new space, choose its primary mode, and seed the first governed members.',
       createSpaceRouteBody:
-        'The full provisioning flow is still landing in a later branch. For now, this confirms that global space creation is an admin-only capability, not a normal member action.',
+        'This flow is reserved for super admins. It creates the shared space, assigns its initial profile when supported, and seeds the first explicit space-boundary members.',
+      fieldSpaceName: 'Space name',
+      fieldSpaceProfile: 'Primary mode',
+      fieldParticipantIdentifiers: 'Initial participants',
+      fieldAdminIdentifiers: 'Initial space admins',
+      profileMessengerFull: 'Messenger space',
+      profileKeepCozyOps: 'KeepCozy ops space',
+      profileHint:
+        'Messenger spaces land chat-first. KeepCozy spaces land home-first when persisted profile storage is available.',
+      participantIdentifiersHint:
+        'Enter one email or user ID per line. These people become the initial member set.',
+      adminIdentifiersHint:
+        'Enter one email or user ID per line. Admin identifiers are also added as members automatically, and the first one becomes the owner.',
+      includeYourselfHint:
+        'Add yourself to the participant or admin list if you need to enter the new space right away.',
+      submitCreateSpace: 'Create governed space',
+      nameRequired: 'Space name is required.',
+      adminIdentifiersRequired: 'At least one initial space admin is required.',
+      createSpaceFailed: 'Unable to create the space right now.',
+      createSpaceSuccess: 'Space created. Open it from the list below.',
+      createSpaceSuccessNoAccess:
+        'Space created. It will not appear in this list until you add yourself as a member.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -1550,13 +1587,35 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       globalAdminEyebrow: 'Глобальный админ',
       createSpaceTitle: 'Создать новое пространство',
       createSpaceBody:
-        'Это действие доступно только супер-админам и открывает первую глобальную точку входа для создания пространства.',
+        'Это действие доступно только супер-админам и создает новое управляемое пространство с первыми участниками и администраторами.',
       createSpaceAction: 'Создать пространство',
       createSpaceRouteTitle: 'Создать пространство',
       createSpaceRouteSubtitle:
-        'Эта точка входа зарезервирована для супер-админов и дальше станет местом для провижининга пространств.',
+        'Создайте новое пространство, выберите его основной режим и задайте первый управляемый состав участников.',
       createSpaceRouteBody:
-        'Полный поток провижининга появится в следующей ветке. Пока этот экран подтверждает, что глобальное создание пространств — это админская возможность, а не обычное действие участника.',
+        'Этот поток зарезервирован для супер-админов. Он создает общее пространство, назначает его начальный профиль, когда это поддержано, и задает первых явных участников границы пространства.',
+      fieldSpaceName: 'Название пространства',
+      fieldSpaceProfile: 'Основной режим',
+      fieldParticipantIdentifiers: 'Первые участники',
+      fieldAdminIdentifiers: 'Первые админы пространства',
+      profileMessengerFull: 'Мессенджер-пространство',
+      profileKeepCozyOps: 'KeepCozy ops-пространство',
+      profileHint:
+        'Мессенджер-пространства открываются с чатов. Пространства KeepCozy открываются с дома, когда включено сохранение профиля пространства.',
+      participantIdentifiersHint:
+        'Введите по одному email или user ID на строку. Эти люди станут первым набором участников.',
+      adminIdentifiersHint:
+        'Введите по одному email или user ID на строку. Администраторы автоматически добавляются и как участники, а первый из них становится owner.',
+      includeYourselfHint:
+        'Добавьте себя в список участников или админов, если вам нужно сразу открыть новое пространство.',
+      submitCreateSpace: 'Создать управляемое пространство',
+      nameRequired: 'Нужно указать название пространства.',
+      adminIdentifiersRequired:
+        'Нужно указать хотя бы одного первого администратора пространства.',
+      createSpaceFailed: 'Сейчас не удалось создать пространство.',
+      createSpaceSuccess: 'Пространство создано. Откройте его из списка ниже.',
+      createSpaceSuccessNoAccess:
+        'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника.',
     },
     settings: {
       backToChats: 'Назад к чатам',

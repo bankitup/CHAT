@@ -59,14 +59,18 @@ The repository already has the first hard boundary primitives:
   space-scoped path in
   [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
   `getAvailableUsers(currentUserId, { spaceId })`
+- a first super-admin-only create-space flow now exists on
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/new/page.tsx)
+  with provisioning logic in
+  [write-server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/write-server.ts)
 
 The repository does not yet have:
 
-- a dedicated super-admin provisioning path
 - invitation tables
 - assignment tables
 - a persisted governance-specific admin model beyond current generic
   `owner | admin | member`
+- broad admin tooling beyond the first narrow super-admin provisioning path
 
 That means the governance foundation must distinguish clearly between:
 

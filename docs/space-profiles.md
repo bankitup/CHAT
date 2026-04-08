@@ -233,14 +233,17 @@ Current runtime note:
 - the repo now exposes a minimal runtime seam for this in
   [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
   and [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
-- profile is currently resolved at runtime, not stored as a committed database
-  field yet
+- persisted profile storage can now be attached through
+  [2026-04-08-spaces-profile-column.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-spaces-profile-column.sql)
+  via `public.spaces.profile`
 - active-space resolution now exposes profile information on the resolved
   space runtime shape
-- the current temporary resolver treats the shared `TEST` space as
-  `keepcozy_ops`
-- all other spaces currently fall back to `messenger_full` until explicit
-  persisted profile storage lands
+- active-space resolution prefers the persisted `public.spaces.profile` value
+  when present
+- if profile storage is absent or null, the temporary fallback still treats
+  the shared `TEST` space as `keepcozy_ops`
+- all other spaces still fall back to `messenger_full` until an explicit
+  persisted profile is written
 - a dedicated profile-aware default-shell helper now exists for later routing
   work and is now used by the authenticated public/auth entry paths
 - the shared space selector now opens each space into its profile-default
@@ -365,8 +368,7 @@ Avoid in the first profile pass:
 
 The following intentionally remain deferred after the first runtime seam:
 
-- persisted `space_profile` storage in shared schema
-- admin-facing profile editing
+- broad admin-facing profile editing and non-provisioning profile mutation UX
 - profile-aware shell rendering changes across the full app
 - final capability enforcement
 - profile-aware per-thread or per-object policy enforcement
@@ -374,10 +376,12 @@ The following intentionally remain deferred after the first runtime seam:
 
 ## Practical Verification
 
-Use the current temporary runtime resolver rule for this branch:
+Use the current persisted-first runtime resolver rule for this branch:
 
-- the shared `TEST` space resolves as `keepcozy_ops`
-- any non-`TEST` space resolves as `messenger_full`
+- when `public.spaces.profile` is present, that value is the source of truth
+- when `public.spaces.profile` is absent or null, the shared `TEST` space
+  resolves as `keepcozy_ops`
+- any other space without a stored profile resolves as `messenger_full`
 
 Recommended review setup:
 

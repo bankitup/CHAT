@@ -47,13 +47,18 @@ The repository already has the outer boundary primitives:
 - ordinary space-scoped user discovery in
   [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
   already has the correct `getAvailableUsers(currentUserId, { spaceId })` path
+- a first super-admin-only create-space flow now exists through
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/new/page.tsx)
+  and
+  [write-server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/write-server.ts)
+  using exact email or user-id identifiers instead of a global user browser
 
 The repository does not yet have:
 
-- a dedicated provisioning service for new spaces
 - invitation tables
 - membership-audit tables
 - a reviewed admin UX for member management
+- a broad provisioning/admin system beyond the first narrow super-admin flow
 
 That means this document must distinguish:
 
