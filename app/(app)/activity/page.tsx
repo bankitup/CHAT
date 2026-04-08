@@ -172,6 +172,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const unreadDmCount = unreadItems.filter(
     (conversation) => !conversation.isGroupConversation,
   ).length;
+  const hasOperationalHistory =
+    counts.issueUpdates > 0 || counts.taskUpdates > 0 || counts.resolutionNotes > 0;
 
   return (
     <section className="stack settings-screen settings-shell activity-screen">
@@ -203,15 +205,29 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <span className="activity-focus-kicker">{t.activity.overviewTitle}</span>
             <h2 className="activity-focus-title">{t.activity.operationsTitle}</h2>
             <p className="muted activity-focus-body">{t.activity.overviewBody}</p>
+            <div className="keepcozy-meta-row">
+              <span className="keepcozy-meta-pill">
+                {t.homeDashboard.currentHomeLabel}: {activeSpace.name}
+              </span>
+            </div>
           </div>
 
-          <Link
-            className="activity-focus-action button button-secondary"
-            href={withSpaceParam('/tasks', activeSpace.id)}
-            prefetch={false}
-          >
-            {t.activity.openTasks}
-          </Link>
+          <div className="keepcozy-card-actions keepcozy-focus-actions">
+            <Link
+              className="activity-focus-action button"
+              href={withSpaceParam('/tasks', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.activity.openTasks}
+            </Link>
+            <Link
+              className="pill"
+              href={withSpaceParam('/home', activeSpace.id)}
+              prefetch={false}
+            >
+              {t.activity.openHome}
+            </Link>
+          </div>
         </section>
       </section>
 
@@ -249,6 +265,41 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               </div>
             </section>
           </div>
+
+          {!showPrimaryFlow && !hasOperationalHistory ? (
+            <section className="empty-card keepcozy-preview-card">
+              <div className="keepcozy-preview-header">
+                <span className="summary-pill summary-pill-muted">
+                  {t.activity.operationsEmptyTitle}
+                </span>
+                <span className="keepcozy-context-label">{activeSpace.name}</span>
+              </div>
+              <p className="muted">{t.activity.operationsEmptyBody}</p>
+              <div className="keepcozy-card-actions">
+                <Link
+                  className="button"
+                  href={withSpaceParam('/issues', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.shell.openIssues}
+                </Link>
+                <Link
+                  className="button button-secondary"
+                  href={withSpaceParam('/tasks', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.shell.openTasks}
+                </Link>
+                <Link
+                  className="pill"
+                  href={withSpaceParam('/home', activeSpace.id)}
+                  prefetch={false}
+                >
+                  {t.activity.openHome}
+                </Link>
+              </div>
+            </section>
+          ) : null}
 
           <section className="stack activity-section keepcozy-section">
             <div className="stack activity-section-copy">
@@ -476,7 +527,14 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   {showPrimaryFlow ? (
                     <>
                       <Link
-                        className="pill"
+                        className="button"
+                        href={withSpaceParam('/home', activeSpace.id)}
+                        prefetch={false}
+                      >
+                        {t.activity.openHome}
+                      </Link>
+                      <Link
+                        className="button button-secondary"
                         href={withSpaceParam('/rooms', activeSpace.id)}
                         prefetch={false}
                       >
@@ -490,7 +548,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                         {t.homeDashboard.openIssues}
                       </Link>
                       <Link
-                        className="button button-secondary"
+                        className="pill"
                         href={withSpaceParam('/tasks', activeSpace.id)}
                         prefetch={false}
                       >

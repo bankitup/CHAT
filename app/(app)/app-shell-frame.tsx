@@ -11,6 +11,10 @@ type AppShellFrameProps = {
   children: ReactNode;
   dmE2eeEnabled: boolean;
   language: AppLanguage;
+  spaces: Array<{
+    id: string;
+    name: string;
+  }>;
   userId: string;
 };
 
@@ -18,6 +22,7 @@ export function AppShellFrame({
   children,
   dmE2eeEnabled,
   language,
+  spaces,
   userId,
 }: AppShellFrameProps) {
   const pathname = usePathname();
@@ -33,10 +38,17 @@ export function AppShellFrame({
   const isRoomsRoute = pathname.startsWith('/rooms');
   const isIssuesRoute = pathname.startsWith('/issues');
   const isTasksRoute = pathname.startsWith('/tasks');
-  const activeSpaceId = searchParams.get('space');
+  const requestedSpaceId = searchParams.get('space');
+  const activeSpace =
+    spaces.find((space) => space.id === requestedSpaceId) ?? spaces[0] ?? null;
+  const activeSpaceId = activeSpace?.id ?? requestedSpaceId;
   const navSpaceHref = (pathname: string) =>
     activeSpaceId ? withSpaceParam(pathname, activeSpaceId) : pathname;
   const showBottomNav = !isChatRoute && !isSpacesRoute;
+  const showShellContext =
+    !isChatRoute &&
+    !isSpacesRoute &&
+    (isHomeRoute || isRoomsRoute || isIssuesRoute || isTasksRoute || isActivityRoute);
   let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
 
   if (isActivityRoute) {
@@ -50,6 +62,72 @@ export function AppShellFrame({
   } else if (isHomeRoute || isSettingsRoute) {
     activeTab = 'home';
   }
+
+  const currentSection =
+    activeTab === 'home'
+      ? {
+          body: t.shell.homeSectionBody,
+          nextHref: '/rooms',
+          nextLabel: t.shell.openRooms,
+          title: t.shell.home,
+        }
+      : activeTab === 'rooms'
+        ? {
+            body: t.shell.roomsSectionBody,
+            nextHref: '/issues',
+            nextLabel: t.shell.openIssues,
+            title: t.shell.rooms,
+          }
+        : activeTab === 'issues'
+          ? {
+              body: t.shell.issuesSectionBody,
+              nextHref: '/tasks',
+              nextLabel: t.shell.openTasks,
+              title: t.shell.issues,
+            }
+          : activeTab === 'tasks'
+            ? {
+                body: t.shell.tasksSectionBody,
+                nextHref: '/activity',
+                nextLabel: t.shell.openActivity,
+                title: t.shell.tasks,
+              }
+            : activeTab === 'activity'
+              ? {
+                  body: t.shell.activitySectionBody,
+                  nextHref: '/home',
+                  nextLabel: t.shell.openHome,
+                  title: t.shell.activity,
+                }
+              : null;
+  const chooseHomeHref = activeSpaceId ? withSpaceParam('/spaces', activeSpaceId) : '/spaces';
+  const loopSteps = [
+    {
+      href: navSpaceHref('/home'),
+      isActive: activeTab === 'home',
+      label: t.shell.home,
+    },
+    {
+      href: navSpaceHref('/rooms'),
+      isActive: activeTab === 'rooms',
+      label: t.shell.rooms,
+    },
+    {
+      href: navSpaceHref('/issues'),
+      isActive: activeTab === 'issues',
+      label: t.shell.issues,
+    },
+    {
+      href: navSpaceHref('/tasks'),
+      isActive: activeTab === 'tasks',
+      label: t.shell.tasks,
+    },
+    {
+      href: navSpaceHref('/activity'),
+      isActive: activeTab === 'activity',
+      label: t.shell.activity,
+    },
+  ];
 
   return (
     <main
@@ -65,6 +143,63 @@ export function AppShellFrame({
         .join(' ')}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
+      {showShellContext && currentSection ? (
+        <section className="app-shell-context" aria-label={t.shell.contextLabel}>
+          <div className="app-shell-context-shell">
+            <section className="stack app-shell-context-block">
+              <span className="app-shell-context-kicker">{t.shell.activeHomeLabel}</span>
+              <div className="app-shell-context-row">
+                <p className="app-shell-context-title">
+                  {activeSpace?.name || t.settings.noSpaceSelected}
+                </p>
+                <Link
+                  className="pill app-shell-context-link"
+                  href={chooseHomeHref}
+                  prefetch={false}
+                >
+                  {t.settings.chooseAnotherSpace}
+                </Link>
+              </div>
+              <p className="muted app-shell-context-body">{t.shell.homeScopeBody}</p>
+            </section>
+
+            <section className="stack app-shell-context-block">
+              <span className="app-shell-context-kicker">{t.shell.currentSectionLabel}</span>
+              <div className="app-shell-context-row">
+                <p className="app-shell-context-title">{currentSection.title}</p>
+                <Link
+                  className="button button-secondary app-shell-context-button"
+                  href={navSpaceHref(currentSection.nextHref)}
+                  prefetch={false}
+                >
+                  {currentSection.nextLabel}
+                </Link>
+              </div>
+              <p className="muted app-shell-context-body">{currentSection.body}</p>
+            </section>
+
+            <section className="stack app-shell-context-block app-shell-flow-block">
+              <span className="app-shell-context-kicker">{t.homeDashboard.loopTitle}</span>
+              <div className="app-shell-flow">
+                {loopSteps.map((step) => (
+                  <Link
+                    key={step.label}
+                    className={
+                      step.isActive
+                        ? 'app-shell-flow-link app-shell-flow-link-active'
+                        : 'app-shell-flow-link'
+                    }
+                    href={step.href}
+                    prefetch={false}
+                  >
+                    {step.label}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          </div>
+        </section>
+      ) : null}
       <div className="stack app-shell-content">{children}</div>
 
       {showBottomNav ? (
