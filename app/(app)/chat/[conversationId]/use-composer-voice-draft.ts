@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MessagingMessageContentMode } from '@/modules/messaging/media/message-metadata';
 import type { MessagingVoiceMessageDraftRecord } from '@/modules/messaging/media/voice';
 import type { MessagingVoiceCaptureState } from '@/modules/messaging/media/voice';
+import {
+  deleteLocalMessagingVoiceDraft,
+  getLocalMessagingVoiceDraft,
+  saveLocalMessagingVoiceDraft,
+} from '@/modules/messaging/media/voice-draft-store';
 
 type VoiceDraftErrorCode =
   | 'unsupported'
@@ -115,6 +120,7 @@ export function useComposerVoiceDraft({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const draftUrlRef = useRef<string | null>(null);
   const draftBlobRef = useRef<Blob | null>(null);
+  const restoredDraftKeyRef = useRef<string | null>(null);
   const isSupported = useMemo(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -150,11 +156,17 @@ export function useComposerVoiceDraft({
     setErrorCode(null);
     setElapsedMs(0);
     draftBlobRef.current = null;
+    chunksRef.current = [];
+    createdAtRef.current = null;
+    startedAtRef.current = null;
+    void deleteLocalMessagingVoiceDraft(conversationId).catch(() => {
+      return;
+    });
 
     if (captureState !== 'recording' && captureState !== 'requesting-permission') {
       setCaptureState('idle');
     }
-  }, [captureState]);
+  }, [captureState, conversationId]);
 
   const finalizeDraft = useCallback(() => {
     const createdAt = createdAtRef.current ?? new Date().toISOString();
@@ -174,6 +186,9 @@ export function useComposerVoiceDraft({
       setElapsedMs(0);
       setErrorCode(null);
       setCaptureState('idle');
+      void deleteLocalMessagingVoiceDraft(conversationId).catch(() => {
+        return;
+      });
       return;
     }
 
@@ -203,7 +218,7 @@ export function useComposerVoiceDraft({
     stopActiveStream();
     setElapsedMs(durationMs);
     setErrorCode(null);
-    setDraft({
+    const nextDraft = {
       blobUrl,
       clientDraftId: createLocalDraftId(),
       contentMode,
@@ -216,6 +231,25 @@ export function useComposerVoiceDraft({
       sizeBytes: blob.size,
       stage: 'draft',
       waveformPeaks: null,
+    } satisfies MessagingVoiceMessageDraftRecord;
+    setDraft(nextDraft);
+    void saveLocalMessagingVoiceDraft({
+      clientDraftId: nextDraft.clientDraftId,
+      contentMode: nextDraft.contentMode,
+      conversationId: nextDraft.conversationId,
+      createdAt: nextDraft.createdAt,
+      durationMs: nextDraft.durationMs,
+      fileName: nextDraft.fileName,
+      mimeType: nextDraft.mimeType,
+      replyToMessageId: nextDraft.replyToMessageId,
+      sizeBytes: nextDraft.sizeBytes,
+      stage: nextDraft.stage,
+      waveformPeaks: nextDraft.waveformPeaks,
+      blob,
+      updatedAt: new Date().toISOString(),
+      version: 1,
+    }).catch(() => {
+      return;
     });
     setCaptureState('stopped');
   }, [
@@ -369,6 +403,80 @@ export function useComposerVoiceDraft({
     stopActiveStream,
     stopActiveTimer,
   ]);
+
+  useEffect(() => {
+    if (draft || captureState === 'recording' || captureState === 'requesting-permission') {
+      return;
+    }
+
+    const restoreKey = `${conversationId}:${contentMode}`;
+
+    if (restoredDraftKeyRef.current === restoreKey) {
+      return;
+    }
+
+    restoredDraftKeyRef.current = restoreKey;
+    let isCancelled = false;
+
+    void (async () => {
+      try {
+        const persistedDraft = await getLocalMessagingVoiceDraft(conversationId);
+
+        if (
+          isCancelled ||
+          !persistedDraft ||
+          persistedDraft.contentMode !== contentMode
+        ) {
+          return;
+        }
+
+        const blobUrl = URL.createObjectURL(persistedDraft.blob);
+
+        if (draftUrlRef.current) {
+          URL.revokeObjectURL(draftUrlRef.current);
+        }
+
+        draftUrlRef.current = blobUrl;
+        draftBlobRef.current = persistedDraft.blob;
+        createdAtRef.current = persistedDraft.createdAt;
+        startedAtRef.current = null;
+        chunksRef.current = [];
+        setElapsedMs(persistedDraft.durationMs ?? 0);
+        setErrorCode(null);
+        setDraft({
+          blobUrl,
+          clientDraftId: persistedDraft.clientDraftId,
+          contentMode: persistedDraft.contentMode,
+          conversationId: persistedDraft.conversationId,
+          createdAt: persistedDraft.createdAt,
+          durationMs: persistedDraft.durationMs,
+          fileName: persistedDraft.fileName,
+          mimeType: persistedDraft.mimeType,
+          replyToMessageId: persistedDraft.replyToMessageId,
+          sizeBytes: persistedDraft.sizeBytes,
+          stage: persistedDraft.stage,
+          waveformPeaks: persistedDraft.waveformPeaks,
+        });
+        setCaptureState('stopped');
+        logVoiceComposerDiagnostics('draft:restored', {
+          clientDraftId: persistedDraft.clientDraftId,
+          contentMode: persistedDraft.contentMode,
+          conversationId: persistedDraft.conversationId,
+          replyToMessageId: persistedDraft.replyToMessageId,
+          sizeBytes: persistedDraft.sizeBytes,
+        });
+      } catch (error) {
+        logVoiceComposerDiagnostics('draft:restore-failed', {
+          conversationId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [captureState, contentMode, conversationId, draft]);
 
   useEffect(() => {
     return () => {
