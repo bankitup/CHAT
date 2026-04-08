@@ -14,6 +14,7 @@ export default async function SignupPage() {
     redirect(
       await resolveDefaultSpaceShellHrefForUser({
         userId: user.id,
+        userEmail: user.email ?? null,
         source: 'signup-page',
       }),
     );

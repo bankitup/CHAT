@@ -575,10 +575,19 @@ export async function requireSpaceMemberManagementForUser(input: {
 
 export async function resolveDefaultSpaceShellHrefForUser(input: {
   userId: string;
+  userEmail?: string | null;
   requestedSpaceId?: string | null;
   source?: string;
 }) {
   try {
+    const globalGovernance = resolveSuperAdminGovernanceForUser({
+      userEmail: input.userEmail ?? null,
+    });
+
+    if (globalGovernance.canCreateSpaces) {
+      return '/spaces';
+    }
+
     const { activeSpace } = await resolveActiveSpaceForUser(input);
 
     if (!activeSpace) {

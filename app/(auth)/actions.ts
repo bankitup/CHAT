@@ -56,6 +56,7 @@ export async function loginAction(formData: FormData) {
   const nextHref = data.user?.id
     ? await resolveDefaultSpaceShellHrefForUser({
         userId: data.user.id,
+        userEmail: data.user.email ?? null,
         source: 'login-action',
       })
     : '/spaces';

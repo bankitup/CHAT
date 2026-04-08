@@ -12,6 +12,7 @@ export default async function HomePage() {
   const authenticatedEntryHref = user?.id
     ? await resolveDefaultSpaceShellHrefForUser({
         userId: user.id,
+        userEmail: user.email ?? null,
         source: 'public-home',
       })
     : null;

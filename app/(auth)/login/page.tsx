@@ -24,6 +24,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     redirect(
       await resolveDefaultSpaceShellHrefForUser({
         userId: user.id,
+        userEmail: user.email ?? null,
         source: 'login-page',
       }),
     );
