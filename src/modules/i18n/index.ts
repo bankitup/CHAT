@@ -69,6 +69,7 @@ type LanguageDictionary = {
     title: string;
     subtitle: string;
     backToChats: string;
+    backToSpaces: string;
     currentSpace: string;
     openSpace: string;
     currentActivityNote: string;
@@ -76,6 +77,13 @@ type LanguageDictionary = {
     emptyBody: string;
     unavailableTitle: string;
     unavailableBody: string;
+    globalAdminEyebrow: string;
+    createSpaceTitle: string;
+    createSpaceBody: string;
+    createSpaceAction: string;
+    createSpaceRouteTitle: string;
+    createSpaceRouteSubtitle: string;
+    createSpaceRouteBody: string;
   };
   settings: {
     backToChats: string;
@@ -767,6 +775,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       title: 'Choose a space',
       subtitle: 'Pick the space you want to open first.',
       backToChats: 'Back to workspace',
+      backToSpaces: 'Back to spaces',
       currentSpace: 'Current space',
       openSpace: 'Open space',
       currentActivityNote: 'Open the right workspace for this space from here.',
@@ -774,6 +783,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyBody: 'Ask the operator to add you to a space first.',
       unavailableTitle: 'Spaces are temporarily unavailable',
       unavailableBody: 'Please try again in a moment while space access is being refreshed.',
+      globalAdminEyebrow: 'Global admin',
+      createSpaceTitle: 'Create a new space',
+      createSpaceBody:
+        'This action is reserved for super admins and opens the first global space-creation entry point.',
+      createSpaceAction: 'Create space',
+      createSpaceRouteTitle: 'Create a space',
+      createSpaceRouteSubtitle:
+        'This entry point is reserved for super admins and will host space provisioning next.',
+      createSpaceRouteBody:
+        'The full provisioning flow is still landing in a later branch. For now, this confirms that global space creation is an admin-only capability, not a normal member action.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -1518,6 +1537,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       title: 'Выберите пространство',
       subtitle: 'Сначала откройте нужное пространство.',
       backToChats: 'Назад к рабочему пространству',
+      backToSpaces: 'Назад к пространствам',
       currentSpace: 'Текущее пространство',
       openSpace: 'Открыть пространство',
       currentActivityNote:
@@ -1527,6 +1547,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       unavailableTitle: 'Пространства временно недоступны',
       unavailableBody:
         'Попробуйте снова чуть позже, пока доступ к пространствам обновляется.',
+      globalAdminEyebrow: 'Глобальный админ',
+      createSpaceTitle: 'Создать новое пространство',
+      createSpaceBody:
+        'Это действие доступно только супер-админам и открывает первую глобальную точку входа для создания пространства.',
+      createSpaceAction: 'Создать пространство',
+      createSpaceRouteTitle: 'Создать пространство',
+      createSpaceRouteSubtitle:
+        'Эта точка входа зарезервирована для супер-админов и дальше станет местом для провижининга пространств.',
+      createSpaceRouteBody:
+        'Полный поток провижининга появится в следующей ветке. Пока этот экран подтверждает, что глобальное создание пространств — это админская возможность, а не обычное действие участника.',
     },
     settings: {
       backToChats: 'Назад к чатам',
