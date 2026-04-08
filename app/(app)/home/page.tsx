@@ -33,6 +33,17 @@ type HomeDashboardPageProps = {
   }>;
 };
 
+function buildMessengerInboxCreateHref(input: {
+  mode: 'dm' | 'group';
+  spaceId: string;
+}) {
+  const params = new URLSearchParams();
+  params.set('space', input.spaceId);
+  params.set('create', 'open');
+  params.set('createMode', input.mode);
+  return `/inbox?${params.toString()}`;
+}
+
 function formatMessengerHomeRecency(
   value: string | null,
   language: 'en' | 'ru',
@@ -223,6 +234,8 @@ export default async function HomeDashboardPage({
     });
     const hasAnyChats =
       conversations.length > 0 || archivedConversations.length > 0;
+    const canManageMessengerMembers =
+      'canManageMembers' in activeSpace && activeSpace.canManageMembers;
 
     return (
       <section className="stack settings-screen settings-shell activity-screen">
@@ -387,24 +400,36 @@ export default async function HomeDashboardPage({
               <div className="keepcozy-card-actions">
                 <Link
                   className="button"
-                  href={withSpaceParam('/inbox', activeSpace.id)}
+                  href={buildMessengerInboxCreateHref({
+                    mode: 'dm',
+                    spaceId: activeSpace.id,
+                  })}
                   prefetch={false}
                 >
-                  {t.shell.openChats}
+                  {t.inbox.create.createDm}
                 </Link>
                 <Link
                   className="button button-secondary"
-                  href={withSpaceParam('/activity', activeSpace.id)}
+                  href={buildMessengerInboxCreateHref({
+                    mode: 'group',
+                    spaceId: activeSpace.id,
+                  })}
                   prefetch={false}
                 >
-                  {t.shell.openMessengerActivity}
+                  {t.inbox.create.createGroup}
                 </Link>
                 <Link
                   className="pill"
-                  href={withSpaceParam('/spaces', activeSpace.id)}
+                  href={
+                    canManageMessengerMembers
+                      ? withSpaceParam('/spaces/members', activeSpace.id)
+                      : withSpaceParam('/spaces', activeSpace.id)
+                  }
                   prefetch={false}
                 >
-                  {t.settings.chooseAnotherSpace}
+                  {canManageMessengerMembers
+                    ? t.spaces.manageMembersAction
+                    : t.settings.chooseAnotherSpace}
                 </Link>
               </div>
             </section>

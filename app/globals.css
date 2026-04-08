@@ -1213,6 +1213,10 @@ main {
   font-size: 0.84rem;
 }
 
+.inbox-compose-empty-state {
+  gap: 10px;
+}
+
 .inbox-compose-user-list {
   display: grid;
   gap: 4px;
@@ -2308,6 +2312,20 @@ main {
 
 .inbox-empty-state {
   padding: 16px;
+}
+
+.inbox-empty-state-messenger {
+  gap: 12px;
+}
+
+.inbox-empty-copy {
+  gap: 8px;
+}
+
+.inbox-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .inbox-archived-note {

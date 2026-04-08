@@ -538,6 +538,10 @@ type LanguageDictionary = {
     archivedNote: string;
     emptyMainTitle: string;
     emptyMainBody: string;
+    messengerFreshTitle: string;
+    messengerFreshBody: string;
+    messengerFreshAdminBody: string;
+    messengerFreshMemberBody: string;
     emptyArchivedTitle: string;
     emptyArchivedBody: string;
     emptySearchTitle: string;
@@ -571,6 +575,7 @@ type LanguageDictionary = {
       searchAria: string;
       searchPlaceholder: string;
       noUsers: string;
+      noUsersAdmin: string;
       existingDmOnly: string;
       noMatches: string;
       selected: string;
@@ -1375,6 +1380,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Archived chats are only hidden from your inbox. They still keep their messages and can return anytime.',
       emptyMainTitle: 'No chats here',
       emptyMainBody: 'Start one from the + button.',
+      messengerFreshTitle: 'This messenger space starts clean',
+      messengerFreshBody:
+        'Start the first direct message or group here. This space begins with no copied history from TEST or any other workspace.',
+      messengerFreshAdminBody:
+        'Add members to this space first, then start the first direct message or group here. Nothing is copied in automatically from TEST or any other workspace.',
+      messengerFreshMemberBody:
+        'This space has no other visible members yet. Ask a space admin to add people here before starting the first chat.',
       emptyArchivedTitle: 'No archived chats',
       emptyArchivedBody: 'Chats you hide from your inbox will appear here.',
       emptySearchTitle: 'No matching chats',
@@ -1408,6 +1420,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         searchAria: 'Search people',
         searchPlaceholder: 'Search people',
         noUsers: 'No other registered users are available yet.',
+        noUsersAdmin:
+          'No other members are available in this space yet. Add people to this space first, then come back to start chats.',
         existingDmOnly: 'Everyone here already has a direct chat with you.',
         noMatches: 'No matching people yet.',
         selected: 'Selected',
@@ -2256,6 +2270,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Архивные чаты только скрыты из списка. Сообщения остаются, и их можно вернуть в любой момент.',
       emptyMainTitle: 'Здесь пока нет чатов',
       emptyMainBody: 'Начните новый через кнопку +.',
+      messengerFreshTitle: 'Это пространство мессенджера начинается с нуля',
+      messengerFreshBody:
+        'Начните здесь первый личный чат или группу. История из TEST или любого другого пространства сюда не копируется.',
+      messengerFreshAdminBody:
+        'Сначала добавьте участников в это пространство, а затем начните здесь первый личный чат или группу. Ничего не копируется автоматически из TEST или любого другого пространства.',
+      messengerFreshMemberBody:
+        'В этом пространстве пока нет других видимых участников. Попросите администратора пространства добавить людей, прежде чем начинать первый чат.',
       emptyArchivedTitle: 'Архивных чатов нет',
       emptyArchivedBody: 'Сюда попадут чаты, которые вы скрыли из списка.',
       emptySearchTitle: 'Подходящих чатов нет',
@@ -2289,6 +2310,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         searchAria: 'Поиск людей',
         searchPlaceholder: 'Поиск людей',
         noUsers: 'Других зарегистрированных пользователей пока нет.',
+        noUsersAdmin:
+          'В этом пространстве пока нет других доступных участников. Сначала добавьте людей в это пространство, а затем вернитесь сюда, чтобы начать чаты.',
         existingDmOnly: 'Со всеми доступными людьми у вас уже есть личные чаты.',
         noMatches: 'Подходящих людей нет.',
         selected: 'Выбрано',
