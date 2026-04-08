@@ -340,7 +340,88 @@ Hard rule:
 | KeepCozy create-or-bind flow | not yet implemented | controlled audited backend create-or-bind path |
 | Sensitive-action audit | not yet defined in runtime | explicit audit expectations for provisioning and membership changes |
 
-## 10. Practical Guidance For Later Branches
+## 10. Practical Verification
+
+Use this branch to verify one clean messenger test space without touching the
+existing KeepCozy `TEST` space.
+
+### Create a clean messenger test space
+
+1. sign in as `dmtest1@chat.local` or `dmtest2@chat.local`
+2. open
+   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/page.tsx)
+3. confirm the global-admin `Create space` surface is visible
+4. open
+   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/new/page.tsx)
+5. create a non-`TEST` space with profile `messenger_full`
+6. seed at least one initial admin by exact email or user ID
+7. leave the participant list blank if the goal is a clean admin-only start
+
+Expected result:
+
+- the new space is created successfully
+- the existing `TEST` space is not renamed, reused, or overwritten
+- the new space returns to the spaces surface as its own separate entry
+
+### Confirm there is no inherited history
+
+After provisioning the new messenger space:
+
+- open the new space from the space picker
+- confirm it opens as its own distinct space rather than reusing `TEST`
+- confirm no KeepCozy home/room/issue/task history was copied into it
+- confirm no participants were copied unless they were explicitly listed during
+  creation
+
+Practical rule:
+
+- new spaces start clean unless the provisioning request explicitly seeds
+  members
+
+### Assign a space admin after creation
+
+If more testers need to be added after the first provisioning step:
+
+1. stay inside the newly created space
+2. open the admin-only `Manage members` surface from
+   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/page.tsx)
+3. add testers by exact email or user ID only
+4. list one or more of those same people in the admin-identifiers field when
+   they should become `space_admin`
+
+Expected result:
+
+- listed people are added only to the current `space_id`
+- listed admins are promoted only inside the current `space_id`
+- no global people browser appears during this flow
+
+### Verify members cannot leave their space boundary
+
+Use a user who is only a member or admin of one non-`TEST` space.
+
+Verify:
+
+- they do not see `Create space` unless they are one of the two seeded
+  `super_admin` accounts
+- they cannot use URL edits or payload changes to manage a different space
+- opening `/spaces/members?space=<other-space-id>` redirects away instead of
+  granting access
+- ordinary product flows still rely on explicit identifier entry, not a
+  browse-all-users picker
+
+### Verify the old KeepCozy TEST space is unchanged
+
+Open the canonical `TEST` space after creating the new messenger test space.
+
+Verify:
+
+- `TEST` still exists as its own separate space
+- `TEST` still behaves as the KeepCozy operational sandbox
+- the new messenger space has not inherited `TEST` history
+- `TEST` has not inherited the new messenger-space members unless they were
+  already part of `TEST`
+
+## 11. Practical Guidance For Later Branches
 
 When a later branch asks “can this person create or change membership?”, answer
 in this order:
