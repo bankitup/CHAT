@@ -120,10 +120,16 @@ export async function createSpaceAction(formData: FormData) {
     revalidatePath('/home');
     revalidatePath('/inbox');
 
-    redirectToSpacesSurface({
-      message: created.creatorIsMember
+    const successMessage = !created.profilePersisted
+      ? created.creatorIsMember
+        ? t.spaces.createSpaceSuccessProfileDeferred
+        : t.spaces.createSpaceSuccessNoAccessProfileDeferred
+      : created.creatorIsMember
         ? t.spaces.createSpaceSuccess
-        : t.spaces.createSpaceSuccessNoAccess,
+        : t.spaces.createSpaceSuccessNoAccess;
+
+    redirectToSpacesSurface({
+      message: successMessage,
       spaceId: created.creatorIsMember ? created.spaceId : returnSpaceId,
     });
   } catch (error) {

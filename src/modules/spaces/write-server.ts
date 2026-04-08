@@ -11,9 +11,6 @@ import {
 } from './model';
 import { resolveSuperAdminGovernanceForUser } from './server';
 
-const SPACE_PROFILE_STORAGE_SETUP_PATH =
-  '/Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-08-spaces-profile-column.sql';
-
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -298,16 +295,13 @@ async function insertSpaceRow(input: {
     .select('id, name')
     .single();
 
+  let profilePersisted = true;
+
   if (
     response.error &&
     isMissingColumnErrorMessage(response.error.message, 'profile')
   ) {
-    if (input.profile !== 'messenger_full') {
-      throw new Error(
-        `Persisted space profiles are not configured yet. Apply ${SPACE_PROFILE_STORAGE_SETUP_PATH} before provisioning a KeepCozy operational space.`,
-      );
-    }
-
+    profilePersisted = false;
     response = await input.serviceClient
       .from('spaces')
       .insert({
@@ -326,6 +320,7 @@ async function insertSpaceRow(input: {
   return {
     id: response.data.id,
     name: response.data.name ?? input.name,
+    profilePersisted,
   };
 }
 
@@ -406,6 +401,7 @@ export async function createGovernedSpace(input: {
       creatorIsMember,
       defaultShellRoute: getDefaultShellRouteForSpaceProfile(profile),
       profile,
+      profilePersisted: createdSpace.profilePersisted,
       spaceId: createdSpace.id,
       spaceName: createdSpace.name,
     };

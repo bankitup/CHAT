@@ -100,6 +100,8 @@ type LanguageDictionary = {
     createSpaceFailed: string;
     createSpaceSuccess: string;
     createSpaceSuccessNoAccess: string;
+    createSpaceSuccessProfileDeferred: string;
+    createSpaceSuccessNoAccessProfileDeferred: string;
   };
   settings: {
     backToChats: string;
@@ -830,6 +832,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSpaceSuccess: 'Space created. Open it from the list below.',
       createSpaceSuccessNoAccess:
         'Space created. It will not appear in this list until you add yourself as a member.',
+      createSpaceSuccessProfileDeferred:
+        'Space created. Profile storage is not live here yet, so this space will use the default shell until the space-profile migration is applied.',
+      createSpaceSuccessNoAccessProfileDeferred:
+        'Space created. It will not appear in this list until you add yourself as a member, and its selected mode will stay on the default shell until the space-profile migration is applied.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -1616,6 +1622,10 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSpaceSuccess: 'Пространство создано. Откройте его из списка ниже.',
       createSpaceSuccessNoAccess:
         'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника.',
+      createSpaceSuccessProfileDeferred:
+        'Пространство создано. Здесь ещё не включено сохранение профиля пространства, поэтому пока оно будет открываться в стандартной оболочке, пока не будет применена миграция профиля пространства.',
+      createSpaceSuccessNoAccessProfileDeferred:
+        'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника, а выбранный режим останется на стандартной оболочке, пока не будет применена миграция профиля пространства.',
     },
     settings: {
       backToChats: 'Назад к чатам',
