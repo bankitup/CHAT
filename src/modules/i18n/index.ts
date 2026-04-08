@@ -96,10 +96,23 @@ type LanguageDictionary = {
     includeYourselfHint: string;
     submitCreateSpace: string;
     nameRequired: string;
+    testSpaceReservedName: string;
     adminIdentifiersRequired: string;
     createSpaceFailed: string;
     createSpaceSuccess: string;
     createSpaceSuccessNoAccess: string;
+    createSpaceSuccessProfileDeferred: string;
+    createSpaceSuccessNoAccessProfileDeferred: string;
+    spaceAdminEyebrow: string;
+    manageMembersTitle: string;
+    manageMembersBody: string;
+    manageMembersAction: string;
+    manageMembersRouteTitle: string;
+    manageMembersRouteSubtitle: string;
+    manageMembersRouteBody: string;
+    membersOrAdminsRequired: string;
+    manageMembersFailed: string;
+    manageMembersSuccess: string;
   };
   settings: {
     backToChats: string;
@@ -808,7 +821,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSpaceRouteSubtitle:
         'Create a new space, choose its primary mode, and seed the first governed members.',
       createSpaceRouteBody:
-        'This flow is reserved for super admins. It creates the shared space, assigns its initial profile when supported, and seeds the first explicit space-boundary members.',
+        'This flow is reserved for super admins. A new space starts clean: no inherited history and no copied TEST-space members unless you list them here.',
       fieldSpaceName: 'Space name',
       fieldSpaceProfile: 'Primary mode',
       fieldParticipantIdentifiers: 'Initial participants',
@@ -818,18 +831,40 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileHint:
         'Messenger spaces land chat-first. KeepCozy spaces land home-first when persisted profile storage is available.',
       participantIdentifiersHint:
-        'Enter one email or user ID per line. These people become the initial member set.',
+        'Enter one email or user ID per line. Leave this blank to start with only the listed admins. Nothing is copied from TEST.',
       adminIdentifiersHint:
         'Enter one email or user ID per line. Admin identifiers are also added as members automatically, and the first one becomes the owner.',
       includeYourselfHint:
         'Add yourself to the participant or admin list if you need to enter the new space right away.',
       submitCreateSpace: 'Create governed space',
       nameRequired: 'Space name is required.',
+      testSpaceReservedName:
+        'TEST is reserved for the existing KeepCozy sandbox. Use a different name for a new messenger space.',
       adminIdentifiersRequired: 'At least one initial space admin is required.',
       createSpaceFailed: 'Unable to create the space right now.',
       createSpaceSuccess: 'Space created. Open it from the list below.',
       createSpaceSuccessNoAccess:
         'Space created. It will not appear in this list until you add yourself as a member.',
+      createSpaceSuccessProfileDeferred:
+        'Space created. Profile storage is not live here yet, so this space will use the default shell until the space-profile migration is applied.',
+      createSpaceSuccessNoAccessProfileDeferred:
+        'Space created. It will not appear in this list until you add yourself as a member, and its selected mode will stay on the default shell until the space-profile migration is applied.',
+      spaceAdminEyebrow: 'Space admin',
+      manageMembersTitle: 'Manage current space members',
+      manageMembersBody:
+        'Add testers to only this space by exact email or user ID, and promote selected people to space admin without exposing a broader people browser.',
+      manageMembersAction: 'Manage members',
+      manageMembersRouteTitle: 'Manage members',
+      manageMembersRouteSubtitle:
+        'Add testers to this space by explicit email or user ID only.',
+      manageMembersRouteBody:
+        'This page changes membership only for the current space. It does not browse or reveal people from other spaces.',
+      membersOrAdminsRequired:
+        'Add at least one member or admin to continue.',
+      manageMembersFailed:
+        'Unable to update space members right now.',
+      manageMembersSuccess:
+        'Space members updated for this space.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -1593,7 +1628,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       createSpaceRouteSubtitle:
         'Создайте новое пространство, выберите его основной режим и задайте первый управляемый состав участников.',
       createSpaceRouteBody:
-        'Этот поток зарезервирован для супер-админов. Он создает общее пространство, назначает его начальный профиль, когда это поддержано, и задает первых явных участников границы пространства.',
+        'Этот поток зарезервирован для супер-админов. Новое пространство создается с чистого листа: без истории и без копирования участников из TEST, если вы не укажете их явно.',
       fieldSpaceName: 'Название пространства',
       fieldSpaceProfile: 'Основной режим',
       fieldParticipantIdentifiers: 'Первые участники',
@@ -1603,19 +1638,41 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       profileHint:
         'Мессенджер-пространства открываются с чатов. Пространства KeepCozy открываются с дома, когда включено сохранение профиля пространства.',
       participantIdentifiersHint:
-        'Введите по одному email или user ID на строку. Эти люди станут первым набором участников.',
+        'Введите по одному email или user ID на строку. Оставьте поле пустым, если хотите начать только с указанных админов. Ничего не копируется из TEST.',
       adminIdentifiersHint:
         'Введите по одному email или user ID на строку. Администраторы автоматически добавляются и как участники, а первый из них становится owner.',
       includeYourselfHint:
         'Добавьте себя в список участников или админов, если вам нужно сразу открыть новое пространство.',
       submitCreateSpace: 'Создать управляемое пространство',
       nameRequired: 'Нужно указать название пространства.',
+      testSpaceReservedName:
+        'TEST зарезервирован за существующей KeepCozy-песочницей. Для нового мессенджер-пространства используйте другое название.',
       adminIdentifiersRequired:
         'Нужно указать хотя бы одного первого администратора пространства.',
       createSpaceFailed: 'Сейчас не удалось создать пространство.',
       createSpaceSuccess: 'Пространство создано. Откройте его из списка ниже.',
       createSpaceSuccessNoAccess:
         'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника.',
+      createSpaceSuccessProfileDeferred:
+        'Пространство создано. Здесь ещё не включено сохранение профиля пространства, поэтому пока оно будет открываться в стандартной оболочке, пока не будет применена миграция профиля пространства.',
+      createSpaceSuccessNoAccessProfileDeferred:
+        'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника, а выбранный режим останется на стандартной оболочке, пока не будет применена миграция профиля пространства.',
+      spaceAdminEyebrow: 'Админ пространства',
+      manageMembersTitle: 'Управлять участниками текущего пространства',
+      manageMembersBody:
+        'Добавляйте тестировщиков только в это пространство по точному email или user ID и повышайте выбранных людей до админов пространства без широкого браузера людей.',
+      manageMembersAction: 'Управлять участниками',
+      manageMembersRouteTitle: 'Управлять участниками',
+      manageMembersRouteSubtitle:
+        'Добавляйте тестировщиков в это пространство только по явному email или user ID.',
+      manageMembersRouteBody:
+        'Эта страница меняет состав только для текущего пространства. Она не просматривает и не раскрывает людей из других пространств.',
+      membersOrAdminsRequired:
+        'Добавьте хотя бы одного участника или админа, чтобы продолжить.',
+      manageMembersFailed:
+        'Сейчас не удалось обновить участников пространства.',
+      manageMembersSuccess:
+        'Состав участников этого пространства обновлен.',
     },
     settings: {
       backToChats: 'Назад к чатам',
