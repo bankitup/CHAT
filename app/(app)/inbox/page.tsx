@@ -19,7 +19,6 @@ import {
   getDirectMessageDisplayName,
   getConversationParticipantIdentities,
   getExistingActiveDmPartnerUserIds,
-  getExistingActiveDmPartnerUserIdsForCandidates,
   getInboxConversations,
   getInboxConversationsStable,
   type InboxConversation,
@@ -252,10 +251,11 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return [] as Awaited<ReturnType<typeof getInboxConversations>>;
       }),
     archivedConversationsPromise,
-    getAvailableUsers(user.id, {
-      spaceId: activeSpaceId,
-      source: isV1TestBypass ? 'inbox-page-v1-test-bypass' : 'inbox-page',
-    })
+    isCreateOpen
+      ? getAvailableUsers(user.id, {
+          spaceId: activeSpaceId,
+          source: isV1TestBypass ? 'inbox-page-v1-test-bypass' : 'inbox-page',
+        })
           .then((value) => {
             logDiagnostics('loader:users-ok', { count: value.length });
             return value;
@@ -270,20 +270,23 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
             }
 
             throw error;
-          }),
-    getExistingActiveDmPartnerUserIds(user.id, {
-      spaceId: activeSpaceId,
-    })
-      .then((value) => {
-        logDiagnostics('loader:existing-dm-users-ok', { count: value.length });
-        return value;
-      })
-      .catch((error) => {
-        logDiagnostics('loader:existing-dm-users-error', {
-          message: error instanceof Error ? error.message : String(error),
-        });
-        return [] as string[];
-      }),
+          })
+      : Promise.resolve([] as Awaited<ReturnType<typeof getAvailableUsers>>),
+    isCreateOpen
+      ? getExistingActiveDmPartnerUserIds(user.id, {
+          spaceId: activeSpaceId,
+        })
+          .then((value) => {
+            logDiagnostics('loader:existing-dm-users-ok', { count: value.length });
+            return value;
+          })
+          .catch((error) => {
+            logDiagnostics('loader:existing-dm-users-error', {
+              message: error instanceof Error ? error.message : String(error),
+            });
+            return [] as string[];
+          })
+      : Promise.resolve([] as string[]),
   ]);
   logDiagnostics('loader:all-ok');
   const allVisibleConversations = [...conversations, ...archivedConversations];
@@ -306,18 +309,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     ...availableUser,
     label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
   }));
-  const exactExistingDmPartnerUserIds = await getExistingActiveDmPartnerUserIdsForCandidates(
-    user.id,
-    availableUserEntries.map((availableUser) => availableUser.userId),
-    {
-      spaceId: activeSpaceId,
-    },
-  ).catch((error) => {
-    logDiagnostics('loader:existing-dm-candidate-verify-error', {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return [] as string[];
-  });
   const visibleExistingDmPartnerUserIds = new Set(
     allVisibleConversations.flatMap((conversation) => {
       if (conversation.kind !== 'dm') {
@@ -334,7 +325,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   );
   const existingDmPartnerUserIdsSet = new Set([
     ...existingDmPartnerUserIds,
-    ...exactExistingDmPartnerUserIds,
     ...visibleExistingDmPartnerUserIds,
   ]);
   const availableDmUserEntries = availableUserEntries.filter(
@@ -347,6 +337,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       const otherParticipants = participantOptions.filter(
         (participant) => participant.userId !== user.id,
       );
+      const primaryOtherParticipant = otherParticipants[0] ?? null;
       const otherParticipantLabels = otherParticipants.map((participant) =>
         resolvePublicIdentityLabel(participant, t.chat.unknownUser),
       );
@@ -393,7 +384,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         latestMessageContentMode: conversation.latestMessageContentMode,
         latestMessageDeletedAt: conversation.latestMessageDeletedAt,
         metaLabels,
-        participants: otherParticipants,
+        participants: primaryOtherParticipant ? [primaryOtherParticipant] : [],
         participantLabels: otherParticipantLabels,
         hasUnread,
       } satisfies ConversationListItem;
@@ -442,6 +433,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         availableUserEntries={availableUserEntries}
         canManageMembers={canManageMembers}
         createOpen={isCreateOpen}
+        createTargetsLoaded={isCreateOpen}
         currentUserId={user.id}
         initialCreateMode={initialCreateMode}
         initialFilter={activeFilter}

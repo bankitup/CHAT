@@ -627,15 +627,17 @@ export default async function ChatPage({
       },
       () => getConversationReadState(conversationId, user.id),
     ),
-    resolveThreadRenderStage(
-      'member-read-states-load',
-      {
-        conversationId,
-        debugRequestId: threadRenderRequestId,
-        kind: conversation.kind,
-      },
-      () => getConversationMemberReadStates(conversationId),
-    ),
+    conversation.kind === 'dm'
+      ? resolveThreadRenderStage(
+          'member-read-states-load',
+          {
+            conversationId,
+            debugRequestId: threadRenderRequestId,
+            kind: conversation.kind,
+          },
+          () => getConversationMemberReadStates(conversationId),
+        )
+      : Promise.resolve([]),
     resolveThreadRenderStage(
       'participants-load',
       {
