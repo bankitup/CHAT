@@ -50,7 +50,7 @@ export function normalizeSpaceProfile(
 }
 
 export type SpaceProfileSource =
-  | 'persisted_space_profile'
+  | 'space_profile_column'
   | 'space_name_test_default'
   | 'fallback_messenger_default';
 
