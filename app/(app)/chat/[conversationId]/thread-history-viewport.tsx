@@ -184,7 +184,10 @@ const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
   'local-voice-send:retry-attachment-resolution';
+const VOICE_MESSAGE_REOPEN_RECOVERY_REASON =
+  'voice-reopen:retry-attachment-resolution';
 const VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS = [180, 700] as const;
+const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -421,6 +424,7 @@ function resolveVoiceMessageRenderReason(input: {
 function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
   return (
     reason === 'local-voice-send' ||
+    reason === VOICE_MESSAGE_REOPEN_RECOVERY_REASON ||
     reason === VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON
   );
 }
@@ -434,7 +438,6 @@ function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
 }
 
 function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
-  currentUserId: string;
   requestedMessageIds: string[];
   snapshot: ThreadHistoryPageSnapshot;
 }) {
@@ -445,18 +448,17 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
       entry.attachments,
     ] as const),
   );
-  const ownedVoiceMessageIds = input.snapshot.messages
+  const voiceMessageIds = input.snapshot.messages
     .filter(
       (message) =>
         requestedMessageIdSet.has(message.id) &&
-        message.kind === 'voice' &&
-        message.sender_id === input.currentUserId,
+        message.kind === 'voice',
     )
     .map((message) => message.id);
-  const ownedVoiceMessageIdSet = new Set(ownedVoiceMessageIds);
+  const voiceMessageIdSet = new Set(voiceMessageIds);
   const missingRequestedMessageIds = input.requestedMessageIds.filter(
     (messageId) => {
-      if (!ownedVoiceMessageIdSet.has(messageId)) {
+      if (!voiceMessageIdSet.has(messageId)) {
         return false;
       }
 
@@ -465,7 +467,7 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
       );
     },
   );
-  const presentRequestedMessageIds = ownedVoiceMessageIds.filter(
+  const presentRequestedMessageIds = voiceMessageIds.filter(
     (messageId) => !missingRequestedMessageIds.includes(messageId),
   );
 
@@ -473,6 +475,33 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
     missingRequestedMessageIds,
     presentRequestedMessageIds,
   };
+}
+
+function resolveRecentVoiceMessageIdsNeedingRecovery(input: {
+  attachmentsByMessage: Map<string, MessageAttachment[]>;
+  maxAgeMs: number;
+  messages: ConversationMessageRow[];
+}) {
+  const now = Date.now();
+
+  return input.messages
+    .filter((message) => message.kind === 'voice')
+    .filter((message) => {
+      const createdAt = message.created_at ? new Date(message.created_at) : null;
+
+      if (!createdAt || Number.isNaN(createdAt.getTime())) {
+        return false;
+      }
+
+      return now - createdAt.getTime() <= input.maxAgeMs;
+    })
+    .filter(
+      (message) =>
+        !hasPlaybackReadyVoiceAttachment(
+          input.attachmentsByMessage.get(message.id) ?? [],
+        ),
+    )
+    .map((message) => message.id);
 }
 
 function getVoiceMessageStateLabel(input: {
@@ -784,19 +813,26 @@ function ThreadVoiceMessageBubble({
   const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
     attachment?.signedUrl ?? null,
   );
+  const [ignoredAttachmentSignedUrl, setIgnoredAttachmentSignedUrl] = useState<
+    string | null
+  >(null);
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
+  const attachmentSignedUrl = attachment?.signedUrl?.trim() || null;
+  const hasRecoverableAttachmentLocator = Boolean(
+    attachment?.id &&
+      attachment?.messageId &&
+      attachment?.bucket &&
+      attachment?.objectPath,
+  );
 
   const effectiveSignedUrl =
-    resolvedSignedUrl?.trim() || attachment?.signedUrl?.trim() || null;
+    resolvedSignedUrl?.trim() ||
+    (attachmentSignedUrl && attachmentSignedUrl !== ignoredAttachmentSignedUrl
+      ? attachmentSignedUrl
+      : null);
   const canResolveSignedUrl =
-    Boolean(
-      conversationId &&
-        attachment?.id &&
-        attachment?.messageId &&
-        attachment?.bucket &&
-        attachment?.objectPath,
-    ) && !effectiveSignedUrl;
+    Boolean(conversationId && hasRecoverableAttachmentLocator) && !effectiveSignedUrl;
   const effectiveStageHint =
     stageHint ??
     (isResolvingSignedUrl && !effectiveSignedUrl ? 'processing' : null);
@@ -860,6 +896,8 @@ function ThreadVoiceMessageBubble({
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? null);
     setResolvedSignedUrl(attachment?.signedUrl ?? null);
+    setIgnoredAttachmentSignedUrl(null);
+    setPlaybackFailed(false);
   }, [attachment?.durationMs, attachment?.id, attachment?.signedUrl]);
 
   const resolveSignedUrl = useCallback(async () => {
@@ -903,6 +941,8 @@ function ThreadVoiceMessageBubble({
             : null;
 
         if (nextSignedUrl) {
+          setIgnoredAttachmentSignedUrl(null);
+          setPlaybackFailed(false);
           setResolvedSignedUrl(nextSignedUrl);
         }
 
@@ -996,6 +1036,26 @@ function ThreadVoiceMessageBubble({
     voiceState,
   ]);
 
+  useEffect(() => {
+    if (!effectiveSignedUrl) {
+      const audio = audioRef.current;
+
+      if (audio) {
+        audio.pause();
+        releaseActiveThreadVoicePlayback(messageId, audio);
+        audio.src = '';
+      }
+
+      setProgressMs(0);
+      setPlaybackState((current) => (current === 'failed' ? current : 'idle'));
+      return;
+    }
+
+    setPlaybackState((current) =>
+      current === 'failed' || current === 'buffering' ? current : 'idle',
+    );
+  }, [effectiveSignedUrl, messageId]);
+
   const togglePlayback = async () => {
     if (voiceState !== 'ready') {
       if (canResolveSignedUrl) {
@@ -1054,7 +1114,7 @@ function ThreadVoiceMessageBubble({
       <button
         aria-label={playButtonLabel}
         className="message-voice-play"
-        disabled={voiceState !== 'ready'}
+        disabled={voiceState !== 'ready' && !canResolveSignedUrl}
         onClick={() => {
           void togglePlayback();
         }}
@@ -1111,6 +1171,18 @@ function ThreadVoiceMessageBubble({
           }}
           onError={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            event.currentTarget.pause();
+            event.currentTarget.currentTime = 0;
+            setProgressMs(0);
+
+            if (effectiveSignedUrl && hasRecoverableAttachmentLocator) {
+              setIgnoredAttachmentSignedUrl(effectiveSignedUrl);
+              setResolvedSignedUrl(null);
+              setPlaybackFailed(false);
+              setPlaybackState('idle');
+              return;
+            }
+
             setPlaybackFailed(true);
             setPlaybackState('failed');
           }}
@@ -2241,6 +2313,7 @@ export function ThreadHistoryViewport({
   const voiceAttachmentRecoveryTimeoutsRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
+  const voiceReopenRecoveryRequestedRef = useRef(new Set<string>());
   const isSyncingRef = useRef(false);
   const historySyncDiagnosticsEnabled =
     typeof window !== 'undefined' &&
@@ -2273,6 +2346,10 @@ export function ThreadHistoryViewport({
   useEffect(() => {
     historyStateRef.current = historyState;
   }, [historyState]);
+
+  useEffect(() => {
+    voiceReopenRecoveryRequestedRef.current.clear();
+  }, [conversationId]);
 
   useEffect(() => {
     const nextSnapshotKey = getSnapshotRevisionKey(initialSnapshot);
@@ -2353,6 +2430,52 @@ export function ThreadHistoryViewport({
     () => historyState.messages.map((message) => message.id),
     [historyState.messages],
   );
+  const recentVoiceMessageIdsNeedingRecovery = useMemo(
+    () =>
+      resolveRecentVoiceMessageIdsNeedingRecovery({
+        attachmentsByMessage: historyState.attachmentsByMessage,
+        maxAgeMs: VOICE_MESSAGE_RECOVERY_MAX_AGE_MS,
+        messages: historyState.messages,
+      }),
+    [historyState.attachmentsByMessage, historyState.messages],
+  );
+
+  useEffect(() => {
+    const requestedRecoveries = voiceReopenRecoveryRequestedRef.current;
+    const activeRecoveryIds = new Set(recentVoiceMessageIdsNeedingRecovery);
+
+    for (const messageId of Array.from(requestedRecoveries)) {
+      if (!activeRecoveryIds.has(messageId)) {
+        requestedRecoveries.delete(messageId);
+      }
+    }
+
+    for (const messageId of recentVoiceMessageIdsNeedingRecovery) {
+      if (requestedRecoveries.has(messageId)) {
+        continue;
+      }
+
+      requestedRecoveries.add(messageId);
+
+      if (historySyncDiagnosticsEnabled) {
+        console.info('[chat-history]', 'voice-reopen-recovery:requested', {
+          conversationId,
+          messageId,
+          reason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON,
+        });
+      }
+
+      emitThreadHistorySyncRequest({
+        conversationId,
+        messageIds: [messageId],
+        reason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON,
+      });
+    }
+  }, [
+    conversationId,
+    historySyncDiagnosticsEnabled,
+    recentVoiceMessageIdsNeedingRecovery,
+  ]);
 
   const loadOlderMessages = useCallback(async () => {
     if (isLoadingOlder || !hasMoreOlder || oldestLoadedSeq === null) {
@@ -2707,7 +2830,6 @@ export function ThreadHistoryViewport({
         missingRequestedMessageIds,
         presentRequestedMessageIds,
       } = resolveVoiceMessageIdsNeedingAttachmentRecovery({
-        currentUserId,
         requestedMessageIds: input.requestedMessageIds,
         snapshot: input.snapshot,
       });
@@ -2795,7 +2917,7 @@ export function ThreadHistoryViewport({
         voiceAttachmentRecoveryTimeoutsRef.current.set(messageId, timeoutId);
       }
     },
-    [conversationId, currentUserId, historySyncDiagnosticsEnabled],
+    [conversationId, historySyncDiagnosticsEnabled],
   );
 
   useEffect(() => {
