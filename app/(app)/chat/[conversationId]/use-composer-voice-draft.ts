@@ -30,6 +30,7 @@ type UseComposerVoiceDraftResult = {
   draft: MessagingVoiceMessageDraftRecord | null;
   elapsedMs: number;
   errorCode: VoiceDraftErrorCode;
+  isRestoredDraft: boolean;
   isSupported: boolean;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
@@ -111,6 +112,7 @@ export function useComposerVoiceDraft({
   const [draft, setDraft] = useState<MessagingVoiceMessageDraftRecord | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [errorCode, setErrorCode] = useState<VoiceDraftErrorCode>(null);
+  const [isRestoredDraft, setIsRestoredDraft] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const createdAtRef = useRef<string | null>(null);
@@ -155,6 +157,7 @@ export function useComposerVoiceDraft({
     setDraft(null);
     setErrorCode(null);
     setElapsedMs(0);
+    setIsRestoredDraft(false);
     draftBlobRef.current = null;
     chunksRef.current = [];
     createdAtRef.current = null;
@@ -185,6 +188,7 @@ export function useComposerVoiceDraft({
       setDraft(null);
       setElapsedMs(0);
       setErrorCode(null);
+      setIsRestoredDraft(false);
       setCaptureState('idle');
       void deleteLocalMessagingVoiceDraft(conversationId).catch(() => {
         return;
@@ -202,6 +206,7 @@ export function useComposerVoiceDraft({
       setDraft(null);
       setElapsedMs(0);
       setErrorCode('capture-failed');
+      setIsRestoredDraft(false);
       setCaptureState('failed');
       return;
     }
@@ -218,6 +223,7 @@ export function useComposerVoiceDraft({
     stopActiveStream();
     setElapsedMs(durationMs);
     setErrorCode(null);
+    setIsRestoredDraft(false);
     const nextDraft = {
       blobUrl,
       clientDraftId: createLocalDraftId(),
@@ -457,6 +463,7 @@ export function useComposerVoiceDraft({
           stage: persistedDraft.stage,
           waveformPeaks: persistedDraft.waveformPeaks,
         });
+        setIsRestoredDraft(true);
         setCaptureState('stopped');
         logVoiceComposerDiagnostics('draft:restored', {
           clientDraftId: persistedDraft.clientDraftId,
@@ -519,6 +526,7 @@ export function useComposerVoiceDraft({
     draft,
     elapsedMs,
     errorCode,
+    isRestoredDraft,
     isSupported,
     startRecording,
     stopRecording,

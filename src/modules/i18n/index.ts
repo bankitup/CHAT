@@ -702,6 +702,7 @@ type LanguageDictionary = {
     file: string;
     unavailableRightNow: string;
     justNow: string;
+    messageQueued: string;
     sending: string;
     sendFailed: string;
     edited: string;
@@ -743,6 +744,13 @@ type LanguageDictionary = {
     voiceRecorderPermissionDenied: string;
     voiceRecorderUnavailable: string;
     voiceRecorderFailed: string;
+    voiceRecorderPreparingHint: string;
+    voiceRecorderRecordingHint: string;
+    voiceRecorderRecoveredDraftHint: string;
+    voiceRecorderPermissionHint: string;
+    voiceRecorderUnavailableHint: string;
+    voiceRecorderRetryHint: string;
+    voiceMessagePendingHint: string;
     mentionSuggestions: string;
     clearAttachment: string;
     attachmentSizeError: (maxSizeLabel: string) => string;
@@ -1552,6 +1560,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       file: 'File',
       unavailableRightNow: 'Unavailable right now',
       justNow: 'Just now',
+      messageQueued: 'Queued on this device',
       sending: 'Sending…',
       sendFailed: 'Failed to send',
       edited: 'Edited',
@@ -1593,6 +1602,15 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceRecorderPermissionDenied: 'Microphone access is blocked.',
       voiceRecorderUnavailable: 'Voice recording is not available here.',
       voiceRecorderFailed: 'Could not finish the recording.',
+      voiceRecorderPreparingHint: 'Waiting for microphone access.',
+      voiceRecorderRecordingHint: 'Tap Stop when you are ready to review it.',
+      voiceRecorderRecoveredDraftHint:
+        'Recovered after refresh. Send it now or discard it.',
+      voiceRecorderPermissionHint: 'Allow microphone access, then try again.',
+      voiceRecorderUnavailableHint: 'Use text or a file on this device instead.',
+      voiceRecorderRetryHint:
+        'Try again. If it keeps failing, start a fresh recording.',
+      voiceMessagePendingHint: 'Keep this chat open while the audio finishes syncing.',
       mentionSuggestions: 'Mention suggestions',
       clearAttachment: 'Clear',
       attachmentSizeError: (maxSizeLabel) =>
@@ -2443,6 +2461,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       file: 'Файл',
       unavailableRightNow: 'Сейчас недоступно',
       justNow: 'Только что',
+      messageQueued: 'В очереди на этом устройстве',
       sending: 'Отправляется…',
       sendFailed: 'Не отправилось',
       edited: 'Изменено',
@@ -2484,6 +2503,19 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceRecorderPermissionDenied: 'Нет доступа к микрофону.',
       voiceRecorderUnavailable: 'Запись голоса здесь недоступна.',
       voiceRecorderFailed: 'Не удалось завершить запись.',
+      voiceRecorderPreparingHint: 'Ждём доступ к микрофону.',
+      voiceRecorderRecordingHint:
+        'Нажмите «Стоп», когда будете готовы прослушать запись.',
+      voiceRecorderRecoveredDraftHint:
+        'Черновик восстановлен после обновления. Его можно отправить или отменить.',
+      voiceRecorderPermissionHint:
+        'Разрешите доступ к микрофону и попробуйте ещё раз.',
+      voiceRecorderUnavailableHint:
+        'На этом устройстве вместо этого используйте текст или файл.',
+      voiceRecorderRetryHint:
+        'Попробуйте ещё раз. Если сбой повторится, начните новую запись.',
+      voiceMessagePendingHint:
+        'Не закрывайте этот чат, пока аудио заканчивает синхронизироваться.',
       mentionSuggestions: 'Подсказки упоминаний',
       clearAttachment: 'Убрать',
       attachmentSizeError: (maxSizeLabel) =>

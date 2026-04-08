@@ -12,10 +12,15 @@ type OptimisticThreadMessagesProps = {
     delete: string;
     failed: string;
     justNow: string;
+    queued: string;
     remove: string;
     retry: string;
     sending: string;
     sent: string;
+    voiceFailed: string;
+    voicePendingHint: string;
+    voiceProcessing: string;
+    voiceUploading: string;
   };
 };
 
@@ -191,6 +196,14 @@ export function OptimisticThreadMessages({
         const messagePreview =
           item.body.trim() || item.attachmentLabel?.trim() || labels.attachment;
         const isVoiceMessage = item.kind === 'voice';
+        const pendingStatusLabel =
+          item.status === 'local_pending'
+            ? labels.queued
+            : isVoiceMessage
+              ? labels.voiceProcessing
+              : labels.sending;
+        const footerStatusLabel =
+          item.status === 'local_pending' ? labels.queued : labels.sending;
 
         return (
           <article
@@ -215,7 +228,13 @@ export function OptimisticThreadMessages({
                   <div className="message-voice-stack">
                     <div
                       className="message-voice-card message-voice-card-own"
-                      data-voice-state={isFailed ? 'failed' : isPending ? 'uploading' : 'ready'}
+                      data-voice-state={
+                        isFailed
+                          ? 'failed'
+                          : item.status === 'local_pending'
+                            ? 'uploading'
+                            : 'processing'
+                      }
                     >
                       <button
                         className="message-voice-play"
@@ -244,7 +263,7 @@ export function OptimisticThreadMessages({
                         {isFailed ? (
                           <div className="message-voice-failed-row">
                             <span className="message-voice-failed-text">
-                              {item.errorMessage ?? labels.failed}
+                              {item.errorMessage ?? labels.voiceFailed}
                             </span>
                             <span className="message-voice-failed-actions">
                               <button
@@ -267,6 +286,14 @@ export function OptimisticThreadMessages({
                               </button>
                             </span>
                           </div>
+                        ) : isPending ? (
+                          <div className="message-voice-meta">
+                            <span className="message-voice-state">
+                              {pendingStatusLabel}
+                            </span>
+                            <span className="message-voice-meta-separator">·</span>
+                            <span>{labels.voicePendingHint}</span>
+                          </div>
                         ) : null}
                       </div>
                     </div>
@@ -278,10 +305,15 @@ export function OptimisticThreadMessages({
               <div className="message-meta message-meta-own message-meta-optimistic">
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
                 {isPending ? (
-                  <MessageStatusIndicator
-                    label={labels.sending}
-                    status="pending"
-                  />
+                  <span className="message-status-pending-stack">
+                    <MessageStatusIndicator
+                      label={footerStatusLabel}
+                      status="pending"
+                    />
+                    <span className="message-status message-status-pending">
+                      {footerStatusLabel}
+                    </span>
+                  </span>
                 ) : isFailed && !isVoiceMessage ? (
                   <span className="message-status-failed-stack">
                     <span className="message-status message-status-failed">

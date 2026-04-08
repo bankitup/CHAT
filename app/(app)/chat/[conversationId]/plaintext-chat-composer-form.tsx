@@ -349,6 +349,7 @@ export function PlaintextChatComposerForm({
         draft={voiceDraft.draft}
         elapsedMs={voiceDraft.elapsedMs}
         errorCode={voiceDraft.errorCode}
+        isRestoredDraft={voiceDraft.isRestoredDraft}
         language={language}
         onCancel={voiceDraft.cancelRecording}
         onRetry={voiceDraft.startRecording}
