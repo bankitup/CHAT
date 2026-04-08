@@ -125,6 +125,22 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
         </section>
       ) : null}
 
+      {currentSpaceId && currentSpace?.canManageMembers ? (
+        <section className="card stack settings-surface spaces-surface">
+          <p className="eyebrow">{t.spaces.spaceAdminEyebrow}</p>
+          <h2 className="card-title">{t.spaces.manageMembersTitle}</h2>
+          <p className="muted">{t.spaces.manageMembersBody}</p>
+          <div className="cluster">
+            <Link
+              className="button button-secondary button-compact"
+              href={withSpaceParam('/spaces/members', currentSpaceId)}
+            >
+              {t.spaces.manageMembersAction}
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className="card stack settings-surface spaces-surface">
         {spacesTemporarilyUnavailable ? (
           <section className="empty-card">
