@@ -844,6 +844,7 @@ function ThreadVoiceMessageBubble({
   const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
     attachment?.signedUrl ?? null,
   );
+  const [didFailSignedUrlResolve, setDidFailSignedUrlResolve] = useState(false);
   const [ignoredAttachmentSignedUrl, setIgnoredAttachmentSignedUrl] = useState<
     string | null
   >(null);
@@ -894,10 +895,25 @@ function ThreadVoiceMessageBubble({
     playbackState === 'buffering'
       ? t.chat.voiceMessageLoading
       : t.chat.voiceMessage;
+  const isRecoveringVoiceMessage =
+    voiceState !== 'ready' &&
+    canResolveSignedUrl &&
+    (isResolvingSignedUrl ||
+      (ignoredAttachmentSignedUrl !== null && !didFailSignedUrlResolve));
   const stateLabel =
     voiceState === 'ready'
       ? readyStateLabel
-      : getVoiceMessageStateLabel({ state: voiceState, t });
+      : isRecoveringVoiceMessage
+        ? t.chat.voiceMessageRecovering
+        : getVoiceMessageStateLabel({ state: voiceState, t });
+  const stateNote =
+    voiceState === 'ready'
+      ? null
+      : isRecoveringVoiceMessage
+        ? t.chat.voiceMessagePendingHint
+        : canResolveSignedUrl && didFailSignedUrlResolve && !isResolvingSignedUrl
+          ? t.chat.voiceMessageRetryHint
+          : null;
   const durationLabel =
     voiceState === 'ready'
       ? playbackState === 'playing' ||
@@ -936,6 +952,7 @@ function ThreadVoiceMessageBubble({
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? null);
     setResolvedSignedUrl(attachment?.signedUrl ?? null);
+    setDidFailSignedUrlResolve(false);
     setIgnoredAttachmentSignedUrl(null);
     setPlaybackFailed(false);
   }, [attachment?.durationMs, attachment?.id, attachment?.signedUrl]);
@@ -954,6 +971,7 @@ function ThreadVoiceMessageBubble({
 
     const promise = (async () => {
       setIsResolvingSignedUrl(true);
+      setDidFailSignedUrlResolve(false);
 
       try {
         const response = await fetch(
@@ -982,6 +1000,7 @@ function ThreadVoiceMessageBubble({
 
         if (nextSignedUrl) {
           setIgnoredAttachmentSignedUrl(null);
+          setDidFailSignedUrlResolve(false);
           setPlaybackFailed(false);
           setResolvedSignedUrl(nextSignedUrl);
         }
@@ -1000,6 +1019,7 @@ function ThreadVoiceMessageBubble({
 
         return nextSignedUrl;
       } catch (error) {
+        setDidFailSignedUrlResolve(true);
         if (
           process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
           typeof window !== 'undefined'
@@ -1187,6 +1207,9 @@ function ThreadVoiceMessageBubble({
         {voiceState !== 'ready' ? (
           <div className="message-voice-meta">
             <span className="message-voice-state">{stateLabel}</span>
+            {stateNote ? (
+              <span className="message-voice-note">{stateNote}</span>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -1208,6 +1231,7 @@ function ThreadVoiceMessageBubble({
 
             if (effectiveSignedUrl && hasRecoverableAttachmentLocator) {
               setIgnoredAttachmentSignedUrl(effectiveSignedUrl);
+              setDidFailSignedUrlResolve(false);
               setResolvedSignedUrl(null);
               setPlaybackFailed(false);
               setPlaybackState('idle');

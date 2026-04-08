@@ -691,6 +691,7 @@ type LanguageDictionary = {
     voiceMessageLoading: string;
     voiceMessageUploading: string;
     voiceMessageProcessing: string;
+    voiceMessageRecovering: string;
     voiceMessageFailed: string;
     voiceMessageUnavailable: string;
     encryptedMessage: string;
@@ -751,6 +752,7 @@ type LanguageDictionary = {
     voiceRecorderUnavailableHint: string;
     voiceRecorderRetryHint: string;
     voiceMessagePendingHint: string;
+    voiceMessageRetryHint: string;
     mentionSuggestions: string;
     clearAttachment: string;
     attachmentSizeError: (maxSizeLabel: string) => string;
@@ -1549,6 +1551,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessageLoading: 'Loading voice message',
       voiceMessageUploading: 'Uploading voice message',
       voiceMessageProcessing: 'Preparing voice message',
+      voiceMessageRecovering: 'Recovering voice message',
       voiceMessageFailed: 'Voice message is not available right now.',
       voiceMessageUnavailable: 'Voice message is unavailable on this device.',
       encryptedMessage: 'Encrypted message',
@@ -1611,6 +1614,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceRecorderRetryHint:
         'Try again. If it keeps failing, start a fresh recording.',
       voiceMessagePendingHint: 'Keep this chat open while the audio finishes syncing.',
+      voiceMessageRetryHint: 'Tap again if the audio still does not load.',
       mentionSuggestions: 'Mention suggestions',
       clearAttachment: 'Clear',
       attachmentSizeError: (maxSizeLabel) =>
@@ -2449,6 +2453,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessageLoading: 'Голосовое сообщение загружается',
       voiceMessageUploading: 'Голосовое сообщение загружается',
       voiceMessageProcessing: 'Голосовое сообщение подготавливается',
+      voiceMessageRecovering: 'Голосовое сообщение восстанавливается',
       voiceMessageFailed: 'Голосовое сообщение сейчас недоступно.',
       voiceMessageUnavailable: 'Голосовое сообщение недоступно на этом устройстве.',
       encryptedMessage: 'Зашифрованное сообщение',
@@ -2516,6 +2521,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Попробуйте ещё раз. Если сбой повторится, начните новую запись.',
       voiceMessagePendingHint:
         'Не закрывайте этот чат, пока аудио заканчивает синхронизироваться.',
+      voiceMessageRetryHint:
+        'Нажмите ещё раз, если аудио всё ещё не загружается.',
       mentionSuggestions: 'Подсказки упоминаний',
       clearAttachment: 'Убрать',
       attachmentSizeError: (maxSizeLabel) =>

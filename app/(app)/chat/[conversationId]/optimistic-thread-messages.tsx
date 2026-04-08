@@ -190,20 +190,26 @@ export function OptimisticThreadMessages({
   return (
     <>
       {visibleItems.map((item) => {
-        const isPending =
-          item.status === 'local_pending' || item.status === 'sending';
+        const isQueued = item.status === 'local_pending';
+        const isSending = item.status === 'sending';
+        const isPending = isQueued || isSending;
         const isFailed = item.status === 'failed';
         const messagePreview =
           item.body.trim() || item.attachmentLabel?.trim() || labels.attachment;
         const isVoiceMessage = item.kind === 'voice';
         const pendingStatusLabel =
-          item.status === 'local_pending'
-            ? labels.queued
-            : isVoiceMessage
-              ? labels.voiceProcessing
+          isVoiceMessage
+            ? isQueued
+              ? labels.queued
+              : labels.voiceUploading
+            : isQueued
+              ? labels.queued
               : labels.sending;
-        const footerStatusLabel =
-          item.status === 'local_pending' ? labels.queued : labels.sending;
+        const footerStatusLabel = pendingStatusLabel;
+        const voicePendingNote =
+          isVoiceMessage && isSending ? labels.voicePendingHint : null;
+        const voiceProgressScale = isFailed ? 0.28 : isQueued ? 0.2 : 0.58;
+        const voiceIconState = isFailed ? 'error' : isPending ? 'loading' : 'play';
 
         return (
           <article
@@ -241,8 +247,11 @@ export function OptimisticThreadMessages({
                         disabled
                         type="button"
                       >
-                        <span aria-hidden="true" className="message-voice-play-icon">
-                          {isFailed ? '!' : isPending ? '...' : '>'}
+                        <span
+                          aria-hidden="true"
+                          className={`message-voice-play-icon message-voice-play-icon-${voiceIconState}`}
+                        >
+                          {voiceIconState === 'error' ? '!' : null}
                         </span>
                       </button>
                       <div className="message-voice-copy">
@@ -256,7 +265,7 @@ export function OptimisticThreadMessages({
                           <span
                             className="message-voice-progress-bar"
                             style={{
-                              transform: `scaleX(${isFailed ? 0.28 : isPending ? 0.52 : 1})`,
+                              transform: `scaleX(${voiceProgressScale})`,
                             }}
                           />
                         </div>
@@ -288,11 +297,12 @@ export function OptimisticThreadMessages({
                           </div>
                         ) : isPending ? (
                           <div className="message-voice-meta">
-                            <span className="message-voice-state">
-                              {pendingStatusLabel}
-                            </span>
-                            <span className="message-voice-meta-separator">·</span>
-                            <span>{labels.voicePendingHint}</span>
+                            <span className="message-voice-state">{pendingStatusLabel}</span>
+                            {voicePendingNote ? (
+                              <span className="message-voice-note">
+                                {voicePendingNote}
+                              </span>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>

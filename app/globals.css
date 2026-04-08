@@ -6140,9 +6140,8 @@ main {
 }
 
 .message-voice-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: grid;
+  gap: 2px;
   min-width: 0;
   color: rgba(91, 100, 112, 0.84);
   font-size: 0.7rem;
@@ -6155,8 +6154,10 @@ main {
   white-space: nowrap;
 }
 
-.message-voice-meta-separator {
-  color: rgba(91, 100, 112, 0.52);
+.message-voice-note {
+  color: rgba(91, 100, 112, 0.76);
+  font-size: 0.68rem;
+  line-height: 1.28;
 }
 
 .message-voice-failed-row {
