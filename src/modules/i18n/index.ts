@@ -69,6 +69,7 @@ type LanguageDictionary = {
     title: string;
     subtitle: string;
     backToChats: string;
+    backToSpaces: string;
     currentSpace: string;
     openSpace: string;
     currentActivityNote: string;
@@ -76,6 +77,29 @@ type LanguageDictionary = {
     emptyBody: string;
     unavailableTitle: string;
     unavailableBody: string;
+    globalAdminEyebrow: string;
+    createSpaceTitle: string;
+    createSpaceBody: string;
+    createSpaceAction: string;
+    createSpaceRouteTitle: string;
+    createSpaceRouteSubtitle: string;
+    createSpaceRouteBody: string;
+    fieldSpaceName: string;
+    fieldSpaceProfile: string;
+    fieldParticipantIdentifiers: string;
+    fieldAdminIdentifiers: string;
+    profileMessengerFull: string;
+    profileKeepCozyOps: string;
+    profileHint: string;
+    participantIdentifiersHint: string;
+    adminIdentifiersHint: string;
+    includeYourselfHint: string;
+    submitCreateSpace: string;
+    nameRequired: string;
+    adminIdentifiersRequired: string;
+    createSpaceFailed: string;
+    createSpaceSuccess: string;
+    createSpaceSuccessNoAccess: string;
   };
   settings: {
     backToChats: string;
@@ -767,6 +791,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       title: 'Choose a space',
       subtitle: 'Pick the space you want to open first.',
       backToChats: 'Back to workspace',
+      backToSpaces: 'Back to spaces',
       currentSpace: 'Current space',
       openSpace: 'Open space',
       currentActivityNote: 'Open the right workspace for this space from here.',
@@ -774,6 +799,37 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyBody: 'Ask the operator to add you to a space first.',
       unavailableTitle: 'Spaces are temporarily unavailable',
       unavailableBody: 'Please try again in a moment while space access is being refreshed.',
+      globalAdminEyebrow: 'Global admin',
+      createSpaceTitle: 'Create a new space',
+      createSpaceBody:
+        'This action is reserved for super admins and provisions a new governed space with its first members and admins.',
+      createSpaceAction: 'Create space',
+      createSpaceRouteTitle: 'Create a space',
+      createSpaceRouteSubtitle:
+        'Create a new space, choose its primary mode, and seed the first governed members.',
+      createSpaceRouteBody:
+        'This flow is reserved for super admins. It creates the shared space, assigns its initial profile when supported, and seeds the first explicit space-boundary members.',
+      fieldSpaceName: 'Space name',
+      fieldSpaceProfile: 'Primary mode',
+      fieldParticipantIdentifiers: 'Initial participants',
+      fieldAdminIdentifiers: 'Initial space admins',
+      profileMessengerFull: 'Messenger space',
+      profileKeepCozyOps: 'KeepCozy ops space',
+      profileHint:
+        'Messenger spaces land chat-first. KeepCozy spaces land home-first when persisted profile storage is available.',
+      participantIdentifiersHint:
+        'Enter one email or user ID per line. These people become the initial member set.',
+      adminIdentifiersHint:
+        'Enter one email or user ID per line. Admin identifiers are also added as members automatically, and the first one becomes the owner.',
+      includeYourselfHint:
+        'Add yourself to the participant or admin list if you need to enter the new space right away.',
+      submitCreateSpace: 'Create governed space',
+      nameRequired: 'Space name is required.',
+      adminIdentifiersRequired: 'At least one initial space admin is required.',
+      createSpaceFailed: 'Unable to create the space right now.',
+      createSpaceSuccess: 'Space created. Open it from the list below.',
+      createSpaceSuccessNoAccess:
+        'Space created. It will not appear in this list until you add yourself as a member.',
     },
     settings: {
       backToChats: 'Back to chats',
@@ -1518,6 +1574,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       title: 'Выберите пространство',
       subtitle: 'Сначала откройте нужное пространство.',
       backToChats: 'Назад к рабочему пространству',
+      backToSpaces: 'Назад к пространствам',
       currentSpace: 'Текущее пространство',
       openSpace: 'Открыть пространство',
       currentActivityNote:
@@ -1527,6 +1584,38 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       unavailableTitle: 'Пространства временно недоступны',
       unavailableBody:
         'Попробуйте снова чуть позже, пока доступ к пространствам обновляется.',
+      globalAdminEyebrow: 'Глобальный админ',
+      createSpaceTitle: 'Создать новое пространство',
+      createSpaceBody:
+        'Это действие доступно только супер-админам и создает новое управляемое пространство с первыми участниками и администраторами.',
+      createSpaceAction: 'Создать пространство',
+      createSpaceRouteTitle: 'Создать пространство',
+      createSpaceRouteSubtitle:
+        'Создайте новое пространство, выберите его основной режим и задайте первый управляемый состав участников.',
+      createSpaceRouteBody:
+        'Этот поток зарезервирован для супер-админов. Он создает общее пространство, назначает его начальный профиль, когда это поддержано, и задает первых явных участников границы пространства.',
+      fieldSpaceName: 'Название пространства',
+      fieldSpaceProfile: 'Основной режим',
+      fieldParticipantIdentifiers: 'Первые участники',
+      fieldAdminIdentifiers: 'Первые админы пространства',
+      profileMessengerFull: 'Мессенджер-пространство',
+      profileKeepCozyOps: 'KeepCozy ops-пространство',
+      profileHint:
+        'Мессенджер-пространства открываются с чатов. Пространства KeepCozy открываются с дома, когда включено сохранение профиля пространства.',
+      participantIdentifiersHint:
+        'Введите по одному email или user ID на строку. Эти люди станут первым набором участников.',
+      adminIdentifiersHint:
+        'Введите по одному email или user ID на строку. Администраторы автоматически добавляются и как участники, а первый из них становится owner.',
+      includeYourselfHint:
+        'Добавьте себя в список участников или админов, если вам нужно сразу открыть новое пространство.',
+      submitCreateSpace: 'Создать управляемое пространство',
+      nameRequired: 'Нужно указать название пространства.',
+      adminIdentifiersRequired:
+        'Нужно указать хотя бы одного первого администратора пространства.',
+      createSpaceFailed: 'Сейчас не удалось создать пространство.',
+      createSpaceSuccess: 'Пространство создано. Откройте его из списка ниже.',
+      createSpaceSuccessNoAccess:
+        'Пространство создано. Оно не появится в этом списке, пока вы не добавите себя как участника.',
     },
     settings: {
       backToChats: 'Назад к чатам',

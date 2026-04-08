@@ -459,6 +459,7 @@ export default async function ChatPage({
       try {
         activeSpaceState = await resolveActiveSpaceForUser({
           userId: user.id,
+          userEmail: user.email ?? null,
           requestedSpaceId: fallbackRequestedSpaceId,
           source: 'chat-page',
         });

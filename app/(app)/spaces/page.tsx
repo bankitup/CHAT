@@ -6,11 +6,13 @@ import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   getUserSpaces,
   isSpaceMembersSchemaCacheErrorMessage,
+  resolveSuperAdminGovernanceForUser,
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type SpacesPageProps = {
   searchParams: Promise<{
+    message?: string;
     space?: string;
   }>;
 };
@@ -40,6 +42,9 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
   }
 
   const query = await searchParams;
+  const superAdminGovernance = resolveSuperAdminGovernanceForUser({
+    userEmail: user.email ?? null,
+  });
 
   const language = await getRequestLanguage();
   const t = getTranslations(language);
@@ -65,6 +70,7 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
   }
 
   const requestedSpaceId = query.space?.trim() || null;
+  const visibleMessage = query.message?.trim() || null;
   const requestedSpace = requestedSpaceId
     ? spaces.find((space) => space.id === requestedSpaceId)
     : undefined;
@@ -93,6 +99,31 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
         <h1 className="settings-hero-title">{t.spaces.title}</h1>
         <p className="muted settings-hero-note">{t.spaces.subtitle}</p>
       </section>
+
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
+
+      {superAdminGovernance.canCreateSpaces ? (
+        <section className="card stack settings-surface spaces-surface">
+          <p className="eyebrow">{t.spaces.globalAdminEyebrow}</p>
+          <h2 className="card-title">{t.spaces.createSpaceTitle}</h2>
+          <p className="muted">{t.spaces.createSpaceBody}</p>
+          <div className="cluster">
+            <Link
+              className="button button-compact"
+              href={withSpaceParam('/spaces/new', currentSpaceId)}
+            >
+              {t.spaces.createSpaceAction}
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <section className="card stack settings-surface spaces-surface">
         {spacesTemporarilyUnavailable ? (
