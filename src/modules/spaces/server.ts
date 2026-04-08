@@ -353,52 +353,38 @@ export async function getUserSpaces(
     return [] as UserSpaceRecord[];
   }
 
-  let spaces:
-    | Array<{
-        id: string;
-        name: string;
-        created_by: string;
-        created_at: string | null;
-        profile?: string | null;
-      }>
-    | null = null;
-  let spacesError: Error | null = null;
+  type SpaceQueryRow = {
+    id: string;
+    name: string;
+    created_by: string;
+    created_at: string | null;
+    profile?: string | null;
+  };
+
   const spacesWithProfileResult = await supabase
     .from('spaces')
     .select('id, name, created_by, created_at, profile')
     .in('id', spaceIds);
 
-  if (
+  const spacesResult = (
     spacesWithProfileResult.error &&
     isMissingSpaceProfileColumnErrorMessage(spacesWithProfileResult.error.message)
-  ) {
+  )
+    ? await (async () => {
     logSpacesDiagnostics('spaces:query-profile-fallback', {
       source,
       message: spacesWithProfileResult.error.message,
     });
 
-    const spacesWithoutProfileResult = await supabase
+      return supabase
       .from('spaces')
       .select('id, name, created_by, created_at')
       .in('id', spaceIds);
+    })()
+    : spacesWithProfileResult;
 
-    spaces = (spacesWithoutProfileResult.data ?? []) as Array<{
-      id: string;
-      name: string;
-      created_by: string;
-      created_at: string | null;
-    }>;
-    spacesError = spacesWithoutProfileResult.error;
-  } else {
-    spaces = (spacesWithProfileResult.data ?? []) as Array<{
-      id: string;
-      name: string;
-      created_by: string;
-      created_at: string | null;
-      profile?: string | null;
-    }>;
-    spacesError = spacesWithProfileResult.error;
-  }
+  const spaces = (spacesResult.data ?? []) as SpaceQueryRow[];
+  const spacesError = spacesResult.error;
 
   if (spacesError) {
     logSpacesDiagnostics('spaces:query-error', {
