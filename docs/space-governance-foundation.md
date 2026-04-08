@@ -73,6 +73,35 @@ That means the governance foundation must distinguish clearly between:
 - what is already structurally true
 - what still needs later enforcement work
 
+### Current Runtime Governance Seam
+
+The repository now has a narrow governance-aware runtime seam, even though
+final enforcement is still deferred.
+
+- [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+  defines explicit governance labels for:
+  - global governance role: `super_admin`
+  - space governance role: `space_admin | space_member`
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+  derives current space governance from runtime `space_members.role`:
+  - runtime `owner` or `admin` -> `space_admin`
+  - runtime `member` -> `space_member`
+- the same server layer resolves global super-admin capability through an
+  opt-in runtime seam:
+  - `CHAT_SUPER_ADMIN_USER_IDS`
+  - `CHAT_SUPER_ADMIN_EMAILS`
+- when those allowlists are not configured, global governance resolves to no
+  active `super_admin` binding by default
+- `resolveActiveSpaceForUser(...)` can now expose:
+  - active space profile state
+  - active space governance state
+  - resolved global governance state
+
+Important current-state note:
+
+- this seam is for awareness and later routing/policy plumbing only
+- it is not final invitation, provisioning, audit, or RLS enforcement
+
 ## 1. Absolute Boundary Rule
 
 The absolute rule for spaces is:
