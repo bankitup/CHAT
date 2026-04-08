@@ -36,31 +36,32 @@ This pass does not introduce:
 - new storage, asset, climate, or supplier domains
 - final capability enforcement beyond the current shell split
 
-## Current Shell Reality
+## Current Branch Reality
 
-The repository already has the first messenger-profile shell split:
+This branch now provides the first real messenger-profile shell posture:
 
-- `messenger_full` spaces land in `/inbox`
-- `keepcozy_ops` spaces land in `/home`
-- the shared bottom nav swaps between the two profiles in
-  [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
-- the shared space selector in
-  [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx)
-  opens each space into its profile-default shell
+- `messenger_full` spaces use a messenger bottom nav:
+  `Home / Chats / Activity`
+- `keepcozy_ops` spaces keep the existing KeepCozy bottom nav:
+  `Home / Rooms / Issues / Tasks / History`
+- `/home` is now profile-aware and renders a lightweight messenger home surface
+  for messenger spaces
+- `/activity` is now profile-aware and renders a message-centric activity view
+  for messenger spaces instead of reusing KeepCozy-first operational framing
+- `/inbox` now treats a clean messenger space like a real starting point rather
+  than a generic empty chat list
 
-The main remaining gap is not routing. It is shell identity.
+The remaining work after this branch is no longer “make messenger shell real at
+all.” It is refinement and hardening.
 
-`messenger_full` currently still feels like a shared fallback shell because:
+Current messenger-shell strengths on this branch:
 
-- its bottom nav is `Chats / Spaces / Settings`, not the intended
-  `Home / Chats / Activity` messenger loop
-- `/activity` is still a KeepCozy operational history surface rather than a
-  messenger activity hub
-- `/settings` remains too prominent in the primary messenger shell
-- active space context is still stronger on KeepCozy routes than on messenger
-  routes
-- a fresh messenger space opens correctly, but still lacks messenger-shaped
-  empty-state guidance and shell continuity
+- the active space is visible on messenger home and fresh-space inbox states
+- the shell distinguishes messenger spaces from KeepCozy spaces immediately
+- settings remain reachable, but they no longer dominate the primary messenger
+  bottom nav
+- a fresh messenger space now exposes concrete first actions:
+  create DM, create group, and manage members when the current user can do so
 
 ## Desired Messenger Shell Posture
 
@@ -86,208 +87,114 @@ Practical rule:
 - KeepCozy surfaces may remain reachable in the repo, but they should not
   define the shell promise for `messenger_full`
 
-## Priority Order
+## What This Branch Delivered
 
-## P0
+### 1. Messenger Bottom Navigation Is Now Shell-Defining
 
-### 1. Bottom Navigation Should Be Messenger-Centered
+- messenger spaces use `Home / Chats / Activity`
+- KeepCozy spaces are unaffected
+- the split remains profile-aware and still runs through the shared auth and
+  active-space context
 
-Current gap:
-
-- messenger spaces currently use `Chats / Spaces / Settings`
-- that makes the shell feel like a utility wrapper around inbox instead of a
-  full messenger product
-- `Settings` is over-promoted for a primary mobile tab
-- `Spaces` is important for switching context, but not as a daily primary tab
-
-Required outcome:
-
-- `messenger_full` bottom nav becomes `Home / Chats / Activity`
-- `Spaces` and `Settings` remain reachable without dominating the primary
-  mobile shell
-- active-tab behavior stays profile-aware and space-aware
-
-Primary file targets:
+Primary files:
 
 - [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
-- [layout.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/layout.tsx)
 - [index.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/i18n/index.ts)
 
-Implementation note:
+### 2. Messenger Home Now Feels Intentional
 
-- do not invent a second permanent nav system
-- keep the shared shell frame, but make the messenger branch of it feel like a
-  real messenger shell
+- `/home` now acts as a messenger overview for `messenger_full`
+- it foregrounds the current space, the next message-centric actions, recent
+  chats, and secondary profile/space actions without feeling like a utility
+  screen
+- the KeepCozy TEST-home path remains intact for `keepcozy_ops`
 
-### 2. Messenger Needs Its Own Shell Hierarchy For Home, Chats, And Activity
+Primary files:
 
-Current gap:
-
-- the repo has `/inbox`, but no clear messenger `Home` shell
-- `/activity` is currently a KeepCozy operational history route, not a
-  messenger activity route
-- messenger users can land in chat, but they do not get a chat-first overview
-  page that frames the space
-
-Required outcome:
-
-- messenger spaces get a lightweight chat-first shell hierarchy:
-  `Home -> Chats -> Activity`
-- `Home` introduces the active messenger space and its next actions
-- `Activity` becomes message-centric for messenger spaces rather than reusing
-  KeepCozy operational framing
-- KeepCozy activity language no longer leaks into messenger-profile routes
-
-Primary file targets:
-
-- [inbox/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/page.tsx)
-- [activity/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
-- [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
-
-Implementation note:
-
-- this does not require a new architecture
-- the first pass can be conditional profile-aware framing on existing routes
-
-### 3. Active Space Visibility Is Too Weak On Messenger Surfaces
-
-Current gap:
-
-- active space context is visible on `/spaces`, but is much less explicit once
-  the user is back in `/inbox`
-- the messenger shell does not strongly remind the user which space they are
-  chatting inside
-- switching spaces works, but the shell does not make the current space feel
-  like the main context anchor
-
-Required outcome:
-
-- messenger routes show the current active space clearly
-- switching spaces remains one or two taps away
-- the active space reads like the current workspace, not just a query param
-
-Primary file targets:
-
-- [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
-- [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx)
-- [inbox/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/page.tsx)
-- [settings/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/settings/page.tsx)
-
-Implementation note:
-
-- prefer one compact shared messenger context treatment over repeating a large
-  context card on every page
-
-### 4. Fresh Messenger Spaces Need Better Empty States
-
-Current gap:
-
-- a new messenger space can be created cleanly, but `/inbox` still reads like
-  a general chat list rather than a fresh workspace start
-- empty-space copy is stronger in KeepCozy than in messenger surfaces
-- the first actions for a new messenger space are not obvious enough
-
-Required outcome:
-
-- a fresh messenger space explains the next useful steps clearly
-- empty-state actions point toward starting chats and adding the right people
-- the shell distinguishes between “no chats yet” and “wrong space or broken
-  state”
-
-Primary file targets:
-
-- [inbox/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/page.tsx)
-- [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx)
-- [index.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/i18n/index.ts)
-
-Implementation note:
-
-- keep this concise and product-shaped
-- do not turn messenger spaces into a tutorial system
-
-## P1
-
-### 5. Settings Should Be Secondary In Messenger Spaces
-
-Current gap:
-
-- the current messenger bottom nav promotes `Settings` to a top-level tab
-- `/settings` itself is still shaped like a broad shared account/settings hub
-- messenger-specific settings continuity already exists in
-  [inbox/settings/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/settings/page.tsx),
-  but the shell does not reflect that hierarchy
-
-Required outcome:
-
-- settings remain reachable, but no longer define the primary messenger shell
-- profile and preferences feel like secondary account surfaces
-- inbox-specific settings read as chat settings, not a shell destination
-
-Primary file targets:
-
-- [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
-- [settings/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/settings/page.tsx)
-- [inbox/settings/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/settings/page.tsx)
-
-### 6. Messenger And KeepCozy Shells Need Stronger Differentiation
-
-Current gap:
-
-- the routing split exists, but some shared copy and structure still feel
-  KeepCozy-first
-- `/activity` is the biggest leak today, because it is operational by design
-- the messenger shell still feels like the shared app with a chat tab, not a
-  profile-aware messenger posture
-
-Required outcome:
-
-- messenger spaces no longer inherit operational language by default
-- KeepCozy spaces stay operations-first without weakening the messenger shell
-- shared shell pieces remain shared, but the product emphasis is visibly
-  different between profiles
-
-Primary file targets:
-
-- [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
-- [activity/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
-- [index.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/i18n/index.ts)
-
-## P2
-
-### 7. Mobile-First Messenger Action Placement Can Be Cleaner
-
-Current gap:
-
-- messenger actions are mostly correct, but the shell does not consistently
-  foreground the next message-centric step on small screens
-- the inbox surface carries a lot of logic, but its surrounding shell does not
-  simplify the mental model enough for a fresh test space
-- space switching and settings still compete visually with core chat actions
-
-Required outcome:
-
-- messenger spaces expose one obvious next step on each top-level route
-- primary actions stay thumb-friendly
-- secondary navigation stays secondary
-
-Primary file targets:
-
-- [inbox/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/page.tsx)
-- [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx)
-- [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
+- [home/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
 - [globals.css](/Users/danya/IOS%20-%20Apps/CHAT/app/globals.css)
+- [index.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/i18n/index.ts)
 
-## Recommended First Code Pass
+### 3. Messenger Activity Now Reads As Message Activity
 
-The first implementation pass after this doc should stay narrow:
+- `/activity` now renders a message-centric unread/recent surface for
+  `messenger_full`
+- the route stays shared, but the product language and structure differ by
+  profile
 
-1. change messenger bottom-nav posture from `Chats / Spaces / Settings` to
-   `Home / Chats / Activity`
-2. add one compact active-space context treatment for messenger-profile routes
-3. make `/activity` render a messenger-oriented shell posture for
-   `messenger_full` spaces
-4. tighten fresh-space empty states on `/inbox`
-5. demote direct settings prominence without hiding settings entirely
+Primary files:
+
+- [activity/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/activity/page.tsx)
+- [index.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/i18n/index.ts)
+
+### 4. Fresh Messenger Spaces Now Have Better Empty States
+
+- `/inbox` no longer treats a clean messenger space as a dead-end
+- a brand-new messenger space now points toward:
+  create DM, create group, and manage members when local space governance
+  allows it
+- the create sheet can open directly into DM or group mode from messenger
+  first-action links
+- no new broad admin surface was introduced; member management stays scoped to
+  the current space
+
+Primary files:
+
+- [inbox/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/page.tsx)
+- [inbox/inbox-filterable-content.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/inbox-filterable-content.tsx)
+- [inbox/new-chat-sheet.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/new-chat-sheet.tsx)
+- [home/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/home/page.tsx)
+- [index.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/i18n/index.ts)
+
+## Practical Verification
+
+### Verify Messenger vs KeepCozy Shell Split
+
+1. Open a known `messenger_full` space from
+   [spaces/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/spaces/page.tsx).
+2. Confirm it lands in `/inbox` and the bottom nav is `Home / Chats / Activity`.
+3. Switch to the KeepCozy `TEST` space.
+4. Confirm it lands in `/home` and the bottom nav is
+   `Home / Rooms / Issues / Tasks / History`.
+
+### Verify The New Messenger Bottom Nav
+
+1. Inside a messenger space, tap `Home` and confirm the route is `/home`.
+2. Tap `Chats` and confirm the route is `/inbox`.
+3. Tap `Activity` and confirm the route is `/activity`.
+4. Confirm the active tab highlights correctly on each route.
+
+### Verify A Fresh Messenger Space Feels Usable
+
+1. Open a newly created messenger space with no chats yet.
+2. Confirm `/home` shows a clean messenger overview rather than a KeepCozy
+   home shell.
+3. Open `/inbox` and confirm the empty state exposes clear first actions.
+4. If the space already has visible members, confirm the first actions can open
+   the create sheet directly into DM or group mode.
+5. If the current user can manage members for that space, confirm `Manage
+   members` appears and stays scoped to the current `space_id`.
+6. If the current user cannot manage members, confirm no broad member-management
+   action is exposed.
+
+### What Remains Shared
+
+- auth and session handling
+- active-space query/context seam
+- profile-aware shell resolution through
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+- the underlying messaging runtime and conversation routes
+
+## Remaining Highest-Value Follow-Ups
+
+- tighten messenger settings/profile entry points so they feel secondary but
+  still easy to reach after the bottom-nav demotion
+- reduce duplicated lightweight chat-summary logic across messenger home and
+  activity surfaces
+- add a more deliberate local invite or member-add flow for fresh messenger
+  spaces instead of relying only on the current member-management handoff
+- keep dogfooding pressure on the create-chat sheet so fresh-space first-run
+  flows stay smooth on mobile
 
 ## Guardrails
 
@@ -301,12 +208,11 @@ The first implementation pass after this doc should stay narrow:
 
 ## Remaining Ambiguities
 
-- whether messenger `Home` should be a lightly reframed `/inbox` overview or a
-  distinct route surface later
-- whether messenger `Activity` should be a recent-chat view, unread-first
-  digest, or a blend of both
-- how much `/spaces` should remain visible from messenger routes once
-  switching-space patterns are stronger elsewhere
-- whether messenger-profile settings should eventually split into lightweight
-  `Profile` and `Chats settings` entry points without growing a broader admin
-  shell
+- whether messenger `Home` should stay a lightweight overview or later become a
+  more distinct route surface with richer chat continuity
+- whether messenger `Activity` should stay blended between unread-first and
+  recent-first or lean harder into one mode
+- how much local member-management affordance should stay visible in fresh
+  messenger spaces once an invite flow exists
+- whether messenger-profile settings should later split into lighter `Profile`
+  and `Chats settings` entry points without widening into a broader admin shell
