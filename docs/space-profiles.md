@@ -240,7 +240,10 @@ Current runtime note:
 - all other spaces currently fall back to `messenger_full` until explicit
   persisted profile storage lands
 - a dedicated profile-aware default-shell helper now exists for later routing
-  work, but current entry behavior does not need to switch immediately
+  work and is now used by the authenticated public/auth entry paths
+- the shared app shell can now render a messenger-centered navigation set for
+  `messenger_full` spaces and a KeepCozy-centered navigation set for
+  `keepcozy_ops` spaces without splitting the app into two products
 
 Important boundaries:
 

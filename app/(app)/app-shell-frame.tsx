@@ -5,12 +5,24 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
+import type {
+  SpaceProfile,
+  SpaceProfileDefaultShellRoute,
+} from '@/modules/spaces/model';
 import { withSpaceParam } from '@/modules/spaces/url';
+
+type AppShellSpaceSummary = {
+  defaultShellRoute: SpaceProfileDefaultShellRoute;
+  id: string;
+  name: string;
+  profile: SpaceProfile;
+};
 
 type AppShellFrameProps = {
   children: ReactNode;
   dmE2eeEnabled: boolean;
   language: AppLanguage;
+  spaces: AppShellSpaceSummary[];
   userId: string;
 };
 
@@ -18,6 +30,7 @@ export function AppShellFrame({
   children,
   dmE2eeEnabled,
   language,
+  spaces,
   userId,
 }: AppShellFrameProps) {
   const pathname = usePathname();
@@ -34,10 +47,16 @@ export function AppShellFrame({
   const isIssuesRoute = pathname.startsWith('/issues');
   const isTasksRoute = pathname.startsWith('/tasks');
   const activeSpaceId = searchParams.get('space');
+  const activeSpace =
+    (activeSpaceId ? spaces.find((space) => space.id === activeSpaceId) : null) ??
+    spaces[0] ??
+    null;
+  const activeSpaceProfile = activeSpace?.profile ?? null;
   const navSpaceHref = (pathname: string) =>
-    activeSpaceId ? withSpaceParam(pathname, activeSpaceId) : pathname;
+    activeSpace?.id ? withSpaceParam(pathname, activeSpace.id) : pathname;
   const showBottomNav = !isChatRoute && !isSpacesRoute;
   let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
+  let messengerActiveTab: 'chats' | 'spaces' | 'settings' | null = null;
 
   if (isActivityRoute) {
     activeTab = 'activity';
@@ -49,6 +68,14 @@ export function AppShellFrame({
     activeTab = 'rooms';
   } else if (isHomeRoute || isSettingsRoute) {
     activeTab = 'home';
+  }
+
+  if (pathname.startsWith('/inbox')) {
+    messengerActiveTab = 'chats';
+  } else if (isSpacesRoute) {
+    messengerActiveTab = 'spaces';
+  } else if (isSettingsRoute) {
+    messengerActiveTab = 'settings';
   }
 
   return (
@@ -70,70 +97,115 @@ export function AppShellFrame({
       {showBottomNav ? (
         <nav className="app-bottom-nav" aria-label={t.shell.label}>
           <div className="app-bottom-nav-shell">
-            <Link
-              aria-label={t.shell.openHome}
-              className={
-                activeTab === 'home'
-                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                  : 'app-bottom-nav-link'
-              }
-              href={navSpaceHref('/home')}
-              prefetch={false}
-            >
-              <span className="app-bottom-nav-label">{t.shell.home}</span>
-            </Link>
+            {activeSpaceProfile === 'messenger_full' ? (
+              <>
+                <Link
+                  aria-label={t.shell.openChats}
+                  className={
+                    messengerActiveTab === 'chats'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/inbox')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.chats}</span>
+                </Link>
 
-            <Link
-              aria-label={t.shell.openRooms}
-              className={
-                activeTab === 'rooms'
-                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                  : 'app-bottom-nav-link'
-              }
-              href={navSpaceHref('/rooms')}
-              prefetch={false}
-            >
-              <span className="app-bottom-nav-label">{t.shell.rooms}</span>
-            </Link>
+                <Link
+                  aria-label={t.shell.openSpaces}
+                  className={
+                    messengerActiveTab === 'spaces'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/spaces')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.spaces}</span>
+                </Link>
 
-            <Link
-              aria-label={t.shell.openIssues}
-              className={
-                activeTab === 'issues'
-                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                  : 'app-bottom-nav-link'
-              }
-              href={navSpaceHref('/issues')}
-              prefetch={false}
-            >
-              <span className="app-bottom-nav-label">{t.shell.issues}</span>
-            </Link>
+                <Link
+                  aria-label={t.shell.openSettings}
+                  className={
+                    messengerActiveTab === 'settings'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/settings')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.settings}</span>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  aria-label={t.shell.openHome}
+                  className={
+                    activeTab === 'home'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/home')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.home}</span>
+                </Link>
 
-            <Link
-              aria-label={t.shell.openTasks}
-              className={
-                activeTab === 'tasks'
-                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                  : 'app-bottom-nav-link'
-              }
-              href={navSpaceHref('/tasks')}
-              prefetch={false}
-            >
-              <span className="app-bottom-nav-label">{t.shell.tasks}</span>
-            </Link>
+                <Link
+                  aria-label={t.shell.openRooms}
+                  className={
+                    activeTab === 'rooms'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/rooms')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.rooms}</span>
+                </Link>
 
-            <Link
-              aria-label={t.shell.openActivity}
-              className={
-                activeTab === 'activity'
-                  ? 'app-bottom-nav-link app-bottom-nav-link-active'
-                  : 'app-bottom-nav-link'
-              }
-              href={navSpaceHref('/activity')}
-              prefetch={false}
-            >
-              <span className="app-bottom-nav-label">{t.shell.activity}</span>
-            </Link>
+                <Link
+                  aria-label={t.shell.openIssues}
+                  className={
+                    activeTab === 'issues'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/issues')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.issues}</span>
+                </Link>
+
+                <Link
+                  aria-label={t.shell.openTasks}
+                  className={
+                    activeTab === 'tasks'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/tasks')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.tasks}</span>
+                </Link>
+
+                <Link
+                  aria-label={t.shell.openActivity}
+                  className={
+                    activeTab === 'activity'
+                      ? 'app-bottom-nav-link app-bottom-nav-link-active'
+                      : 'app-bottom-nav-link'
+                  }
+                  href={navSpaceHref('/activity')}
+                  prefetch={false}
+                >
+                  <span className="app-bottom-nav-label">{t.shell.activity}</span>
+                </Link>
+              </>
+            )}
           </div>
         </nav>
       ) : null}

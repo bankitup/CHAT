@@ -38,12 +38,16 @@ type LanguageDictionary = {
     issues: string;
     tasks: string;
     chats: string;
+    spaces: string;
+    settings: string;
     activity: string;
     openHome: string;
     openRooms: string;
     openIssues: string;
     openTasks: string;
     openChats: string;
+    openSpaces: string;
+    openSettings: string;
     openActivity: string;
   };
   spaces: {
@@ -702,12 +706,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       issues: 'Issues',
       tasks: 'Tasks',
       chats: 'Chats',
+      spaces: 'Spaces',
+      settings: 'Settings',
       activity: 'History',
       openHome: 'Open home',
       openRooms: 'Open rooms',
       openIssues: 'Open issues',
       openTasks: 'Open tasks',
       openChats: 'Open chats',
+      openSpaces: 'Open spaces',
+      openSettings: 'Open settings',
       openActivity: 'Open history',
     },
     spaces: {
@@ -1410,12 +1418,16 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       issues: 'Проблемы',
       tasks: 'Задачи',
       chats: 'Чаты',
+      spaces: 'Пространства',
+      settings: 'Настройки',
       activity: 'История',
       openHome: 'Открыть главную',
       openRooms: 'Открыть комнаты',
       openIssues: 'Открыть проблемы',
       openTasks: 'Открыть задачи',
       openChats: 'Открыть чаты',
+      openSpaces: 'Открыть пространства',
+      openSettings: 'Открыть настройки',
       openActivity: 'Открыть историю',
     },
     spaces: {
