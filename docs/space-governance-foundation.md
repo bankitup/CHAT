@@ -28,6 +28,8 @@ Related documents:
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
 - [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql)
+- [2026-04-08-spaces-runtime-contract-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-spaces-runtime-contract-align.sql)
+- [2026-04-08-spaces-profile-column.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-spaces-profile-column.sql)
 
 ## Why This Comes Before Broader Profile Rollout
 
@@ -76,6 +78,43 @@ That means the governance foundation must distinguish clearly between:
 
 - what is already structurally true
 - what still needs later enforcement work
+
+### Current `public.spaces` Runtime Contract
+
+The current runtime now assumes a narrow base schema for `public.spaces`.
+
+Required columns:
+
+- `id`
+- `name`
+- `created_by`
+- `created_at`
+- `updated_at`
+
+Optional persisted column:
+
+- `profile`
+
+Current runtime usage:
+
+- active-space reads in
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+  read `id`, `name`, `created_by`, and `created_at`
+- create-space provisioning in
+  [write-server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/write-server.ts)
+  now writes `created_by`, `name`, and `updated_at`
+- persisted profile storage is optional because the read path already falls
+  back safely when `public.spaces.profile` is absent
+
+Apply these SQL files in this order when an environment is behind:
+
+1. [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql)
+   for the base `spaces` and `space_members` contract
+2. [2026-04-08-spaces-runtime-contract-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-spaces-runtime-contract-align.sql)
+   for older existing `spaces` tables that are missing `updated_at`
+3. [2026-04-08-spaces-profile-column.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-spaces-profile-column.sql)
+   when the environment should persist profile routing instead of relying on
+   the runtime fallback
 
 ### Current Runtime Governance Seam
 
