@@ -11,6 +11,16 @@ Scope for this foundation:
 
 This is not a full notification product spec. It is the bridge from the current browser-readiness state to a real first push system.
 
+## First implementation note
+
+The first practical subscription foundation on this branch uses:
+
+- `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` on the client for `PushManager.subscribe(...)`
+- [2026-04-08-push-subscriptions-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-push-subscriptions-foundation.sql) for `public.push_subscriptions`
+- `POST` and `DELETE` on `/api/messaging/push-subscriptions` for current-user subscription persistence
+
+This is intentionally the subscription/storage slice only. Real chat send fan-out and unread-driven badge updates still remain a later implementation step.
+
 ## Current repo reality
 
 The repo already has a few important pieces in place:

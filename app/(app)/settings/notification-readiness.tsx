@@ -34,6 +34,13 @@ function getStatusCopy(
         badge: t.notifications.unsupportedBadge,
         settingValue: t.notifications.unavailable,
       };
+    case 'unconfigured':
+      return {
+        title: t.notifications.title,
+        body: t.notifications.unconfiguredBody,
+        badge: t.notifications.unconfiguredBadge,
+        settingValue: t.notifications.setupNeeded,
+      };
     case 'blocked':
       return {
         title: t.notifications.title,
@@ -51,7 +58,10 @@ function getStatusCopy(
     default:
       return {
         title: t.notifications.title,
-        body: t.notifications.availableBody,
+        body:
+          readiness.permission === 'granted'
+            ? t.notifications.permissionReadyBody
+            : t.notifications.availableBody,
         badge: t.notifications.availableBadge,
         settingValue: t.notifications.available,
       };
@@ -66,6 +76,7 @@ export function NotificationReadinessPanel({
   language: AppLanguage;
 }) {
   const [readiness, setReadiness] = useState<NotificationReadiness | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const t = getTranslations(language);
 
@@ -75,6 +86,7 @@ export function NotificationReadinessPanel({
     void getNotificationReadiness().then((nextState) => {
       if (!cancelled) {
         setReadiness(nextState);
+        setLastError(null);
       }
     });
 
@@ -119,6 +131,16 @@ export function NotificationReadinessPanel({
                   : t.notifications.checking}
           </span>
         </div>
+        <div className="settings-capability-row">
+          <span className="settings-capability-label">{t.notifications.device}</span>
+          <span className="settings-capability-value">
+            {readiness?.status === 'unsupported'
+              ? t.notifications.unavailable
+              : readiness?.subscriptionActive
+                ? t.notifications.connected
+                : t.notifications.notConnected}
+          </span>
+        </div>
       </div>
 
       <div className="settings-actions">
@@ -129,13 +151,29 @@ export function NotificationReadinessPanel({
             type="button"
             onClick={() => {
               startTransition(async () => {
-                const nextState = await enableNotificationReadiness();
-                setReadiness(nextState);
+                try {
+                  const nextState = await enableNotificationReadiness();
+                  setReadiness(nextState);
+                  setLastError(null);
+                } catch {
+                  setLastError(t.notifications.syncFailedNote);
+                  setReadiness(await getNotificationReadiness());
+                }
               });
             }}
           >
-            {isPending ? t.notifications.turningOn : t.notifications.turnOn}
+            {isPending
+              ? readiness.permission === 'granted'
+                ? t.notifications.connectingDevice
+                : t.notifications.turningOn
+              : readiness.permission === 'granted'
+                ? t.notifications.connectDevice
+                : t.notifications.turnOn}
           </button>
+        ) : null}
+
+        {lastError ? (
+          <p className="muted settings-note">{lastError}</p>
         ) : null}
 
         {readiness?.status === 'blocked' ? (
@@ -152,7 +190,15 @@ export function NotificationReadinessPanel({
 
         {readiness?.status === 'available' ? (
           <p className="muted settings-note">
-            {t.notifications.availableNote}
+            {readiness.permission === 'granted'
+              ? t.notifications.permissionReadyNote
+              : t.notifications.availableNote}
+          </p>
+        ) : null}
+
+        {readiness?.status === 'unconfigured' ? (
+          <p className="muted settings-note">
+            {t.notifications.notConfiguredNote}
           </p>
         ) : null}
 
