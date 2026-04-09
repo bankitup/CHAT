@@ -6,6 +6,7 @@ import {
   patchThreadConversationReadState,
 } from '@/modules/messaging/realtime/thread-live-state-store';
 import { patchThreadMessageContent } from '@/modules/messaging/realtime/thread-message-patch-store';
+import { noteWarmNavRouterRefresh } from '@/modules/messaging/performance/warm-nav-client';
 import {
   emitThreadHistorySyncRequest,
   LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
@@ -212,6 +213,10 @@ export function ActiveChatRealtimeSync({
         refreshTimeoutRef.current = null;
         lastRefreshAtRef.current = Date.now();
         logDiagnostics('refresh:start', { conversationId, reason });
+        noteWarmNavRouterRefresh('chat', reason, {
+          conversationId,
+          trackedMessageCount: normalizedMessageIds.length,
+        });
         startRefreshTransition(() => {
           router.refresh();
         });

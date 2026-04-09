@@ -28,6 +28,13 @@ import {
   loadInboxConversationsForSsr,
 } from '@/modules/messaging/data/inbox-ssr-stability';
 import {
+  WarmNavReadyProbe,
+} from '@/modules/messaging/performance/warm-nav-client';
+import {
+  measureWarmNavServerLoad,
+  recordWarmNavServerRender,
+} from '@/modules/messaging/performance/warm-nav-server';
+import {
   resolvePublicIdentityLabel,
 } from '@/modules/messaging/ui/identity-label';
 import {
@@ -192,6 +199,22 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     }
   }
   logDiagnostics('active-space-ok', { hasActiveSpace: true });
+  const warmNavRouteKey = [
+    `space=${activeSpaceId}`,
+    `view=${activeView}`,
+    `filter=${activeFilter}`,
+    `create=${isCreateOpen ? '1' : '0'}`,
+    `query=${query.q?.trim() ? '1' : '0'}`,
+  ].join('|');
+
+  recordWarmNavServerRender({
+    details: {
+      canManageMembers,
+      isMessengerSpace,
+    },
+    routeKey: warmNavRouteKey,
+    surface: 'inbox',
+  });
 
   const t = getTranslations(language);
   const visibleError = query.error
@@ -205,16 +228,26 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const emptyArchivedConversations =
     [] as Awaited<ReturnType<typeof getArchivedConversations>>;
 
-  const archivedConversationsPromise = loadArchivedConversationsForSsr({
-    view: activeView,
-    emptyValue: emptyArchivedConversations,
-    loadArchived: async () => {
-      const value = await getArchivedConversations(user.id, {
-        spaceId: activeSpaceId,
-      });
-      logDiagnostics('loader:archived-ok', { count: value.length });
-      return value;
+  const archivedConversationsPromise = measureWarmNavServerLoad({
+    details: {
+      activeView,
+      userId: user.id,
     },
+    load: 'archived-conversations',
+    routeKey: warmNavRouteKey,
+    surface: 'inbox',
+    resolver: () =>
+      loadArchivedConversationsForSsr({
+        view: activeView,
+        emptyValue: emptyArchivedConversations,
+        loadArchived: async () => {
+          const value = await getArchivedConversations(user.id, {
+            spaceId: activeSpaceId,
+          });
+          logDiagnostics('loader:archived-ok', { count: value.length });
+          return value;
+        },
+      }),
   }).catch((error) => {
     logDiagnostics('loader:archived-error', {
       message: error instanceof Error ? error.message : String(error),
@@ -233,11 +266,21 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     Awaited<ReturnType<typeof getAvailableUsers>>,
     string[],
   ] = await Promise.all([
-    loadInboxConversationsForSsr({
-      view: 'main',
-      loadPrecise: () => getInboxConversations(user.id, { spaceId: activeSpaceId }),
-      loadStable: () =>
-        getInboxConversationsStable(user.id, { spaceId: activeSpaceId }),
+    measureWarmNavServerLoad({
+      details: {
+        userId: user.id,
+      },
+      load: 'main-conversations',
+      routeKey: warmNavRouteKey,
+      surface: 'inbox',
+      resolver: () =>
+        loadInboxConversationsForSsr({
+          view: 'main',
+          loadPrecise: () =>
+            getInboxConversations(user.id, { spaceId: activeSpaceId }),
+          loadStable: () =>
+            getInboxConversationsStable(user.id, { spaceId: activeSpaceId }),
+        }),
     })
       .then((value) => {
         logDiagnostics('loader:inbox-ok', { count: value.length });
@@ -290,9 +333,18 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   ]);
   logDiagnostics('loader:all-ok');
   const allVisibleConversations = [...conversations, ...archivedConversations];
-  const participantIdentities = await getConversationParticipantIdentities(
-    allVisibleConversations.map((conversation) => conversation.conversationId),
-  );
+  const participantIdentities = await measureWarmNavServerLoad({
+    details: {
+      conversationCount: allVisibleConversations.length,
+    },
+    load: 'participant-identities',
+    routeKey: warmNavRouteKey,
+    surface: 'inbox',
+    resolver: () =>
+      getConversationParticipantIdentities(
+        allVisibleConversations.map((conversation) => conversation.conversationId),
+      ),
+  });
   logDiagnostics('loader:participant-identities-ok', {
     count: participantIdentities.length,
   });
@@ -421,6 +473,16 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         conversationIds={allConversationIds}
         initialSummaries={[...mainSummaries, ...archivedSummaries]}
         userId={user.id}
+      />
+      <WarmNavReadyProbe
+        details={{
+          archivedCount: archivedConversationItems.length,
+          mainCount: mainConversationItems.length,
+          spaceId: activeSpaceId,
+        }}
+        routeKey={warmNavRouteKey}
+        routePath="/inbox"
+        surface="inbox"
       />
 
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}

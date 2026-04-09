@@ -31,6 +31,13 @@ import {
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
 import {
+  WarmNavReadyProbe,
+} from '@/modules/messaging/performance/warm-nav-client';
+import {
+  measureWarmNavServerLoad,
+  recordWarmNavServerRender,
+} from '@/modules/messaging/performance/warm-nav-server';
+import {
   resolveV1TestSpaceFallback,
   resolveActiveSpaceForUser,
   isSpaceMembersSchemaCacheErrorMessage,
@@ -560,6 +567,23 @@ export default async function ChatPage({
             THREAD_HISTORY_PAGE_SIZE,
         )
       : THREAD_HISTORY_PAGE_SIZE;
+  const warmNavRouteKey = [
+    `conversation=${conversationId}`,
+    `space=${activeSpaceId}`,
+    `settings=${isSettingsOpen ? '1' : '0'}`,
+    `targets=${requestedHistoryTargetMessageIds.length}`,
+  ].join('|');
+
+  recordWarmNavServerRender({
+    details: {
+      isSettingsOpen,
+      kind: conversation.kind,
+      requestedHistoryTargetMessageCount:
+        requestedHistoryTargetMessageIds.length,
+    },
+    routeKey: warmNavRouteKey,
+    surface: 'chat',
+  });
   const threadRenderRequestId =
     process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
       ? crypto.randomUUID()
@@ -583,53 +607,96 @@ export default async function ChatPage({
     memberReadStates,
     participants,
   ] = await Promise.all([
-    resolveThreadRenderStage(
-      'history-snapshot-load',
-      {
+    measureWarmNavServerLoad({
+      details: {
         conversationId,
-        debugRequestId: threadRenderRequestId,
-        kind: conversation.kind,
         requestedHistoryTargetMessageCount:
           requestedHistoryTargetMessageIds.length,
         threadHistoryLimit,
-      },
-      () =>
-        getConversationHistorySnapshot({
-          conversationId,
-          debugRequestId: threadRenderRequestId,
-          limit: threadHistoryLimit,
-          userId: user.id,
-        }),
-    ),
-    resolveThreadRenderStage(
-      'read-state-load',
-      {
-        conversationId,
-        debugRequestId: threadRenderRequestId,
         userId: user.id,
       },
-      () => getConversationReadState(conversationId, user.id),
-    ),
+      load: 'history-snapshot',
+      routeKey: warmNavRouteKey,
+      surface: 'chat',
+      resolver: () =>
+        resolveThreadRenderStage(
+          'history-snapshot-load',
+          {
+            conversationId,
+            debugRequestId: threadRenderRequestId,
+            kind: conversation.kind,
+            requestedHistoryTargetMessageCount:
+              requestedHistoryTargetMessageIds.length,
+            threadHistoryLimit,
+          },
+          () =>
+            getConversationHistorySnapshot({
+              conversationId,
+              debugRequestId: threadRenderRequestId,
+              limit: threadHistoryLimit,
+              userId: user.id,
+            }),
+        ),
+    }),
+    measureWarmNavServerLoad({
+      details: {
+        conversationId,
+        userId: user.id,
+      },
+      load: 'read-state',
+      routeKey: warmNavRouteKey,
+      surface: 'chat',
+      resolver: () =>
+        resolveThreadRenderStage(
+          'read-state-load',
+          {
+            conversationId,
+            debugRequestId: threadRenderRequestId,
+            userId: user.id,
+          },
+          () => getConversationReadState(conversationId, user.id),
+        ),
+    }),
     conversation.kind === 'dm'
-      ? resolveThreadRenderStage(
-          'member-read-states-load',
+      ? measureWarmNavServerLoad({
+          details: {
+            conversationId,
+            kind: conversation.kind,
+          },
+          load: 'member-read-states',
+          routeKey: warmNavRouteKey,
+          surface: 'chat',
+          resolver: () =>
+            resolveThreadRenderStage(
+              'member-read-states-load',
+              {
+                conversationId,
+                debugRequestId: threadRenderRequestId,
+                kind: conversation.kind,
+              },
+              () => getConversationMemberReadStates(conversationId),
+            ),
+        })
+      : Promise.resolve([]),
+    measureWarmNavServerLoad({
+      details: {
+        conversationId,
+        kind: conversation.kind,
+      },
+      load: 'participants',
+      routeKey: warmNavRouteKey,
+      surface: 'chat',
+      resolver: () =>
+        resolveThreadRenderStage(
+          'participants-load',
           {
             conversationId,
             debugRequestId: threadRenderRequestId,
             kind: conversation.kind,
           },
-          () => getConversationMemberReadStates(conversationId),
-        )
-      : Promise.resolve([]),
-    resolveThreadRenderStage(
-      'participants-load',
-      {
-        conversationId,
-        debugRequestId: threadRenderRequestId,
-        kind: conversation.kind,
-      },
-      () => getConversationParticipants(conversationId),
-    ),
+          () => getConversationParticipants(conversationId),
+        ),
+    }),
   ]);
   const { hasMoreOlder, messages } = threadHistorySnapshot;
   logThreadRenderCheckpoint('thread-history-loaded', {
@@ -1188,6 +1255,17 @@ export default async function ChatPage({
           renderedEmptyState={messages.length === 0}
         />
       ) : null}
+      <WarmNavReadyProbe
+        details={{
+          isSettingsOpen,
+          kind: conversation.kind,
+          messageCount: messages.length,
+          spaceId: activeSpaceId,
+        }}
+        routeKey={warmNavRouteKey}
+        routePath={`/chat/${conversationId}`}
+        surface="chat"
+      />
       {conversation.kind === 'dm' ? (
         <DmThreadClientSubtree
           conversationId={conversationId}
