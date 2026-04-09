@@ -90,6 +90,7 @@ type PushRecipientResolutionResult = {
   appActiveSuppressedUserCount?: number;
   eligibleRecipientCount: number;
   membershipCount: number;
+  presenceSchemaPresent: boolean;
   rows: PushSubscriptionRow[];
   sameConversationSuppressedUserCount?: number;
   skippedReason: string | null;
@@ -638,6 +639,7 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
       appActiveSuppressedUserCount: 0,
       eligibleRecipientCount: 0,
       membershipCount: 0,
+      presenceSchemaPresent: true,
       rows: [] as PushSubscriptionRow[],
       sameConversationSuppressedUserCount: 0,
       skippedReason: 'missing-service-role',
@@ -689,6 +691,7 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
       appActiveSuppressedUserCount: 0,
       eligibleRecipientCount: 0,
       membershipCount: membershipRows.length,
+      presenceSchemaPresent: true,
       rows: [] as PushSubscriptionRow[],
       sameConversationSuppressedUserCount: 0,
       skippedReason: 'no-eligible-recipients',
@@ -707,6 +710,7 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
     .is('disabled_at', null);
   let subscriptionsError = subscriptionsWithPresence.error;
   let subscriptionRows = (subscriptionsWithPresence.data ?? []) as PushSubscriptionRow[];
+  let presenceSchemaPresent = true;
 
   if (
     subscriptionsError &&
@@ -722,6 +726,7 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
 
     subscriptionsError = subscriptionsWithoutPresence.error;
     subscriptionRows = (subscriptionsWithoutPresence.data ?? []) as PushSubscriptionRow[];
+    presenceSchemaPresent = false;
   }
 
   if (subscriptionsError) {
@@ -756,6 +761,7 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
       presenceSuppression.appActiveSuppressedUserCount,
     eligibleRecipientCount: eligibleUserIds.length,
     membershipCount: membershipRows.length,
+    presenceSchemaPresent,
     rows: presenceSuppression.rows,
     sameConversationSuppressedUserCount:
       presenceSuppression.sameConversationSuppressedUserCount,
@@ -1357,6 +1363,7 @@ export async function sendChatPushNotifications(
   let appActiveSuppressedUserCount = 0;
   let membershipCount = 0;
   let eligibleRecipientCount = 0;
+  let presenceSchemaPresent = true;
   let sameConversationSuppressedUserCount = 0;
   let suppressedSubscriptionCount = 0;
   let subscriptionCount = 0;
@@ -1369,6 +1376,7 @@ export async function sendChatPushNotifications(
     appActiveSuppressedUserCount = result.appActiveSuppressedUserCount ?? 0;
     eligibleRecipientCount = result.eligibleRecipientCount;
     membershipCount = result.membershipCount;
+    presenceSchemaPresent = result.presenceSchemaPresent;
     sameConversationSuppressedUserCount =
       result.sameConversationSuppressedUserCount ?? 0;
     subscriptions = result.rows;
@@ -1392,6 +1400,7 @@ export async function sendChatPushNotifications(
         messageId: input.messageId,
         messageKind: input.messageKind,
         appActiveSuppressedUserCount,
+        presenceSchemaPresent,
         sameConversationSuppressedUserCount,
         sentCount: 0,
         skippedReason: 'missing-push-subscriptions-schema',
@@ -1424,6 +1433,7 @@ export async function sendChatPushNotifications(
         messageId: input.messageId,
         messageKind: input.messageKind,
         appActiveSuppressedUserCount,
+        presenceSchemaPresent,
         sameConversationSuppressedUserCount,
         sentCount: 0,
         skippedReason: 'recipient-resolution-error',
@@ -1455,6 +1465,7 @@ export async function sendChatPushNotifications(
       messageId: input.messageId,
       messageKind: input.messageKind,
       appActiveSuppressedUserCount,
+      presenceSchemaPresent,
       sameConversationSuppressedUserCount,
       sentCount: 0,
       skippedReason,
@@ -1576,6 +1587,7 @@ export async function sendChatPushNotifications(
       messageId: input.messageId,
       messageKind: input.messageKind,
       appActiveSuppressedUserCount,
+      presenceSchemaPresent,
       sameConversationSuppressedUserCount,
       sentCount,
       skippedReason: null,
