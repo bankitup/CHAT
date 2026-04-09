@@ -8,3 +8,4 @@ node_modules
 Keys.env.local.rtf
 .DS_Store
 .codex
+*.tsbuildinfo
