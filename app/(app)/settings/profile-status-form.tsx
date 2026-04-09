@@ -8,6 +8,8 @@ import type { AppLanguage } from '@/modules/i18n';
 type ProfileStatusFormProps = {
   defaultStatusEmoji: string;
   defaultStatusText: string;
+  redirectSurface?: 'home' | 'settings';
+  spaceId?: string | null;
   labels: {
     statusTitle: string;
     statusSubtitle: string;
@@ -48,6 +50,8 @@ function formatStatusUpdatedAt(value: string | null | undefined, language: AppLa
 export function ProfileStatusForm({
   defaultStatusEmoji,
   defaultStatusText,
+  redirectSurface = 'settings',
+  spaceId = null,
   labels,
   language,
   statusUpdatedAt,
@@ -111,6 +115,11 @@ export function ProfileStatusForm({
     const formData = new FormData();
     formData.set('statusEmoji', nextStatusEmoji);
     formData.set('statusText', nextStatusText);
+    formData.set('redirectSurface', redirectSurface);
+
+    if (spaceId) {
+      formData.set('spaceId', spaceId);
+    }
 
     try {
       await updateProfileStatusAction(formData);

@@ -3555,54 +3555,21 @@ main {
   gap: 14px;
 }
 
-.messenger-home-profile-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-}
-
-.messenger-home-profile-copy {
-  gap: 4px;
-  min-width: 0;
-}
-
-.messenger-home-profile-name {
-  margin: 0;
-  font-size: 1.12rem;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-}
-
-.messenger-home-profile-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.messenger-home-profile-email {
-  font-size: 0.82rem;
-  line-height: 1.32;
-  overflow-wrap: anywhere;
-}
-
-.messenger-home-personal-actions {
-  justify-content: flex-start;
-}
-
 .messenger-home-status-card {
   justify-content: space-between;
 }
 
-.messenger-home-status-empty,
-.messenger-home-status-updated {
-  font-size: 0.78rem;
-  line-height: 1.4;
-}
-
 .messenger-home-session-card {
   justify-content: space-between;
+}
+
+.messenger-home-notification-panel {
+  gap: 10px;
+}
+
+.messenger-home-notification-panel .settings-actions .button {
+  width: 100%;
+  justify-content: center;
 }
 
 .messenger-home-entry-card {

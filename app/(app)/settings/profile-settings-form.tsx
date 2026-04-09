@@ -27,6 +27,8 @@ type ProfileSettingsFormProps = {
   defaultDisplayName: string;
   defaultUsername: string;
   hasAvatar: boolean;
+  redirectSurface?: 'home' | 'settings';
+  spaceId?: string | null;
   labels: {
     profileTitle: string;
     profileSubtitle: string;
@@ -224,6 +226,8 @@ export function ProfileSettingsForm({
   defaultDisplayName,
   defaultUsername,
   hasAvatar,
+  redirectSurface = 'settings',
+  spaceId = null,
   labels,
 }: ProfileSettingsFormProps) {
   const router = useRouter();
@@ -429,6 +433,11 @@ export function ProfileSettingsForm({
 
     const formData = new FormData();
     formData.set('displayName', normalizedDraftDisplayName);
+    formData.set('redirectSurface', redirectSurface);
+
+    if (spaceId) {
+      formData.set('spaceId', spaceId);
+    }
 
     if (uploadedAvatarObjectPath) {
       formData.set('avatarObjectPath', uploadedAvatarObjectPath);

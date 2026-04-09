@@ -77,7 +77,7 @@ export function NotificationReadinessPanel({
   anchorId?: string;
   embedded?: boolean;
   language: AppLanguage;
-  surface?: 'activity' | 'settings';
+  surface?: 'activity' | 'home' | 'settings';
 }) {
   const [readiness, setReadiness] = useState<NotificationReadiness | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -108,6 +108,8 @@ export function NotificationReadinessPanel({
         embedded
           ? surface === 'activity'
             ? 'stack settings-section settings-notification-section messenger-activity-notification-panel'
+            : surface === 'home'
+              ? 'stack settings-section settings-notification-section messenger-home-notification-panel'
             : 'stack settings-section settings-notification-section'
           : 'card stack settings-card'
       }

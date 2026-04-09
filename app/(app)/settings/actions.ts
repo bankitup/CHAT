@@ -16,12 +16,28 @@ import {
   sanitizeUserFacingErrorMessage,
 } from '@/modules/messaging/ui/user-facing-errors';
 
-function redirectWithMessage(
-  kind: 'error' | 'message',
-  value: string,
-): never {
-  const params = new URLSearchParams({ [kind]: value });
-  redirect(`/settings?${params.toString()}`);
+function readOptionalText(formData: FormData, key: string) {
+  const normalized = String(formData.get(key) ?? '').trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function redirectWithMessage(input: {
+  destination?: 'home' | 'settings';
+  kind: 'error' | 'message';
+  value: string;
+  spaceId?: string | null;
+}): never {
+  const params = new URLSearchParams({ [input.kind]: input.value });
+
+  if (input.spaceId) {
+    params.set('space', input.spaceId);
+  }
+
+  redirect(
+    input.destination === 'home'
+      ? `/home?${params.toString()}`
+      : `/settings?${params.toString()}`,
+  );
 }
 
 function getProfileSettingsErrorMessage(
@@ -53,6 +69,11 @@ export async function updateProfileAction(formData: FormData) {
   const language = await getRequestLanguage();
   const t = getTranslations(language);
   const displayName = String(formData.get('displayName') ?? '').trim();
+  const spaceId = readOptionalText(formData, 'spaceId');
+  const redirectSurface =
+    readOptionalText(formData, 'redirectSurface') === 'home'
+      ? 'home'
+      : 'settings';
   const avatarObjectPath =
     String(formData.get('avatarObjectPath') ?? '').trim() || null;
   const removeAvatar = String(formData.get('removeAvatar') ?? '').trim() === '1';
@@ -63,7 +84,12 @@ export async function updateProfileAction(formData: FormData) {
   const user = await getRequestViewer();
 
   if (!user?.id) {
-    redirectWithMessage('error', t.login.managedAccess);
+    redirectWithMessage({
+      destination: redirectSurface,
+      kind: 'error',
+      spaceId,
+      value: t.login.managedAccess,
+    });
   }
 
   try {
@@ -75,21 +101,29 @@ export async function updateProfileAction(formData: FormData) {
       removeAvatar,
     });
   } catch (error) {
-    redirectWithMessage(
-      'error',
-      getProfileSettingsErrorMessage(
+    redirectWithMessage({
+      destination: redirectSurface,
+      kind: 'error',
+      spaceId,
+      value: getProfileSettingsErrorMessage(
         error,
         t.settings.profileUpdateFailed,
         t.settings.avatarStorageUnavailable,
       ),
-    );
+    });
   }
 
+  revalidatePath('/home');
   revalidatePath('/settings');
   revalidatePath('/inbox');
   revalidatePath('/activity');
   revalidatePath('/', 'layout');
-  redirectWithMessage('message', t.settings.profileUpdated);
+  redirectWithMessage({
+    destination: redirectSurface,
+    kind: 'message',
+    spaceId,
+    value: t.settings.profileUpdated,
+  });
 }
 
 export async function removeAvatarAction() {
@@ -98,27 +132,33 @@ export async function removeAvatarAction() {
   const user = await getRequestViewer();
 
   if (!user?.id) {
-    redirectWithMessage('error', t.login.managedAccess);
+    redirectWithMessage({
+      kind: 'error',
+      value: t.login.managedAccess,
+    });
   }
 
   try {
     await removeCurrentUserAvatar(user.id);
   } catch (error) {
-    redirectWithMessage(
-      'error',
-      getProfileSettingsErrorMessage(
+    redirectWithMessage({
+      kind: 'error',
+      value: getProfileSettingsErrorMessage(
         error,
         t.settings.profileUpdateFailed,
         t.settings.avatarStorageUnavailable,
       ),
-    );
+    });
   }
 
   revalidatePath('/settings');
   revalidatePath('/inbox');
   revalidatePath('/activity');
   revalidatePath('/', 'layout');
-  redirectWithMessage('message', t.settings.profileUpdated);
+  redirectWithMessage({
+    kind: 'message',
+    value: t.settings.profileUpdated,
+  });
 }
 
 export async function updateLanguagePreferenceAction(formData: FormData) {
@@ -129,7 +169,10 @@ export async function updateLanguagePreferenceAction(formData: FormData) {
   const user = await getRequestViewer();
 
   if (!user?.id) {
-    redirectWithMessage('error', t.login.managedAccess);
+    redirectWithMessage({
+      kind: 'error',
+      value: t.login.managedAccess,
+    });
   }
 
   try {
@@ -152,17 +195,20 @@ export async function updateLanguagePreferenceAction(formData: FormData) {
       surface: 'settings:update-language',
     });
 
-    redirectWithMessage(
-      'error',
-      sanitizeUserFacingErrorMessage({
+    redirectWithMessage({
+      kind: 'error',
+      value: sanitizeUserFacingErrorMessage({
         fallback: fallbackMessage,
         language: preferredLanguage,
         rawMessage,
       }),
-    );
+    });
   }
 
-  redirectWithMessage('message', t.settings.languageUpdated);
+  redirectWithMessage({
+    kind: 'message',
+    value: t.settings.languageUpdated,
+  });
 }
 
 export async function updateProfileStatusAction(formData: FormData) {
@@ -170,18 +216,38 @@ export async function updateProfileStatusAction(formData: FormData) {
   const t = getTranslations(language);
   const statusEmoji = String(formData.get('statusEmoji') ?? '').trim();
   const statusText = String(formData.get('statusText') ?? '').trim();
+  const spaceId = readOptionalText(formData, 'spaceId');
+  const redirectSurface =
+    readOptionalText(formData, 'redirectSurface') === 'home'
+      ? 'home'
+      : 'settings';
   const user = await getRequestViewer();
 
   if (!user?.id) {
-    redirectWithMessage('error', t.login.managedAccess);
+    redirectWithMessage({
+      destination: redirectSurface,
+      kind: 'error',
+      spaceId,
+      value: t.login.managedAccess,
+    });
   }
 
   if (statusEmoji.length > 16) {
-    redirectWithMessage('error', t.settings.statusEmojiTooLong);
+    redirectWithMessage({
+      destination: redirectSurface,
+      kind: 'error',
+      spaceId,
+      value: t.settings.statusEmojiTooLong,
+    });
   }
 
   if (statusText.length > 80) {
-    redirectWithMessage('error', t.settings.statusTextTooLong);
+    redirectWithMessage({
+      destination: redirectSurface,
+      kind: 'error',
+      spaceId,
+      value: t.settings.statusTextTooLong,
+    });
   }
 
   try {
@@ -199,12 +265,23 @@ export async function updateProfileStatusAction(formData: FormData) {
       rawMessage,
     });
 
-    redirectWithMessage('error', safeMessage);
+    redirectWithMessage({
+      destination: redirectSurface,
+      kind: 'error',
+      spaceId,
+      value: safeMessage,
+    });
   }
 
+  revalidatePath('/home');
   revalidatePath('/settings');
   revalidatePath('/inbox');
   revalidatePath('/activity');
   revalidatePath('/', 'layout');
-  redirectWithMessage('message', t.settings.statusUpdated);
+  redirectWithMessage({
+    destination: redirectSurface,
+    kind: 'message',
+    spaceId,
+    value: t.settings.statusUpdated,
+  });
 }
