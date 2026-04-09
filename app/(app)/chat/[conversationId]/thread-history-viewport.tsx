@@ -1368,6 +1368,7 @@ function looksLikeUuid(value: string) {
 }
 
 function buildHistoryPageUrl(input: {
+  activeDeviceId?: string | null;
   conversationId: string;
   afterSeq?: number | null;
   beforeSeq?: number | null;
@@ -1404,6 +1405,10 @@ function buildHistoryPageUrl(input: {
 
   if (input.debugRequestId) {
     params.set('debugRequestId', input.debugRequestId);
+  }
+
+  if (input.activeDeviceId && looksLikeUuid(input.activeDeviceId)) {
+    params.set('activeDeviceId', input.activeDeviceId);
   }
 
   return `/api/messaging/conversations/${input.conversationId}/history?${params.toString()}`;
@@ -2818,6 +2823,9 @@ export function ThreadHistoryViewport({
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
     createThreadHistoryState(initialSnapshot),
   );
+  const historyFetchActiveDeviceIdRef = useRef<string | null>(
+    initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null,
+  );
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const historyStateRef = useRef(historyState);
   const lastConversationIdRef = useRef(conversationId);
@@ -2891,6 +2899,8 @@ export function ThreadHistoryViewport({
       lastInitialSnapshotKeyRef.current = nextSnapshotKey;
       historyStateRef.current = resetState;
       setHistoryState(resetState);
+      historyFetchActiveDeviceIdRef.current =
+        initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null;
       setIsLoadingOlder(false);
       pendingRestoreRef.current = null;
       pendingByIdSyncRequestRef.current = null;
@@ -2912,6 +2922,8 @@ export function ThreadHistoryViewport({
       historyStateRef.current = nextState;
       return nextState;
     });
+    historyFetchActiveDeviceIdRef.current =
+      initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null;
   }, [conversationId, initialSnapshot]);
 
   const senderNames = useMemo(
@@ -3086,6 +3098,13 @@ export function ThreadHistoryViewport({
         return;
       }
 
+      const resolvedActiveDeviceId =
+        bootstrap.result?.deviceRecordId?.trim() || null;
+
+      if (resolvedActiveDeviceId) {
+        historyFetchActiveDeviceIdRef.current = resolvedActiveDeviceId;
+      }
+
       nextMessageIds.forEach((messageId) => {
         inFlightMessageIds.delete(messageId);
         attemptedMessageIds.add(messageId);
@@ -3157,6 +3176,7 @@ export function ThreadHistoryViewport({
     try {
       const response = await fetch(
         buildHistoryPageUrl({
+          activeDeviceId: historyFetchActiveDeviceIdRef.current,
           beforeSeq: oldestLoadedSeq,
           conversationId,
           debugRequestId:
@@ -3323,6 +3343,7 @@ export function ThreadHistoryViewport({
 
       const response = await fetch(
         buildHistoryPageUrl({
+          activeDeviceId: historyFetchActiveDeviceIdRef.current,
           afterSeq: input.afterSeq ?? null,
           conversationId,
           debugRequestId:

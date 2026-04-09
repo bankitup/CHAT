@@ -4529,33 +4529,59 @@ export async function resetCurrentUserDmE2eeDeviceForDev(input: {
   };
 }
 
-async function getCurrentUserActiveDmE2eeDeviceInfo(userId: string) {
+async function getCurrentUserActiveDmE2eeDeviceInfo(input: {
+  preferredDeviceRecordId?: string | null;
+  userId: string;
+}) {
   const supabase = await createSupabaseServerClient();
   const cookieStore = await cookies();
   const hintedDeviceRecordId =
     cookieStore.get(DM_E2EE_CURRENT_DEVICE_COOKIE)?.value?.trim() || null;
+  const preferredDeviceRecordId =
+    input.preferredDeviceRecordId?.trim() || null;
   const resolveDevice = async (hintedId: string | null) =>
     hintedId
       ? supabase
           .from('user_devices')
           .select('id, created_at')
-          .eq('user_id', userId)
+          .eq('user_id', input.userId)
           .eq('id', hintedId)
           .is('retired_at', null)
           .maybeSingle()
       : supabase
           .from('user_devices')
           .select('id, created_at')
-          .eq('user_id', userId)
+          .eq('user_id', input.userId)
           .is('retired_at', null)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+  const candidateDeviceIds = Array.from(
+    new Set(
+      [preferredDeviceRecordId, hintedDeviceRecordId]
+        .map((value) => value?.trim() || '')
+        .filter(Boolean),
+    ),
+  );
+  let response:
+    | Awaited<ReturnType<typeof resolveDevice>>
+    | null = null;
+  let selectionSource: 'client-hint' | 'cookie' | 'latest-active' =
+    'latest-active';
 
-  let response = await resolveDevice(hintedDeviceRecordId);
+  for (const candidateDeviceId of candidateDeviceIds) {
+    response = await resolveDevice(candidateDeviceId);
 
-  if (!response.error && !response.data && hintedDeviceRecordId) {
+    if (response.error || response.data) {
+      selectionSource =
+        candidateDeviceId === preferredDeviceRecordId ? 'client-hint' : 'cookie';
+      break;
+    }
+  }
+
+  if (!response || (!response.error && !response.data)) {
     response = await resolveDevice(null);
+    selectionSource = 'latest-active';
   }
 
   if (response.error) {
@@ -4576,10 +4602,7 @@ async function getCurrentUserActiveDmE2eeDeviceInfo(userId: string) {
   return {
     createdAt: row?.created_at ?? null,
     id: (row?.id ?? null) as string | null,
-    selectionSource:
-      hintedDeviceRecordId && row?.id === hintedDeviceRecordId
-        ? 'cookie'
-        : 'latest-active',
+    selectionSource,
   } as const;
 }
 
@@ -4587,6 +4610,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   debugRequestId?: string | null;
   userId: string;
   messageIds: string[];
+  preferredDeviceRecordId?: string | null;
 }) {
   const diagnosticsEnabled = process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
   const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
@@ -4614,7 +4638,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     };
   }
 
-  const activeDevice = await getCurrentUserActiveDmE2eeDeviceInfo(input.userId);
+  const activeDevice = await getCurrentUserActiveDmE2eeDeviceInfo({
+    preferredDeviceRecordId: input.preferredDeviceRecordId ?? null,
+    userId: input.userId,
+  });
   const activeDeviceRecordId = activeDevice?.id ?? null;
   logDiagnostics('envelopes:active-device-resolved', {
     currentUserId: input.userId,
@@ -6258,6 +6285,7 @@ export async function getConversationHistorySnapshot(input: {
   debugRequestId?: string | null;
   limit: number;
   messageIds?: string[] | null;
+  preferredDeviceRecordId?: string | null;
   userId: string;
 }): Promise<ConversationHistoryPageSnapshot> {
   const normalizedLimit =
@@ -6358,6 +6386,7 @@ export async function getConversationHistorySnapshot(input: {
     getCurrentUserDmE2eeEnvelopesForMessages({
       debugRequestId: input.debugRequestId ?? null,
       messageIds: encryptedMessageIds,
+      preferredDeviceRecordId: input.preferredDeviceRecordId ?? null,
       userId: input.userId,
     }),
   ]);
