@@ -118,6 +118,66 @@ function formatLongDate(value: string | null, language: AppLanguage, t: ReturnTy
   }).format(parsedDate);
 }
 
+function classifyMissingEncryptedHistory(input: {
+  activeDeviceCreatedAtDate: Date | null;
+  currentUserId: string;
+  currentUserJoinedAtDate: Date | null;
+  message: {
+    created_at: string | null;
+    sender_id: string | null;
+  } | null;
+}) {
+  const messageCreatedAtDate = parseSafeDate(input.message?.created_at ?? null);
+  const policyBlocked =
+    messageCreatedAtDate !== null &&
+    input.currentUserJoinedAtDate !== null &&
+    input.message?.sender_id !== input.currentUserId &&
+    messageCreatedAtDate.getTime() < input.currentUserJoinedAtDate.getTime();
+
+  if (policyBlocked) {
+    return {
+      classification: 'policy-blocked-by-membership' as const,
+      expectedByDesign: true,
+      messageCreatedAtDate,
+      policyBlocked: true,
+      sameUserNewDevice: false,
+      suspiciousMissingEnvelope: false,
+    };
+  }
+
+  const messagePredatesCurrentDevice =
+    messageCreatedAtDate !== null &&
+    input.activeDeviceCreatedAtDate !== null &&
+    messageCreatedAtDate.getTime() < input.activeDeviceCreatedAtDate.getTime();
+
+  if (messagePredatesCurrentDevice) {
+    const sameUserNewDevice =
+      input.currentUserJoinedAtDate !== null &&
+      messageCreatedAtDate.getTime() >= input.currentUserJoinedAtDate.getTime();
+
+    return {
+      classification:
+        input.message?.sender_id === input.currentUserId
+          ? ('expected-v1-sent-on-older-device' as const)
+          : ('expected-v1-received-before-current-device' as const),
+      expectedByDesign: true,
+      messageCreatedAtDate,
+      policyBlocked: false,
+      sameUserNewDevice,
+      suspiciousMissingEnvelope: false,
+    };
+  }
+
+  return {
+    classification: 'unexpected-current-device-envelope-missing' as const,
+    expectedByDesign: false,
+    messageCreatedAtDate,
+    policyBlocked: false,
+    sameUserNewDevice: false,
+    suspiciousMissingEnvelope: true,
+  };
+}
+
 function getMessageSeq(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
 }
@@ -868,40 +928,42 @@ export default async function ChatPage({
     const missingEnvelopeDiagnostics = missingEnvelopeMessageIds.map((messageId) => {
       const message = messagesById.get(messageId) ?? null;
       const messageCreatedAt = message?.created_at ?? null;
-      const messageCreatedAtDate = parseSafeDate(messageCreatedAt);
-      const sameUserNewDevice =
-        messageCreatedAtDate !== null &&
-        activeDeviceCreatedAtDate !== null &&
-        currentUserJoinedAtDate !== null &&
-        messageCreatedAtDate.getTime() >= currentUserJoinedAtDate.getTime() &&
-        activeDeviceCreatedAtDate.getTime() > messageCreatedAtDate.getTime();
-      const policyBlocked =
-        messageCreatedAtDate !== null &&
-        currentUserJoinedAtDate !== null &&
-        message?.sender_id !== user.id &&
-        messageCreatedAtDate.getTime() < currentUserJoinedAtDate.getTime();
+      const historyClassification = classifyMissingEncryptedHistory({
+        activeDeviceCreatedAtDate,
+        currentUserId: user.id,
+        currentUserJoinedAtDate,
+        message,
+      });
 
       return {
+        availabilityClass: historyClassification.classification,
         backfillAttempted: false,
-        backfillResult: sameUserNewDevice
-          ? 'skipped-unsupported-v1-no-cross-device-recovery'
-          : policyBlocked
-            ? 'not-applicable-policy-blocked'
-            : 'not-attempted-no-history-sync-path',
+        backfillResult:
+          historyClassification.classification ===
+          'unexpected-current-device-envelope-missing'
+            ? 'not-attempted-current-device-envelope-expected'
+            : historyClassification.policyBlocked
+              ? 'not-applicable-policy-blocked'
+              : 'skipped-unsupported-v1-no-cross-device-recovery',
         committedHistoryState: 'present',
         currentDeviceRowId: e2eeEnvelopeHistory.activeDeviceRecordId ?? null,
         currentDeviceRowSelectionSource: e2eeEnvelopeHistory.selectionSource ?? null,
-        currentDeviceAvailability: policyBlocked
+        currentDeviceAvailability: historyClassification.policyBlocked
           ? 'policy-blocked-history'
           : 'missing-envelope',
         envelopeFoundForCurrentDevice: false,
+        expectedByDesign: historyClassification.expectedByDesign,
         memberJoinedAt: currentUserConversationJoinedAt,
         messageCreatedAt,
+        messageDirection:
+          message?.sender_id === user.id ? 'sent-by-current-user' : 'received',
         messageId,
-        recoveryDisposition: policyBlocked
+        recoveryDisposition: historyClassification.policyBlocked
           ? 'policy-blocked'
           : 'not-supported-v1',
-        sameUserNewDevice,
+        sameUserNewDevice: historyClassification.sameUserNewDevice,
+        suspiciousMissingEnvelope:
+          historyClassification.suspiciousMissingEnvelope,
       };
     });
     const policyBlockedMessageIds = encryptedMessageIds.filter(
