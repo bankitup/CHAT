@@ -204,9 +204,7 @@ export function SpaceParticipantsModule({
               <div className="messenger-home-participant-actions">
                 <button
                   className="button"
-                  disabled={
-                    removableParticipants.length === 0 || selectedUserIds.length === 0
-                  }
+                  disabled={removableParticipants.length === 0 || selectedUserIds.length === 0}
                   onClick={() => setIsConfirmingRemoval(true)}
                   type="button"
                 >

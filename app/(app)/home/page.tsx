@@ -17,11 +17,20 @@ import {
   isKeepCozyPrimaryTestHomeName,
 } from '@/modules/keepcozy/server';
 import {
+import { getCurrentUserProfile } from '@/modules/messaging/data/server';
+import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
+import {
   getManageableSpaceParticipantsForUser,
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
+import {
+  getKeepCozyPrimaryTestFlowHints,
+  getKeepCozyHomeDashboardData,
+  isKeepCozyPrimaryTestHomeName,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type HomeDashboardPageProps = {

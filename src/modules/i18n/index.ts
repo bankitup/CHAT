@@ -1058,7 +1058,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Manage the current roster for this space only. This stays a closed-space surface, not an open invite flow.',
       participantsEmptyBody: 'No participants are available in this space yet.',
       participantsLockedHint:
-        'The space owner and your own account stay protected here. Everything else remains scoped to this space only.',
+        'Owners and your own account stay protected here. Everything else remains scoped to this space only.',
       participantsRemoveAction: 'Remove selected',
       participantsRemoveConfirmBody:
         'Confirm removal for the selected participants. This changes access only inside the current space.',
