@@ -1,4 +1,7 @@
-import type { PushSubscriptionRecordInput } from '@/modules/messaging/push/contract';
+import type {
+  PushSubscriptionPresenceInput,
+  PushSubscriptionRecordInput,
+} from '@/modules/messaging/push/contract';
 
 export type NotificationReadinessStatus =
   | 'unsupported'
@@ -254,6 +257,58 @@ async function syncPushSubscriptionWithServer(subscription: PushSubscription) {
 
     throw new Error(errorMessage);
   }
+}
+
+export async function syncCurrentPushSubscriptionPresence(
+  input: Omit<PushSubscriptionPresenceInput, 'endpoint'>,
+) {
+  if (!supportsPushSubscriptions()) {
+    return {
+      synced: false,
+      reason: 'unsupported',
+    } as const;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return {
+      synced: false,
+      reason: 'permission-not-granted',
+    } as const;
+  }
+
+  const subscription = await getCurrentPushSubscription();
+
+  if (!subscription) {
+    return {
+      synced: false,
+      reason: 'subscription-missing',
+    } as const;
+  }
+
+  const response = await fetch('/api/messaging/push-subscriptions', {
+    keepalive: true,
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      activeConversationId: input.activeInApp ? input.activeConversationId : null,
+      activeInApp: input.activeInApp,
+    } satisfies PushSubscriptionPresenceInput),
+  });
+
+  if (!response.ok) {
+    return {
+      synced: false,
+      reason: 'request-failed',
+    } as const;
+  }
+
+  return {
+    synced: true,
+    reason: null,
+  } as const;
 }
 
 async function getServerPushSubscriptionState(subscription: PushSubscription) {
