@@ -1,5 +1,4 @@
 import { logoutAction } from '../actions';
-import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { ProfileSettingsForm } from '../settings/profile-settings-form';
 import { ProfileStatusForm } from '../settings/profile-status-form';
 import Link from 'next/link';
@@ -229,10 +228,6 @@ export default async function HomeDashboardPage({
               statusUpdatedAt={currentUserProfile.statusUpdatedAt}
             />
           </section>
-          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
-            <NotificationReadinessPanel embedded language={language} surface="home" />
-          </section>
-
           <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
             <div className="stack settings-card-copy settings-section-copy">
               <h2 className="section-title">{t.settings.logoutTitle}</h2>
