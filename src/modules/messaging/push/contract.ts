@@ -10,6 +10,12 @@ export type PushSubscriptionRecordInput = {
   language: string | null;
 };
 
+export type PushSubscriptionPresenceInput = {
+  endpoint: string;
+  activeConversationId: string | null;
+  activeInApp: boolean;
+};
+
 export type StoredPushSubscription = {
   id: string;
   endpoint: string;

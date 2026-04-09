@@ -7,6 +7,7 @@ import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
 import { WarmNavRouteObserver } from '@/modules/messaging/performance/warm-nav-client';
 import { ChatUnreadBadgeSync } from '@/modules/messaging/push/chat-unread-badge-sync';
+import { PushSubscriptionPresenceSync } from '@/modules/messaging/push/presence-sync';
 import type {
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
@@ -97,6 +98,7 @@ export function AppShellFrame({
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
       <ChatUnreadBadgeSync syncKey={badgeSyncKey} />
+      <PushSubscriptionPresenceSync />
       <WarmNavRouteObserver />
       <div className="stack app-shell-content">{children}</div>
 

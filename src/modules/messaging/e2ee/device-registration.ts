@@ -126,6 +126,15 @@ function clearRecentReadyDmE2eeInspection(userId: string) {
   recentReadyDmE2eeInspectionByUser.delete(userId);
 }
 
+function shouldResetLocalDmE2eeRecordForBootstrapRepair(input: {
+  exact400ReasonCode: DmE2eeBootstrap400ReasonCode | null;
+}) {
+  // Resetting IndexedDB state creates a brand-new DM device identity and can
+  // strand older encrypted history on the previous device record. Only do that
+  // when the server explicitly reports a malformed local bootstrap payload.
+  return input.exact400ReasonCode === 'bad payload';
+}
+
 function getReusableRecentReadyDmE2eeInspection(input: {
   userId: string;
   triggerReason: EnsureDmE2eeDeviceRegisteredOptions['triggerReason'];
@@ -845,27 +854,42 @@ export async function ensureDmE2eeDeviceRegistered(
     }
 
     if (errorCode === 'dm_e2ee_local_state_incomplete') {
-      if (allowRepair) {
-      logDmE2eeBootstrapClientDiagnostics('local-record:repair:start', {
-        exact400ReasonCode,
-        failedValidationBranch:
-          failedValidationBranch ?? 'incomplete local state',
-        exactFailurePoint,
-        reason: 'server-reported-local-state-incomplete',
-      });
-      await deleteLocalDmE2eeDeviceRecord(userId);
-      logDmE2eeBootstrapClientDiagnostics('local-record:repair:retry', {
-        exact400ReasonCode,
-        failedValidationBranch: 'failed republish',
-        allowRepair: false,
-        forcePublish: true,
-        publishAttempt: 'repair-republish',
-      });
+      const shouldResetLocalRecord =
+        shouldResetLocalDmE2eeRecordForBootstrapRepair({
+          exact400ReasonCode,
+        });
+
+      if (allowRepair && shouldResetLocalRecord) {
+        logDmE2eeBootstrapClientDiagnostics('local-record:repair:start', {
+          exact400ReasonCode,
+          failedValidationBranch:
+            failedValidationBranch ?? 'incomplete local state',
+          exactFailurePoint,
+          reason: 'server-reported-local-state-incomplete',
+        });
+        await deleteLocalDmE2eeDeviceRecord(userId);
+        logDmE2eeBootstrapClientDiagnostics('local-record:repair:retry', {
+          exact400ReasonCode,
+          failedValidationBranch: 'failed republish',
+          allowRepair: false,
+          forcePublish: true,
+          publishAttempt: 'repair-republish',
+        });
         return ensureDmE2eeDeviceRegistered(userId, {
           forcePublish: true,
           allowRepair: false,
           publishAttempt: 'repair-republish',
           triggerReason,
+        });
+      }
+
+      if (allowRepair && !shouldResetLocalRecord) {
+        logDmE2eeBootstrapClientDiagnostics('local-record:repair:preserved', {
+          exact400ReasonCode,
+          failedValidationBranch:
+            failedValidationBranch ?? 'incomplete local state',
+          exactFailurePoint,
+          reason: 'preserve-history-continuity',
         });
       }
 

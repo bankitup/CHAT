@@ -15,6 +15,7 @@ import { resolveSuperAdminGovernanceForUser } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import type {
   ChatPushPayload,
+  PushSubscriptionPresenceInput,
   PushSubscriptionState,
   PushSubscriptionRecordInput,
   StoredPushSubscription,
@@ -27,7 +28,9 @@ type PushSubscriptionRow = {
   expiration_time?: number | null;
   p256dh?: string | null;
   auth?: string | null;
+  active_conversation_id?: string | null;
   created_at: string;
+  presence_updated_at?: string | null;
   updated_at: string;
   disabled_at: string | null;
 };
@@ -84,10 +87,13 @@ type PushTestSendResult = {
 };
 
 type PushRecipientResolutionResult = {
+  appActiveSuppressedUserCount?: number;
   eligibleRecipientCount: number;
   membershipCount: number;
   rows: PushSubscriptionRow[];
+  sameConversationSuppressedUserCount?: number;
   skippedReason: string | null;
+  suppressedSubscriptionCount?: number;
   subscriptionCount: number;
 };
 
@@ -116,6 +122,8 @@ type PushDeliveryFailureDetails = {
 };
 
 let vapidConfigured = false;
+const CHAT_PUSH_APP_ACTIVE_WINDOW_MS = 45_000;
+const CHAT_PUSH_SAME_CONVERSATION_WINDOW_MS = 90_000;
 
 function mapStoredPushSubscription(
   row: PushSubscriptionRow,
@@ -503,6 +511,122 @@ export function isMissingPushSubscriptionsSchemaMessage(message: string) {
   );
 }
 
+function isMissingPushSubscriptionPresenceSchemaMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedMessage.includes('presence_updated_at') ||
+    normalizedMessage.includes('active_conversation_id')
+  );
+}
+
+function isFreshPushPresenceTimestamp(input: {
+  now: number;
+  timestamp: string | null | undefined;
+  windowMs: number;
+}) {
+  if (!input.timestamp) {
+    return false;
+  }
+
+  const parsed = new Date(input.timestamp);
+  const time = parsed.getTime();
+
+  if (Number.isNaN(time)) {
+    return false;
+  }
+
+  return input.now - time <= input.windowMs;
+}
+
+function applyPushPresenceSuppression(input: {
+  conversationId: string;
+  rows: PushSubscriptionRow[];
+}) {
+  const rowsByUserId = new Map<string, PushSubscriptionRow[]>();
+
+  for (const row of input.rows) {
+    const userId = typeof row.user_id === 'string' ? row.user_id.trim() : '';
+
+    if (!userId) {
+      continue;
+    }
+
+    const existing = rowsByUserId.get(userId) ?? [];
+    existing.push(row);
+    rowsByUserId.set(userId, existing);
+  }
+
+  const now = Date.now();
+  const sameConversationSuppressedUserIds = new Set<string>();
+  const appActiveSuppressedUserIds = new Set<string>();
+
+  for (const [userId, rows] of rowsByUserId) {
+    const hasSameConversationPresence = rows.some((row) => {
+      const activeConversationId =
+        typeof row.active_conversation_id === 'string'
+          ? row.active_conversation_id.trim()
+          : '';
+
+      return (
+        activeConversationId === input.conversationId &&
+        isFreshPushPresenceTimestamp({
+          now,
+          timestamp: row.presence_updated_at,
+          windowMs: CHAT_PUSH_SAME_CONVERSATION_WINDOW_MS,
+        })
+      );
+    });
+
+    if (hasSameConversationPresence) {
+      sameConversationSuppressedUserIds.add(userId);
+      continue;
+    }
+
+    const hasGeneralAppPresence = rows.some((row) =>
+      isFreshPushPresenceTimestamp({
+        now,
+        timestamp: row.presence_updated_at,
+        windowMs: CHAT_PUSH_APP_ACTIVE_WINDOW_MS,
+      }),
+    );
+
+    if (hasGeneralAppPresence) {
+      appActiveSuppressedUserIds.add(userId);
+    }
+  }
+
+  const filteredRows = input.rows.filter((row) => {
+    const userId = typeof row.user_id === 'string' ? row.user_id.trim() : '';
+
+    if (!userId) {
+      return true;
+    }
+
+    return (
+      !sameConversationSuppressedUserIds.has(userId) &&
+      !appActiveSuppressedUserIds.has(userId)
+    );
+  });
+
+  const skippedReason =
+    filteredRows.length === 0
+      ? sameConversationSuppressedUserIds.size > 0
+        ? 'recipient-viewing-conversation'
+        : appActiveSuppressedUserIds.size > 0
+          ? 'recipient-active-in-app'
+          : null
+      : null;
+
+  return {
+    appActiveSuppressedUserCount: appActiveSuppressedUserIds.size,
+    rows: filteredRows,
+    sameConversationSuppressedUserCount: sameConversationSuppressedUserIds.size,
+    skippedReason,
+    suppressedSubscriptionCount: input.rows.length - filteredRows.length,
+  };
+}
+
 async function getActivePushSubscriptionRowsForRecipients(input: {
   conversationId: string;
   senderId: string;
@@ -511,10 +635,13 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
 
   if (!client) {
     return {
+      appActiveSuppressedUserCount: 0,
       eligibleRecipientCount: 0,
       membershipCount: 0,
       rows: [] as PushSubscriptionRow[],
+      sameConversationSuppressedUserCount: 0,
       skippedReason: 'missing-service-role',
+      suppressedSubscriptionCount: 0,
       subscriptionCount: 0,
     };
   }
@@ -559,35 +686,81 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
 
   if (eligibleUserIds.length === 0) {
     return {
+      appActiveSuppressedUserCount: 0,
       eligibleRecipientCount: 0,
       membershipCount: membershipRows.length,
       rows: [] as PushSubscriptionRow[],
+      sameConversationSuppressedUserCount: 0,
       skippedReason: 'no-eligible-recipients',
+      suppressedSubscriptionCount: 0,
       subscriptionCount: 0,
     };
   }
 
-  const { data, error } = await client
+  const selectBase =
+    'id, user_id, endpoint, expiration_time, p256dh, auth, created_at, updated_at, disabled_at';
+  const selectWithPresence = `${selectBase}, presence_updated_at, active_conversation_id`;
+  const subscriptionsWithPresence = await client
     .from('push_subscriptions')
-    .select(
-      'id, user_id, endpoint, expiration_time, p256dh, auth, created_at, updated_at, disabled_at',
-    )
+    .select(selectWithPresence)
     .in('user_id', eligibleUserIds)
     .is('disabled_at', null);
+  let subscriptionsError = subscriptionsWithPresence.error;
+  let subscriptionRows = (subscriptionsWithPresence.data ?? []) as PushSubscriptionRow[];
 
-  if (error) {
-    throw new Error(error.message);
+  if (
+    subscriptionsError &&
+    isMissingPushSubscriptionPresenceSchemaMessage(
+      subscriptionsError.message,
+    )
+  ) {
+    const subscriptionsWithoutPresence = await client
+      .from('push_subscriptions')
+      .select(selectBase)
+      .in('user_id', eligibleUserIds)
+      .is('disabled_at', null);
+
+    subscriptionsError = subscriptionsWithoutPresence.error;
+    subscriptionRows = (subscriptionsWithoutPresence.data ?? []) as PushSubscriptionRow[];
   }
 
-  const rows = ((data ?? []) as PushSubscriptionRow[]).filter(
+  if (subscriptionsError) {
+    throw new Error(subscriptionsError.message);
+  }
+
+  const rows = subscriptionRows.filter(
     (row) => row.endpoint && row.p256dh && row.auth,
   );
+  const presenceSuppression = applyPushPresenceSuppression({
+    conversationId: input.conversationId,
+    rows,
+  });
+
+  if (
+    presenceSuppression.sameConversationSuppressedUserCount > 0 ||
+    presenceSuppression.appActiveSuppressedUserCount > 0
+  ) {
+    logPushDiagnostics('recipient-presence-suppressed', {
+      appActiveSuppressedUserCount:
+        presenceSuppression.appActiveSuppressedUserCount,
+      conversationId: input.conversationId,
+      sameConversationSuppressedUserCount:
+        presenceSuppression.sameConversationSuppressedUserCount,
+      suppressedSubscriptionCount:
+        presenceSuppression.suppressedSubscriptionCount,
+    });
+  }
 
   return {
+    appActiveSuppressedUserCount:
+      presenceSuppression.appActiveSuppressedUserCount,
     eligibleRecipientCount: eligibleUserIds.length,
     membershipCount: membershipRows.length,
-    rows,
-    skippedReason: null,
+    rows: presenceSuppression.rows,
+    sameConversationSuppressedUserCount:
+      presenceSuppression.sameConversationSuppressedUserCount,
+    skippedReason: presenceSuppression.skippedReason,
+    suppressedSubscriptionCount: presenceSuppression.suppressedSubscriptionCount,
     subscriptionCount: rows.length,
   };
 }
@@ -719,6 +892,33 @@ export async function upsertPushSubscriptionForUser(input: {
   }
 
   return mapStoredPushSubscription(data);
+}
+
+export async function updatePushSubscriptionPresenceForUser(input: {
+  userId: string;
+  presence: PushSubscriptionPresenceInput;
+}) {
+  const client = await getPushSubscriptionWriteClient();
+  const now = new Date().toISOString();
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .update({
+      active_conversation_id: input.presence.activeInApp
+        ? input.presence.activeConversationId
+        : null,
+      presence_updated_at: input.presence.activeInApp ? now : null,
+    })
+    .eq('user_id', input.userId)
+    .eq('endpoint', input.presence.endpoint)
+    .is('disabled_at', null)
+    .select('id')
+    .maybeSingle<{ id: string }>();
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data?.id);
 }
 
 export async function getPushSubscriptionStateForUser(input: {
@@ -1154,8 +1354,11 @@ export async function sendChatPushNotifications(
 
   let subscriptions: PushSubscriptionRow[] = [];
   let subscriptionSkipReason: string | null = null;
+  let appActiveSuppressedUserCount = 0;
   let membershipCount = 0;
   let eligibleRecipientCount = 0;
+  let sameConversationSuppressedUserCount = 0;
+  let suppressedSubscriptionCount = 0;
   let subscriptionCount = 0;
 
   try {
@@ -1163,10 +1366,14 @@ export async function sendChatPushNotifications(
       conversationId: input.conversationId,
       senderId: input.senderId,
     });
+    appActiveSuppressedUserCount = result.appActiveSuppressedUserCount ?? 0;
     eligibleRecipientCount = result.eligibleRecipientCount;
     membershipCount = result.membershipCount;
+    sameConversationSuppressedUserCount =
+      result.sameConversationSuppressedUserCount ?? 0;
     subscriptions = result.rows;
     subscriptionSkipReason = result.skippedReason;
+    suppressedSubscriptionCount = result.suppressedSubscriptionCount ?? 0;
     subscriptionCount = result.subscriptionCount;
   } catch (error) {
     const message =
@@ -1184,8 +1391,11 @@ export async function sendChatPushNotifications(
         membershipCount,
         messageId: input.messageId,
         messageKind: input.messageKind,
+        appActiveSuppressedUserCount,
+        sameConversationSuppressedUserCount,
         sentCount: 0,
         skippedReason: 'missing-push-subscriptions-schema',
+        suppressedSubscriptionCount,
         subscriptionCount,
       });
 
@@ -1213,8 +1423,11 @@ export async function sendChatPushNotifications(
         message,
         messageId: input.messageId,
         messageKind: input.messageKind,
+        appActiveSuppressedUserCount,
+        sameConversationSuppressedUserCount,
         sentCount: 0,
         skippedReason: 'recipient-resolution-error',
+        suppressedSubscriptionCount,
         subscriptionCount,
       },
       { level: 'error' },
@@ -1241,8 +1454,11 @@ export async function sendChatPushNotifications(
       membershipCount,
       messageId: input.messageId,
       messageKind: input.messageKind,
+      appActiveSuppressedUserCount,
+      sameConversationSuppressedUserCount,
       sentCount: 0,
       skippedReason,
+      suppressedSubscriptionCount,
       subscriptionCount,
     });
 
@@ -1359,8 +1575,11 @@ export async function sendChatPushNotifications(
       membershipCount,
       messageId: input.messageId,
       messageKind: input.messageKind,
+      appActiveSuppressedUserCount,
+      sameConversationSuppressedUserCount,
       sentCount,
       skippedReason: null,
+      suppressedSubscriptionCount,
       subscriptionCount,
     },
     {

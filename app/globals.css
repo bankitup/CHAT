@@ -7645,6 +7645,31 @@ main {
   letter-spacing: 0;
 }
 
+.message-encryption-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.message-encryption-count-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(224, 231, 240, 0.82);
+  color: rgba(76, 86, 102, 0.8);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.message-encryption-state-continuation {
+  opacity: 0.88;
+}
+
 .message-encryption-actions {
   display: flex;
   flex-wrap: wrap;

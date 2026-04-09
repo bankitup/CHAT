@@ -19,6 +19,7 @@ import {
   type EncryptedDmServerHistoryHint,
 } from '@/modules/messaging/e2ee/ui-policy';
 import { setDmThreadVisibleMessageState } from './dm-thread-visible-message-store';
+import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailable-state';
 
 type EncryptedDmMessageBodyProps = {
   clientId: string | null;
@@ -28,6 +29,7 @@ type EncryptedDmMessageBodyProps = {
   envelope: StoredDmE2eeEnvelope | null;
   fallbackLabel: string;
   historyDiagnosticHint: EncryptedDmServerHistoryHint;
+  historicalUnavailableContinuationCount?: number;
   olderHistoryLabel: string;
   historyUnavailableNoteLabel: string;
   messageSenderId: string | null;
@@ -80,6 +82,7 @@ export function EncryptedDmMessageBody({
   envelope,
   fallbackLabel,
   historyDiagnosticHint,
+  historicalUnavailableContinuationCount = 0,
   olderHistoryLabel,
   historyUnavailableNoteLabel,
   messageSenderId,
@@ -470,25 +473,20 @@ export function EncryptedDmMessageBody({
           diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
         }
       >
-        <p
-          className={
-            isHistoricalUnavailable
-              ? shouldRenderCompactHistoricalUnavailable
-                ? 'message-encryption-title message-encryption-title-compact'
-                : 'message-encryption-title'
-              : 'message-body'
+        <EncryptedHistoryUnavailableState
+          accessState={renderState.currentDeviceAccessState}
+          compact={shouldRenderCompactHistoricalUnavailable}
+          continuationCount={
+            isHistoricalUnavailable ? historicalUnavailableContinuationCount : 0
           }
-        >
-          {isHistoricalUnavailable ? historicalUnavailableTitle : renderState.text}
-        </p>
-        {unavailableNote && !shouldRenderCompactHistoricalUnavailable ? (
-          <p className="message-encryption-note">{unavailableNote}</p>
-        ) : null}
-        {diagnosticsEnabled && renderState.diagnosticCode ? (
-          <p className="message-encryption-debug-label">
-            {renderState.diagnosticCode}
-          </p>
-        ) : null}
+          debugLabel={
+            diagnosticsEnabled ? renderState.diagnosticCode ?? null : null
+          }
+          note={unavailableNote}
+          title={
+            isHistoricalUnavailable ? historicalUnavailableTitle : renderState.text
+          }
+        />
         {renderState.showRetryAction ? (
           <div className="message-encryption-actions">
             <button
