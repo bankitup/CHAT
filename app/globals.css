@@ -19,6 +19,11 @@
   --radius-card: 22px;
   --radius-control: 15px;
   --safe-area-bottom-pad: max(8px, env(safe-area-inset-bottom));
+  --app-shell-max-width: 580px;
+  --app-shell-chat-max-width: 620px;
+  --app-shell-context-max-width: 580px;
+  --app-shell-bottom-nav-max-width: 580px;
+  --app-shell-messenger-nav-max-width: 430px;
   --app-bottom-nav-reserve: calc(84px + env(safe-area-inset-bottom));
   --chat-composer-resting-bottom-offset: max(4px, calc(env(safe-area-inset-bottom) - 4px));
   --chat-composer-keyboard-gap-trim: max(10px, calc(env(safe-area-inset-bottom) + 2px));
@@ -588,7 +593,12 @@ main {
   gap: 0;
 }
 
+.page.app-shell {
+  max-width: var(--app-shell-max-width);
+}
+
 .page.app-shell-chat-route {
+  max-width: var(--app-shell-chat-max-width);
   height: 100dvh;
   min-height: 100dvh;
   padding:
@@ -611,6 +621,8 @@ main {
   display: grid;
   gap: 14px;
   min-height: 0;
+  width: min(100%, var(--app-shell-max-width));
+  margin: 0 auto;
   padding-bottom: 4px;
 }
 
@@ -621,6 +633,8 @@ main {
   gap: 0;
   min-height: 0;
   height: 100%;
+  width: min(100%, var(--app-shell-chat-max-width));
+  margin: 0 auto;
   overflow: hidden;
   padding-bottom: 0;
 }
@@ -642,7 +656,7 @@ main {
 }
 
 .app-shell-context {
-  width: min(100%, 720px);
+  width: min(100%, var(--app-shell-context-max-width));
   margin: 0 auto 12px;
 }
 
@@ -732,14 +746,14 @@ main {
   left: 50%;
   bottom: 0;
   z-index: 14;
-  width: min(calc(100% - 16px), 720px);
+  width: min(calc(100% - 16px), var(--app-shell-bottom-nav-max-width));
   padding: 0 0 calc(8px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   pointer-events: none;
 }
 
 .app-bottom-nav-messenger {
-  width: min(calc(100% - 44px), 420px);
+  width: min(calc(100% - 40px), var(--app-shell-messenger-nav-max-width));
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
 
@@ -2731,22 +2745,22 @@ main {
 }
 
 .messenger-activity-head {
-  gap: 8px;
-}
-
-.messenger-activity-head-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 4px;
 }
 
 .messenger-activity-copy {
-  gap: 3px;
+  gap: 4px;
 }
 
 .messenger-activity-meta {
   gap: 8px;
+}
+
+.messenger-activity-surface-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .messenger-activity-head-actions {
@@ -2762,15 +2776,24 @@ main {
 }
 
 .messenger-activity-surface {
-  gap: 12px;
+  gap: 14px;
 }
 
 .messenger-activity-surface-copy {
-  gap: 3px;
+  gap: 4px;
+}
+
+.messenger-activity-surface-copy .muted {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.messenger-activity-surface-pill {
+  flex-shrink: 0;
 }
 
 .messenger-activity-notification-panel {
-  gap: 14px;
+  gap: 12px;
   padding: 16px;
   border: 1px solid rgba(211, 221, 234, 0.92);
   border-radius: 22px;
@@ -2785,7 +2808,7 @@ main {
 .messenger-activity-notification-header,
 .messenger-activity-notification-copy,
 .messenger-activity-notification-actions {
-  gap: 8px;
+  gap: 6px;
 }
 
 .messenger-activity-notification-topline {
@@ -2849,6 +2872,7 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  padding-top: 2px;
 }
 
 .messenger-activity-filter-pill {
@@ -2897,7 +2921,7 @@ main {
 .messenger-activity-scroll {
   display: grid;
   gap: 12px;
-  max-height: min(62vh, 620px);
+  max-height: min(56vh, 560px);
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -3372,7 +3396,7 @@ main {
     justify-content: center;
   }
 
-  .messenger-activity-head-row {
+  .messenger-activity-surface-header {
     flex-direction: column;
   }
 
@@ -3388,7 +3412,8 @@ main {
     width: 100%;
   }
 
-  .messenger-activity-head-actions .pill {
+  .messenger-activity-head-actions .pill,
+  .messenger-activity-surface-pill {
     flex: 1 1 auto;
     justify-content: center;
   }
@@ -3616,7 +3641,7 @@ main {
 }
 
 .messenger-home-shell {
-  width: min(100%, 760px);
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -3631,7 +3656,6 @@ main {
   grid-template-areas:
     'profile'
     'status'
-    'notifications'
     'session';
 }
 
@@ -3751,13 +3775,7 @@ main {
   }
 
   .messenger-home-personal-grid {
-    grid-template-columns: minmax(0, 1.12fr) minmax(280px, 0.88fr);
-    align-items: start;
     gap: 14px;
-    grid-template-areas:
-      'profile profile'
-      'status notifications'
-      'session notifications';
   }
 }
 

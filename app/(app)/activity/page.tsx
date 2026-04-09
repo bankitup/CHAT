@@ -287,6 +287,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const recentItems = activityItems
     .filter((conversation) => conversation.preview && conversation.unreadCount === 0)
     .slice(0, 8);
+  const recentMovementCount = recentItems.length;
   const messengerNotificationItems: MessengerNotificationItem[] = [
     ...unreadItems.map((conversation) => ({
       ...conversation,
@@ -387,31 +388,38 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         />
 
         <section className="stack settings-hero activity-hero messenger-activity-head">
-          <div className="messenger-activity-head-row">
-            <div className="stack activity-focus-copy messenger-activity-copy">
-              <span className="activity-focus-kicker">{t.shell.messengerActivity}</span>
-              <h1 className="activity-focus-title">
-                {t.messengerActivity.overviewTitle}
-              </h1>
-              <p className="muted activity-focus-body">
-                {t.messengerActivity.subtitle}
-              </p>
+          <div className="stack activity-focus-copy messenger-activity-copy">
+            <span className="activity-focus-kicker">{t.shell.messengerActivity}</span>
+            <h1 className="activity-focus-title">
+              {t.messengerActivity.overviewTitle}
+            </h1>
+            <p className="muted activity-focus-body">
+              {t.messengerActivity.overviewBody}
+            </p>
+          </div>
+        </section>
+
+        <NotificationReadinessPanel embedded language={language} surface="activity" />
+
+        <section className="card stack settings-surface activity-surface messenger-activity-surface">
+          <div className="messenger-activity-surface-header">
+            <div className="stack messenger-activity-surface-copy">
+              <h2 className="card-title">{t.messengerActivity.surfaceTitle}</h2>
+              <p className="muted">{t.messengerActivity.surfaceBody}</p>
             </div>
 
-            <div className="messenger-activity-head-actions">
-              {archivedConversations.length > 0 ? (
-                <Link
-                  className="pill messenger-activity-head-pill"
-                  href={buildInboxHref({
-                    spaceId: activeSpace.id,
-                    view: 'archived',
-                  })}
-                  prefetch={false}
-                >
-                  {t.activity.openArchived}
-                </Link>
-              ) : null}
-            </div>
+            {archivedConversations.length > 0 ? (
+              <Link
+                className="pill messenger-activity-head-pill messenger-activity-surface-pill"
+                href={buildInboxHref({
+                  spaceId: activeSpace.id,
+                  view: 'archived',
+                })}
+                prefetch={false}
+              >
+                {t.activity.openArchived}
+              </Link>
+            ) : null}
           </div>
 
           <div className="keepcozy-meta-row messenger-activity-meta">
@@ -438,7 +446,10 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <p className="muted">{t.messengerActivity.surfaceBody}</p>
           </div>
 
-          <nav className="messenger-activity-filter-row" aria-label={t.messengerActivity.filtersLabel}>
+          <nav
+            className="messenger-activity-filter-row"
+            aria-label={t.messengerActivity.filtersLabel}
+          >
             <Link
               className={
                 activeMessengerActivityFilter === 'attention'
