@@ -190,6 +190,12 @@ type PushTestSendResponse = {
   error?: string;
 };
 
+type PushPresenceSyncResponse = {
+  ok?: boolean;
+  reason?: string | null;
+  synced?: boolean;
+};
+
 function serializePushSubscription(
   subscription: PushSubscription,
 ): PushSubscriptionRecordInput {
@@ -298,10 +304,25 @@ export async function syncCurrentPushSubscriptionPresence(
     } satisfies PushSubscriptionPresenceInput),
   });
 
+  let body: PushPresenceSyncResponse | null = null;
+
+  try {
+    body = (await response.json()) as PushPresenceSyncResponse;
+  } catch {
+    body = null;
+  }
+
   if (!response.ok) {
     return {
       synced: false,
-      reason: 'request-failed',
+      reason: body?.reason ?? 'request-failed',
+    } as const;
+  }
+
+  if (body?.synced === false) {
+    return {
+      synced: false,
+      reason: body.reason ?? 'server-skipped',
     } as const;
   }
 

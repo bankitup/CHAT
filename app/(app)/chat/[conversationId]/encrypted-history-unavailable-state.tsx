@@ -6,7 +6,10 @@ type EncryptedHistoryUnavailableStateProps = {
     | 'temporary-local-read-failure';
   compact: boolean;
   continuationCount?: number;
+  debugBucket?: string | null;
+  diagnostic?: string | null;
   debugLabel?: string | null;
+  historyState?: string | null;
   note?: string | null;
   title: string;
 };
@@ -15,7 +18,10 @@ export function EncryptedHistoryUnavailableState({
   accessState,
   compact,
   continuationCount = 0,
+  debugBucket = null,
+  diagnostic = null,
   debugLabel = null,
+  historyState = 'present',
   note = null,
   title,
 }: EncryptedHistoryUnavailableStateProps) {
@@ -31,7 +37,9 @@ export function EncryptedHistoryUnavailableState({
           : 'message-encryption-state'
       }
       data-dm-e2ee-access-state={accessState}
-      data-dm-e2ee-history-state="present"
+      data-dm-e2ee-debug-bucket={debugBucket ?? undefined}
+      data-dm-e2ee-diagnostic={diagnostic ?? undefined}
+      data-dm-e2ee-history-state={historyState ?? undefined}
       title={compact && debugLabel ? debugLabel : undefined}
     >
       <div

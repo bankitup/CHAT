@@ -1368,6 +1368,7 @@ function looksLikeUuid(value: string) {
 }
 
 function buildHistoryPageUrl(input: {
+  activeDeviceId?: string | null;
   conversationId: string;
   afterSeq?: number | null;
   beforeSeq?: number | null;
@@ -1404,6 +1405,10 @@ function buildHistoryPageUrl(input: {
 
   if (input.debugRequestId) {
     params.set('debugRequestId', input.debugRequestId);
+  }
+
+  if (input.activeDeviceId && looksLikeUuid(input.activeDeviceId)) {
+    params.set('activeDeviceId', input.activeDeviceId);
   }
 
   return `/api/messaging/conversations/${input.conversationId}/history?${params.toString()}`;
@@ -2046,6 +2051,8 @@ function ThreadMessageRow({
     encryptedHistoryHint.code === 'policy-blocked-history'
       ? t.chat.encryptedHistoryPolicyBlockedNote
       : t.chat.encryptedHistoryUnavailableNote;
+  const shouldRenderCompactHistoricalUnavailableBubble =
+    compactHistoricalUnavailable && isUnavailableHistoricalEncryptedHint;
   const canAttemptEncryptedRender = canRenderEncryptedDmBody({
     clientId: message.client_id,
   });
@@ -2357,6 +2364,9 @@ function ThreadMessageRow({
                       'message-bubble',
                       'message-bubble-own',
                       'message-bubble-with-reply',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2369,6 +2379,9 @@ function ThreadMessageRow({
                   : [
                       'message-bubble',
                       'message-bubble-with-reply',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2382,6 +2395,9 @@ function ThreadMessageRow({
                   ? [
                       'message-bubble',
                       'message-bubble-own',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2393,6 +2409,9 @@ function ThreadMessageRow({
                       .join(' ')
                   : [
                       'message-bubble',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2430,6 +2449,7 @@ function ThreadMessageRow({
                   deletedFallbackLabel={t.chat.messageDeleted}
                   emptyFallbackLabel={t.chat.emptyMessage}
                   encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                  historicalEncryptedFallbackLabel={t.chat.olderEncryptedMessage}
                   encryptedReferenceNote={null}
                   loadedFallbackLabel={t.chat.earlierMessage}
                   messageId={message.id}
@@ -2558,47 +2578,44 @@ function ThreadMessageRow({
                 />
               </DmThreadClientSubtree>
             ) : (
-              <div
-                data-dm-e2ee-debug-bucket={
+              <EncryptedHistoryUnavailableState
+                accessState={
+                  isUnavailableHistoricalEncryptedHint
+                    ? encryptedHistoryFallbackAccessState
+                    : 'temporary-local-read-failure'
+                }
+                compact={
+                  compactHistoricalUnavailable &&
+                  isUnavailableHistoricalEncryptedHint
+                }
+                continuationCount={
+                  isUnavailableHistoricalEncryptedHint
+                    ? historicalUnavailableContinuationCount
+                    : 0
+                }
+                debugBucket={
                   process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
                     ? encryptedHistoryHint.code
-                    : undefined
+                    : null
                 }
-              >
-                <EncryptedHistoryUnavailableState
-                  accessState={
-                    isUnavailableHistoricalEncryptedHint
-                      ? encryptedHistoryFallbackAccessState
-                      : 'temporary-local-read-failure'
-                  }
-                  compact={
-                    compactHistoricalUnavailable &&
-                    isUnavailableHistoricalEncryptedHint
-                  }
-                  continuationCount={
-                    isUnavailableHistoricalEncryptedHint
-                      ? historicalUnavailableContinuationCount
-                      : 0
-                  }
-                  debugLabel={
-                    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-                      ? encryptedHistoryHint.code
-                      : null
-                  }
-                  note={
-                    isUnavailableHistoricalEncryptedHint
-                      ? encryptedHistoryFallbackNote
-                      : null
-                  }
-                  title={
-                    isUnavailableHistoricalEncryptedHint
-                      ? compactHistoricalUnavailable
-                        ? t.chat.encryptedMessage
-                        : t.chat.olderEncryptedMessage
-                      : t.chat.encryptedMessageUnavailable
-                  }
-                />
-              </div>
+                debugLabel={
+                  process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+                    ? encryptedHistoryHint.code
+                    : null
+                }
+                note={
+                  isUnavailableHistoricalEncryptedHint
+                    ? encryptedHistoryFallbackNote
+                    : null
+                }
+                title={
+                  isUnavailableHistoricalEncryptedHint
+                    ? compactHistoricalUnavailable
+                      ? t.chat.encryptedMessage
+                      : t.chat.olderEncryptedMessage
+                    : t.chat.encryptedMessageUnavailable
+                }
+              />
             )
           ) : message.kind === 'voice' ? (
             <div className="message-voice-stack">
@@ -2818,6 +2835,9 @@ export function ThreadHistoryViewport({
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
     createThreadHistoryState(initialSnapshot),
   );
+  const historyFetchActiveDeviceIdRef = useRef<string | null>(
+    initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null,
+  );
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const historyStateRef = useRef(historyState);
   const lastConversationIdRef = useRef(conversationId);
@@ -2891,6 +2911,8 @@ export function ThreadHistoryViewport({
       lastInitialSnapshotKeyRef.current = nextSnapshotKey;
       historyStateRef.current = resetState;
       setHistoryState(resetState);
+      historyFetchActiveDeviceIdRef.current =
+        initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null;
       setIsLoadingOlder(false);
       pendingRestoreRef.current = null;
       pendingByIdSyncRequestRef.current = null;
@@ -2912,6 +2934,8 @@ export function ThreadHistoryViewport({
       historyStateRef.current = nextState;
       return nextState;
     });
+    historyFetchActiveDeviceIdRef.current =
+      initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null;
   }, [conversationId, initialSnapshot]);
 
   const senderNames = useMemo(
@@ -3086,6 +3110,13 @@ export function ThreadHistoryViewport({
         return;
       }
 
+      const resolvedActiveDeviceId =
+        bootstrap.result?.deviceRecordId?.trim() || null;
+
+      if (resolvedActiveDeviceId) {
+        historyFetchActiveDeviceIdRef.current = resolvedActiveDeviceId;
+      }
+
       nextMessageIds.forEach((messageId) => {
         inFlightMessageIds.delete(messageId);
         attemptedMessageIds.add(messageId);
@@ -3157,6 +3188,7 @@ export function ThreadHistoryViewport({
     try {
       const response = await fetch(
         buildHistoryPageUrl({
+          activeDeviceId: historyFetchActiveDeviceIdRef.current,
           beforeSeq: oldestLoadedSeq,
           conversationId,
           debugRequestId:
@@ -3323,6 +3355,7 @@ export function ThreadHistoryViewport({
 
       const response = await fetch(
         buildHistoryPageUrl({
+          activeDeviceId: historyFetchActiveDeviceIdRef.current,
           afterSeq: input.afterSeq ?? null,
           conversationId,
           debugRequestId:

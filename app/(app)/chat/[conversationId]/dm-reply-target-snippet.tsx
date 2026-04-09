@@ -33,6 +33,7 @@ type DmReplyTargetSnippetProps = {
   deletedFallbackLabel: string;
   emptyFallbackLabel: string;
   encryptedFallbackLabel: string;
+  historicalEncryptedFallbackLabel?: string | null;
   encryptedReferenceNote?: string | null;
   loadedFallbackLabel: string;
   messageId: string;
@@ -78,6 +79,19 @@ function logReplyTargetResolution(
   console.info('[chat-reply-target]', stage, details);
 }
 
+function isHistoricalEncryptedReplyTargetDiagnostic(
+  code: ReplyTargetResolutionCode | null,
+) {
+  return (
+    code === 'missing-envelope' ||
+    code === 'policy-blocked-history' ||
+    code === 'same-user-new-device-history-gap' ||
+    code === 'device-retired-or-mismatched' ||
+    code === 'client-key-material-missing' ||
+    code === 'local-device-record-missing'
+  );
+}
+
 export function DmReplyTargetSnippet({
   body,
   conversationId,
@@ -86,6 +100,7 @@ export function DmReplyTargetSnippet({
   deletedFallbackLabel,
   emptyFallbackLabel,
   encryptedFallbackLabel,
+  historicalEncryptedFallbackLabel = null,
   encryptedReferenceNote = null,
   loadedFallbackLabel,
   messageId,
@@ -138,10 +153,16 @@ export function DmReplyTargetSnippet({
       }
 
       return {
-        diagnosticCode:
-          (visibleMessageState.diagnosticCode ?? 'temporary-loading') as ReplyTargetResolutionCode,
+        diagnosticCode: (
+          visibleMessageState.diagnosticCode ?? 'temporary-loading'
+        ) as ReplyTargetResolutionCode,
         note: visibleMessageState.diagnosticCode,
-        text: encryptedFallbackLabel,
+        text: isHistoricalEncryptedReplyTargetDiagnostic(
+          (visibleMessageState.diagnosticCode ??
+            'temporary-loading') as ReplyTargetResolutionCode,
+        )
+          ? historicalEncryptedFallbackLabel ?? encryptedFallbackLabel
+          : encryptedFallbackLabel,
       };
     }
 
@@ -165,6 +186,7 @@ export function DmReplyTargetSnippet({
     deletedFallbackLabel,
     emptyFallbackLabel,
     encryptedFallbackLabel,
+    historicalEncryptedFallbackLabel,
     loadedFallbackLabel,
     targetDeleted,
     targetIsEncrypted,

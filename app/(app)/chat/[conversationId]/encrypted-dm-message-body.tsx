@@ -458,30 +458,21 @@ export function EncryptedDmMessageBody({
       : olderHistoryLabel;
 
     return (
-      <div
-        className={
-          shouldRenderCompactHistoricalUnavailable
-            ? 'message-encryption-state message-encryption-state-compact'
-            : 'message-encryption-state'
-        }
-        data-dm-e2ee-debug-bucket={
-          diagnosticsEnabled ? renderState.debugBucket ?? undefined : undefined
-        }
-        data-dm-e2ee-history-state={renderState.committedHistoryState}
-        data-dm-e2ee-access-state={renderState.currentDeviceAccessState}
-        data-dm-e2ee-diagnostic={
-          diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
-        }
-      >
+      <>
         <EncryptedHistoryUnavailableState
           accessState={renderState.currentDeviceAccessState}
           compact={shouldRenderCompactHistoricalUnavailable}
           continuationCount={
             isHistoricalUnavailable ? historicalUnavailableContinuationCount : 0
           }
+          debugBucket={diagnosticsEnabled ? renderState.debugBucket ?? null : null}
+          diagnostic={
+            diagnosticsEnabled ? renderState.diagnosticCode ?? null : null
+          }
           debugLabel={
             diagnosticsEnabled ? renderState.diagnosticCode ?? null : null
           }
+          historyState={renderState.committedHistoryState}
           note={unavailableNote}
           title={
             isHistoricalUnavailable ? historicalUnavailableTitle : renderState.text
@@ -498,7 +489,7 @@ export function EncryptedDmMessageBody({
             </button>
           </div>
         ) : null}
-      </div>
+      </>
     );
   }
 
