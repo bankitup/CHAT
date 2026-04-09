@@ -8,6 +8,7 @@ export type NotificationReadinessStatus =
   | 'blocked';
 
 export type NotificationReadiness = {
+  deviceRegistered: boolean;
   status: NotificationReadinessStatus;
   permission: NotificationPermission | 'unsupported';
   serviceWorkerReady: boolean;
@@ -15,6 +16,18 @@ export type NotificationReadiness = {
   subscriptionActive: boolean;
   vapidConfigured: boolean;
 };
+
+type PushSubscriptionStateResponse = {
+  activeCount: number;
+  currentEndpointRegistered: boolean;
+};
+
+class PushSubscriptionSchemaMissingError extends Error {
+  constructor(message = 'Push subscriptions are not ready on the server yet.') {
+    super(message);
+    this.name = 'PushSubscriptionSchemaMissingError';
+  }
+}
 
 function supportsNotificationReadiness() {
   return (
@@ -143,13 +156,73 @@ async function syncPushSubscriptionWithServer(subscription: PushSubscription) {
   });
 
   if (!response.ok) {
-    throw new Error('Unable to persist this push subscription.');
+    let errorCode: string | null = null;
+    let errorMessage = 'Unable to persist this push subscription.';
+
+    try {
+      const body = (await response.json()) as {
+        code?: string;
+        error?: string;
+      };
+      errorCode = typeof body.code === 'string' ? body.code : null;
+      if (typeof body.error === 'string' && body.error.trim().length > 0) {
+        errorMessage = body.error;
+      }
+    } catch {
+      // Keep the fallback message when the response body is not JSON.
+    }
+
+    if (errorCode === 'push_subscription_schema_missing') {
+      throw new PushSubscriptionSchemaMissingError(errorMessage);
+    }
+
+    throw new Error(errorMessage);
   }
+}
+
+async function getServerPushSubscriptionState(subscription: PushSubscription) {
+  const response = await fetch(
+    `/api/messaging/push-subscriptions?endpoint=${encodeURIComponent(subscription.endpoint)}`,
+    {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        accept: 'application/json',
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let errorCode: string | null = null;
+    let errorMessage = 'Unable to confirm this device registration.';
+
+    try {
+      const body = (await response.json()) as {
+        code?: string;
+        error?: string;
+      };
+      errorCode = typeof body.code === 'string' ? body.code : null;
+      if (typeof body.error === 'string' && body.error.trim().length > 0) {
+        errorMessage = body.error;
+      }
+    } catch {
+      // Keep the fallback message when the response body is not JSON.
+    }
+
+    if (errorCode === 'push_subscription_schema_missing') {
+      throw new PushSubscriptionSchemaMissingError(errorMessage);
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  return (await response.json()) as PushSubscriptionStateResponse;
 }
 
 export async function getNotificationReadiness() {
   if (!supportsNotificationReadiness()) {
     return {
+      deviceRegistered: false,
       status: 'unsupported',
       permission: 'unsupported',
       serviceWorkerReady: false,
@@ -169,9 +242,30 @@ export async function getNotificationReadiness() {
       ? await getCurrentPushSubscription()
       : null;
   const subscriptionActive = Boolean(subscription);
+  let deviceRegistered = false;
+
+  if (subscription) {
+    try {
+      const state = await getServerPushSubscriptionState(subscription);
+      deviceRegistered = state.currentEndpointRegistered;
+    } catch (error) {
+      if (error instanceof PushSubscriptionSchemaMissingError) {
+        return {
+          deviceRegistered: false,
+          status: 'unconfigured',
+          permission,
+          serviceWorkerReady,
+          pushSupported,
+          subscriptionActive,
+          vapidConfigured,
+        } satisfies NotificationReadiness;
+      }
+    }
+  }
 
   if (!pushSupported) {
     return {
+      deviceRegistered: false,
       status: 'unsupported',
       permission,
       serviceWorkerReady,
@@ -181,8 +275,9 @@ export async function getNotificationReadiness() {
     } satisfies NotificationReadiness;
   }
 
-  if (permission === 'granted' && subscriptionActive) {
+  if (permission === 'granted' && subscriptionActive && deviceRegistered) {
     return {
+      deviceRegistered,
       status: 'enabled',
       permission,
       serviceWorkerReady,
@@ -194,6 +289,7 @@ export async function getNotificationReadiness() {
 
   if (!vapidConfigured) {
     return {
+      deviceRegistered,
       status: 'unconfigured',
       permission,
       serviceWorkerReady,
@@ -205,6 +301,7 @@ export async function getNotificationReadiness() {
 
   if (permission === 'denied') {
     return {
+      deviceRegistered,
       status: 'blocked',
       permission,
       serviceWorkerReady,
@@ -215,6 +312,7 @@ export async function getNotificationReadiness() {
   }
 
   return {
+    deviceRegistered,
     status: 'available',
     permission,
     serviceWorkerReady,
@@ -227,6 +325,7 @@ export async function getNotificationReadiness() {
 export async function enableNotificationReadiness() {
   if (!supportsPushSubscriptions()) {
     return {
+      deviceRegistered: false,
       status: 'unsupported',
       permission: supportsNotificationReadiness()
         ? Notification.permission
@@ -277,6 +376,7 @@ export async function enableNotificationReadiness() {
   }
 
   return {
+    deviceRegistered: true,
     status: 'enabled',
     permission,
     serviceWorkerReady: true,

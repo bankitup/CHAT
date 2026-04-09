@@ -14,6 +14,7 @@ import {
 import { withSpaceParam } from '@/modules/spaces/url';
 import type {
   ChatPushPayload,
+  PushSubscriptionState,
   PushSubscriptionRecordInput,
   StoredPushSubscription,
 } from './contract';
@@ -494,6 +495,34 @@ export async function upsertPushSubscriptionForUser(input: {
   }
 
   return mapStoredPushSubscription(data);
+}
+
+export async function getPushSubscriptionStateForUser(input: {
+  userId: string;
+  endpoint?: string | null;
+}): Promise<PushSubscriptionState> {
+  const client = await getRequestSupabaseServerClient();
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .select('endpoint')
+    .eq('user_id', input.userId)
+    .is('disabled_at', null);
+
+  if (error) {
+    throw error;
+  }
+
+  const activeRows = ((data ?? []) as Array<{ endpoint?: string | null }>).filter(
+    (row) => typeof row.endpoint === 'string' && row.endpoint.length > 0,
+  );
+  const currentEndpoint = input.endpoint?.trim() || null;
+
+  return {
+    activeCount: activeRows.length,
+    currentEndpointRegistered: currentEndpoint
+      ? activeRows.some((row) => row.endpoint === currentEndpoint)
+      : false,
+  };
 }
 
 export async function disablePushSubscriptionForUser(input: {

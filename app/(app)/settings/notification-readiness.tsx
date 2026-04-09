@@ -112,9 +112,17 @@ export function NotificationReadinessPanel({
   const deviceValue =
     readiness?.status === 'unsupported'
       ? t.notifications.unavailable
-      : readiness?.subscriptionActive
+      : readiness?.deviceRegistered
         ? t.notifications.connected
         : t.notifications.notConnected;
+  const primaryActionLabel =
+    readiness?.permission === 'granted'
+      ? t.notifications.connectDevice
+      : t.notifications.turnOn;
+  const pendingActionLabel =
+    readiness?.permission === 'granted'
+      ? t.notifications.connectingDevice
+      : t.notifications.turningOn;
   const detailNote = lastError
     ? lastError
     : readiness?.status === 'blocked'
@@ -220,7 +228,7 @@ export function NotificationReadinessPanel({
               });
             }}
           >
-            {isPending ? t.notifications.turningOn : t.notifications.turnOn}
+            {isPending ? pendingActionLabel : primaryActionLabel}
           </button>
         ) : null}
 
