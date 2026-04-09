@@ -214,6 +214,8 @@ export function NotificationReadinessPanel({
         : t.notifications.notConnected;
   const testValue = !allowTestSend
     ? t.notifications.unavailable
+    : !readiness?.deliveryConfigured
+      ? t.notifications.unavailable
     : readiness?.status === 'enabled'
       ? t.notifications.ready
       : readiness?.status === 'available'
@@ -241,9 +243,9 @@ export function NotificationReadinessPanel({
     : readiness?.status === 'blocked'
       ? t.notifications.browserSettingsNote
       : readiness?.status === 'enabled'
-        ? allowTestSend
+        ? allowTestSend && readiness.deliveryConfigured
           ? t.notifications.testReadyNote
-          : t.notifications.comingSoonNote
+          : t.notifications.deliveryNotReadyNote
         : readiness?.status === 'available'
           ? readiness.permission === 'granted'
             ? t.notifications.permissionReadyNote
@@ -378,7 +380,9 @@ export function NotificationReadinessPanel({
           </button>
         ) : null}
 
-        {allowTestSend && readiness?.status === 'enabled' ? (
+        {allowTestSend &&
+        readiness?.deliveryConfigured &&
+        readiness?.status === 'enabled' ? (
           <button
             className="button button-secondary"
             disabled={isPending}

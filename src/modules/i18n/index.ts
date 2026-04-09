@@ -548,6 +548,7 @@ type LanguageDictionary = {
     connectingDevice: string;
     browserSettingsNote: string;
     comingSoonNote: string;
+    deliveryNotReadyNote: string;
     availableNote: string;
     permissionReadyNote: string;
     notConfiguredNote: string;
@@ -1461,10 +1462,12 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       connectingDevice: 'Connecting…',
       browserSettingsNote: 'You can change this later in browser settings.',
       comingSoonNote: 'This browser is connected for the first chat push delivery slice.',
+      deliveryNotReadyNote:
+        'This device can connect now. Test delivery becomes available when web push delivery is configured for this environment.',
       availableNote: 'You can enable this now for this browser.',
       permissionReadyNote: 'Permission is already on. Enable notifications to save a real push subscription for this browser.',
       notConfiguredNote:
-        'Add NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY and apply the push-subscriptions SQL before enabling this here.',
+        'Add a web-push VAPID public key for runtime config and apply the push-subscriptions SQL before enabling this here.',
       syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
       sendTest: 'Send test notification',
       sendingTest: 'Sending test notification…',
@@ -2433,11 +2436,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       connectingDevice: 'Подключаем…',
       browserSettingsNote: 'Позже это можно изменить в настройках браузера.',
       comingSoonNote: 'Этот браузер уже подключен для первого chat-first среза push-уведомлений.',
+      deliveryNotReadyNote:
+        'Это устройство уже можно подключить. Тестовая доставка станет доступна, когда web push будет настроен для этой среды.',
       availableNote: 'Это можно включить сейчас для этого браузера.',
       permissionReadyNote:
         'Разрешение уже включено. Включите уведомления, чтобы сохранить реальную push-подписку для этого браузера.',
       notConfiguredNote:
-        'Добавьте NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY и примените SQL для push_subscriptions, прежде чем включать это здесь.',
+        'Добавьте VAPID public key для runtime-настройки push и примените SQL для push_subscriptions, прежде чем включать это здесь.',
       syncFailedNote:
         'Сейчас не удалось подключить этот браузер к push-уведомлениям. Попробуйте ещё раз.',
       sendTest: 'Отправить тестовое уведомление',
