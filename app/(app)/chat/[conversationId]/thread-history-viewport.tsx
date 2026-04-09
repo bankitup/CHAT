@@ -40,6 +40,7 @@ import {
 } from './dm-thread-client-diagnostics';
 import { DmReplyTargetSnippet } from './dm-reply-target-snippet';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
+import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailable-state';
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
 import { MarkConversationRead } from './mark-conversation-read';
 import { MessageStatusIndicator } from './message-status-indicator';
@@ -180,6 +181,11 @@ type ThreadHistoryState = {
 type TimelineItem =
   | { key: string; label: string; type: 'separator' | 'unread' }
   | { key: string; message: ConversationMessageRow; type: 'message' };
+
+type EncryptedUnavailableRunMeta = {
+  continuationCount: number;
+  isContinuation: boolean;
+};
 
 type VoiceMessageRenderState =
   | 'ready'
@@ -1832,13 +1838,13 @@ function getEncryptedHistoryHintForMessage(input: {
   );
 }
 
-function isUnavailableEncryptedHistoryMessage(input: {
+function getUnavailableEncryptedHistoryRunKey(input: {
   encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
   encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
   message: ConversationMessageRow | null;
 }) {
   if (!input.message || !isEncryptedDmTextMessage(input.message)) {
-    return false;
+    return null;
   }
 
   const envelope =
@@ -1849,7 +1855,87 @@ function isUnavailableEncryptedHistoryMessage(input: {
     message: input.message,
   });
 
-  return historyHint.code !== 'envelope-present';
+  if (historyHint.code === 'envelope-present') {
+    return null;
+  }
+
+  return historyHint.code === 'policy-blocked-history'
+    ? 'policy-blocked-history'
+    : 'history-unavailable';
+}
+
+function buildUnavailableEncryptedHistoryRunMeta(input: {
+  encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
+  encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
+  timelineItems: TimelineItem[];
+}) {
+  const runMetaByMessageId = new Map<string, EncryptedUnavailableRunMeta>();
+
+  let index = 0;
+
+  while (index < input.timelineItems.length) {
+    const item = input.timelineItems[index];
+
+    if (item?.type !== 'message') {
+      index += 1;
+      continue;
+    }
+
+    const runKey = getUnavailableEncryptedHistoryRunKey({
+      encryptedEnvelopesByMessage: input.encryptedEnvelopesByMessage,
+      encryptedHistoryHintsByMessage: input.encryptedHistoryHintsByMessage,
+      message: item.message,
+    });
+
+    if (!runKey) {
+      index += 1;
+      continue;
+    }
+
+    let endIndex = index;
+
+    while (endIndex + 1 < input.timelineItems.length) {
+      const nextItem = input.timelineItems[endIndex + 1];
+
+      if (nextItem?.type !== 'message') {
+        break;
+      }
+
+      const nextRunKey = getUnavailableEncryptedHistoryRunKey({
+        encryptedEnvelopesByMessage: input.encryptedEnvelopesByMessage,
+        encryptedHistoryHintsByMessage: input.encryptedHistoryHintsByMessage,
+        message: nextItem.message,
+      });
+
+      if (nextRunKey !== runKey) {
+        break;
+      }
+
+      endIndex += 1;
+    }
+
+    runMetaByMessageId.set(item.message.id, {
+      continuationCount: endIndex - index,
+      isContinuation: false,
+    });
+
+    for (let runIndex = index + 1; runIndex <= endIndex; runIndex += 1) {
+      const runItem = input.timelineItems[runIndex];
+
+      if (runItem?.type !== 'message') {
+        continue;
+      }
+
+      runMetaByMessageId.set(runItem.message.id, {
+        continuationCount: 0,
+        isContinuation: true,
+      });
+    }
+
+    index = endIndex + 1;
+  }
+
+  return runMetaByMessageId;
 }
 
 type ThreadMessageRowProps = {
@@ -1863,6 +1949,7 @@ type ThreadMessageRowProps = {
   compactHistoricalUnavailable: boolean;
   encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
   encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
+  historicalUnavailableContinuationCount: number;
   isClusteredWithNext: boolean;
   isClusteredWithPrevious: boolean;
   language: AppLanguage;
@@ -1887,6 +1974,7 @@ function ThreadMessageRow({
   currentUserId,
   encryptedEnvelopesByMessage,
   encryptedHistoryHintsByMessage,
+  historicalUnavailableContinuationCount,
   isClusteredWithNext,
   isClusteredWithPrevious,
   language,
@@ -2408,42 +2496,34 @@ function ThreadMessageRow({
                 conversationId={conversationId}
                 {...threadClientDiagnostics}
                 fallback={
-                  <div
-                    className={
-                      compactHistoricalUnavailable &&
-                      isUnavailableHistoricalEncryptedHint
-                        ? 'message-encryption-state message-encryption-state-compact'
-                        : 'message-encryption-state'
-                    }
-                    data-dm-e2ee-access-state={
+                  <EncryptedHistoryUnavailableState
+                    accessState={
                       isUnavailableHistoricalEncryptedHint
                         ? encryptedHistoryFallbackAccessState
                         : 'temporary-local-read-failure'
                     }
-                    data-dm-e2ee-history-state="present"
-                  >
-                    <p
-                      className={
-                        isUnavailableHistoricalEncryptedHint
-                          ? compactHistoricalUnavailable
-                            ? 'message-encryption-title message-encryption-title-compact'
-                            : 'message-encryption-title'
-                          : 'message-body'
-                      }
-                    >
-                      {isUnavailableHistoricalEncryptedHint
+                    compact={
+                      compactHistoricalUnavailable &&
+                      isUnavailableHistoricalEncryptedHint
+                    }
+                    continuationCount={
+                      isUnavailableHistoricalEncryptedHint
+                        ? historicalUnavailableContinuationCount
+                        : 0
+                    }
+                    note={
+                      isUnavailableHistoricalEncryptedHint
+                        ? encryptedHistoryFallbackNote
+                        : null
+                    }
+                    title={
+                      isUnavailableHistoricalEncryptedHint
                         ? compactHistoricalUnavailable
                           ? t.chat.encryptedMessage
                           : t.chat.olderEncryptedMessage
-                        : t.chat.encryptedMessageUnavailable}
-                    </p>
-                    {isUnavailableHistoricalEncryptedHint &&
-                    !compactHistoricalUnavailable ? (
-                      <p className="message-encryption-note">
-                        {encryptedHistoryFallbackNote}
-                      </p>
-                    ) : null}
-                  </div>
+                        : t.chat.encryptedMessageUnavailable
+                    }
+                  />
                 }
                 messageId={message.id}
                 surface="encrypted-dm-message-body"
@@ -2456,6 +2536,9 @@ function ThreadMessageRow({
                   envelope={encryptedEnvelope}
                   fallbackLabel={t.chat.encryptedMessage}
                   historyDiagnosticHint={encryptedHistoryHint}
+                  historicalUnavailableContinuationCount={
+                    historicalUnavailableContinuationCount
+                  }
                   olderHistoryLabel={t.chat.olderEncryptedMessage}
                   historyUnavailableNoteLabel={
                     t.chat.encryptedHistoryUnavailableNote
@@ -2476,50 +2559,45 @@ function ThreadMessageRow({
               </DmThreadClientSubtree>
             ) : (
               <div
-                className={
-                  compactHistoricalUnavailable &&
-                  isUnavailableHistoricalEncryptedHint
-                    ? 'message-encryption-state message-encryption-state-compact'
-                    : 'message-encryption-state'
-                }
-                data-dm-e2ee-access-state={
-                  isUnavailableHistoricalEncryptedHint
-                    ? encryptedHistoryFallbackAccessState
-                    : 'temporary-local-read-failure'
-                }
-                data-dm-e2ee-history-state="present"
                 data-dm-e2ee-debug-bucket={
                   process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
                     ? encryptedHistoryHint.code
                     : undefined
                 }
               >
-                <p
-                  className={
+                <EncryptedHistoryUnavailableState
+                  accessState={
+                    isUnavailableHistoricalEncryptedHint
+                      ? encryptedHistoryFallbackAccessState
+                      : 'temporary-local-read-failure'
+                  }
+                  compact={
+                    compactHistoricalUnavailable &&
+                    isUnavailableHistoricalEncryptedHint
+                  }
+                  continuationCount={
+                    isUnavailableHistoricalEncryptedHint
+                      ? historicalUnavailableContinuationCount
+                      : 0
+                  }
+                  debugLabel={
+                    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+                      ? encryptedHistoryHint.code
+                      : null
+                  }
+                  note={
+                    isUnavailableHistoricalEncryptedHint
+                      ? encryptedHistoryFallbackNote
+                      : null
+                  }
+                  title={
                     isUnavailableHistoricalEncryptedHint
                       ? compactHistoricalUnavailable
-                        ? 'message-encryption-title message-encryption-title-compact'
-                        : 'message-encryption-title'
-                      : 'message-body'
+                        ? t.chat.encryptedMessage
+                        : t.chat.olderEncryptedMessage
+                      : t.chat.encryptedMessageUnavailable
                   }
-                >
-                  {isUnavailableHistoricalEncryptedHint
-                    ? compactHistoricalUnavailable
-                      ? t.chat.encryptedMessage
-                      : t.chat.olderEncryptedMessage
-                    : t.chat.encryptedMessageUnavailable}
-                </p>
-                {isUnavailableHistoricalEncryptedHint &&
-                !compactHistoricalUnavailable ? (
-                  <p className="message-encryption-note">
-                    {encryptedHistoryFallbackNote}
-                  </p>
-                ) : null}
-                {process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ? (
-                  <p className="message-encryption-debug-label">
-                    {encryptedHistoryHint.code}
-                  </p>
-                ) : null}
+                />
               </div>
             )
           ) : message.kind === 'voice' ? (
@@ -2858,6 +2936,19 @@ export function ThreadHistoryViewport({
         t,
       }),
     [currentReadMessageSeq, historyState.messages, language, t],
+  );
+  const unavailableEncryptedHistoryRunMeta = useMemo(
+    () =>
+      buildUnavailableEncryptedHistoryRunMeta({
+        encryptedEnvelopesByMessage: historyState.encryptedEnvelopesByMessage,
+        encryptedHistoryHintsByMessage: historyState.encryptedHistoryHintsByMessage,
+        timelineItems,
+      }),
+    [
+      historyState.encryptedEnvelopesByMessage,
+      historyState.encryptedHistoryHintsByMessage,
+      timelineItems,
+    ],
   );
   const oldestLoadedSeq = historyState.oldestLoadedSeq;
   const hasMoreOlder = historyState.hasMoreOlder;
@@ -3835,27 +3926,18 @@ export function ThreadHistoryViewport({
                 activeSpaceId={activeSpaceId}
                 attachmentsByMessage={historyState.attachmentsByMessage}
                 compactHistoricalUnavailable={
-                  canClusterAdjacentMessages(previousMessage, item.message) &&
-                  isUnavailableEncryptedHistoryMessage({
-                    encryptedEnvelopesByMessage:
-                      historyState.encryptedEnvelopesByMessage,
-                    encryptedHistoryHintsByMessage:
-                      historyState.encryptedHistoryHintsByMessage,
-                    message: previousMessage,
-                  }) &&
-                  isUnavailableEncryptedHistoryMessage({
-                    encryptedEnvelopesByMessage:
-                      historyState.encryptedEnvelopesByMessage,
-                    encryptedHistoryHintsByMessage:
-                      historyState.encryptedHistoryHintsByMessage,
-                    message: item.message,
-                  })
+                  unavailableEncryptedHistoryRunMeta.get(item.message.id)
+                    ?.isContinuation ?? false
                 }
                 conversationId={conversationId}
                 conversationKind={conversationKind}
                 currentUserId={currentUserId}
                 encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
                 encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
+                historicalUnavailableContinuationCount={
+                  unavailableEncryptedHistoryRunMeta.get(item.message.id)
+                    ?.continuationCount ?? 0
+                }
                 isClusteredWithNext={canClusterAdjacentMessages(
                   item.message,
                   nextMessage,
