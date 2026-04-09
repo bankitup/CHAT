@@ -201,6 +201,24 @@ type LanguageDictionary = {
     recentEmptyBody: string;
     emptyTitle: string;
     emptyBody: string;
+    participantsTitle: string;
+    participantsBody: string;
+    participantsEmptyBody: string;
+    participantsLockedHint: string;
+    participantsRemoveAction: string;
+    participantsRemoveConfirmBody: string;
+    participantsConfirmRemoveAction: string;
+    participantsCancelRemoveAction: string;
+    participantsRemovePending: string;
+    participantsSelectionRequired: string;
+    participantsRemoveSuccess: string;
+    participantsRemoveFailed: string;
+    participantsRequestAction: string;
+    participantsRequestBody: string;
+    participantsRequestPending: string;
+    participantsRequestSuccess: string;
+    participantsRequestFailed: string;
+    currentUserBadge: string;
   };
   messengerActivity: {
     subtitle: string;
@@ -1035,6 +1053,31 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyTitle: 'This messenger space starts clean',
       emptyBody:
         'Open Chats to start the first conversation here. No history or participants are copied in automatically from TEST or any other space.',
+      participantsTitle: 'Space participants',
+      participantsBody:
+        'Manage the current roster for this space only. This stays a closed-space surface, not an open invite flow.',
+      participantsEmptyBody: 'No participants are available in this space yet.',
+      participantsLockedHint:
+        'Owners and your own account stay protected here. Everything else remains scoped to this space only.',
+      participantsRemoveAction: 'Remove selected',
+      participantsRemoveConfirmBody:
+        'Confirm removal for the selected participants. This changes access only inside the current space.',
+      participantsConfirmRemoveAction: 'Confirm removal',
+      participantsCancelRemoveAction: 'Cancel',
+      participantsRemovePending: 'Removing...',
+      participantsSelectionRequired: 'Select at least one participant to remove.',
+      participantsRemoveSuccess:
+        'Selected participants were removed from this space.',
+      participantsRemoveFailed:
+        'Unable to update space participants right now.',
+      participantsRequestAction: 'Request additional account(s) for this space',
+      participantsRequestBody:
+        'Need more assigned people here? Send a controlled request for super-admin or staff review.',
+      participantsRequestPending: 'Sending request...',
+      participantsRequestSuccess: 'Account request sent for staff review.',
+      participantsRequestFailed:
+        'Unable to send the account request right now.',
+      currentUserBadge: 'You',
     },
     messengerActivity: {
       subtitle:
@@ -1940,6 +1983,34 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyTitle: 'Это пространство мессенджера начинается с нуля',
       emptyBody:
         'Откройте Чаты, чтобы начать здесь первый разговор. История и участники не копируются автоматически из TEST или любого другого пространства.',
+      participantsTitle: 'Участники пространства',
+      participantsBody:
+        'Управляйте текущим составом только для этого пространства. Это остаётся закрытым контуром, а не открытым приглашением.',
+      participantsEmptyBody: 'В этом пространстве пока нет доступных участников.',
+      participantsLockedHint:
+        'Владелец пространства и ваш собственный аккаунт здесь защищены. Все остальные изменения остаются только внутри этого пространства.',
+      participantsRemoveAction: 'Удалить выбранных',
+      participantsRemoveConfirmBody:
+        'Подтвердите удаление выбранных участников. Это меняет доступ только внутри текущего пространства.',
+      participantsConfirmRemoveAction: 'Подтвердить удаление',
+      participantsCancelRemoveAction: 'Отмена',
+      participantsRemovePending: 'Удаляем...',
+      participantsSelectionRequired:
+        'Выберите хотя бы одного участника для удаления.',
+      participantsRemoveSuccess:
+        'Выбранные участники удалены из этого пространства.',
+      participantsRemoveFailed:
+        'Сейчас не удалось обновить участников пространства.',
+      participantsRequestAction:
+        'Запросить дополнительные аккаунты для этого пространства',
+      participantsRequestBody:
+        'Нужны ещё назначенные люди? Отправьте контролируемый запрос на проверку супер-админу или внутренней команде.',
+      participantsRequestPending: 'Отправляем запрос...',
+      participantsRequestSuccess:
+        'Запрос на дополнительные аккаунты отправлен на проверку.',
+      participantsRequestFailed:
+        'Сейчас не удалось отправить запрос на аккаунты.',
+      currentUserBadge: 'Вы',
     },
     messengerActivity: {
       subtitle:

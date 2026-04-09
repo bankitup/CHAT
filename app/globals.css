@@ -3601,6 +3601,10 @@ main {
   line-height: 1.4;
 }
 
+.messenger-home-session-card {
+  justify-content: space-between;
+}
+
 .messenger-home-entry-card {
   gap: 0;
 }
@@ -3625,9 +3629,72 @@ main {
   gap: 8px;
 }
 
+.messenger-home-participants-card {
+  gap: 0;
+}
+
+.messenger-home-participants-panel {
+  gap: 14px;
+}
+
+.messenger-home-participants-note {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.messenger-home-participants-list {
+  gap: 10px;
+}
+
+.messenger-home-participant-row {
+  align-items: center;
+  gap: 12px;
+}
+
+.messenger-home-participant-row-disabled {
+  opacity: 0.76;
+}
+
+.messenger-home-participant-copy {
+  flex: 1;
+}
+
+.messenger-home-participant-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.messenger-home-participant-secondary {
+  font-size: 0.78rem;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.messenger-home-participant-role {
+  margin-left: auto;
+}
+
+.messenger-home-participant-form,
+.messenger-home-account-request-form {
+  gap: 10px;
+}
+
+.messenger-home-participant-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.messenger-home-participant-confirmation {
+  gap: 10px;
+}
+
 @media (min-width: 700px) {
   .messenger-home-personal-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
   }
 }

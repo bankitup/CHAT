@@ -1,6 +1,11 @@
 import 'server-only';
 
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
+import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
+import {
+  buildAvatarDeliveryPath,
+  isAbsoluteAvatarUrl,
+} from '@/modules/messaging/avatar-delivery';
 import type {
   ResolvedSpaceProfile,
   ResolvedSpaceGovernanceGlobalRole,
@@ -43,6 +48,21 @@ export type ExactUserSpaceAccessState = {
   globalGovernance: ResolvedSpaceGovernanceGlobalRole;
   requestedSpaceId: string;
   spaces: UserSpaceRecord[];
+};
+
+export type SpaceParticipantRecord = {
+  userId: string;
+  role: SpaceRole;
+  createdAt: string | null;
+  displayName: string | null;
+  username: string | null;
+  email: string | null;
+  emailLocalPart: string | null;
+  avatarPath: string | null;
+  statusEmoji: string | null;
+  statusText: string | null;
+  statusUpdatedAt: string | null;
+  isCurrentUser: boolean;
 };
 
 export const INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST = new Set([
@@ -207,6 +227,177 @@ function createSpaceSchemaRequirementError(details: string) {
   return new Error(
     `${details} Apply the documented Supabase changes in /Users/danya/IOS - Apps/CHAT/docs/space-model.md.`,
   );
+}
+
+function resolveParticipantAvatarPath(value: string | null | undefined) {
+  const normalizedValue = value?.trim() || null;
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  if (isAbsoluteAvatarUrl(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  return buildAvatarDeliveryPath(normalizedValue);
+}
+
+type SpaceParticipantProfileRow = {
+  user_id: string;
+  display_name: string | null;
+  username?: string | null;
+  email_local_part?: string | null;
+  avatar_path?: string | null;
+  status_emoji?: string | null;
+  status_text?: string | null;
+  status_updated_at?: string | null;
+};
+
+async function loadSpaceParticipantProfiles(input: {
+  client:
+    | Awaited<ReturnType<typeof getRequestSupabaseServerClient>>
+    | NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
+  userIds: string[];
+}) {
+  if (input.userIds.length === 0) {
+    return [] as Array<{
+      avatarPath: string | null;
+      displayName: string | null;
+      emailLocalPart: string | null;
+      statusEmoji: string | null;
+      statusText: string | null;
+      statusUpdatedAt: string | null;
+      userId: string;
+      username: string | null;
+    }>;
+  }
+
+  const withStatuses = await input.client
+    .from('profiles')
+    .select(
+      [
+        'user_id',
+        'display_name',
+        'username',
+        'email_local_part',
+        'avatar_path',
+        'status_emoji',
+        'status_text',
+        'status_updated_at',
+      ].join(', '),
+    )
+    .in('user_id', input.userIds);
+
+  if (!withStatuses.error) {
+    return ((withStatuses.data ?? []) as unknown as SpaceParticipantProfileRow[]).map(
+      (profile) => ({
+        avatarPath: resolveParticipantAvatarPath(profile.avatar_path),
+        displayName: profile.display_name?.trim() || null,
+        emailLocalPart: profile.email_local_part?.trim() || null,
+        statusEmoji: profile.status_emoji?.trim() || null,
+        statusText: profile.status_text?.trim() || null,
+        statusUpdatedAt: profile.status_updated_at?.trim() || null,
+        userId: profile.user_id,
+        username: profile.username?.trim() || null,
+      }),
+    );
+  }
+
+  const identityFallback = await input.client
+    .from('profiles')
+    .select('user_id, display_name, username, email_local_part, avatar_path')
+    .in('user_id', input.userIds);
+
+  if (!identityFallback.error) {
+    return ((identityFallback.data ?? []) as unknown as SpaceParticipantProfileRow[]).map(
+      (profile) => ({
+        avatarPath: resolveParticipantAvatarPath(profile.avatar_path),
+        displayName: profile.display_name?.trim() || null,
+        emailLocalPart: profile.email_local_part?.trim() || null,
+        statusEmoji: null,
+        statusText: null,
+        statusUpdatedAt: null,
+        userId: profile.user_id,
+        username: profile.username?.trim() || null,
+      }),
+    );
+  }
+
+  const minimalFallback = await input.client
+    .from('profiles')
+    .select('user_id, display_name')
+    .in('user_id', input.userIds);
+
+  if (minimalFallback.error) {
+    throw new Error(minimalFallback.error.message);
+  }
+
+  return ((minimalFallback.data ?? []) as unknown as SpaceParticipantProfileRow[]).map(
+    (profile) => ({
+      avatarPath: null,
+      displayName: profile.display_name?.trim() || null,
+      emailLocalPart: null,
+      statusEmoji: null,
+      statusText: null,
+      statusUpdatedAt: null,
+      userId: profile.user_id,
+      username: null,
+    }),
+  );
+}
+
+async function loadSpaceParticipantEmails(input: {
+  serviceClient: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>> | null;
+  userIds: string[];
+}) {
+  const emailsByUserId = new Map<string, string | null>();
+
+  if (!input.serviceClient || input.userIds.length === 0) {
+    return emailsByUserId;
+  }
+
+  const responses = await Promise.allSettled(
+    input.userIds.map(async (userId) => {
+      const response = await input.serviceClient!.auth.admin.getUserById(userId);
+      return {
+        email: response.data.user?.email?.trim() || null,
+        userId,
+      };
+    }),
+  );
+
+  for (const response of responses) {
+    if (response.status !== 'fulfilled') {
+      continue;
+    }
+
+    emailsByUserId.set(response.value.userId, response.value.email);
+  }
+
+  return emailsByUserId;
+}
+
+function getSpaceParticipantSortWeight(role: SpaceRole) {
+  if (role === 'owner') {
+    return 0;
+  }
+
+  if (role === 'admin') {
+    return 1;
+  }
+
+  return 2;
+}
+
+function getSpaceParticipantSortLabel(participant: SpaceParticipantRecord) {
+  return (
+    participant.displayName?.trim() ||
+    participant.username?.trim() ||
+    participant.emailLocalPart?.trim() ||
+    participant.email?.split('@')[0]?.trim() ||
+    participant.userId
+  ).toLowerCase();
 }
 
 function isMissingRelationErrorMessage(message: string, relationName: string) {
@@ -571,6 +762,82 @@ export async function requireSpaceMemberManagementForUser(input: {
   }
 
   return exactSpaceAccess;
+}
+
+export async function getManageableSpaceParticipantsForUser(input: {
+  userId: string;
+  userEmail?: string | null;
+  requestedSpaceId?: string | null;
+  source?: string;
+}) {
+  const exactSpaceAccess = await requireSpaceMemberManagementForUser(input);
+  const requestSupabase = await getRequestSupabaseServerClient();
+  const serviceClient = createSupabaseServiceRoleClient();
+  const queryClient = serviceClient ?? requestSupabase;
+  const membershipResponse = await queryClient
+    .from('space_members')
+    .select('user_id, role, created_at')
+    .eq('space_id', exactSpaceAccess.activeSpace.id);
+
+  if (membershipResponse.error) {
+    throw new Error(membershipResponse.error.message);
+  }
+
+  const membershipRows = ((membershipResponse.data ?? []) as Array<{
+    created_at: string | null;
+    role: SpaceRole;
+    user_id: string;
+  }>).filter((row) => Boolean(row.user_id));
+  const userIds = Array.from(new Set(membershipRows.map((row) => row.user_id)));
+  const profiles = await loadSpaceParticipantProfiles({
+    client: queryClient,
+    userIds,
+  });
+  const profileByUserId = new Map(
+    profiles.map((profile) => [profile.userId, profile] as const),
+  );
+  const emailsByUserId = await loadSpaceParticipantEmails({
+    serviceClient,
+    userIds,
+  });
+
+  const participants = membershipRows
+    .map((membership) => {
+      const profile = profileByUserId.get(membership.user_id);
+
+      return {
+        avatarPath: profile?.avatarPath ?? null,
+        createdAt: membership.created_at ?? null,
+        displayName: profile?.displayName ?? null,
+        email: emailsByUserId.get(membership.user_id) ?? null,
+        emailLocalPart: profile?.emailLocalPart ?? null,
+        isCurrentUser: membership.user_id === input.userId,
+        role: membership.role,
+        statusEmoji: profile?.statusEmoji ?? null,
+        statusText: profile?.statusText ?? null,
+        statusUpdatedAt: profile?.statusUpdatedAt ?? null,
+        userId: membership.user_id,
+        username: profile?.username ?? null,
+      } satisfies SpaceParticipantRecord;
+    })
+    .sort((left, right) => {
+      const roleDelta =
+        getSpaceParticipantSortWeight(left.role) -
+        getSpaceParticipantSortWeight(right.role);
+
+      if (roleDelta !== 0) {
+        return roleDelta;
+      }
+
+      return getSpaceParticipantSortLabel(left).localeCompare(
+        getSpaceParticipantSortLabel(right),
+      );
+    });
+
+  return {
+    activeSpace: exactSpaceAccess.activeSpace,
+    participants,
+  };
 }
 
 export async function resolveDefaultSpaceShellHrefForUser(input: {
