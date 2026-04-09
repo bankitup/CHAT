@@ -398,7 +398,13 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           </div>
         </section>
 
-        <NotificationReadinessPanel embedded language={language} surface="activity" />
+        <NotificationReadinessPanel
+          allowTestSend={allowNotificationTestSend}
+          embedded
+          language={language}
+          surface="activity"
+          testSpaceId={activeSpace.id}
+        />
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
           <div className="messenger-activity-surface-header">
@@ -430,14 +436,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             </span>
           </div>
         </section>
-
-        <NotificationReadinessPanel
-          allowTestSend={allowNotificationTestSend}
-          embedded
-          language={language}
-          surface="activity"
-          testSpaceId={activeSpace.id}
-        />
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
           <div className="stack messenger-activity-surface-copy">
