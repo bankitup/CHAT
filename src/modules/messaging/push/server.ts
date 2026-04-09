@@ -106,8 +106,17 @@ function logPushDiagnostics(stage: string, details?: Record<string, unknown>) {
   console.info('[chat-push]', stage);
 }
 
+function getWebPushPublicKey() {
+  return (
+    process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ||
+    process.env.VAPID_PUBLIC_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ||
+    null
+  );
+}
+
 function getWebPushConfig() {
-  const publicKey = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY?.trim() || null;
+  const publicKey = getWebPushPublicKey();
   const privateKey =
     process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim() ||
     process.env.VAPID_PRIVATE_KEY?.trim() ||
@@ -125,6 +134,20 @@ function getWebPushConfig() {
     publicKey,
     privateKey,
     subject,
+  };
+}
+
+export function getWebPushRuntimeConfig() {
+  const publicKey = getWebPushPublicKey();
+  const privateKey =
+    process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim() ||
+    process.env.VAPID_PRIVATE_KEY?.trim() ||
+    null;
+
+  return {
+    deliveryConfigured: Boolean(publicKey && privateKey),
+    publicKey,
+    subscriptionConfigured: Boolean(publicKey),
   };
 }
 

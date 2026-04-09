@@ -287,7 +287,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const recentItems = activityItems
     .filter((conversation) => conversation.preview && conversation.unreadCount === 0)
     .slice(0, 8);
-  const recentMovementCount = recentItems.length;
   const messengerNotificationItems: MessengerNotificationItem[] = [
     ...unreadItems.map((conversation) => ({
       ...conversation,
