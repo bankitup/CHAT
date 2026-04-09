@@ -22,6 +22,7 @@ import { setDmThreadVisibleMessageState } from './dm-thread-visible-message-stor
 
 type EncryptedDmMessageBodyProps = {
   clientId: string | null;
+  compactHistoricalUnavailable?: boolean;
   conversationId: string;
   currentUserId: string;
   envelope: StoredDmE2eeEnvelope | null;
@@ -73,6 +74,7 @@ function shouldClassifySelfHistoryGap(input: {
 
 export function EncryptedDmMessageBody({
   clientId,
+  compactHistoricalUnavailable = false,
   conversationId,
   currentUserId,
   envelope,
@@ -440,16 +442,25 @@ export function EncryptedDmMessageBody({
     const isHistoricalUnavailable =
       renderState.currentDeviceAccessState === 'history-unavailable-on-this-device' ||
       renderState.currentDeviceAccessState === 'policy-blocked';
+    const shouldRenderCompactHistoricalUnavailable =
+      compactHistoricalUnavailable && isHistoricalUnavailable;
     const unavailableNote =
       renderState.unavailableNoteKind === 'history-unavailable'
         ? historyUnavailableNoteLabel
         : renderState.unavailableNoteKind === 'policy-blocked'
           ? policyUnavailableNoteLabel
           : null;
+    const historicalUnavailableTitle = shouldRenderCompactHistoricalUnavailable
+      ? fallbackLabel
+      : olderHistoryLabel;
 
     return (
       <div
-        className="message-encryption-state"
+        className={
+          shouldRenderCompactHistoricalUnavailable
+            ? 'message-encryption-state message-encryption-state-compact'
+            : 'message-encryption-state'
+        }
         data-dm-e2ee-debug-bucket={
           diagnosticsEnabled ? renderState.debugBucket ?? undefined : undefined
         }
@@ -462,13 +473,15 @@ export function EncryptedDmMessageBody({
         <p
           className={
             isHistoricalUnavailable
-              ? 'message-encryption-title'
+              ? shouldRenderCompactHistoricalUnavailable
+                ? 'message-encryption-title message-encryption-title-compact'
+                : 'message-encryption-title'
               : 'message-body'
           }
         >
-          {isHistoricalUnavailable ? olderHistoryLabel : renderState.text}
+          {isHistoricalUnavailable ? historicalUnavailableTitle : renderState.text}
         </p>
-        {unavailableNote ? (
+        {unavailableNote && !shouldRenderCompactHistoricalUnavailable ? (
           <p className="message-encryption-note">{unavailableNote}</p>
         ) : null}
         {diagnosticsEnabled && renderState.diagnosticCode ? (

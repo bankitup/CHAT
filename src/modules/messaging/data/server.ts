@@ -4643,6 +4643,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     let malformedEnvelopeCount = 0;
     let selectedCurrentDeviceEnvelopeCount = 0;
     let selectedSenderSelfEnvelopeCount = 0;
+    const messagesWithAnyEnvelopeRows = new Set<string>();
+    const messagesWithOtherDeviceEnvelopes = new Set<string>();
+    const messagesWithReadableEnvelope = new Set<string>();
+    const otherRecipientDeviceIds = new Set<string>();
     const selectedEnvelopes = (rows ?? []).flatMap<
       [string, StoredDmE2eeEnvelope]
     >((row) => {
@@ -4653,6 +4657,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       const senderId = String(messageRecord?.sender_id ?? '').trim();
       const recipientDeviceRecordId = String(row.recipient_device_id ?? '').trim();
       const ciphertext = String(row.ciphertext ?? '').trim();
+      messagesWithAnyEnvelopeRows.add(row.message_id);
 
       const isCurrentDeviceEnvelope =
         Boolean(activeDeviceRecordId) &&
@@ -4663,6 +4668,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
         recipientDeviceRecordId === senderDeviceRecordId;
 
       if (!isCurrentDeviceEnvelope && !isSenderSelfEnvelope) {
+        if (recipientDeviceRecordId) {
+          otherRecipientDeviceIds.add(recipientDeviceRecordId);
+        }
+        messagesWithOtherDeviceEnvelopes.add(row.message_id);
         return [];
       }
 
@@ -4684,6 +4693,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       } else if (isSenderSelfEnvelope) {
         selectedSenderSelfEnvelopeCount += 1;
       }
+      messagesWithReadableEnvelope.add(row.message_id);
 
       return [[
         row.message_id,
@@ -4705,8 +4715,14 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     return {
       envelopeMap: new Map(selectedEnvelopes),
       malformedEnvelopeCount,
+      messagesWithOnlyOtherDeviceEnvelopes: Array.from(
+        messagesWithOtherDeviceEnvelopes,
+      ).filter((messageId) => !messagesWithReadableEnvelope.has(messageId)),
+      otherRecipientDeviceIds: Array.from(otherRecipientDeviceIds),
       selectedCurrentDeviceEnvelopeCount,
       selectedSenderSelfEnvelopeCount,
+      totalEnvelopeRowCount: (rows ?? []).length,
+      totalMessagesWithAnyEnvelopeRows: messagesWithAnyEnvelopeRows.size,
     };
   };
 
@@ -4797,7 +4813,14 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     authEnvelopeRowCount,
     authSelectedEnvelopeCount,
     debugRequestId: input.debugRequestId ?? null,
+    messagesWithOnlyOtherDeviceEnvelopes:
+      selectedEnvelopeResult.messagesWithOnlyOtherDeviceEnvelopes,
+    messagesWithOnlyOtherDeviceEnvelopesCount:
+      selectedEnvelopeResult.messagesWithOnlyOtherDeviceEnvelopes.length,
     malformedEnvelopeCount: selectedEnvelopeResult.malformedEnvelopeCount,
+    otherRecipientDeviceCount:
+      selectedEnvelopeResult.otherRecipientDeviceIds.length,
+    otherRecipientDeviceIds: selectedEnvelopeResult.otherRecipientDeviceIds,
     selectedCurrentDeviceEnvelopeCount:
       selectedEnvelopeResult.selectedCurrentDeviceEnvelopeCount,
     selectedSenderSelfEnvelopeCount:
@@ -4805,6 +4828,9 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     requestedMessageCount: uniqueMessageIds.length,
     envelopeCount: selectedEnvelopeResult.envelopeMap.size,
     selectionSource: activeDevice?.selectionSource ?? null,
+    totalEnvelopeRowCount: selectedEnvelopeResult.totalEnvelopeRowCount,
+    totalMessagesWithAnyEnvelopeRows:
+      selectedEnvelopeResult.totalMessagesWithAnyEnvelopeRows,
     usedPrivilegedEnvelopeLookup,
   });
 
