@@ -7579,6 +7579,11 @@ main {
   padding: 0;
 }
 
+.message-encryption-state-compact {
+  gap: 0;
+  padding: 0;
+}
+
 .message-encryption-title {
   margin: 0;
   color: rgba(58, 68, 84, 0.88);
@@ -7591,6 +7596,13 @@ main {
 .message-encryption-state[data-dm-e2ee-access-state='history-unavailable-on-this-device'] .message-encryption-title,
 .message-encryption-state[data-dm-e2ee-access-state='policy-blocked'] .message-encryption-title {
   color: rgba(58, 68, 84, 0.82);
+}
+
+.message-encryption-title-compact {
+  color: rgba(76, 86, 102, 0.72);
+  font-size: 0.76rem;
+  font-weight: 560;
+  letter-spacing: 0;
 }
 
 .message-encryption-actions {

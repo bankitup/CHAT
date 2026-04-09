@@ -1810,6 +1810,48 @@ function mergeThreadHistoryState(input: {
   };
 }
 
+function getEncryptedHistoryHintForMessage(input: {
+  envelope: StoredDmE2eeEnvelope | null;
+  hint: EncryptedDmServerHistoryHint | null;
+  message: ConversationMessageRow;
+}) {
+  return (
+    input.hint ?? {
+      code: input.envelope ? 'envelope-present' : 'missing-envelope',
+      committedHistoryState: 'present',
+      currentDeviceAvailability: input.envelope
+        ? 'envelope-present'
+        : 'missing-envelope',
+      recoveryDisposition: input.envelope
+        ? 'already-readable'
+        : 'not-supported-v1',
+      activeDeviceRecordId: null,
+      messageCreatedAt: input.message.created_at ?? null,
+      viewerJoinedAt: null,
+    }
+  );
+}
+
+function isUnavailableEncryptedHistoryMessage(input: {
+  encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
+  encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
+  message: ConversationMessageRow | null;
+}) {
+  if (!input.message || !isEncryptedDmTextMessage(input.message)) {
+    return false;
+  }
+
+  const envelope =
+    input.encryptedEnvelopesByMessage.get(input.message.id) ?? null;
+  const historyHint = getEncryptedHistoryHintForMessage({
+    envelope,
+    hint: input.encryptedHistoryHintsByMessage.get(input.message.id) ?? null,
+    message: input.message,
+  });
+
+  return historyHint.code !== 'envelope-present';
+}
+
 type ThreadMessageRowProps = {
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
@@ -1818,6 +1860,7 @@ type ThreadMessageRowProps = {
   conversationId: string;
   conversationKind: 'dm' | 'group';
   currentUserId: string;
+  compactHistoricalUnavailable: boolean;
   encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
   encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
   isClusteredWithNext: boolean;
@@ -1838,6 +1881,7 @@ function ThreadMessageRow({
   activeEditMessageId,
   activeSpaceId,
   attachmentsByMessage,
+  compactHistoricalUnavailable,
   conversationId,
   conversationKind,
   currentUserId,
@@ -1899,20 +1943,11 @@ function ThreadMessageRow({
         );
   const encryptedEnvelope =
     encryptedEnvelopesByMessage.get(message.id) ?? null;
-  const encryptedHistoryHint =
-    encryptedHistoryHintsByMessage.get(message.id) ?? {
-      code: encryptedEnvelope ? 'envelope-present' : 'missing-envelope',
-      committedHistoryState: 'present',
-      currentDeviceAvailability: encryptedEnvelope
-        ? 'envelope-present'
-        : 'missing-envelope',
-      recoveryDisposition: encryptedEnvelope
-        ? 'already-readable'
-        : 'not-supported-v1',
-      activeDeviceRecordId: null,
-      messageCreatedAt: message.created_at ?? null,
-      viewerJoinedAt: null,
-    };
+  const encryptedHistoryHint = getEncryptedHistoryHintForMessage({
+    envelope: encryptedEnvelope,
+    hint: encryptedHistoryHintsByMessage.get(message.id) ?? null,
+    message,
+  });
   const isUnavailableHistoricalEncryptedHint =
     encryptedHistoryHint.code !== 'envelope-present';
   const encryptedHistoryFallbackAccessState =
@@ -2374,7 +2409,12 @@ function ThreadMessageRow({
                 {...threadClientDiagnostics}
                 fallback={
                   <div
-                    className="message-encryption-state"
+                    className={
+                      compactHistoricalUnavailable &&
+                      isUnavailableHistoricalEncryptedHint
+                        ? 'message-encryption-state message-encryption-state-compact'
+                        : 'message-encryption-state'
+                    }
                     data-dm-e2ee-access-state={
                       isUnavailableHistoricalEncryptedHint
                         ? encryptedHistoryFallbackAccessState
@@ -2385,15 +2425,20 @@ function ThreadMessageRow({
                     <p
                       className={
                         isUnavailableHistoricalEncryptedHint
-                          ? 'message-encryption-title'
+                          ? compactHistoricalUnavailable
+                            ? 'message-encryption-title message-encryption-title-compact'
+                            : 'message-encryption-title'
                           : 'message-body'
                       }
                     >
                       {isUnavailableHistoricalEncryptedHint
-                        ? t.chat.olderEncryptedMessage
+                        ? compactHistoricalUnavailable
+                          ? t.chat.encryptedMessage
+                          : t.chat.olderEncryptedMessage
                         : t.chat.encryptedMessageUnavailable}
                     </p>
-                    {isUnavailableHistoricalEncryptedHint ? (
+                    {isUnavailableHistoricalEncryptedHint &&
+                    !compactHistoricalUnavailable ? (
                       <p className="message-encryption-note">
                         {encryptedHistoryFallbackNote}
                       </p>
@@ -2405,6 +2450,7 @@ function ThreadMessageRow({
               >
                 <EncryptedDmMessageBody
                   clientId={message.client_id}
+                  compactHistoricalUnavailable={compactHistoricalUnavailable}
                   conversationId={conversationId}
                   currentUserId={currentUserId}
                   envelope={encryptedEnvelope}
@@ -2430,7 +2476,12 @@ function ThreadMessageRow({
               </DmThreadClientSubtree>
             ) : (
               <div
-                className="message-encryption-state"
+                className={
+                  compactHistoricalUnavailable &&
+                  isUnavailableHistoricalEncryptedHint
+                    ? 'message-encryption-state message-encryption-state-compact'
+                    : 'message-encryption-state'
+                }
                 data-dm-e2ee-access-state={
                   isUnavailableHistoricalEncryptedHint
                     ? encryptedHistoryFallbackAccessState
@@ -2446,15 +2497,20 @@ function ThreadMessageRow({
                 <p
                   className={
                     isUnavailableHistoricalEncryptedHint
-                      ? 'message-encryption-title'
+                      ? compactHistoricalUnavailable
+                        ? 'message-encryption-title message-encryption-title-compact'
+                        : 'message-encryption-title'
                       : 'message-body'
                   }
                 >
                   {isUnavailableHistoricalEncryptedHint
-                    ? t.chat.olderEncryptedMessage
+                    ? compactHistoricalUnavailable
+                      ? t.chat.encryptedMessage
+                      : t.chat.olderEncryptedMessage
                     : t.chat.encryptedMessageUnavailable}
                 </p>
-                {isUnavailableHistoricalEncryptedHint ? (
+                {isUnavailableHistoricalEncryptedHint &&
+                !compactHistoricalUnavailable ? (
                   <p className="message-encryption-note">
                     {encryptedHistoryFallbackNote}
                   </p>
@@ -3778,6 +3834,23 @@ export function ThreadHistoryViewport({
                 activeEditMessageId={activeEditMessageId}
                 activeSpaceId={activeSpaceId}
                 attachmentsByMessage={historyState.attachmentsByMessage}
+                compactHistoricalUnavailable={
+                  canClusterAdjacentMessages(previousMessage, item.message) &&
+                  isUnavailableEncryptedHistoryMessage({
+                    encryptedEnvelopesByMessage:
+                      historyState.encryptedEnvelopesByMessage,
+                    encryptedHistoryHintsByMessage:
+                      historyState.encryptedHistoryHintsByMessage,
+                    message: previousMessage,
+                  }) &&
+                  isUnavailableEncryptedHistoryMessage({
+                    encryptedEnvelopesByMessage:
+                      historyState.encryptedEnvelopesByMessage,
+                    encryptedHistoryHintsByMessage:
+                      historyState.encryptedHistoryHintsByMessage,
+                    message: item.message,
+                  })
+                }
                 conversationId={conversationId}
                 conversationKind={conversationKind}
                 currentUserId={currentUserId}
