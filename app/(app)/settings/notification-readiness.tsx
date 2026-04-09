@@ -83,6 +83,7 @@ export function NotificationReadinessPanel({
   const [lastError, setLastError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const t = getTranslations(language);
+  const isActivitySurface = embedded && surface === 'activity';
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +101,39 @@ export function NotificationReadinessPanel({
   }, []);
 
   const statusCopy = getStatusCopy(readiness, language);
+  const permissionValue =
+    readiness?.permission === 'unsupported'
+      ? t.notifications.unavailable
+      : readiness?.permission === 'granted'
+        ? t.notifications.on
+        : readiness?.permission === 'denied'
+          ? t.notifications.off
+          : t.notifications.checking;
+  const deviceValue =
+    readiness?.status === 'unsupported'
+      ? t.notifications.unavailable
+      : readiness?.subscriptionActive
+        ? t.notifications.connected
+        : t.notifications.notConnected;
+  const detailNote = lastError
+    ? lastError
+    : readiness?.status === 'blocked'
+      ? t.notifications.browserSettingsNote
+      : readiness?.status === 'enabled'
+        ? t.notifications.comingSoonNote
+        : readiness?.status === 'available'
+          ? readiness.permission === 'granted'
+            ? t.notifications.permissionReadyNote
+            : t.notifications.availableNote
+          : readiness?.status === 'unconfigured'
+            ? isActivitySurface
+              ? null
+              : t.notifications.notConfiguredNote
+            : readiness?.status === 'unsupported'
+              ? isActivitySurface
+                ? null
+                : statusCopy.body
+              : null;
 
   return (
     <section
@@ -114,45 +148,60 @@ export function NotificationReadinessPanel({
           : 'card stack settings-card'
       }
     >
-      <div className="stack settings-card-copy settings-section-copy">
-        <h2 className="section-title">{statusCopy.title}</h2>
-        <p className="muted">{t.notifications.subtitle}</p>
-      </div>
+      {isActivitySurface ? (
+        <div className="stack messenger-activity-notification-header">
+          <div className="messenger-activity-notification-topline">
+            <div className="stack settings-card-copy settings-section-copy messenger-activity-notification-copy">
+              <h2 className="section-title">{statusCopy.title}</h2>
+              <p className="muted">{statusCopy.body}</p>
+            </div>
 
-      <div className="cluster settings-summary">
-        <span className="summary-pill">{statusCopy.badge}</span>
-      </div>
+            <span className="summary-pill messenger-activity-notification-badge">
+              {statusCopy.badge}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="stack settings-card-copy settings-section-copy">
+            <h2 className="section-title">{statusCopy.title}</h2>
+            <p className="muted">{t.notifications.subtitle}</p>
+          </div>
 
-      <div className="settings-capability-list">
+          <div className="cluster settings-summary">
+            <span className="summary-pill">{statusCopy.badge}</span>
+          </div>
+        </>
+      )}
+
+      <div
+        className={
+          isActivitySurface
+            ? 'settings-capability-list messenger-activity-notification-status-list'
+            : 'settings-capability-list'
+        }
+      >
         <div className="settings-capability-row">
           <span className="settings-capability-label">{t.notifications.status}</span>
           <span className="settings-capability-value">{statusCopy.settingValue}</span>
         </div>
         <div className="settings-capability-row">
           <span className="settings-capability-label">{t.notifications.permission}</span>
-          <span className="settings-capability-value">
-            {readiness?.permission === 'unsupported'
-              ? t.notifications.unavailable
-              : readiness?.permission === 'granted'
-                ? t.notifications.on
-                : readiness?.permission === 'denied'
-                  ? t.notifications.off
-                  : t.notifications.checking}
-          </span>
+          <span className="settings-capability-value">{permissionValue}</span>
         </div>
         <div className="settings-capability-row">
           <span className="settings-capability-label">{t.notifications.device}</span>
-          <span className="settings-capability-value">
-            {readiness?.status === 'unsupported'
-              ? t.notifications.unavailable
-              : readiness?.subscriptionActive
-                ? t.notifications.connected
-                : t.notifications.notConnected}
-          </span>
+          <span className="settings-capability-value">{deviceValue}</span>
         </div>
       </div>
 
-      <div className="settings-actions">
+      <div
+        className={
+          isActivitySurface
+            ? 'settings-actions messenger-activity-notification-actions'
+            : 'settings-actions'
+        }
+      >
         {readiness?.status === 'available' ? (
           <button
             className="button"
@@ -175,38 +224,16 @@ export function NotificationReadinessPanel({
           </button>
         ) : null}
 
-        {lastError ? (
-          <p className="muted settings-note">{lastError}</p>
-        ) : null}
-
-        {readiness?.status === 'blocked' ? (
-          <p className="muted settings-note">
-            {t.notifications.browserSettingsNote}
+        {detailNote ? (
+          <p
+            className={
+              isActivitySurface
+                ? 'muted settings-note messenger-activity-notification-note'
+                : 'muted settings-note'
+            }
+          >
+            {detailNote}
           </p>
-        ) : null}
-
-        {readiness?.status === 'enabled' ? (
-          <p className="muted settings-note">
-            {t.notifications.comingSoonNote}
-          </p>
-        ) : null}
-
-        {readiness?.status === 'available' ? (
-          <p className="muted settings-note">
-            {readiness.permission === 'granted'
-              ? t.notifications.permissionReadyNote
-              : t.notifications.availableNote}
-          </p>
-        ) : null}
-
-        {readiness?.status === 'unconfigured' ? (
-          <p className="muted settings-note">
-            {t.notifications.notConfiguredNote}
-          </p>
-        ) : null}
-
-        {readiness?.status === 'unsupported' ? (
-          <p className="muted settings-note">{statusCopy.body}</p>
         ) : null}
       </div>
     </section>

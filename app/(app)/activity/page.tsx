@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
@@ -330,8 +331,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   ).length;
   const messengerHasVisibleNotifications =
     filteredMessengerAttentionItems.length > 0 || filteredMessengerRecentItems.length > 0;
-  const visibleNotificationCount =
-    filteredMessengerAttentionItems.length + filteredMessengerRecentItems.length;
   const { counts, primaryFlow } =
     activeSpace.profile === 'keepcozy_ops'
       ? await getKeepCozyActivityData({
@@ -418,18 +417,10 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <span className="keepcozy-meta-pill">
               {t.messengerActivity.unreadSectionTitle}: {unreadChatCount}
             </span>
-            {unreadDmCount > 0 ? (
-              <span className="keepcozy-meta-pill">
-                {t.messengerActivity.filterDirect}: {unreadDmCount}
-              </span>
-            ) : null}
-            {visibleNotificationCount > 0 ? (
-              <span className="keepcozy-meta-pill">
-                {t.messengerActivity.filterRecent}: {visibleNotificationCount}
-              </span>
-            ) : null}
           </div>
         </section>
+
+        <NotificationReadinessPanel embedded language={language} surface="activity" />
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
           <div className="stack messenger-activity-surface-copy">
