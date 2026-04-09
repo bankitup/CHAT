@@ -48,6 +48,7 @@ type ActivityConversationLiveItemProps = {
     attentionBadge: string;
     recentBadge: string;
   };
+  shouldPrefetch?: boolean;
 };
 
 function formatActivityRecency(value: string | null, language: 'en' | 'ru', yesterdayLabel: string) {
@@ -188,6 +189,7 @@ export function ActivityConversationLiveItem({
   item,
   language,
   labels,
+  shouldPrefetch = false,
 }: ActivityConversationLiveItemProps) {
   const liveSummary = useSyncExternalStore(
     (listener) =>
@@ -249,7 +251,7 @@ export function ActivityConversationLiveItem({
           : 'activity-item activity-item-messenger activity-item-attention'
       }
       href={chatHref}
-      prefetch={false}
+      prefetch={shouldPrefetch}
     >
       <ActivityConversationAvatarVisual
         groupAvatarPath={item.groupAvatarPath}

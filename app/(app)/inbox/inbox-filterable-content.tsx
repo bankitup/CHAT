@@ -157,6 +157,7 @@ type InboxFilterableContentProps = {
 const INBOX_PULL_REFRESH_MAX_OFFSET = 92;
 const INBOX_PULL_REFRESH_HOLD_OFFSET = 58;
 const INBOX_PULL_REFRESH_THRESHOLD = 72;
+const HOT_CHAT_ROUTE_PREFETCH_LIMIT = 6;
 
 function normalizeSearchTerm(value: string) {
   return value.trim().toLowerCase();
@@ -1333,7 +1334,7 @@ export function InboxFilterableContent({
               {section.label ? (
                 <p className="conversation-list-section-label">{section.label}</p>
               ) : null}
-              {section.items.map((conversation) => (
+              {section.items.map((conversation, index) => (
                 <InboxConversationLiveRow
                   key={conversation.conversationId}
                   activeSpaceId={activeSpaceId}
@@ -1365,6 +1366,9 @@ export function InboxFilterableContent({
                   previewMode={preferences.previewMode}
                   restoreAction={activeView === 'archived' ? restoreAction : null}
                   restoreLabel={activeView === 'archived' ? t.inbox.restore : undefined}
+                  shouldPrefetch={
+                    activeView !== 'archived' && index < HOT_CHAT_ROUTE_PREFETCH_LIMIT
+                  }
                 />
               ))}
             </div>

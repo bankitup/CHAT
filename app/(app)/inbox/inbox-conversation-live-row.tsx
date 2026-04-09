@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { memo, useSyncExternalStore } from 'react';
 import { getInboxDisplayPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
@@ -56,6 +55,7 @@ type InboxConversationLiveRowProps = {
   };
   restoreAction?: ((formData: FormData) => void | Promise<void>) | null;
   restoreLabel?: string;
+  shouldPrefetch?: boolean;
 };
 
 function formatTimestamp(value: string | null, language: 'en' | 'ru', noActivityLabel: string) {
@@ -303,8 +303,8 @@ function InboxConversationLiveRowComponent({
   labels,
   restoreAction,
   restoreLabel,
+  shouldPrefetch = false,
 }: InboxConversationLiveRowProps) {
-  const router = useRouter();
   const liveSummary = useSyncExternalStore(
     (listener) =>
       subscribeToInboxConversationSummary(item.conversationId, listener),
@@ -414,7 +414,7 @@ function InboxConversationLiveRowComponent({
               event.metaKey ||
               event.ctrlKey ||
               event.shiftKey ||
-              event.altKey
+            event.altKey
             ) {
               logNavigationDiagnostics('row:navigation-bypassed', {
                 conversationId: item.conversationId,
@@ -425,15 +425,13 @@ function InboxConversationLiveRowComponent({
               return;
             }
 
-            event.preventDefault();
             logNavigationDiagnostics('row:navigation-attempt', {
               conversationId: item.conversationId,
               href: chatHref,
               isGroupConversation: item.isGroupConversation,
             });
-            router.push(chatHref);
           }}
-          prefetch={false}
+          prefetch={shouldPrefetch}
         >
           <InboxConversationAvatarVisual
             groupAvatarPath={item.groupAvatarPath}

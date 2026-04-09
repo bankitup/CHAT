@@ -105,6 +105,37 @@ function parseSpaceUserIdentifiers(rawValue: string | null | undefined) {
   return { invalid, valid };
 }
 
+function parseSelectedSpaceMemberUserIds(rawValue: string | null | undefined) {
+  const unique = new Set<string>();
+  const valid: string[] = [];
+  const invalid: string[] = [];
+
+  for (const rawPart of String(rawValue ?? '').split(/[\n,]+/)) {
+    const raw = rawPart.trim();
+
+    if (!raw) {
+      continue;
+    }
+
+    if (!UUID_PATTERN.test(raw)) {
+      invalid.push(raw);
+      continue;
+    }
+
+    const normalized = raw.toLowerCase();
+
+    if (!unique.has(normalized)) {
+      unique.add(normalized);
+      valid.push(normalized);
+    }
+  }
+
+  return {
+    invalid,
+    valid,
+  };
+}
+
 async function listUsersByEmail(input: {
   emails: string[];
   serviceClient: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
@@ -574,6 +605,137 @@ export async function addMembersToGovernedSpace(input: {
   return {
     addedCount: insertRows.length,
     promotedCount: promoteToAdminUserIds.length,
+    spaceId: exactSpaceAccess.activeSpace.id,
+    spaceName: exactSpaceAccess.activeSpace.name,
+  };
+}
+
+export async function removeMembersFromGovernedSpace(input: {
+  selectedUserIds: string;
+  spaceId: string;
+}) {
+  const viewer = await requireRequestViewer('spaces:remove-members');
+  const exactSpaceAccess = await requireSpaceMemberManagementForUser({
+    requestedSpaceId: input.spaceId,
+    source: 'spaces:remove-members',
+    userEmail: viewer.email ?? null,
+    userId: viewer.id,
+  });
+  const serviceClient = await requireServiceRoleClient();
+  const selectedUserIds = parseSelectedSpaceMemberUserIds(input.selectedUserIds);
+
+  if (selectedUserIds.invalid.length > 0) {
+    throw new Error(
+      `Selected participants are invalid. Use the current-space list only: ${selectedUserIds.invalid.join(', ')}`,
+    );
+  }
+
+  if (selectedUserIds.valid.length === 0) {
+    throw new Error('Choose at least one participant to remove.');
+  }
+
+  const { data: targetMembershipRows, error: targetMembershipError } =
+    await serviceClient
+      .from('space_members')
+      .select('user_id, role')
+      .eq('space_id', exactSpaceAccess.activeSpace.id)
+      .in('user_id', selectedUserIds.valid);
+
+  if (targetMembershipError) {
+    throw new Error(targetMembershipError.message);
+  }
+
+  const targetMemberships = (targetMembershipRows ?? []) as Array<{
+    role: SpaceRole;
+    user_id: string;
+  }>;
+
+  if (targetMemberships.length === 0) {
+    throw new Error('Those participants are no longer active in this space.');
+  }
+
+  if (targetMemberships.some((membership) => membership.user_id === viewer.id)) {
+    throw new Error(
+      'Remove your own account through a reviewed staff flow, not from Home.',
+    );
+  }
+
+  if (targetMemberships.some((membership) => membership.role === 'owner')) {
+    throw new Error('The current space owner cannot be removed here.');
+  }
+
+  const { data: allMembershipRows, error: allMembershipError } = await serviceClient
+    .from('space_members')
+    .select('user_id, role')
+    .eq('space_id', exactSpaceAccess.activeSpace.id);
+
+  if (allMembershipError) {
+    throw new Error(allMembershipError.message);
+  }
+
+  const selectedUserIdSet = new Set(
+    targetMemberships.map((membership) => membership.user_id),
+  );
+  const remainingAdminCount = ((allMembershipRows ?? []) as Array<{
+    role: SpaceRole;
+    user_id: string;
+  }>).filter(
+    (membership) =>
+      !selectedUserIdSet.has(membership.user_id) &&
+      (membership.role === 'owner' || membership.role === 'admin'),
+  ).length;
+
+  if (remainingAdminCount === 0) {
+    throw new Error('Keep at least one space admin in this space.');
+  }
+
+  const removableUserIds = Array.from(selectedUserIdSet);
+  const { error: removeError } = await serviceClient
+    .from('space_members')
+    .delete()
+    .eq('space_id', exactSpaceAccess.activeSpace.id)
+    .in('user_id', removableUserIds);
+
+  if (removeError) {
+    throw new Error(removeError.message);
+  }
+
+  console.info('[spaces-membership]', {
+    action: 'remove-members',
+    actingUserId: viewer.id,
+    removedUserIds: removableUserIds,
+    source: 'home-space-participants',
+    spaceId: exactSpaceAccess.activeSpace.id,
+  });
+
+  return {
+    removedCount: removableUserIds.length,
+    spaceId: exactSpaceAccess.activeSpace.id,
+  };
+}
+
+export async function requestAdditionalAccountsForGovernedSpace(input: {
+  spaceId: string;
+}) {
+  const viewer = await requireRequestViewer('spaces:request-accounts');
+  const exactSpaceAccess = await requireSpaceMemberManagementForUser({
+    requestedSpaceId: input.spaceId,
+    source: 'spaces:request-accounts',
+    userEmail: viewer.email ?? null,
+    userId: viewer.id,
+  });
+
+  console.info('[spaces-membership]', {
+    action: 'request-additional-accounts',
+    actingUserEmail: viewer.email ?? null,
+    actingUserId: viewer.id,
+    requestedAt: new Date().toISOString(),
+    source: 'home-space-participants',
+    spaceId: exactSpaceAccess.activeSpace.id,
+    spaceName: exactSpaceAccess.activeSpace.name,
+  });
+
+  return {
     spaceId: exactSpaceAccess.activeSpace.id,
     spaceName: exactSpaceAccess.activeSpace.name,
   };

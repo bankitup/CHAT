@@ -2,6 +2,7 @@
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import { noteWarmNavRouterRefresh } from '@/modules/messaging/performance/warm-nav-client';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useTransition } from 'react';
 import {
@@ -104,6 +105,9 @@ export function InboxRealtimeSync({
         refreshTimeoutRef.current = null;
         lastRefreshAtRef.current = Date.now();
         logDiagnostics('refresh:start', { reason });
+        noteWarmNavRouterRefresh('inbox', reason, {
+          trackedConversationCount: normalizedConversationIds.length,
+        });
         startRefreshTransition(() => {
           router.refresh();
         });
@@ -259,6 +263,9 @@ export function InboxRealtimeSync({
 
         if (normalizedConversationIds.length === 0) {
           lastRefreshAtRef.current = Date.now();
+          noteWarmNavRouterRefresh('inbox', 'manual-refresh-empty-tracked-set', {
+            trackedConversationCount: 0,
+          });
           startRefreshTransition(() => {
             router.refresh();
           });

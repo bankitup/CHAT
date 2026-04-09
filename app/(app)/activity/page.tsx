@@ -62,6 +62,8 @@ type MessengerNotificationItem = ActivityItem & {
   variant: 'attention' | 'recent';
 };
 
+const HOT_ACTIVITY_CHAT_PREFETCH_LIMIT = 4;
+
 function buildInboxHref(input: {
   spaceId: string;
   view?: 'main' | 'archived';
@@ -525,7 +527,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   </div>
 
                   <div className="activity-list messenger-activity-list">
-                    {filteredMessengerAttentionItems.map((conversation) => (
+                    {filteredMessengerAttentionItems.map((conversation, index) => (
                       <ActivityConversationLiveItem
                         key={`messenger-unread-${conversation.conversationId}`}
                         activeSpaceId={activeSpace.id}
@@ -566,6 +568,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                           voiceMessage: t.chat.voiceMessage,
                           yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
                         }}
+                        shouldPrefetch={index < HOT_ACTIVITY_CHAT_PREFETCH_LIMIT}
                       />
                     ))}
                   </div>
@@ -589,7 +592,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                   </div>
 
                   <div className="activity-list messenger-activity-list">
-                    {filteredMessengerRecentItems.map((conversation) => (
+                    {filteredMessengerRecentItems.map((conversation, index) => (
                       <ActivityConversationLiveItem
                         key={`messenger-recent-${conversation.conversationId}`}
                         activeSpaceId={activeSpace.id}
@@ -630,6 +633,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                           voiceMessage: t.chat.voiceMessage,
                           yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
                         }}
+                        shouldPrefetch={index < HOT_ACTIVITY_CHAT_PREFETCH_LIMIT}
                       />
                     ))}
                   </div>
@@ -1103,7 +1107,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
           {unreadItems.length > 0 ? (
             <div className="activity-list">
-              {unreadItems.map((conversation) => (
+              {unreadItems.map((conversation, index) => (
                 <ActivityConversationLiveItem
                   key={`unread-${conversation.conversationId}`}
                   activeSpaceId={activeSpace.id}
@@ -1151,6 +1155,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     voiceMessage: t.chat.voiceMessage,
                     yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
                   }}
+                  shouldPrefetch={index < HOT_ACTIVITY_CHAT_PREFETCH_LIMIT}
                 />
               ))}
             </div>
@@ -1187,7 +1192,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
           {recentItems.length > 0 ? (
             <div className="activity-list">
-              {recentItems.map((conversation) => (
+              {recentItems.map((conversation, index) => (
                 <ActivityConversationLiveItem
                   key={`recent-${conversation.conversationId}`}
                   activeSpaceId={activeSpace.id}
@@ -1235,6 +1240,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
                     voiceMessage: t.chat.voiceMessage,
                     yesterday: language === 'ru' ? 'Вчера' : 'Yesterday',
                   }}
+                  shouldPrefetch={index < HOT_ACTIVITY_CHAT_PREFETCH_LIMIT}
                 />
               ))}
             </div>
