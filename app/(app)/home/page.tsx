@@ -10,7 +10,6 @@ import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
-import { IdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
@@ -36,28 +35,6 @@ type HomeDashboardPageProps = {
     space?: string;
   }>;
 };
-
-function resolveMessengerProfileLabel(input: {
-  displayName: string | null;
-  email: string | null;
-  username: string | null;
-}) {
-  const displayName = input.displayName?.trim();
-
-  if (displayName) {
-    return displayName;
-  }
-
-  const username = input.username?.trim();
-
-  if (username) {
-    return username;
-  }
-
-  const emailLocalPart = input.email?.split('@')[0]?.trim();
-
-  return emailLocalPart || null;
-}
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
   const [user, language] = await Promise.all([
@@ -156,16 +133,6 @@ export default async function HomeDashboardPage({
           })
         : null,
     ]);
-    const profileLabel =
-      resolveMessengerProfileLabel({
-        displayName: currentUserProfile.displayName ?? null,
-        email: currentUserProfile.email ?? user.email ?? null,
-        username: currentUserProfile.username ?? null,
-      }) ?? t.settings.profileTitle;
-    const profileHandle = currentUserProfile.username?.trim()
-      ? `@${currentUserProfile.username.trim()}`
-      : null;
-    const profileEmail = currentUserProfile.email ?? user.email ?? null;
     const visibleError = query.error
       ? sanitizeUserFacingErrorMessage({
           fallback: getUserFacingErrorFallback(language, 'settings'),
@@ -190,41 +157,6 @@ export default async function HomeDashboardPage({
         {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
 
         <section className="messenger-home-personal-grid">
-          <section className="card stack settings-surface settings-home-card settings-home-card-profile messenger-home-personal-card">
-            <div className="messenger-home-profile-row">
-              <IdentityAvatar
-                diagnosticsSurface="home:messenger-profile"
-                identity={{
-                  avatarPath: currentUserProfile.avatarPath ?? null,
-                  displayName: profileLabel,
-                  userId: user.id,
-                }}
-                label={profileLabel}
-                size="lg"
-              />
-
-              <div className="stack messenger-home-profile-copy">
-                <span className="activity-focus-kicker">{t.settings.profileTitle}</span>
-                <h1 className="messenger-home-profile-name">{profileLabel}</h1>
-                <div className="messenger-home-profile-meta">
-                  {profileEmail ? (
-                    <span className="muted messenger-home-profile-email">
-                      {profileEmail}
-                    </span>
-                  ) : null}
-                  {profileHandle ? (
-                    <span className="summary-pill summary-pill-muted">
-                      {profileHandle}
-                    </span>
-                  ) : null}
-                  <span className="summary-pill summary-pill-muted">
-                    {t.settings.currentSpaceLabel}: {activeSpace.name}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </section>
-
           <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-profile-editor-card">
             <div className="stack settings-card-copy settings-section-copy">
               <h2 className="section-title">{t.settings.profileTitle}</h2>
@@ -234,7 +166,7 @@ export default async function HomeDashboardPage({
             <ProfileSettingsForm
               avatarPath={currentUserProfile.avatarPath}
               defaultDisplayName={currentUserProfile.displayName ?? ''}
-              defaultEmail={profileEmail ?? ''}
+              defaultEmail={currentUserProfile.email ?? user.email ?? ''}
               defaultUsername={currentUserProfile.username ?? ''}
               hasAvatar={Boolean(currentUserProfile.avatarPath)}
               labels={{
@@ -270,7 +202,6 @@ export default async function HomeDashboardPage({
               userId={user.id}
             />
           </section>
-
           <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
             <ProfileStatusForm
               key={`home-profile-status-${currentUserProfile.statusEmoji ?? ''}-${currentUserProfile.statusText ?? ''}-${currentUserProfile.statusUpdatedAt ?? ''}`}
@@ -298,7 +229,6 @@ export default async function HomeDashboardPage({
               statusUpdatedAt={currentUserProfile.statusUpdatedAt}
             />
           </section>
-
           <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
             <NotificationReadinessPanel embedded language={language} surface="home" />
           </section>
