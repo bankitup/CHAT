@@ -558,6 +558,8 @@ type LanguageDictionary = {
     testReadyNote: string;
     testSentNote: string;
     testFailedNote: string;
+    internalTools: string;
+    internalToolsNote: string;
   };
     inbox: {
       title: string;
@@ -1476,6 +1478,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Test notification sent. Put the app in the background if you want to confirm the browser alert.',
       testFailedNote:
         'We could not send a test notification to this device just now. Please try again.',
+      internalTools: 'Internal notification tools',
+      internalToolsNote:
+        'Includes test delivery and readiness details for preview and admin checks.',
     },
     inbox: {
       title: 'Chats',
@@ -2452,6 +2457,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Тестовое уведомление отправлено. Сверните приложение, если хотите проверить системное оповещение браузера.',
       testFailedNote:
         'Сейчас не удалось отправить тестовое уведомление на это устройство. Попробуйте ещё раз.',
+      internalTools: 'Внутренние инструменты уведомлений',
+      internalToolsNote:
+        'Здесь остаются тестовая доставка и детали готовности для превью и админ-проверок.',
     },
     inbox: {
       title: 'Чаты',
