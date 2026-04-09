@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
@@ -12,6 +13,7 @@ import {
   getInboxConversationsStable,
   type InboxConversation,
 } from '@/modules/messaging/data/server';
+import { isPushTestSendEnabledForUser } from '@/modules/messaging/push/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
@@ -25,7 +27,6 @@ import {
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
-import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
 
 type ActivityPageProps = {
@@ -188,6 +189,9 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const { activeSpace, language, t, user } = await requireActivitySpaceContext(
     query.space,
   );
+  const allowNotificationTestSend = isPushTestSendEnabledForUser({
+    userEmail: user.email ?? null,
+  });
   const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
@@ -331,8 +335,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   ).length;
   const messengerHasVisibleNotifications =
     filteredMessengerAttentionItems.length > 0 || filteredMessengerRecentItems.length > 0;
-  const visibleNotificationCount =
-    filteredMessengerAttentionItems.length + filteredMessengerRecentItems.length;
   const { counts, primaryFlow } =
     activeSpace.profile === 'keepcozy_ops'
       ? await getKeepCozyActivityData({
@@ -385,38 +387,38 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         />
 
         <section className="stack settings-hero activity-hero messenger-activity-head">
-          <div className="messenger-activity-head-row">
-            <div className="stack activity-focus-copy messenger-activity-copy">
-              <span className="activity-focus-kicker">{t.shell.messengerActivity}</span>
-              <h1 className="activity-focus-title">
-                {t.messengerActivity.overviewTitle}
-              </h1>
-              <p className="muted activity-focus-body">
-                {t.messengerActivity.subtitle}
-              </p>
+          <div className="stack activity-focus-copy messenger-activity-copy">
+            <span className="activity-focus-kicker">{t.shell.messengerActivity}</span>
+            <h1 className="activity-focus-title">
+              {t.messengerActivity.overviewTitle}
+            </h1>
+            <p className="muted activity-focus-body">
+              {t.messengerActivity.overviewBody}
+            </p>
+          </div>
+        </section>
+
+        <NotificationReadinessPanel embedded language={language} surface="activity" />
+
+        <section className="card stack settings-surface activity-surface messenger-activity-surface">
+          <div className="messenger-activity-surface-header">
+            <div className="stack messenger-activity-surface-copy">
+              <h2 className="card-title">{t.messengerActivity.surfaceTitle}</h2>
+              <p className="muted">{t.messengerActivity.surfaceBody}</p>
             </div>
 
-            <div className="messenger-activity-head-actions">
+            {archivedConversations.length > 0 ? (
               <Link
-                className="pill messenger-activity-head-pill"
-                href={withSpaceParam('/settings', activeSpace.id)}
+                className="pill messenger-activity-head-pill messenger-activity-surface-pill"
+                href={buildInboxHref({
+                  spaceId: activeSpace.id,
+                  view: 'archived',
+                })}
                 prefetch={false}
               >
-                {t.messengerActivity.settingsAction}
+                {t.activity.openArchived}
               </Link>
-              {archivedConversations.length > 0 ? (
-                <Link
-                  className="pill messenger-activity-head-pill"
-                  href={buildInboxHref({
-                    spaceId: activeSpace.id,
-                    view: 'archived',
-                  })}
-                  prefetch={false}
-                >
-                  {t.activity.openArchived}
-                </Link>
-              ) : null}
-            </div>
+            ) : null}
           </div>
 
           <div className="keepcozy-meta-row messenger-activity-meta">
@@ -426,18 +428,16 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <span className="keepcozy-meta-pill">
               {t.messengerActivity.unreadSectionTitle}: {unreadChatCount}
             </span>
-            {unreadDmCount > 0 ? (
-              <span className="keepcozy-meta-pill">
-                {t.messengerActivity.filterDirect}: {unreadDmCount}
-              </span>
-            ) : null}
-            {visibleNotificationCount > 0 ? (
-              <span className="keepcozy-meta-pill">
-                {t.messengerActivity.filterRecent}: {visibleNotificationCount}
-              </span>
-            ) : null}
           </div>
         </section>
+
+        <NotificationReadinessPanel
+          allowTestSend={allowNotificationTestSend}
+          embedded
+          language={language}
+          surface="activity"
+          testSpaceId={activeSpace.id}
+        />
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
           <div className="stack messenger-activity-surface-copy">
@@ -445,7 +445,10 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <p className="muted">{t.messengerActivity.surfaceBody}</p>
           </div>
 
-          <nav className="messenger-activity-filter-row" aria-label={t.messengerActivity.filtersLabel}>
+          <nav
+            className="messenger-activity-filter-row"
+            aria-label={t.messengerActivity.filtersLabel}
+          >
             <Link
               className={
                 activeMessengerActivityFilter === 'attention'
@@ -1252,9 +1255,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           )}
         </section>
 
-        <section className="stack settings-section activity-section">
-          <NotificationReadinessPanel embedded language={language} />
-        </section>
       </section>
     </section>
   );

@@ -535,18 +535,29 @@ type LanguageDictionary = {
     status: string;
     permission: string;
     device: string;
+    badge: string;
+    test: string;
     connected: string;
     notConnected: string;
+    ready: string;
+    enableFirst: string;
+    unreadCount: (count: number) => string;
     turnOn: string;
     turningOn: string;
     connectDevice: string;
     connectingDevice: string;
     browserSettingsNote: string;
     comingSoonNote: string;
+    deliveryNotReadyNote: string;
     availableNote: string;
     permissionReadyNote: string;
     notConfiguredNote: string;
     syncFailedNote: string;
+    sendTest: string;
+    sendingTest: string;
+    testReadyNote: string;
+    testSentNote: string;
+    testFailedNote: string;
   };
     inbox: {
       title: string;
@@ -1081,14 +1092,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     messengerActivity: {
       subtitle:
-        'Follow unread conversations and recent message movement for this space.',
+        'Unread replies and recent movement for this space.',
       overviewTitle: 'Notifications',
       overviewBody:
-        'Catch up on unread replies and recent conversation movement here, then jump straight into the exact message that needs you.',
+        'Enable notifications for this device, then use the queue below to catch up quickly on replies and recent chat movement.',
       settingsAction: 'Notification settings',
-      surfaceTitle: 'Replies and recent chat activity',
+      surfaceTitle: 'Needs attention and recent movement',
       surfaceBody:
-        'Each row groups the latest reply movement for one conversation so you can catch up fast and jump back into the right message.',
+        'Unread replies stay first. Recent movement stays just below for fast catch-up.',
       filtersLabel: 'Activity filters',
       filterAttention: 'Needs reply',
       filterRecent: 'Recent',
@@ -1438,19 +1449,33 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       status: 'Status',
       permission: 'Permission',
       device: 'This device',
+      badge: 'App badge',
+      test: 'Test send',
       connected: 'Connected',
       notConnected: 'Not connected',
+      ready: 'Ready',
+      enableFirst: 'Enable first',
+      unreadCount: (count) => `${count} unread`,
       turnOn: 'Enable notifications',
       turningOn: 'Enabling…',
       connectDevice: 'Connect this device',
       connectingDevice: 'Connecting…',
       browserSettingsNote: 'You can change this later in browser settings.',
       comingSoonNote: 'This browser is connected for the first chat push delivery slice.',
+      deliveryNotReadyNote:
+        'This device can connect now. Test delivery becomes available when web push delivery is configured for this environment.',
       availableNote: 'You can enable this now for this browser.',
       permissionReadyNote: 'Permission is already on. Enable notifications to save a real push subscription for this browser.',
       notConfiguredNote:
-        'Add NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY and apply the push-subscriptions SQL before enabling this here.',
+        'Add a web-push VAPID public key for runtime config and apply the push-subscriptions SQL before enabling this here.',
       syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
+      sendTest: 'Send test notification',
+      sendingTest: 'Sending test notification…',
+      testReadyNote: 'Send a test notification to verify this browser.',
+      testSentNote:
+        'Test notification sent. Put the app in the background if you want to confirm the browser alert.',
+      testFailedNote:
+        'We could not send a test notification to this device just now. Please try again.',
     },
     inbox: {
       title: 'Chats',
@@ -2014,14 +2039,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     messengerActivity: {
       subtitle:
-        'Следите за непрочитанными чатами и недавним движением сообщений в этом пространстве.',
+        'Непрочитанные ответы и недавнее движение по этому пространству.',
       overviewTitle: 'Уведомления',
       overviewBody:
-        'Разбирайте здесь непрочитанные ответы и недавнее движение разговоров, а затем переходите сразу к тому сообщению, которое требует внимания.',
+        'Включите уведомления для этого устройства, а затем быстро разбирайте ниже ответы и недавнее движение по чатам.',
       settingsAction: 'Настройки уведомлений',
-      surfaceTitle: 'Ответы и недавняя активность',
+      surfaceTitle: 'Требует внимания и недавнее движение',
       surfaceBody:
-        'Каждая строка собирает последнее движение по одному разговору, чтобы можно было быстро сориентироваться и вернуться сразу к нужному сообщению.',
+        'Сначала идут непрочитанные ответы, а ниже остаётся недавнее движение для быстрого возврата в нужный чат.',
       filtersLabel: 'Фильтры активности',
       filterAttention: 'Нужен ответ',
       filterRecent: 'Недавнее',
@@ -2397,21 +2422,36 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       status: 'Статус',
       permission: 'Разрешение',
       device: 'Это устройство',
+      badge: 'Значок app',
+      test: 'Тест',
       connected: 'Подключено',
       notConnected: 'Не подключено',
+      ready: 'Готово',
+      enableFirst: 'Сначала включите',
+      unreadCount: (count) =>
+        `${count} ${getRussianCountWord(count, ['непрочитанное', 'непрочитанных', 'непрочитанных'])}`,
       turnOn: 'Включить уведомления',
       turningOn: 'Включаем уведомления…',
       connectDevice: 'Подключить это устройство',
       connectingDevice: 'Подключаем…',
       browserSettingsNote: 'Позже это можно изменить в настройках браузера.',
       comingSoonNote: 'Этот браузер уже подключен для первого chat-first среза push-уведомлений.',
+      deliveryNotReadyNote:
+        'Это устройство уже можно подключить. Тестовая доставка станет доступна, когда web push будет настроен для этой среды.',
       availableNote: 'Это можно включить сейчас для этого браузера.',
       permissionReadyNote:
         'Разрешение уже включено. Включите уведомления, чтобы сохранить реальную push-подписку для этого браузера.',
       notConfiguredNote:
-        'Добавьте NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY и примените SQL для push_subscriptions, прежде чем включать это здесь.',
+        'Добавьте VAPID public key для runtime-настройки push и примените SQL для push_subscriptions, прежде чем включать это здесь.',
       syncFailedNote:
         'Сейчас не удалось подключить этот браузер к push-уведомлениям. Попробуйте ещё раз.',
+      sendTest: 'Отправить тестовое уведомление',
+      sendingTest: 'Отправляем тестовое уведомление…',
+      testReadyNote: 'Отправьте тестовое уведомление, чтобы проверить этот браузер.',
+      testSentNote:
+        'Тестовое уведомление отправлено. Сверните приложение, если хотите проверить системное оповещение браузера.',
+      testFailedNote:
+        'Сейчас не удалось отправить тестовое уведомление на это устройство. Попробуйте ещё раз.',
     },
     inbox: {
       title: 'Чаты',

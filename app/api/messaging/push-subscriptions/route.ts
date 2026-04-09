@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { PushSubscriptionRecordInput } from '@/modules/messaging/push/contract';
 import {
   disablePushSubscriptionForUser,
+  getPushSubscriptionStateForUser,
   isMissingPushSubscriptionsSchemaMessage,
   upsertPushSubscriptionForUser,
 } from '@/modules/messaging/push/server';
@@ -56,6 +57,54 @@ function createMissingSchemaResponse() {
     },
     { status: 503 },
   );
+}
+
+export async function GET(request: Request) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const endpoint = searchParams.get('endpoint')?.trim() || null;
+
+  try {
+    const state = await getPushSubscriptionStateForUser({
+      userId: user.id,
+      endpoint,
+    });
+
+    return NextResponse.json(state, {
+      headers: {
+        'cache-control': 'no-store',
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unable to load push subscription state.';
+
+    if (isMissingPushSubscriptionsSchemaMessage(message)) {
+      return createMissingSchemaResponse();
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Unable to load push subscription state right now.',
+      },
+      {
+        headers: {
+          'cache-control': 'no-store',
+        },
+        status: 400,
+      },
+    );
+  }
 }
 
 export async function POST(request: Request) {

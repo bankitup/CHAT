@@ -18,6 +18,11 @@ export type StoredPushSubscription = {
   disabledAt: string | null;
 };
 
+export type PushSubscriptionState = {
+  activeCount: number;
+  currentEndpointRegistered: boolean;
+};
+
 export type ChatPushPayload = {
   title: string;
   body: string;
