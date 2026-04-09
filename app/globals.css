@@ -2800,7 +2800,7 @@ main {
 }
 
 .messenger-activity-notification-status-list {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -2820,6 +2820,24 @@ main {
 
 .messenger-activity-notification-note {
   line-height: 1.42;
+}
+
+.messenger-activity-notification-note-feedback {
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(211, 221, 234, 0.92);
+}
+
+.messenger-activity-notification-note-success {
+  color: rgba(7, 94, 84, 0.96);
+  background: rgba(228, 249, 243, 0.88);
+  border-color: rgba(112, 211, 186, 0.52);
+}
+
+.messenger-activity-notification-note-error {
+  color: rgba(158, 45, 67, 0.96);
+  background: rgba(255, 239, 242, 0.9);
+  border-color: rgba(248, 182, 194, 0.6);
 }
 
 .messenger-activity-notification-panel .settings-actions .button {

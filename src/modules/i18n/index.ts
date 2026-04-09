@@ -535,8 +535,13 @@ type LanguageDictionary = {
     status: string;
     permission: string;
     device: string;
+    badge: string;
+    test: string;
     connected: string;
     notConnected: string;
+    ready: string;
+    enableFirst: string;
+    unreadCount: (count: number) => string;
     turnOn: string;
     turningOn: string;
     connectDevice: string;
@@ -1443,8 +1448,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       status: 'Status',
       permission: 'Permission',
       device: 'This device',
+      badge: 'App badge',
+      test: 'Test send',
       connected: 'Connected',
       notConnected: 'Not connected',
+      ready: 'Ready',
+      enableFirst: 'Enable first',
+      unreadCount: (count) => `${count} unread`,
       turnOn: 'Enable notifications',
       turningOn: 'Enabling…',
       connectDevice: 'Connect this device',
@@ -2409,8 +2419,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       status: 'Статус',
       permission: 'Разрешение',
       device: 'Это устройство',
+      badge: 'Значок app',
+      test: 'Тест',
       connected: 'Подключено',
       notConnected: 'Не подключено',
+      ready: 'Готово',
+      enableFirst: 'Сначала включите',
+      unreadCount: (count) =>
+        `${count} ${getRussianCountWord(count, ['непрочитанное', 'непрочитанных', 'непрочитанных'])}`,
       turnOn: 'Включить уведомления',
       turningOn: 'Включаем уведомления…',
       connectDevice: 'Подключить это устройство',

@@ -10,7 +10,31 @@ import {
   sendNotificationReadinessTest,
   type NotificationReadiness,
 } from '@/modules/messaging/sdk/notifications';
+import { supportsAppBadge } from '@/modules/messaging/sdk/badge';
+import { subscribeToChatUnreadBadgeRefresh } from '@/modules/messaging/push/chat-unread-badge-events';
 import { useEffect, useState, useTransition } from 'react';
+
+type ChatUnreadBadgeResponse = {
+  mutedExcluded: boolean;
+  unreadCount: number;
+};
+
+async function getUnreadBadgeState(signal?: AbortSignal) {
+  const response = await fetch('/api/messaging/unread-badge', {
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers: {
+      accept: 'application/json',
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load unread badge state right now.');
+  }
+
+  return (await response.json()) as ChatUnreadBadgeResponse;
+}
 
 function getStatusCopy(
   readiness: NotificationReadiness | null,
@@ -89,25 +113,89 @@ export function NotificationReadinessPanel({
     kind: 'error' | 'success';
     message: string;
   } | null>(null);
+  const [badgeUnreadCount, setBadgeUnreadCount] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<'enable' | 'test' | null>(null);
   const [isPending, startTransition] = useTransition();
   const t = getTranslations(language);
   const isActivitySurface = embedded && surface === 'activity';
+  const badgeSupported = supportsAppBadge();
 
   useEffect(() => {
     let cancelled = false;
+    let controller: AbortController | null = null;
 
-    void getNotificationReadiness().then((nextState) => {
+    const refreshReadiness = async () => {
+      const nextState = await getNotificationReadiness();
+
       if (!cancelled) {
         setReadiness(nextState);
         setFeedback(null);
       }
+    };
+
+    const refreshBadgeState = async () => {
+      controller?.abort();
+
+      if (!badgeSupported) {
+        if (!cancelled) {
+          setBadgeUnreadCount(0);
+        }
+        return;
+      }
+
+      controller = new AbortController();
+
+      try {
+        const nextState = await getUnreadBadgeState(controller.signal);
+
+        if (!cancelled) {
+          setBadgeUnreadCount(nextState.unreadCount);
+        }
+      } catch (error) {
+        if (
+          cancelled ||
+          (error instanceof Error && error.name === 'AbortError')
+        ) {
+          return;
+        }
+
+        if (!cancelled) {
+          setBadgeUnreadCount(null);
+        }
+      }
+    };
+
+    const refreshAll = () => {
+      void refreshReadiness();
+      void refreshBadgeState();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAll();
+      }
+    };
+
+    const handleFocus = () => {
+      refreshAll();
+    };
+
+    refreshAll();
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const unsubscribeBadgeRefresh = subscribeToChatUnreadBadgeRefresh(() => {
+      void refreshBadgeState();
     });
 
     return () => {
       cancelled = true;
+      controller?.abort();
+      unsubscribeBadgeRefresh();
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [badgeSupported]);
 
   const statusCopy = getStatusCopy(readiness, language);
   const permissionValue =
@@ -124,6 +212,22 @@ export function NotificationReadinessPanel({
       : readiness?.deviceRegistered
         ? t.notifications.connected
         : t.notifications.notConnected;
+  const testValue = !allowTestSend
+    ? t.notifications.unavailable
+    : readiness?.status === 'enabled'
+      ? t.notifications.ready
+      : readiness?.status === 'available'
+        ? t.notifications.enableFirst
+        : readiness
+          ? t.notifications.unavailable
+          : t.notifications.checking;
+  const badgeValue = !badgeSupported
+    ? t.notifications.unavailable
+    : badgeUnreadCount === null
+      ? t.notifications.checking
+      : badgeUnreadCount > 0
+        ? t.notifications.unreadCount(badgeUnreadCount)
+        : t.notifications.ready;
   const primaryActionLabel =
     readiness?.permission === 'granted'
       ? t.notifications.connectDevice
@@ -200,18 +304,41 @@ export function NotificationReadinessPanel({
             : 'settings-capability-list'
         }
       >
-        <div className="settings-capability-row">
-          <span className="settings-capability-label">{t.notifications.status}</span>
-          <span className="settings-capability-value">{statusCopy.settingValue}</span>
-        </div>
-        <div className="settings-capability-row">
-          <span className="settings-capability-label">{t.notifications.permission}</span>
-          <span className="settings-capability-value">{permissionValue}</span>
-        </div>
-        <div className="settings-capability-row">
-          <span className="settings-capability-label">{t.notifications.device}</span>
-          <span className="settings-capability-value">{deviceValue}</span>
-        </div>
+        {isActivitySurface ? (
+          <>
+            <div className="settings-capability-row">
+              <span className="settings-capability-label">{t.notifications.permission}</span>
+              <span className="settings-capability-value">{permissionValue}</span>
+            </div>
+            <div className="settings-capability-row">
+              <span className="settings-capability-label">{t.notifications.device}</span>
+              <span className="settings-capability-value">{deviceValue}</span>
+            </div>
+            <div className="settings-capability-row">
+              <span className="settings-capability-label">{t.notifications.test}</span>
+              <span className="settings-capability-value">{testValue}</span>
+            </div>
+            <div className="settings-capability-row">
+              <span className="settings-capability-label">{t.notifications.badge}</span>
+              <span className="settings-capability-value">{badgeValue}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="settings-capability-row">
+              <span className="settings-capability-label">{t.notifications.status}</span>
+              <span className="settings-capability-value">{statusCopy.settingValue}</span>
+            </div>
+            <div className="settings-capability-row">
+              <span className="settings-capability-label">{t.notifications.permission}</span>
+              <span className="settings-capability-value">{permissionValue}</span>
+            </div>
+            <div className="settings-capability-row">
+              <span className="settings-capability-label">{t.notifications.device}</span>
+              <span className="settings-capability-value">{deviceValue}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div
@@ -290,9 +417,19 @@ export function NotificationReadinessPanel({
         {detailNote ? (
           <p
             className={
-              isActivitySurface
-                ? 'muted settings-note messenger-activity-notification-note'
-                : 'muted settings-note'
+              [
+                isActivitySurface
+                  ? 'muted settings-note messenger-activity-notification-note'
+                  : 'muted settings-note',
+                feedback?.kind === 'success'
+                  ? 'messenger-activity-notification-note-feedback messenger-activity-notification-note-success'
+                  : null,
+                feedback?.kind === 'error'
+                  ? 'messenger-activity-notification-note-feedback messenger-activity-notification-note-error'
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' ')
             }
           >
             {detailNote}
