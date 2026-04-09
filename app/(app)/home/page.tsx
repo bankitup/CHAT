@@ -22,6 +22,11 @@ import {
   resolveActiveSpaceForUser,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
+import {
+  getKeepCozyPrimaryTestFlowHints,
+  getKeepCozyHomeDashboardData,
+  isKeepCozyPrimaryTestHomeName,
+} from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type HomeDashboardPageProps = {
