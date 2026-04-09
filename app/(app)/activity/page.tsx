@@ -25,7 +25,6 @@ import {
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
-import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
 
 type ActivityPageProps = {
@@ -397,13 +396,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             </div>
 
             <div className="messenger-activity-head-actions">
-              <Link
-                className="pill messenger-activity-head-pill"
-                href={withSpaceParam('/settings', activeSpace.id)}
-                prefetch={false}
-              >
-                {t.messengerActivity.settingsAction}
-              </Link>
               {archivedConversations.length > 0 ? (
                 <Link
                   className="pill messenger-activity-head-pill"
@@ -1252,9 +1244,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           )}
         </section>
 
-        <section className="stack settings-section activity-section">
-          <NotificationReadinessPanel embedded language={language} />
-        </section>
       </section>
     </section>
   );

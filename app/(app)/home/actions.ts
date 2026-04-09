@@ -13,7 +13,6 @@ import {
   removeMembersFromGovernedSpace,
   requestAdditionalAccountsForGovernedSpace,
 } from '@/modules/spaces/write-server';
-import { withSpaceParam } from '@/modules/spaces/url';
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
@@ -44,7 +43,7 @@ function redirectToHomeSurface(input: {
   }
 
   const href = params.toString() ? `/home?${params.toString()}` : '/home';
-  redirect(withSpaceParam(href, input.spaceId));
+  redirect(href);
 }
 
 function getFriendlyHomeErrorMessage(input: {
