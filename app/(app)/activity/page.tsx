@@ -13,6 +13,7 @@ import {
   getInboxConversationsStable,
   type InboxConversation,
 } from '@/modules/messaging/data/server';
+import { isPushTestSendEnabledForUser } from '@/modules/messaging/push/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
@@ -188,6 +189,9 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const { activeSpace, language, t, user } = await requireActivitySpaceContext(
     query.space,
   );
+  const allowNotificationTestSend = isPushTestSendEnabledForUser({
+    userEmail: user.email ?? null,
+  });
   const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
@@ -425,9 +429,21 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             <span className="keepcozy-meta-pill">
               {t.messengerActivity.unreadSectionTitle}: {unreadChatCount}
             </span>
-            <span className="keepcozy-meta-pill">
-              {t.messengerActivity.recentSectionTitle}: {recentMovementCount}
-            </span>
+          </div>
+        </section>
+
+        <NotificationReadinessPanel
+          allowTestSend={allowNotificationTestSend}
+          embedded
+          language={language}
+          surface="activity"
+          testSpaceId={activeSpace.id}
+        />
+
+        <section className="card stack settings-surface activity-surface messenger-activity-surface">
+          <div className="stack messenger-activity-surface-copy">
+            <h2 className="card-title">{t.messengerActivity.surfaceTitle}</h2>
+            <p className="muted">{t.messengerActivity.surfaceBody}</p>
           </div>
 
           <nav

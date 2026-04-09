@@ -11,9 +11,11 @@ import {
   getInboxConversations,
   getProfileIdentities,
 } from '@/modules/messaging/data/server';
+import { resolveSuperAdminGovernanceForUser } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import type {
   ChatPushPayload,
+  PushSubscriptionState,
   PushSubscriptionRecordInput,
   StoredPushSubscription,
 } from './contract';
@@ -63,6 +65,14 @@ type ChatPushSendResult = {
 type ChatUnreadBadgeState = {
   mutedExcluded: boolean;
   unreadCount: number;
+};
+
+type PushTestSendResult = {
+  attempted: boolean;
+  disabledCount: number;
+  failedCount: number;
+  sent: boolean;
+  skippedReason: string | null;
 };
 
 let vapidConfigured = false;
@@ -132,6 +142,20 @@ function ensureWebPushConfigured() {
   webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
   vapidConfigured = true;
   return true;
+}
+
+export function isPushTestSendEnabledForUser(input: {
+  userEmail?: string | null;
+}) {
+  const vercelEnv = process.env.VERCEL_ENV?.trim().toLowerCase() ?? null;
+  const isPreview = vercelEnv === 'preview';
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const isDebugEnabled = process.env.CHAT_DEBUG_PUSH === '1';
+  const isSuperAdmin = resolveSuperAdminGovernanceForUser({
+    userEmail: input.userEmail ?? null,
+  }).canCreateSpaces;
+
+  return isDevelopment || isPreview || isDebugEnabled || isSuperAdmin;
 }
 
 function getProfileLabel(input: {
@@ -496,6 +520,34 @@ export async function upsertPushSubscriptionForUser(input: {
   return mapStoredPushSubscription(data);
 }
 
+export async function getPushSubscriptionStateForUser(input: {
+  userId: string;
+  endpoint?: string | null;
+}): Promise<PushSubscriptionState> {
+  const client = await getRequestSupabaseServerClient();
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .select('endpoint')
+    .eq('user_id', input.userId)
+    .is('disabled_at', null);
+
+  if (error) {
+    throw error;
+  }
+
+  const activeRows = ((data ?? []) as Array<{ endpoint?: string | null }>).filter(
+    (row) => typeof row.endpoint === 'string' && row.endpoint.length > 0,
+  );
+  const currentEndpoint = input.endpoint?.trim() || null;
+
+  return {
+    activeCount: activeRows.length,
+    currentEndpointRegistered: currentEndpoint
+      ? activeRows.some((row) => row.endpoint === currentEndpoint)
+      : false,
+  };
+}
+
 export async function disablePushSubscriptionForUser(input: {
   userId: string;
   endpoint: string;
@@ -543,6 +595,28 @@ async function disablePushSubscriptionByEndpoint(endpoint: string) {
   }
 }
 
+async function getActivePushSubscriptionRowForUserEndpoint(input: {
+  userId: string;
+  endpoint: string;
+}) {
+  const client = await getPushSubscriptionWriteClient();
+  const { data, error } = await client
+    .from('push_subscriptions')
+    .select(
+      'id, user_id, endpoint, expiration_time, p256dh, auth, created_at, updated_at, disabled_at',
+    )
+    .eq('user_id', input.userId)
+    .eq('endpoint', input.endpoint)
+    .is('disabled_at', null)
+    .maybeSingle<PushSubscriptionRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? null;
+}
+
 function getPushErrorStatusCode(error: unknown) {
   const value = error as { statusCode?: unknown } | null;
   return typeof value?.statusCode === 'number' ? value.statusCode : null;
@@ -550,6 +624,105 @@ function getPushErrorStatusCode(error: unknown) {
 
 function isExpiredPushEndpointStatusCode(statusCode: number | null) {
   return statusCode === 404 || statusCode === 410;
+}
+
+export async function sendPushTestNotificationToUserDevice(input: {
+  endpoint: string;
+  spaceId?: string | null;
+  userId: string;
+}): Promise<PushTestSendResult> {
+  if (!ensureWebPushConfigured()) {
+    return {
+      attempted: false,
+      disabledCount: 0,
+      failedCount: 0,
+      sent: false,
+      skippedReason: 'missing-vapid-config',
+    };
+  }
+
+  const subscription = await getActivePushSubscriptionRowForUserEndpoint({
+    endpoint: input.endpoint,
+    userId: input.userId,
+  });
+
+  if (!subscription?.endpoint || !subscription.p256dh || !subscription.auth) {
+    return {
+      attempted: false,
+      disabledCount: 0,
+      failedCount: 0,
+      sent: false,
+      skippedReason: 'subscription-not-found',
+    };
+  }
+
+  const payload = JSON.stringify({
+    body: 'Test notification for this device.',
+    tag: `push:test:${input.userId}`,
+    title: 'BWC Products',
+    url: withSpaceParam('/activity', input.spaceId ?? null),
+  });
+
+  try {
+    await webpush.sendNotification(
+      {
+        endpoint: subscription.endpoint,
+        expirationTime: subscription.expiration_time ?? null,
+        keys: {
+          p256dh: subscription.p256dh,
+          auth: subscription.auth,
+        },
+      },
+      payload,
+      {
+        TTL: 60 * 5,
+        urgency: 'high',
+      },
+    );
+
+    return {
+      attempted: true,
+      disabledCount: 0,
+      failedCount: 0,
+      sent: true,
+      skippedReason: null,
+    };
+  } catch (error) {
+    const statusCode = getPushErrorStatusCode(error);
+
+    logPushDiagnostics('test-send-error', {
+      endpoint: subscription.endpoint,
+      message:
+        error instanceof Error ? error.message : 'Unable to send test push.',
+      statusCode,
+      userId: input.userId,
+    });
+
+    let disabledCount = 0;
+
+    if (isExpiredPushEndpointStatusCode(statusCode)) {
+      try {
+        await disablePushSubscriptionByEndpoint(subscription.endpoint);
+        disabledCount = 1;
+      } catch (disableError) {
+        logPushDiagnostics('test-disable-endpoint-error', {
+          endpoint: subscription.endpoint,
+          message:
+            disableError instanceof Error
+              ? disableError.message
+              : 'Unable to disable expired test push endpoint.',
+        });
+      }
+    }
+
+    return {
+      attempted: true,
+      disabledCount,
+      failedCount: 1,
+      sent: false,
+      skippedReason: 'send-failed',
+    };
+  }
 }
 
 export async function sendChatPushNotifications(

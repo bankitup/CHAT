@@ -1,6 +1,7 @@
 'use client';
 
 import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import { requestChatUnreadBadgeRefresh } from '@/modules/messaging/push/chat-unread-badge-events';
 
 export type InboxConversationLiveSummary = {
   conversationId: string;
@@ -79,6 +80,25 @@ function emitInboxConversationSummaryChange(conversationId: string) {
 
     emitInboxSummaryRevisionChange();
   }
+}
+
+function resolveEffectiveUnreadCount(summary: InboxConversationLiveSummary | null) {
+  if (!summary || summary.removed) {
+    return 0;
+  }
+
+  return Math.max(0, summary.unreadCount);
+}
+
+function emitInboxUnreadBadgeRefreshIfNeeded(
+  previous: InboxConversationLiveSummary | null,
+  next: InboxConversationLiveSummary | null,
+) {
+  if (resolveEffectiveUnreadCount(previous) === resolveEffectiveUnreadCount(next)) {
+    return;
+  }
+
+  requestChatUnreadBadgeRefresh();
 }
 
 export function subscribeToInboxSummaryRevision(listener: () => void) {
@@ -182,6 +202,7 @@ export function hydrateInboxConversationSummaries(
 
     inboxSummaryFallbackStore.delete(normalizedConversationId);
     inboxSummaryStore.set(normalizedConversationId, nextValue ?? normalizedSummary);
+    emitInboxUnreadBadgeRefreshIfNeeded(existing, nextValue ?? normalizedSummary);
     emitInboxConversationSummaryChange(normalizedConversationId);
   }
 }
@@ -207,6 +228,7 @@ export function patchInboxConversationSummary(
 
   inboxSummaryFallbackStore.delete(normalizedConversationId);
   inboxSummaryStore.set(normalizedConversationId, nextValue);
+  emitInboxUnreadBadgeRefreshIfNeeded(existing, nextValue);
   emitInboxConversationSummaryChange(normalizedConversationId);
 }
 
@@ -234,6 +256,7 @@ export function updateInboxConversationSummary(
 
   inboxSummaryFallbackStore.delete(normalizedConversationId);
   inboxSummaryStore.set(normalizedConversationId, nextValue);
+  emitInboxUnreadBadgeRefreshIfNeeded(current, nextValue);
   emitInboxConversationSummaryChange(normalizedConversationId);
 }
 
@@ -248,13 +271,15 @@ export function markInboxConversationRemoved(conversationId: string) {
 
   if (existing) {
     inboxSummaryFallbackStore.delete(normalizedConversationId);
-    inboxSummaryStore.set(normalizedConversationId, {
+    const nextValue = {
       ...existing,
       removed: true,
-    });
+    };
+    inboxSummaryStore.set(normalizedConversationId, nextValue);
+    emitInboxUnreadBadgeRefreshIfNeeded(existing, nextValue);
   } else {
     inboxSummaryFallbackStore.delete(normalizedConversationId);
-    inboxSummaryStore.set(normalizedConversationId, {
+    const nextValue = {
       conversationId: normalizedConversationId,
       createdAt: null,
       hiddenAt: null,
@@ -271,7 +296,9 @@ export function markInboxConversationRemoved(conversationId: string) {
       latestMessageSeq: null,
       removed: true,
       unreadCount: 0,
-    });
+    };
+    inboxSummaryStore.set(normalizedConversationId, nextValue);
+    emitInboxUnreadBadgeRefreshIfNeeded(null, nextValue);
   }
 
   emitInboxConversationSummaryChange(normalizedConversationId);

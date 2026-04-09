@@ -535,8 +535,13 @@ type LanguageDictionary = {
     status: string;
     permission: string;
     device: string;
+    badge: string;
+    test: string;
     connected: string;
     notConnected: string;
+    ready: string;
+    enableFirst: string;
+    unreadCount: (count: number) => string;
     turnOn: string;
     turningOn: string;
     connectDevice: string;
@@ -547,6 +552,11 @@ type LanguageDictionary = {
     permissionReadyNote: string;
     notConfiguredNote: string;
     syncFailedNote: string;
+    sendTest: string;
+    sendingTest: string;
+    testReadyNote: string;
+    testSentNote: string;
+    testFailedNote: string;
   };
     inbox: {
       title: string;
@@ -1438,8 +1448,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       status: 'Status',
       permission: 'Permission',
       device: 'This device',
+      badge: 'App badge',
+      test: 'Test send',
       connected: 'Connected',
       notConnected: 'Not connected',
+      ready: 'Ready',
+      enableFirst: 'Enable first',
+      unreadCount: (count) => `${count} unread`,
       turnOn: 'Enable notifications',
       turningOn: 'Enabling…',
       connectDevice: 'Connect this device',
@@ -1451,6 +1466,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       notConfiguredNote:
         'Add NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY and apply the push-subscriptions SQL before enabling this here.',
       syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
+      sendTest: 'Send test notification',
+      sendingTest: 'Sending test notification…',
+      testReadyNote: 'Send a test notification to verify this browser.',
+      testSentNote:
+        'Test notification sent. Put the app in the background if you want to confirm the browser alert.',
+      testFailedNote:
+        'We could not send a test notification to this device just now. Please try again.',
     },
     inbox: {
       title: 'Chats',
@@ -2397,8 +2419,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       status: 'Статус',
       permission: 'Разрешение',
       device: 'Это устройство',
+      badge: 'Значок app',
+      test: 'Тест',
       connected: 'Подключено',
       notConnected: 'Не подключено',
+      ready: 'Готово',
+      enableFirst: 'Сначала включите',
+      unreadCount: (count) =>
+        `${count} ${getRussianCountWord(count, ['непрочитанное', 'непрочитанных', 'непрочитанных'])}`,
       turnOn: 'Включить уведомления',
       turningOn: 'Включаем уведомления…',
       connectDevice: 'Подключить это устройство',
@@ -2412,6 +2440,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Добавьте NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY и примените SQL для push_subscriptions, прежде чем включать это здесь.',
       syncFailedNote:
         'Сейчас не удалось подключить этот браузер к push-уведомлениям. Попробуйте ещё раз.',
+      sendTest: 'Отправить тестовое уведомление',
+      sendingTest: 'Отправляем тестовое уведомление…',
+      testReadyNote: 'Отправьте тестовое уведомление, чтобы проверить этот браузер.',
+      testSentNote:
+        'Тестовое уведомление отправлено. Сверните приложение, если хотите проверить системное оповещение браузера.',
+      testFailedNote:
+        'Сейчас не удалось отправить тестовое уведомление на это устройство. Попробуйте ещё раз.',
     },
     inbox: {
       title: 'Чаты',

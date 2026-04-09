@@ -8,6 +8,7 @@ export type NotificationReadinessStatus =
   | 'blocked';
 
 export type NotificationReadiness = {
+  deviceRegistered: boolean;
   status: NotificationReadinessStatus;
   permission: NotificationPermission | 'unsupported';
   serviceWorkerReady: boolean;
@@ -15,6 +16,18 @@ export type NotificationReadiness = {
   subscriptionActive: boolean;
   vapidConfigured: boolean;
 };
+
+type PushSubscriptionStateResponse = {
+  activeCount: number;
+  currentEndpointRegistered: boolean;
+};
+
+class PushSubscriptionSchemaMissingError extends Error {
+  constructor(message = 'Push subscriptions are not ready on the server yet.') {
+    super(message);
+    this.name = 'PushSubscriptionSchemaMissingError';
+  }
+}
 
 function supportsNotificationReadiness() {
   return (
@@ -98,6 +111,12 @@ async function getCurrentPushSubscription() {
   return registration.pushManager.getSubscription();
 }
 
+type PushTestSendResponse = {
+  ok?: boolean;
+  code?: string;
+  error?: string;
+};
+
 function serializePushSubscription(
   subscription: PushSubscription,
 ): PushSubscriptionRecordInput {
@@ -143,13 +162,73 @@ async function syncPushSubscriptionWithServer(subscription: PushSubscription) {
   });
 
   if (!response.ok) {
-    throw new Error('Unable to persist this push subscription.');
+    let errorCode: string | null = null;
+    let errorMessage = 'Unable to persist this push subscription.';
+
+    try {
+      const body = (await response.json()) as {
+        code?: string;
+        error?: string;
+      };
+      errorCode = typeof body.code === 'string' ? body.code : null;
+      if (typeof body.error === 'string' && body.error.trim().length > 0) {
+        errorMessage = body.error;
+      }
+    } catch {
+      // Keep the fallback message when the response body is not JSON.
+    }
+
+    if (errorCode === 'push_subscription_schema_missing') {
+      throw new PushSubscriptionSchemaMissingError(errorMessage);
+    }
+
+    throw new Error(errorMessage);
   }
+}
+
+async function getServerPushSubscriptionState(subscription: PushSubscription) {
+  const response = await fetch(
+    `/api/messaging/push-subscriptions?endpoint=${encodeURIComponent(subscription.endpoint)}`,
+    {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        accept: 'application/json',
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let errorCode: string | null = null;
+    let errorMessage = 'Unable to confirm this device registration.';
+
+    try {
+      const body = (await response.json()) as {
+        code?: string;
+        error?: string;
+      };
+      errorCode = typeof body.code === 'string' ? body.code : null;
+      if (typeof body.error === 'string' && body.error.trim().length > 0) {
+        errorMessage = body.error;
+      }
+    } catch {
+      // Keep the fallback message when the response body is not JSON.
+    }
+
+    if (errorCode === 'push_subscription_schema_missing') {
+      throw new PushSubscriptionSchemaMissingError(errorMessage);
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  return (await response.json()) as PushSubscriptionStateResponse;
 }
 
 export async function getNotificationReadiness() {
   if (!supportsNotificationReadiness()) {
     return {
+      deviceRegistered: false,
       status: 'unsupported',
       permission: 'unsupported',
       serviceWorkerReady: false,
@@ -169,9 +248,30 @@ export async function getNotificationReadiness() {
       ? await getCurrentPushSubscription()
       : null;
   const subscriptionActive = Boolean(subscription);
+  let deviceRegistered = false;
+
+  if (subscription) {
+    try {
+      const state = await getServerPushSubscriptionState(subscription);
+      deviceRegistered = state.currentEndpointRegistered;
+    } catch (error) {
+      if (error instanceof PushSubscriptionSchemaMissingError) {
+        return {
+          deviceRegistered: false,
+          status: 'unconfigured',
+          permission,
+          serviceWorkerReady,
+          pushSupported,
+          subscriptionActive,
+          vapidConfigured,
+        } satisfies NotificationReadiness;
+      }
+    }
+  }
 
   if (!pushSupported) {
     return {
+      deviceRegistered: false,
       status: 'unsupported',
       permission,
       serviceWorkerReady,
@@ -181,8 +281,9 @@ export async function getNotificationReadiness() {
     } satisfies NotificationReadiness;
   }
 
-  if (permission === 'granted' && subscriptionActive) {
+  if (permission === 'granted' && subscriptionActive && deviceRegistered) {
     return {
+      deviceRegistered,
       status: 'enabled',
       permission,
       serviceWorkerReady,
@@ -194,6 +295,7 @@ export async function getNotificationReadiness() {
 
   if (!vapidConfigured) {
     return {
+      deviceRegistered,
       status: 'unconfigured',
       permission,
       serviceWorkerReady,
@@ -205,6 +307,7 @@ export async function getNotificationReadiness() {
 
   if (permission === 'denied') {
     return {
+      deviceRegistered,
       status: 'blocked',
       permission,
       serviceWorkerReady,
@@ -215,6 +318,7 @@ export async function getNotificationReadiness() {
   }
 
   return {
+    deviceRegistered,
     status: 'available',
     permission,
     serviceWorkerReady,
@@ -227,6 +331,7 @@ export async function getNotificationReadiness() {
 export async function enableNotificationReadiness() {
   if (!supportsPushSubscriptions()) {
     return {
+      deviceRegistered: false,
       status: 'unsupported',
       permission: supportsNotificationReadiness()
         ? Notification.permission
@@ -277,6 +382,7 @@ export async function enableNotificationReadiness() {
   }
 
   return {
+    deviceRegistered: true,
     status: 'enabled',
     permission,
     serviceWorkerReady: true,
@@ -284,4 +390,44 @@ export async function enableNotificationReadiness() {
     subscriptionActive: true,
     vapidConfigured: true,
   } satisfies NotificationReadiness;
+}
+
+export async function sendNotificationReadinessTest(input?: {
+  spaceId?: string | null;
+}) {
+  if (!supportsPushSubscriptions()) {
+    throw new Error('Push notifications are not supported on this device.');
+  }
+
+  const subscription = await getCurrentPushSubscription();
+
+  if (!subscription) {
+    throw new Error('This browser is not connected for push notifications yet.');
+  }
+
+  const response = await fetch('/api/messaging/push-test', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      spaceId: input?.spaceId ?? null,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = 'Unable to send a test notification right now.';
+
+    try {
+      const body = (await response.json()) as PushTestSendResponse;
+      if (typeof body.error === 'string' && body.error.trim().length > 0) {
+        errorMessage = body.error;
+      }
+    } catch {
+      // Keep the fallback message when the response body is not JSON.
+    }
+
+    throw new Error(errorMessage);
+  }
 }
