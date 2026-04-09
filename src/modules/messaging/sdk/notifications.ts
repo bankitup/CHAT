@@ -111,6 +111,12 @@ async function getCurrentPushSubscription() {
   return registration.pushManager.getSubscription();
 }
 
+type PushTestSendResponse = {
+  ok?: boolean;
+  code?: string;
+  error?: string;
+};
+
 function serializePushSubscription(
   subscription: PushSubscription,
 ): PushSubscriptionRecordInput {
@@ -384,4 +390,44 @@ export async function enableNotificationReadiness() {
     subscriptionActive: true,
     vapidConfigured: true,
   } satisfies NotificationReadiness;
+}
+
+export async function sendNotificationReadinessTest(input?: {
+  spaceId?: string | null;
+}) {
+  if (!supportsPushSubscriptions()) {
+    throw new Error('Push notifications are not supported on this device.');
+  }
+
+  const subscription = await getCurrentPushSubscription();
+
+  if (!subscription) {
+    throw new Error('This browser is not connected for push notifications yet.');
+  }
+
+  const response = await fetch('/api/messaging/push-test', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      spaceId: input?.spaceId ?? null,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = 'Unable to send a test notification right now.';
+
+    try {
+      const body = (await response.json()) as PushTestSendResponse;
+      if (typeof body.error === 'string' && body.error.trim().length > 0) {
+        errorMessage = body.error;
+      }
+    } catch {
+      // Keep the fallback message when the response body is not JSON.
+    }
+
+    throw new Error(errorMessage);
+  }
 }

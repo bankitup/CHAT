@@ -7,6 +7,7 @@ import {
 import {
   enableNotificationReadiness,
   getNotificationReadiness,
+  sendNotificationReadinessTest,
   type NotificationReadiness,
 } from '@/modules/messaging/sdk/notifications';
 import { useEffect, useState, useTransition } from 'react';
@@ -69,18 +70,26 @@ function getStatusCopy(
 }
 
 export function NotificationReadinessPanel({
+  allowTestSend = false,
   anchorId,
   embedded = false,
   language,
   surface = 'settings',
+  testSpaceId,
 }: {
+  allowTestSend?: boolean;
   anchorId?: string;
   embedded?: boolean;
   language: AppLanguage;
   surface?: 'activity' | 'home' | 'settings';
+  testSpaceId?: string | null;
 }) {
   const [readiness, setReadiness] = useState<NotificationReadiness | null>(null);
-  const [lastError, setLastError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    kind: 'error' | 'success';
+    message: string;
+  } | null>(null);
+  const [pendingAction, setPendingAction] = useState<'enable' | 'test' | null>(null);
   const [isPending, startTransition] = useTransition();
   const t = getTranslations(language);
   const isActivitySurface = embedded && surface === 'activity';
@@ -91,7 +100,7 @@ export function NotificationReadinessPanel({
     void getNotificationReadiness().then((nextState) => {
       if (!cancelled) {
         setReadiness(nextState);
-        setLastError(null);
+        setFeedback(null);
       }
     });
 
@@ -123,12 +132,14 @@ export function NotificationReadinessPanel({
     readiness?.permission === 'granted'
       ? t.notifications.connectingDevice
       : t.notifications.turningOn;
-  const detailNote = lastError
-    ? lastError
+  const detailNote = feedback?.message
+    ? feedback.message
     : readiness?.status === 'blocked'
       ? t.notifications.browserSettingsNote
       : readiness?.status === 'enabled'
-        ? t.notifications.comingSoonNote
+        ? allowTestSend
+          ? t.notifications.testReadyNote
+          : t.notifications.comingSoonNote
         : readiness?.status === 'available'
           ? readiness.permission === 'granted'
             ? t.notifications.permissionReadyNote
@@ -216,19 +227,63 @@ export function NotificationReadinessPanel({
             disabled={isPending}
             type="button"
             onClick={() => {
+              setPendingAction('enable');
               startTransition(async () => {
                 try {
                   const nextState = await enableNotificationReadiness();
                   setReadiness(nextState);
-                  setLastError(null);
+                  setFeedback(null);
                 } catch {
-                  setLastError(t.notifications.syncFailedNote);
+                  setFeedback({
+                    kind: 'error',
+                    message: t.notifications.syncFailedNote,
+                  });
                   setReadiness(await getNotificationReadiness());
+                } finally {
+                  setPendingAction(null);
                 }
               });
             }}
           >
-            {isPending ? pendingActionLabel : primaryActionLabel}
+            {isPending && pendingAction === 'enable'
+              ? pendingActionLabel
+              : primaryActionLabel}
+          </button>
+        ) : null}
+
+        {allowTestSend && readiness?.status === 'enabled' ? (
+          <button
+            className="button button-secondary"
+            disabled={isPending}
+            type="button"
+            onClick={() => {
+              setPendingAction('test');
+              startTransition(async () => {
+                try {
+                  await sendNotificationReadinessTest({
+                    spaceId: testSpaceId ?? null,
+                  });
+                  setFeedback({
+                    kind: 'success',
+                    message: t.notifications.testSentNote,
+                  });
+                } catch (error) {
+                  setFeedback({
+                    kind: 'error',
+                    message:
+                      error instanceof Error && error.message.trim().length > 0
+                        ? error.message
+                        : t.notifications.testFailedNote,
+                  });
+                } finally {
+                  setPendingAction(null);
+                }
+              });
+            }}
+          >
+            {isPending && pendingAction === 'test'
+              ? t.notifications.sendingTest
+              : t.notifications.sendTest}
           </button>
         ) : null}
 

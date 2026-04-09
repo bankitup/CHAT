@@ -13,6 +13,7 @@ import {
   getInboxConversationsStable,
   type InboxConversation,
 } from '@/modules/messaging/data/server';
+import { isPushTestSendEnabledForUser } from '@/modules/messaging/push/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
@@ -188,6 +189,9 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const { activeSpace, language, t, user } = await requireActivitySpaceContext(
     query.space,
   );
+  const allowNotificationTestSend = isPushTestSendEnabledForUser({
+    userEmail: user.email ?? null,
+  });
   const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
@@ -420,7 +424,13 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           </div>
         </section>
 
-        <NotificationReadinessPanel embedded language={language} surface="activity" />
+        <NotificationReadinessPanel
+          allowTestSend={allowNotificationTestSend}
+          embedded
+          language={language}
+          surface="activity"
+          testSpaceId={activeSpace.id}
+        />
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
           <div className="stack messenger-activity-surface-copy">
