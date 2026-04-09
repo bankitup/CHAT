@@ -2051,6 +2051,8 @@ function ThreadMessageRow({
     encryptedHistoryHint.code === 'policy-blocked-history'
       ? t.chat.encryptedHistoryPolicyBlockedNote
       : t.chat.encryptedHistoryUnavailableNote;
+  const shouldRenderCompactHistoricalUnavailableBubble =
+    compactHistoricalUnavailable && isUnavailableHistoricalEncryptedHint;
   const canAttemptEncryptedRender = canRenderEncryptedDmBody({
     clientId: message.client_id,
   });
@@ -2362,6 +2364,9 @@ function ThreadMessageRow({
                       'message-bubble',
                       'message-bubble-own',
                       'message-bubble-with-reply',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2374,6 +2379,9 @@ function ThreadMessageRow({
                   : [
                       'message-bubble',
                       'message-bubble-with-reply',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2387,6 +2395,9 @@ function ThreadMessageRow({
                   ? [
                       'message-bubble',
                       'message-bubble-own',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2398,6 +2409,9 @@ function ThreadMessageRow({
                       .join(' ')
                   : [
                       'message-bubble',
+                      shouldRenderCompactHistoricalUnavailableBubble
+                        ? 'message-bubble-encrypted-history-continuation'
+                        : null,
                       isClusteredWithPrevious
                         ? 'message-bubble-clustered-with-previous'
                         : null,
@@ -2435,6 +2449,7 @@ function ThreadMessageRow({
                   deletedFallbackLabel={t.chat.messageDeleted}
                   emptyFallbackLabel={t.chat.emptyMessage}
                   encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                  historicalEncryptedFallbackLabel={t.chat.olderEncryptedMessage}
                   encryptedReferenceNote={null}
                   loadedFallbackLabel={t.chat.earlierMessage}
                   messageId={message.id}
@@ -2563,47 +2578,44 @@ function ThreadMessageRow({
                 />
               </DmThreadClientSubtree>
             ) : (
-              <div
-                data-dm-e2ee-debug-bucket={
+              <EncryptedHistoryUnavailableState
+                accessState={
+                  isUnavailableHistoricalEncryptedHint
+                    ? encryptedHistoryFallbackAccessState
+                    : 'temporary-local-read-failure'
+                }
+                compact={
+                  compactHistoricalUnavailable &&
+                  isUnavailableHistoricalEncryptedHint
+                }
+                continuationCount={
+                  isUnavailableHistoricalEncryptedHint
+                    ? historicalUnavailableContinuationCount
+                    : 0
+                }
+                debugBucket={
                   process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
                     ? encryptedHistoryHint.code
-                    : undefined
+                    : null
                 }
-              >
-                <EncryptedHistoryUnavailableState
-                  accessState={
-                    isUnavailableHistoricalEncryptedHint
-                      ? encryptedHistoryFallbackAccessState
-                      : 'temporary-local-read-failure'
-                  }
-                  compact={
-                    compactHistoricalUnavailable &&
-                    isUnavailableHistoricalEncryptedHint
-                  }
-                  continuationCount={
-                    isUnavailableHistoricalEncryptedHint
-                      ? historicalUnavailableContinuationCount
-                      : 0
-                  }
-                  debugLabel={
-                    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-                      ? encryptedHistoryHint.code
-                      : null
-                  }
-                  note={
-                    isUnavailableHistoricalEncryptedHint
-                      ? encryptedHistoryFallbackNote
-                      : null
-                  }
-                  title={
-                    isUnavailableHistoricalEncryptedHint
-                      ? compactHistoricalUnavailable
-                        ? t.chat.encryptedMessage
-                        : t.chat.olderEncryptedMessage
-                      : t.chat.encryptedMessageUnavailable
-                  }
-                />
-              </div>
+                debugLabel={
+                  process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+                    ? encryptedHistoryHint.code
+                    : null
+                }
+                note={
+                  isUnavailableHistoricalEncryptedHint
+                    ? encryptedHistoryFallbackNote
+                    : null
+                }
+                title={
+                  isUnavailableHistoricalEncryptedHint
+                    ? compactHistoricalUnavailable
+                      ? t.chat.encryptedMessage
+                      : t.chat.olderEncryptedMessage
+                    : t.chat.encryptedMessageUnavailable
+                }
+              />
             )
           ) : message.kind === 'voice' ? (
             <div className="message-voice-stack">

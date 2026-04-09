@@ -1527,6 +1527,9 @@ export default async function ChatPage({
                     deletedFallbackLabel={t.chat.thisMessageWasDeleted}
                     emptyFallbackLabel={t.chat.emptyMessage}
                     encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                    historicalEncryptedFallbackLabel={
+                      t.chat.olderEncryptedMessage
+                    }
                     encryptedReferenceNote={t.chat.encryptedReplyInfo}
                     loadedFallbackLabel={t.chat.earlierMessage}
                     messageId={activeReplyTarget.id}
