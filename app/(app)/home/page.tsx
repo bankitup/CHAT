@@ -9,7 +9,6 @@ import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
-import { IdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
@@ -35,28 +34,6 @@ type HomeDashboardPageProps = {
     space?: string;
   }>;
 };
-
-function resolveMessengerProfileLabel(input: {
-  displayName: string | null;
-  email: string | null;
-  username: string | null;
-}) {
-  const displayName = input.displayName?.trim();
-
-  if (displayName) {
-    return displayName;
-  }
-
-  const username = input.username?.trim();
-
-  if (username) {
-    return username;
-  }
-
-  const emailLocalPart = input.email?.split('@')[0]?.trim();
-
-  return emailLocalPart || null;
-}
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
   const [user, language] = await Promise.all([
@@ -155,16 +132,6 @@ export default async function HomeDashboardPage({
           })
         : null,
     ]);
-    const profileLabel =
-      resolveMessengerProfileLabel({
-        displayName: currentUserProfile.displayName ?? null,
-        email: currentUserProfile.email ?? user.email ?? null,
-        username: currentUserProfile.username ?? null,
-      }) ?? t.settings.profileTitle;
-    const profileHandle = currentUserProfile.username?.trim()
-      ? `@${currentUserProfile.username.trim()}`
-      : null;
-    const profileEmail = currentUserProfile.email ?? user.email ?? null;
     const visibleError = query.error
       ? sanitizeUserFacingErrorMessage({
           fallback: getUserFacingErrorFallback(language, 'settings'),
@@ -264,10 +231,6 @@ export default async function HomeDashboardPage({
               />
             </section>
 
-            <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
-              <NotificationReadinessPanel embedded language={language} surface="home" />
-            </section>
-
             <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
               <div className="stack settings-card-copy settings-section-copy">
                 <h2 className="section-title">{t.settings.logoutTitle}</h2>
@@ -316,53 +279,8 @@ export default async function HomeDashboardPage({
               }}
               spaceId={activeSpace.id}
             />
-          </section>
-          <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
-            <div className="stack settings-card-copy settings-section-copy">
-              <h2 className="section-title">{t.settings.logoutTitle}</h2>
-              <p className="muted">{t.settings.logoutSubtitle}</p>
-            </div>
-            <form action={logoutAction}>
-              <button className="button button-secondary settings-logout-button" type="submit">
-                {t.settings.logoutButton}
-              </button>
-            </form>
-          </section>
-        </section>
-
-        {canManageMessengerMembers && manageableParticipants ? (
-          <SpaceParticipantsModule
-            copy={{
-              body: t.messengerHome.participantsBody,
-              cancelRemoveAction: t.messengerHome.participantsCancelRemoveAction,
-              confirmRemoveAction: t.messengerHome.participantsConfirmRemoveAction,
-              currentUserBadge: t.messengerHome.currentUserBadge,
-              emptyBody: t.messengerHome.participantsEmptyBody,
-              lockedHint: t.messengerHome.participantsLockedHint,
-              removeAction: t.messengerHome.participantsRemoveAction,
-              removeConfirmBody: t.messengerHome.participantsRemoveConfirmBody,
-              removePending: t.messengerHome.participantsRemovePending,
-              requestAction: t.messengerHome.participantsRequestAction,
-              requestBody: t.messengerHome.participantsRequestBody,
-              requestPending: t.messengerHome.participantsRequestPending,
-              summaryValue: formatMemberCount(
-                language,
-                manageableParticipants.participants.length,
-              ),
-              title: t.messengerHome.participantsTitle,
-            }}
-            defaultOpen={participantsDefaultOpen}
-            participants={manageableParticipants.participants}
-            removeAction={removeSpaceParticipantsAction}
-            requestAction={requestAdditionalSpaceAccountsAction}
-            roleLabels={{
-              admin: t.chat.admin,
-              member: t.chat.member,
-              owner: t.chat.owner,
-            }}
-            spaceId={activeSpace.id}
-          />
-        ) : null}
+          ) : null}
+        </div>
       </section>
     );
   }
