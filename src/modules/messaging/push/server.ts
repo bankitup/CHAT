@@ -70,11 +70,17 @@ type ChatUnreadBadgeState = {
 type PushTestSendResult = {
   attempted: boolean;
   disabledCount: number;
+  endpointHost?: string | null;
   errorMessage?: string | null;
   errorStatusCode?: number | null;
+  failureReason?: PushTestFailureReason | null;
   failedCount: number;
+  nodeCode?: string | null;
+  providerBody?: string | null;
   sent: boolean;
   skippedReason: string | null;
+  subscriptionCreatedAt?: string | null;
+  subscriptionUpdatedAt?: string | null;
 };
 
 type PushRecipientResolutionResult = {
@@ -93,6 +99,12 @@ type PushDeliveryFailureReason =
   | 'subscription-expired'
   | 'unknown'
   | 'vapid-rejected';
+
+type PushTestFailureReason =
+  | PushDeliveryFailureReason
+  | 'delivery-config-invalid'
+  | 'delivery-config-missing'
+  | 'subscription-not-found';
 
 type PushDeliveryFailureDetails = {
   endpointHost: string | null;
@@ -824,6 +836,7 @@ export async function sendPushTestNotificationToUserDevice(input: {
     if (!ensureWebPushConfigured()) {
       logPushTestOutcome({
         attempted: false,
+        failureReason: 'delivery-config-missing',
         sent: false,
         skippedReason: 'missing-vapid-config',
         spaceId: input.spaceId ?? null,
@@ -833,11 +846,17 @@ export async function sendPushTestNotificationToUserDevice(input: {
       return {
         attempted: false,
         disabledCount: 0,
+        endpointHost: null,
         errorMessage: null,
         errorStatusCode: null,
+        failureReason: 'delivery-config-missing',
         failedCount: 0,
+        nodeCode: null,
+        providerBody: null,
         sent: false,
         skippedReason: 'missing-vapid-config',
+        subscriptionCreatedAt: null,
+        subscriptionUpdatedAt: null,
       };
     }
   } catch (error) {
@@ -852,10 +871,14 @@ export async function sendPushTestNotificationToUserDevice(input: {
     logPushTestOutcome(
       {
         attempted: false,
+        endpointHost: null,
         errorMessage:
           error instanceof Error
             ? error.message
             : 'Invalid VAPID delivery configuration.',
+        failureReason: 'delivery-config-invalid',
+        nodeCode: getPushErrorNodeCode(error),
+        providerBody: getPushErrorBody(error),
         sent: false,
         skippedReason: 'invalid-vapid-config',
         spaceId: input.spaceId ?? null,
@@ -867,14 +890,20 @@ export async function sendPushTestNotificationToUserDevice(input: {
     return {
       attempted: false,
       disabledCount: 0,
+      endpointHost: null,
       errorMessage:
         error instanceof Error
           ? error.message
           : 'Invalid VAPID delivery configuration.',
       errorStatusCode: null,
+      failureReason: 'delivery-config-invalid',
       failedCount: 0,
+      nodeCode: getPushErrorNodeCode(error),
+      providerBody: getPushErrorBody(error),
       sent: false,
       skippedReason: 'invalid-vapid-config',
+      subscriptionCreatedAt: null,
+      subscriptionUpdatedAt: null,
     };
   }
 
@@ -886,6 +915,7 @@ export async function sendPushTestNotificationToUserDevice(input: {
   if (!subscription?.endpoint || !subscription.p256dh || !subscription.auth) {
     logPushTestOutcome({
       attempted: false,
+      failureReason: 'subscription-not-found',
       sent: false,
       skippedReason: 'subscription-not-found',
       spaceId: input.spaceId ?? null,
@@ -896,11 +926,17 @@ export async function sendPushTestNotificationToUserDevice(input: {
     return {
       attempted: false,
       disabledCount: 0,
+      endpointHost: null,
       errorMessage: null,
       errorStatusCode: null,
+      failureReason: 'subscription-not-found',
       failedCount: 0,
+      nodeCode: null,
+      providerBody: null,
       sent: false,
       skippedReason: 'subscription-not-found',
+      subscriptionCreatedAt: null,
+      subscriptionUpdatedAt: null,
     };
   }
 
@@ -931,39 +967,55 @@ export async function sendPushTestNotificationToUserDevice(input: {
     logPushTestOutcome({
       attempted: true,
       disabledCount: 0,
+      endpointHost: getPushEndpointHost(subscription.endpoint),
+      failureReason: null,
       failedCount: 0,
+      nodeCode: null,
+      providerBody: null,
       sent: true,
       skippedReason: null,
       spaceId: input.spaceId ?? null,
       subscriptionFound: true,
+      subscriptionCreatedAt: subscription.created_at,
+      subscriptionUpdatedAt: subscription.updated_at,
       userId: input.userId,
     });
 
     return {
       attempted: true,
       disabledCount: 0,
+      endpointHost: getPushEndpointHost(subscription.endpoint),
       errorMessage: null,
       errorStatusCode: null,
+      failureReason: null,
       failedCount: 0,
+      nodeCode: null,
+      providerBody: null,
       sent: true,
       skippedReason: null,
+      subscriptionCreatedAt: subscription.created_at,
+      subscriptionUpdatedAt: subscription.updated_at,
     };
   } catch (error) {
-    const statusCode = getPushErrorStatusCode(error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Unable to send test push.';
+    const failure = getPushDeliveryFailureDetails({
+      endpoint: subscription.endpoint,
+      error,
+    });
 
     logPushDiagnostics('test-send-error', {
       endpoint: subscription.endpoint,
-      message: errorMessage,
-      statusCode,
+      message: failure.message,
+      nodeCode: failure.nodeCode,
+      providerBody: failure.providerBody,
+      reason: failure.reason,
+      statusCode: failure.statusCode,
       userId: input.userId,
     });
 
     let disabledCount = 0;
     let skippedReason = 'send-failed';
 
-    if (isExpiredPushEndpointStatusCode(statusCode)) {
+    if (isExpiredPushEndpointStatusCode(failure.statusCode)) {
       try {
         await disablePushSubscriptionByEndpoint(subscription.endpoint);
         disabledCount = 1;
@@ -978,7 +1030,7 @@ export async function sendPushTestNotificationToUserDevice(input: {
       }
 
       skippedReason = 'subscription-expired';
-    } else if (statusCode === 401 || statusCode === 403) {
+    } else if (failure.reason === 'vapid-rejected') {
       skippedReason = 'vapid-rejected';
     }
 
@@ -986,13 +1038,24 @@ export async function sendPushTestNotificationToUserDevice(input: {
       {
         attempted: true,
         disabledCount,
-        errorMessage,
-        errorStatusCode: statusCode,
+        endpointHost: failure.endpointHost,
+        errorMessage: failure.message,
+        errorStatusCode: failure.statusCode,
+        failureReason:
+          skippedReason === 'subscription-expired'
+            ? 'subscription-expired'
+            : skippedReason === 'vapid-rejected'
+              ? 'vapid-rejected'
+              : failure.reason,
         failedCount: 1,
+        nodeCode: failure.nodeCode,
+        providerBody: failure.providerBody,
         sent: false,
         skippedReason,
         spaceId: input.spaceId ?? null,
         subscriptionFound: true,
+        subscriptionCreatedAt: subscription.created_at,
+        subscriptionUpdatedAt: subscription.updated_at,
         userId: input.userId,
       },
       { level: 'error' },
@@ -1001,11 +1064,22 @@ export async function sendPushTestNotificationToUserDevice(input: {
     return {
       attempted: true,
       disabledCount,
-      errorMessage,
-      errorStatusCode: statusCode,
+      endpointHost: failure.endpointHost,
+      errorMessage: failure.message,
+      errorStatusCode: failure.statusCode,
+      failureReason:
+        skippedReason === 'subscription-expired'
+          ? 'subscription-expired'
+          : skippedReason === 'vapid-rejected'
+            ? 'vapid-rejected'
+            : failure.reason,
       failedCount: 1,
+      nodeCode: failure.nodeCode,
+      providerBody: failure.providerBody,
       sent: false,
       skippedReason,
+      subscriptionCreatedAt: subscription.created_at,
+      subscriptionUpdatedAt: subscription.updated_at,
     };
   }
 }
