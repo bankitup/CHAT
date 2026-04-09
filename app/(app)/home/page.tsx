@@ -1,44 +1,37 @@
 import { logoutAction } from '../actions';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { requestAdditionalSpaceAccountsAction, removeSpaceParticipantsAction } from './actions';
+import { SpaceParticipantsModule } from './space-participants-module';
 import { getRequestViewer } from '@/lib/request-context/server';
-import { getTranslations } from '@/modules/i18n';
+import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   getCurrentUserProfile,
-  getArchivedConversations,
-  getInboxConversationsStable,
 } from '@/modules/messaging/data/server';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
 import {
   getKeepCozyPrimaryTestFlowHints,
   getKeepCozyHomeDashboardData,
   isKeepCozyPrimaryTestHomeName,
 } from '@/modules/keepcozy/server';
 import {
+  getManageableSpaceParticipantsForUser,
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
-  resolveSuperAdminGovernanceForUser,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type HomeDashboardPageProps = {
   searchParams: Promise<{
+    error?: string;
+    message?: string;
+    participants?: string;
     space?: string;
   }>;
 };
-
-function buildMessengerInboxCreateHref(input: {
-  mode: 'dm' | 'group';
-  spaceId: string;
-}) {
-  const params = new URLSearchParams();
-  params.set('space', input.spaceId);
-  params.set('create', 'open');
-  params.set('createMode', input.mode);
-  return `/inbox?${params.toString()}`;
-}
 
 function formatMessengerStatusUpdatedAt(
   value: string | null,
@@ -171,23 +164,19 @@ export default async function HomeDashboardPage({
   );
 
   if (activeSpace.profile === 'messenger_full') {
-    const [conversations, archivedConversations, currentUserProfile] = await Promise.all([
-      getInboxConversationsStable(user.id, { spaceId: activeSpace.id }),
-      getArchivedConversations(user.id, { spaceId: activeSpace.id }),
-      getCurrentUserProfile(user.id, user.email ?? null),
-    ]);
-    const unreadChatCount = conversations.filter(
-      (conversation) => conversation.unreadCount > 0,
-    ).length;
-    const hasAnyChats =
-      conversations.length > 0 || archivedConversations.length > 0;
     const canManageMessengerMembers =
       'canManageMembers' in activeSpace && activeSpace.canManageMembers;
-    const canCreateSpaces = resolveSuperAdminGovernanceForUser({
-      userEmail: user.email ?? null,
-    }).canCreateSpaces;
-    const showMessengerAdminControls =
-      canManageMessengerMembers || canCreateSpaces;
+    const [currentUserProfile, manageableParticipants] = await Promise.all([
+      getCurrentUserProfile(user.id, user.email ?? null),
+      canManageMessengerMembers
+        ? getManageableSpaceParticipantsForUser({
+            requestedSpaceId: activeSpace.id,
+            source: 'home:space-participants',
+            userEmail: user.email ?? null,
+            userId: user.id,
+          })
+        : null,
+    ]);
     const profileLabel =
       resolveMessengerProfileLabel({
         displayName: currentUserProfile.displayName ?? null,
@@ -205,9 +194,30 @@ export default async function HomeDashboardPage({
       currentUserProfile.statusUpdatedAt ?? null,
       language,
     );
+    const visibleError = query.error
+      ? sanitizeUserFacingErrorMessage({
+          fallback: t.messengerHome.participantsRemoveFailed,
+          language,
+          rawMessage: query.error,
+        })
+      : null;
+    const visibleMessage = query.message?.trim() || null;
+    const participantsDefaultOpen =
+      query.participants?.trim() === 'open' || Boolean(visibleError || visibleMessage);
 
     return (
       <section className="stack settings-screen settings-shell activity-screen messenger-home-screen">
+        {visibleMessage ? (
+          <div aria-live="polite" className="notice notice-success notice-inline">
+            <span aria-hidden="true" className="notice-check">
+              ✓
+            </span>
+            <span className="notice-copy">{visibleMessage}</span>
+          </div>
+        ) : null}
+
+        {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+
         <section className="messenger-home-personal-grid">
           <section className="card stack settings-surface settings-home-card settings-home-card-profile messenger-home-personal-card">
             <div className="messenger-home-profile-row">
@@ -242,16 +252,6 @@ export default async function HomeDashboardPage({
                 </div>
               </div>
             </div>
-
-            <div className="keepcozy-card-actions messenger-home-personal-actions">
-              <Link
-                className="button button-secondary"
-                href={withSpaceParam('/settings', activeSpace.id)}
-                prefetch={false}
-              >
-                {t.messengerHome.openProfileAction}
-              </Link>
-            </div>
           </section>
 
           <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
@@ -283,99 +283,53 @@ export default async function HomeDashboardPage({
               </p>
             ) : null}
           </section>
-        </section>
 
-        <section className="card stack settings-surface activity-surface messenger-home-entry-card">
-          <section className="stack settings-section">
-            <div className="stack activity-section-copy">
-              <h2 className="card-title">{t.messengerHome.overviewTitle}</h2>
-              <p className="muted">{t.messengerHome.overviewBody}</p>
+          <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
+            <div className="stack settings-card-copy settings-section-copy">
+              <h2 className="section-title">{t.settings.logoutTitle}</h2>
+              <p className="muted">{t.settings.logoutSubtitle}</p>
             </div>
-            <div className="messenger-home-summary-pills">
-              <span className="summary-pill">
-                {t.messengerHome.activeChatsTitle}: {conversations.length}
-              </span>
-              <span className="summary-pill summary-pill-muted">
-                {t.activity.unreadChats}: {unreadChatCount}
-              </span>
-              {archivedConversations.length > 0 ? (
-                <span className="summary-pill summary-pill-muted">
-                  {t.activity.archivedChats}: {archivedConversations.length}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="messenger-home-entry-actions">
-              <Link
-                className="button"
-                href={withSpaceParam('/inbox', activeSpace.id)}
-                prefetch={false}
-              >
-                {t.shell.openChats}
-              </Link>
-              <Link
-                className="button button-secondary"
-                href={buildMessengerInboxCreateHref({
-                  mode: 'dm',
-                  spaceId: activeSpace.id,
-                })}
-                prefetch={false}
-              >
-                {t.inbox.create.createDm}
-              </Link>
-              <Link
-                className="button button-secondary"
-                href={buildMessengerInboxCreateHref({
-                  mode: 'group',
-                  spaceId: activeSpace.id,
-                })}
-                prefetch={false}
-              >
-                {t.inbox.create.createGroup}
-              </Link>
-            </div>
+            <form action={logoutAction}>
+              <button className="button button-secondary settings-logout-button" type="submit">
+                {t.settings.logoutButton}
+              </button>
+            </form>
           </section>
-
-          {!hasAnyChats ? (
-            <section className="stack settings-section messenger-home-empty-section">
-              <h2 className="card-title">{t.messengerHome.emptyTitle}</h2>
-              <p className="muted">{t.messengerHome.emptyBody}</p>
-            </section>
-          ) : null}
-
-          {showMessengerAdminControls ? (
-            <section className="stack settings-section messenger-home-admin-section">
-              <div className="stack activity-section-copy">
-                <h2 className="card-title">{t.messengerHome.adminTitle}</h2>
-                <p className="muted">{t.messengerHome.adminBody}</p>
-              </div>
-
-              <div className="messenger-home-admin-actions">
-                {canManageMessengerMembers ? (
-                  <Link
-                    className="pill"
-                    href={withSpaceParam('/spaces/members', activeSpace.id)}
-                    prefetch={false}
-                  >
-                    {t.spaces.manageMembersAction}
-                  </Link>
-                ) : null}
-                <Link
-                  className="button button-secondary"
-                  href={withSpaceParam('/spaces', activeSpace.id)}
-                  prefetch={false}
-                >
-                  {t.settings.chooseAnotherSpace}
-                </Link>
-                <form action={logoutAction} className="messenger-home-logout-form">
-                  <button className="button button-secondary" type="submit">
-                    {t.settings.logoutButton}
-                  </button>
-                </form>
-              </div>
-            </section>
-          ) : null}
         </section>
+
+        {canManageMessengerMembers && manageableParticipants ? (
+          <SpaceParticipantsModule
+            copy={{
+              body: t.messengerHome.participantsBody,
+              cancelRemoveAction: t.messengerHome.participantsCancelRemoveAction,
+              confirmRemoveAction: t.messengerHome.participantsConfirmRemoveAction,
+              currentUserBadge: t.messengerHome.currentUserBadge,
+              emptyBody: t.messengerHome.participantsEmptyBody,
+              lockedHint: t.messengerHome.participantsLockedHint,
+              removeAction: t.messengerHome.participantsRemoveAction,
+              removeConfirmBody: t.messengerHome.participantsRemoveConfirmBody,
+              removePending: t.messengerHome.participantsRemovePending,
+              requestAction: t.messengerHome.participantsRequestAction,
+              requestBody: t.messengerHome.participantsRequestBody,
+              requestPending: t.messengerHome.participantsRequestPending,
+              summaryValue: formatMemberCount(
+                language,
+                manageableParticipants.participants.length,
+              ),
+              title: t.messengerHome.participantsTitle,
+            }}
+            defaultOpen={participantsDefaultOpen}
+            participants={manageableParticipants.participants}
+            removeAction={removeSpaceParticipantsAction}
+            requestAction={requestAdditionalSpaceAccountsAction}
+            roleLabels={{
+              admin: t.chat.admin,
+              member: t.chat.member,
+              owner: t.chat.owner,
+            }}
+            spaceId={activeSpace.id}
+          />
+        ) : null}
       </section>
     );
   }
