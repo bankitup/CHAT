@@ -2745,22 +2745,22 @@ main {
 }
 
 .messenger-activity-head {
-  gap: 8px;
-}
-
-.messenger-activity-head-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 4px;
 }
 
 .messenger-activity-copy {
-  gap: 3px;
+  gap: 4px;
 }
 
 .messenger-activity-meta {
   gap: 8px;
+}
+
+.messenger-activity-surface-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .messenger-activity-head-actions {
@@ -2776,15 +2776,24 @@ main {
 }
 
 .messenger-activity-surface {
-  gap: 12px;
+  gap: 14px;
 }
 
 .messenger-activity-surface-copy {
-  gap: 3px;
+  gap: 4px;
+}
+
+.messenger-activity-surface-copy .muted {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.messenger-activity-surface-pill {
+  flex-shrink: 0;
 }
 
 .messenger-activity-notification-panel {
-  gap: 14px;
+  gap: 12px;
   padding: 16px;
   border: 1px solid rgba(211, 221, 234, 0.92);
   border-radius: 22px;
@@ -2799,7 +2808,7 @@ main {
 .messenger-activity-notification-header,
 .messenger-activity-notification-copy,
 .messenger-activity-notification-actions {
-  gap: 8px;
+  gap: 6px;
 }
 
 .messenger-activity-notification-topline {
@@ -2845,6 +2854,7 @@ main {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  padding-top: 2px;
 }
 
 .messenger-activity-filter-pill {
@@ -2893,7 +2903,7 @@ main {
 .messenger-activity-scroll {
   display: grid;
   gap: 12px;
-  max-height: min(62vh, 620px);
+  max-height: min(56vh, 560px);
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -3368,7 +3378,7 @@ main {
     justify-content: center;
   }
 
-  .messenger-activity-head-row {
+  .messenger-activity-surface-header {
     flex-direction: column;
   }
 
@@ -3384,7 +3394,8 @@ main {
     width: 100%;
   }
 
-  .messenger-activity-head-actions .pill {
+  .messenger-activity-head-actions .pill,
+  .messenger-activity-surface-pill {
     flex: 1 1 auto;
     justify-content: center;
   }

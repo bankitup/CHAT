@@ -1081,14 +1081,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     messengerActivity: {
       subtitle:
-        'Follow unread conversations and recent message movement for this space.',
+        'Unread replies and recent movement for this space.',
       overviewTitle: 'Notifications',
       overviewBody:
-        'Catch up on unread replies and recent conversation movement here, then jump straight into the exact message that needs you.',
+        'Enable notifications for this device, then use the queue below to catch up quickly on replies and recent chat movement.',
       settingsAction: 'Notification settings',
-      surfaceTitle: 'Replies and recent chat activity',
+      surfaceTitle: 'Needs attention and recent movement',
       surfaceBody:
-        'Each row groups the latest reply movement for one conversation so you can catch up fast and jump back into the right message.',
+        'Unread replies stay first. Recent movement stays just below for fast catch-up.',
       filtersLabel: 'Activity filters',
       filterAttention: 'Needs reply',
       filterRecent: 'Recent',
@@ -2014,14 +2014,14 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
     },
     messengerActivity: {
       subtitle:
-        'Следите за непрочитанными чатами и недавним движением сообщений в этом пространстве.',
+        'Непрочитанные ответы и недавнее движение по этому пространству.',
       overviewTitle: 'Уведомления',
       overviewBody:
-        'Разбирайте здесь непрочитанные ответы и недавнее движение разговоров, а затем переходите сразу к тому сообщению, которое требует внимания.',
+        'Включите уведомления для этого устройства, а затем быстро разбирайте ниже ответы и недавнее движение по чатам.',
       settingsAction: 'Настройки уведомлений',
-      surfaceTitle: 'Ответы и недавняя активность',
+      surfaceTitle: 'Требует внимания и недавнее движение',
       surfaceBody:
-        'Каждая строка собирает последнее движение по одному разговору, чтобы можно было быстро сориентироваться и вернуться сразу к нужному сообщению.',
+        'Сначала идут непрочитанные ответы, а ниже остаётся недавнее движение для быстрого возврата в нужный чат.',
       filtersLabel: 'Фильтры активности',
       filterAttention: 'Нужен ответ',
       filterRecent: 'Недавнее',
