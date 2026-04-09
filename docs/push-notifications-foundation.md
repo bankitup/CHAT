@@ -11,6 +11,27 @@ Scope for this foundation:
 
 This is not a full notification product spec. It is the bridge from the current browser-readiness state to a real first push system.
 
+## Live audit status
+
+As of April 9, 2026, the repo is no longer at a UI-only notification state.
+
+Implemented now:
+
+- browser permission checks and user-triggered enable flow in the notification readiness panel
+- service-worker registration and `push` / `notificationclick` handling in [public/sw.js](/Users/danya/IOS%20-%20Apps/CHAT/public/sw.js)
+- real `PushManager.subscribe(...)` support in [src/modules/messaging/sdk/notifications.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/sdk/notifications.ts)
+- authenticated subscription persistence through [app/api/messaging/push-subscriptions/route.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/api/messaging/push-subscriptions/route.ts)
+- server-driven chat push fan-out in [src/modules/messaging/push/server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/push/server.ts) after committed message sends
+- unread badge syncing through [app/api/messaging/unread-badge/route.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/api/messaging/unread-badge/route.ts) and [src/modules/messaging/push/chat-unread-badge-sync.tsx](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/push/chat-unread-badge-sync.tsx)
+
+Still missing or blocking real-world testing:
+
+- the target database must have [2026-04-08-push-subscriptions-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-push-subscriptions-foundation.sql) applied
+- the runtime needs `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` configured
+- there is no dedicated test-notification send route yet, so practical testing still depends on a real incoming chat message
+- exact badge counts are restored when the app syncs unread state, but closed-app badge behavior still relies on the service worker's generic badge nudge where the platform supports it
+- logout and account-switch badge clearing are still follow-up work
+
 ## First implementation note
 
 The first practical subscription foundation on this branch uses:
