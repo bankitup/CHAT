@@ -77,6 +77,14 @@ type PushTestSendResult = {
   skippedReason: string | null;
 };
 
+type PushRecipientResolutionResult = {
+  eligibleRecipientCount: number;
+  membershipCount: number;
+  rows: PushSubscriptionRow[];
+  skippedReason: string | null;
+  subscriptionCount: number;
+};
+
 let vapidConfigured = false;
 
 function mapStoredPushSubscription(
@@ -106,6 +114,20 @@ function logPushDiagnostics(stage: string, details?: Record<string, unknown>) {
   }
 
   console.info('[chat-push]', stage);
+}
+
+function logPushFanoutOutcome(
+  details: Record<string, unknown>,
+  options?: { level?: 'error' | 'info' },
+) {
+  const level = options?.level ?? 'info';
+
+  if (level === 'error') {
+    console.error('[chat-push-fanout]', details);
+    return;
+  }
+
+  console.info('[chat-push-fanout]', details);
 }
 
 function getWebPushPublicKey() {
@@ -341,13 +363,16 @@ export function isMissingPushSubscriptionsSchemaMessage(message: string) {
 async function getActivePushSubscriptionRowsForRecipients(input: {
   conversationId: string;
   senderId: string;
-}) {
+}): Promise<PushRecipientResolutionResult> {
   const client = createSupabaseServiceRoleClient();
 
   if (!client) {
     return {
+      eligibleRecipientCount: 0,
+      membershipCount: 0,
       rows: [] as PushSubscriptionRow[],
       skippedReason: 'missing-service-role',
+      subscriptionCount: 0,
     };
   }
 
@@ -391,8 +416,11 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
 
   if (eligibleUserIds.length === 0) {
     return {
+      eligibleRecipientCount: 0,
+      membershipCount: membershipRows.length,
       rows: [] as PushSubscriptionRow[],
       skippedReason: 'no-eligible-recipients',
+      subscriptionCount: 0,
     };
   }
 
@@ -408,11 +436,16 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
     throw new Error(error.message);
   }
 
+  const rows = ((data ?? []) as PushSubscriptionRow[]).filter(
+    (row) => row.endpoint && row.p256dh && row.auth,
+  );
+
   return {
-    rows: ((data ?? []) as PushSubscriptionRow[]).filter(
-      (row) => row.endpoint && row.p256dh && row.auth,
-    ),
+    eligibleRecipientCount: eligibleUserIds.length,
+    membershipCount: membershipRows.length,
+    rows,
     skippedReason: null,
+    subscriptionCount: rows.length,
   };
 }
 
@@ -791,6 +824,17 @@ export async function sendChatPushNotifications(
   input: ChatPushSendInput,
 ): Promise<ChatPushSendResult> {
   if (!ensureWebPushConfigured()) {
+    logPushFanoutOutcome({
+      attempted: false,
+      contentMode: input.contentMode,
+      conversationId: input.conversationId,
+      failedCount: 0,
+      messageId: input.messageId,
+      messageKind: input.messageKind,
+      sentCount: 0,
+      skippedReason: 'missing-vapid-config',
+    });
+
     return {
       attempted: false,
       sentCount: 0,
@@ -807,6 +851,20 @@ export async function sendChatPushNotifications(
   });
 
   if (!presentation) {
+    logPushFanoutOutcome(
+      {
+        attempted: false,
+        contentMode: input.contentMode,
+        conversationId: input.conversationId,
+        failedCount: 0,
+        messageId: input.messageId,
+        messageKind: input.messageKind,
+        sentCount: 0,
+        skippedReason: 'conversation-unavailable',
+      },
+      { level: 'error' },
+    );
+
     return {
       attempted: false,
       sentCount: 0,
@@ -832,14 +890,20 @@ export async function sendChatPushNotifications(
 
   let subscriptions: PushSubscriptionRow[] = [];
   let subscriptionSkipReason: string | null = null;
+  let membershipCount = 0;
+  let eligibleRecipientCount = 0;
+  let subscriptionCount = 0;
 
   try {
     const result = await getActivePushSubscriptionRowsForRecipients({
       conversationId: input.conversationId,
       senderId: input.senderId,
     });
+    eligibleRecipientCount = result.eligibleRecipientCount;
+    membershipCount = result.membershipCount;
     subscriptions = result.rows;
     subscriptionSkipReason = result.skippedReason;
+    subscriptionCount = result.subscriptionCount;
   } catch (error) {
     const message =
       error instanceof Error
@@ -847,6 +911,20 @@ export async function sendChatPushNotifications(
         : 'Unable to resolve push subscriptions.';
 
     if (isMissingPushSubscriptionsSchemaMessage(message)) {
+      logPushFanoutOutcome({
+        attempted: false,
+        contentMode: input.contentMode,
+        conversationId: input.conversationId,
+        eligibleRecipientCount,
+        failedCount: 0,
+        membershipCount,
+        messageId: input.messageId,
+        messageKind: input.messageKind,
+        sentCount: 0,
+        skippedReason: 'missing-push-subscriptions-schema',
+        subscriptionCount,
+      });
+
       return {
         attempted: false,
         sentCount: 0,
@@ -860,6 +938,23 @@ export async function sendChatPushNotifications(
       conversationId: input.conversationId,
       message,
     });
+    logPushFanoutOutcome(
+      {
+        attempted: false,
+        contentMode: input.contentMode,
+        conversationId: input.conversationId,
+        eligibleRecipientCount,
+        failedCount: 0,
+        membershipCount,
+        message,
+        messageId: input.messageId,
+        messageKind: input.messageKind,
+        sentCount: 0,
+        skippedReason: 'recipient-resolution-error',
+        subscriptionCount,
+      },
+      { level: 'error' },
+    );
 
     return {
       attempted: false,
@@ -871,12 +966,28 @@ export async function sendChatPushNotifications(
   }
 
   if (subscriptions.length === 0) {
+    const skippedReason = subscriptionSkipReason ?? 'no-active-subscriptions';
+
+    logPushFanoutOutcome({
+      attempted: false,
+      contentMode: input.contentMode,
+      conversationId: input.conversationId,
+      eligibleRecipientCount,
+      failedCount: 0,
+      membershipCount,
+      messageId: input.messageId,
+      messageKind: input.messageKind,
+      sentCount: 0,
+      skippedReason,
+      subscriptionCount,
+    });
+
     return {
       attempted: false,
       sentCount: 0,
       disabledCount: 0,
       failedCount: 0,
-      skippedReason: subscriptionSkipReason ?? 'no-active-subscriptions',
+      skippedReason,
     };
   }
 
@@ -933,6 +1044,26 @@ export async function sendChatPushNotifications(
       }
     }
   }
+
+  logPushFanoutOutcome(
+    {
+      attempted: true,
+      contentMode: input.contentMode,
+      conversationId: input.conversationId,
+      disabledCount,
+      eligibleRecipientCount,
+      failedCount,
+      membershipCount,
+      messageId: input.messageId,
+      messageKind: input.messageKind,
+      sentCount,
+      skippedReason: null,
+      subscriptionCount,
+    },
+    {
+      level: failedCount > 0 && sentCount === 0 ? 'error' : 'info',
+    },
+  );
 
   return {
     attempted: true,
