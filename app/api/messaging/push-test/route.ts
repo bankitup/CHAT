@@ -85,6 +85,18 @@ export async function POST(request: Request) {
         );
       }
 
+      if (result.skippedReason === 'invalid-vapid-config') {
+        return NextResponse.json(
+          {
+            code: 'push_test_vapid_invalid',
+            error:
+              'Push delivery credentials are invalid for this environment. Verify the configured VAPID keys.',
+            detail: result.errorMessage ?? null,
+          },
+          { status: 503 },
+        );
+      }
+
       if (result.skippedReason === 'subscription-not-found') {
         return NextResponse.json(
           {
@@ -95,10 +107,35 @@ export async function POST(request: Request) {
         );
       }
 
+      if (result.skippedReason === 'subscription-expired') {
+        return NextResponse.json(
+          {
+            code: 'push_test_subscription_expired',
+            error:
+              'This browser subscription expired or was replaced. Re-enable notifications on this device.',
+          },
+          { status: 409 },
+        );
+      }
+
+      if (result.skippedReason === 'vapid-rejected') {
+        return NextResponse.json(
+          {
+            code: 'push_test_vapid_rejected',
+            error:
+              'The push service rejected this environment’s VAPID credentials. Verify that the configured public and private keys are a matching pair.',
+            detail: result.errorMessage ?? null,
+          },
+          { status: 503 },
+        );
+      }
+
       return NextResponse.json(
         {
           code: 'push_test_send_failed',
-          error: 'Unable to send a test notification right now.',
+          error: 'Push delivery failed after the device was connected.',
+          detail: result.errorMessage ?? null,
+          statusCode: result.errorStatusCode ?? null,
         },
         { status: 400 },
       );
