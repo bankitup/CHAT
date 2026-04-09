@@ -144,7 +144,7 @@ export default async function HomeDashboardPage({
     const participantsDefaultOpen = query.participants?.trim() === 'open';
 
     return (
-      <section className="stack settings-screen settings-shell activity-screen messenger-home-screen">
+      <section className="stack messenger-home-screen messenger-home-shell">
         {visibleMessage ? (
           <div aria-live="polite" className="notice notice-success notice-inline">
             <span aria-hidden="true" className="notice-check">
@@ -156,129 +156,136 @@ export default async function HomeDashboardPage({
 
         {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
 
-        <section className="messenger-home-personal-grid">
-          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-profile-editor-card">
-            <div className="stack settings-card-copy settings-section-copy">
-              <h2 className="section-title">{t.settings.profileTitle}</h2>
-              <p className="muted">{t.settings.profileSubtitle}</p>
-            </div>
+        <div className="stack messenger-home-main-flow">
+          <section className="messenger-home-personal-grid">
+            <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-profile-editor-card">
+              <div className="stack settings-card-copy settings-section-copy">
+                <h2 className="section-title">{t.settings.profileTitle}</h2>
+                <p className="muted">{t.settings.profileSubtitle}</p>
+              </div>
 
-            <ProfileSettingsForm
-              avatarPath={currentUserProfile.avatarPath}
-              defaultDisplayName={currentUserProfile.displayName ?? ''}
-              defaultEmail={currentUserProfile.email ?? user.email ?? ''}
-              defaultUsername={currentUserProfile.username ?? ''}
-              hasAvatar={Boolean(currentUserProfile.avatarPath)}
-              labels={{
-                profileTitle: t.settings.profileTitle,
-                profileSubtitle: t.settings.profileSubtitle,
-                profilePhoto: t.settings.profilePhoto,
-                profilePhotoNote: t.settings.profilePhotoNote,
-                profilePhotoCurrent: t.settings.profilePhotoCurrent,
-                profilePhotoEmpty: t.settings.profilePhotoEmpty,
-                displayName: t.settings.displayName,
-                displayNamePlaceholder: t.settings.displayNamePlaceholder,
-                saveChanges: t.settings.saveChanges,
-                editProfile: t.settings.editProfile,
-                cancelEdit: t.settings.cancelEdit,
-                tapPhotoToChange: t.settings.tapPhotoToChange,
-                removePhoto: t.settings.removePhoto,
-                avatarTooLarge: t.settings.avatarTooLarge,
-                avatarInvalidType: t.settings.avatarInvalidType,
-                avatarUploading: t.settings.avatarUploading,
-                avatarUploadFailed: t.settings.avatarUploadFailed,
-                avatarStorageUnavailable: t.settings.avatarStorageUnavailable,
-                profileUpdateFailed: t.settings.profileUpdateFailed,
-                avatarEditorHint: t.settings.avatarEditorHint,
-                avatarEditorZoom: t.settings.avatarEditorZoom,
-                avatarEditorApply: t.settings.avatarEditorApply,
-                avatarEditorDraftReady: t.settings.avatarEditorDraftReady,
-                avatarEditorPreparing: t.settings.avatarEditorPreparing,
-                avatarEditorLoadFailed: t.settings.avatarEditorLoadFailed,
-                avatarEditorApplyBeforeSave: t.settings.avatarEditorApplyBeforeSave,
+              <ProfileSettingsForm
+                avatarPath={currentUserProfile.avatarPath}
+                defaultDisplayName={currentUserProfile.displayName ?? ''}
+                defaultEmail={currentUserProfile.email ?? user.email ?? ''}
+                defaultUsername={currentUserProfile.username ?? ''}
+                hasAvatar={Boolean(currentUserProfile.avatarPath)}
+                labels={{
+                  profileTitle: t.settings.profileTitle,
+                  profileSubtitle: t.settings.profileSubtitle,
+                  profilePhoto: t.settings.profilePhoto,
+                  profilePhotoNote: t.settings.profilePhotoNote,
+                  profilePhotoCurrent: t.settings.profilePhotoCurrent,
+                  profilePhotoEmpty: t.settings.profilePhotoEmpty,
+                  displayName: t.settings.displayName,
+                  displayNamePlaceholder: t.settings.displayNamePlaceholder,
+                  saveChanges: t.settings.saveChanges,
+                  editProfile: t.settings.editProfile,
+                  cancelEdit: t.settings.cancelEdit,
+                  tapPhotoToChange: t.settings.tapPhotoToChange,
+                  removePhoto: t.settings.removePhoto,
+                  avatarTooLarge: t.settings.avatarTooLarge,
+                  avatarInvalidType: t.settings.avatarInvalidType,
+                  avatarUploading: t.settings.avatarUploading,
+                  avatarUploadFailed: t.settings.avatarUploadFailed,
+                  avatarStorageUnavailable: t.settings.avatarStorageUnavailable,
+                  profileUpdateFailed: t.settings.profileUpdateFailed,
+                  avatarEditorHint: t.settings.avatarEditorHint,
+                  avatarEditorZoom: t.settings.avatarEditorZoom,
+                  avatarEditorApply: t.settings.avatarEditorApply,
+                  avatarEditorDraftReady: t.settings.avatarEditorDraftReady,
+                  avatarEditorPreparing: t.settings.avatarEditorPreparing,
+                  avatarEditorLoadFailed: t.settings.avatarEditorLoadFailed,
+                  avatarEditorApplyBeforeSave: t.settings.avatarEditorApplyBeforeSave,
+                }}
+                redirectSurface="home"
+                spaceId={activeSpace.id}
+                userId={user.id}
+              />
+            </section>
+
+            <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
+              <ProfileStatusForm
+                key={`home-profile-status-${currentUserProfile.statusEmoji ?? ''}-${currentUserProfile.statusText ?? ''}-${currentUserProfile.statusUpdatedAt ?? ''}`}
+                defaultStatusEmoji={currentUserProfile.statusEmoji ?? ''}
+                defaultStatusText={currentUserProfile.statusText ?? ''}
+                labels={{
+                  statusTitle: t.settings.statusTitle,
+                  statusSubtitle: t.settings.statusSubtitle,
+                  statusEmpty: t.settings.statusEmpty,
+                  statusEmoji: t.settings.statusEmoji,
+                  statusText: t.settings.statusText,
+                  statusEmojiPlaceholder: t.settings.statusEmojiPlaceholder,
+                  statusTextPlaceholder: t.settings.statusTextPlaceholder,
+                  statusSave: t.settings.statusSave,
+                  statusEdit: t.settings.statusEdit,
+                  statusClear: t.settings.statusClear,
+                  cancelEdit: t.settings.cancelEdit,
+                  statusTextHint: t.settings.statusTextHint,
+                  statusEmojiTooLong: t.settings.statusEmojiTooLong,
+                  statusTextTooLong: t.settings.statusTextTooLong,
+                }}
+                language={language}
+                redirectSurface="home"
+                spaceId={activeSpace.id}
+                statusUpdatedAt={currentUserProfile.statusUpdatedAt}
+              />
+            </section>
+
+            <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
+              <NotificationReadinessPanel embedded language={language} surface="home" />
+            </section>
+
+            <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
+              <div className="stack settings-card-copy settings-section-copy">
+                <h2 className="section-title">{t.settings.logoutTitle}</h2>
+                <p className="muted">{t.settings.logoutSubtitle}</p>
+              </div>
+              <form action={logoutAction}>
+                <button
+                  className="button button-secondary settings-logout-button"
+                  type="submit"
+                >
+                  {t.settings.logoutButton}
+                </button>
+              </form>
+            </section>
+          </section>
+
+          {canManageMessengerMembers && manageableParticipants ? (
+            <SpaceParticipantsModule
+              copy={{
+                body: t.messengerHome.participantsBody,
+                cancelRemoveAction: t.messengerHome.participantsCancelRemoveAction,
+                confirmRemoveAction: t.messengerHome.participantsConfirmRemoveAction,
+                currentUserBadge: t.messengerHome.currentUserBadge,
+                emptyBody: t.messengerHome.participantsEmptyBody,
+                lockedHint: t.messengerHome.participantsLockedHint,
+                removeAction: t.messengerHome.participantsRemoveAction,
+                removeConfirmBody: t.messengerHome.participantsRemoveConfirmBody,
+                removePending: t.messengerHome.participantsRemovePending,
+                requestAction: t.messengerHome.participantsRequestAction,
+                requestBody: t.messengerHome.participantsRequestBody,
+                requestPending: t.messengerHome.participantsRequestPending,
+                summaryValue: formatMemberCount(
+                  language,
+                  manageableParticipants.participants.length,
+                ),
+                title: t.messengerHome.participantsTitle,
               }}
-              redirectSurface="home"
-              spaceId={activeSpace.id}
-              userId={user.id}
-            />
-          </section>
-          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
-            <ProfileStatusForm
-              key={`home-profile-status-${currentUserProfile.statusEmoji ?? ''}-${currentUserProfile.statusText ?? ''}-${currentUserProfile.statusUpdatedAt ?? ''}`}
-              defaultStatusEmoji={currentUserProfile.statusEmoji ?? ''}
-              defaultStatusText={currentUserProfile.statusText ?? ''}
-              labels={{
-                statusTitle: t.settings.statusTitle,
-                statusSubtitle: t.settings.statusSubtitle,
-                statusEmpty: t.settings.statusEmpty,
-                statusEmoji: t.settings.statusEmoji,
-                statusText: t.settings.statusText,
-                statusEmojiPlaceholder: t.settings.statusEmojiPlaceholder,
-                statusTextPlaceholder: t.settings.statusTextPlaceholder,
-                statusSave: t.settings.statusSave,
-                statusEdit: t.settings.statusEdit,
-                statusClear: t.settings.statusClear,
-                cancelEdit: t.settings.cancelEdit,
-                statusTextHint: t.settings.statusTextHint,
-                statusEmojiTooLong: t.settings.statusEmojiTooLong,
-                statusTextTooLong: t.settings.statusTextTooLong,
+              defaultOpen={participantsDefaultOpen}
+              participants={manageableParticipants.participants}
+              removeAction={removeSpaceParticipantsAction}
+              requestAction={requestAdditionalSpaceAccountsAction}
+              roleLabels={{
+                admin: t.chat.admin,
+                member: t.chat.member,
+                owner: t.chat.owner,
               }}
-              language={language}
-              redirectSurface="home"
               spaceId={activeSpace.id}
-              statusUpdatedAt={currentUserProfile.statusUpdatedAt}
             />
-          </section>
-          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
-            <NotificationReadinessPanel embedded language={language} surface="home" />
-          </section>
-
-          <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
-            <div className="stack settings-card-copy settings-section-copy">
-              <h2 className="section-title">{t.settings.logoutTitle}</h2>
-              <p className="muted">{t.settings.logoutSubtitle}</p>
-            </div>
-            <form action={logoutAction}>
-              <button className="button button-secondary settings-logout-button" type="submit">
-                {t.settings.logoutButton}
-              </button>
-            </form>
-          </section>
-        </section>
-
-        {canManageMessengerMembers && manageableParticipants ? (
-          <SpaceParticipantsModule
-            copy={{
-              body: t.messengerHome.participantsBody,
-              cancelRemoveAction: t.messengerHome.participantsCancelRemoveAction,
-              confirmRemoveAction: t.messengerHome.participantsConfirmRemoveAction,
-              currentUserBadge: t.messengerHome.currentUserBadge,
-              emptyBody: t.messengerHome.participantsEmptyBody,
-              lockedHint: t.messengerHome.participantsLockedHint,
-              removeAction: t.messengerHome.participantsRemoveAction,
-              removeConfirmBody: t.messengerHome.participantsRemoveConfirmBody,
-              removePending: t.messengerHome.participantsRemovePending,
-              requestAction: t.messengerHome.participantsRequestAction,
-              requestBody: t.messengerHome.participantsRequestBody,
-              requestPending: t.messengerHome.participantsRequestPending,
-              summaryValue: formatMemberCount(
-                language,
-                manageableParticipants.participants.length,
-              ),
-              title: t.messengerHome.participantsTitle,
-            }}
-            defaultOpen={participantsDefaultOpen}
-            participants={manageableParticipants.participants}
-            removeAction={removeSpaceParticipantsAction}
-            requestAction={requestAdditionalSpaceAccountsAction}
-            roleLabels={{
-              admin: t.chat.admin,
-              member: t.chat.member,
-              owner: t.chat.owner,
-            }}
-            spaceId={activeSpace.id}
-          />
-        ) : null}
+          ) : null}
+        </div>
       </section>
     );
   }

@@ -3544,22 +3544,49 @@ main {
 
 .messenger-home-screen {
   gap: 14px;
+  padding-bottom: calc(12px + var(--safe-area-bottom-pad));
+}
+
+.messenger-home-shell {
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+.messenger-home-main-flow {
+  gap: 14px;
 }
 
 .messenger-home-personal-grid {
   display: grid;
   gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'profile'
+    'status'
+    'notifications'
+    'session';
 }
 
 .messenger-home-personal-card {
   gap: 14px;
+  min-width: 0;
+}
+
+.messenger-home-profile-editor-card {
+  grid-area: profile;
 }
 
 .messenger-home-status-card {
+  grid-area: status;
   justify-content: space-between;
 }
 
+.messenger-home-notification-card {
+  grid-area: notifications;
+}
+
 .messenger-home-session-card {
+  grid-area: session;
   justify-content: space-between;
 }
 
@@ -3659,10 +3686,19 @@ main {
   gap: 10px;
 }
 
-@media (min-width: 700px) {
+@media (min-width: 760px) {
+  .messenger-home-main-flow {
+    gap: 16px;
+  }
+
   .messenger-home-personal-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.12fr) minmax(280px, 0.88fr);
     align-items: start;
+    gap: 14px;
+    grid-template-areas:
+      'profile profile'
+      'status notifications'
+      'session notifications';
   }
 }
 
