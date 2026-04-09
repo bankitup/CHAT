@@ -1,0 +1,159 @@
+'use server';
+
+import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import { getRequestLanguage } from '@/modules/i18n/server';
+import {
+  logControlledUiError,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
+import {
+  removeMembersFromGovernedSpace,
+  requestAdditionalAccountsForGovernedSpace,
+} from '@/modules/spaces/write-server';
+import { withSpaceParam } from '@/modules/spaces/url';
+
+function readText(formData: FormData, key: string) {
+  return String(formData.get(key) ?? '').trim();
+}
+
+function setTextParam(params: URLSearchParams, key: string, value?: string | null) {
+  const normalized = value?.trim() ?? '';
+
+  if (normalized) {
+    params.set(key, normalized);
+  }
+}
+
+function redirectToHomeSurface(input: {
+  error?: string | null;
+  message?: string | null;
+  openParticipants?: boolean;
+  spaceId?: string | null;
+}): never {
+  const params = new URLSearchParams();
+
+  setTextParam(params, 'space', input.spaceId);
+  setTextParam(params, 'message', input.message);
+  setTextParam(params, 'error', input.error);
+
+  if (input.openParticipants) {
+    params.set('participants', 'open');
+  }
+
+  const href = params.toString() ? `/home?${params.toString()}` : '/home';
+  redirect(withSpaceParam(href, input.spaceId));
+}
+
+function getFriendlyHomeErrorMessage(input: {
+  error: unknown;
+  fallback: string;
+  language: AppLanguage;
+  surface: 'home:participants-remove' | 'home:participants-request';
+}) {
+  const rawMessage =
+    input.error instanceof Error ? input.error.message : input.fallback;
+
+  logControlledUiError({
+    fallback: input.fallback,
+    rawMessage,
+    surface: input.surface,
+  });
+
+  return sanitizeUserFacingErrorMessage({
+    fallback: input.fallback,
+    language: input.language,
+    rawMessage,
+  });
+}
+
+export async function removeSpaceParticipantsAction(formData: FormData) {
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
+  const spaceId = readText(formData, 'spaceId');
+  const selectedUserIds = readText(formData, 'selectedUserIds');
+
+  if (!spaceId) {
+    redirect('/spaces');
+  }
+
+  if (!selectedUserIds) {
+    redirectToHomeSurface({
+      error: t.messengerHome.participantsSelectionRequired,
+      openParticipants: true,
+      spaceId,
+    });
+  }
+
+  try {
+    await removeMembersFromGovernedSpace({
+      selectedUserIds,
+      spaceId,
+    });
+
+    revalidatePath('/home');
+    revalidatePath('/inbox');
+    revalidatePath('/activity');
+    revalidatePath('/spaces');
+
+    redirectToHomeSurface({
+      message: t.messengerHome.participantsRemoveSuccess,
+      openParticipants: true,
+      spaceId,
+    });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    redirectToHomeSurface({
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback: t.messengerHome.participantsRemoveFailed,
+        language,
+        surface: 'home:participants-remove',
+      }),
+      openParticipants: true,
+      spaceId,
+    });
+  }
+}
+
+export async function requestAdditionalSpaceAccountsAction(formData: FormData) {
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
+  const spaceId = readText(formData, 'spaceId');
+
+  if (!spaceId) {
+    redirect('/spaces');
+  }
+
+  try {
+    await requestAdditionalAccountsForGovernedSpace({
+      spaceId,
+    });
+
+    redirectToHomeSurface({
+      message: t.messengerHome.participantsRequestSuccess,
+      openParticipants: true,
+      spaceId,
+    });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    redirectToHomeSurface({
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback: t.messengerHome.participantsRequestFailed,
+        language,
+        surface: 'home:participants-request',
+      }),
+      openParticipants: true,
+      spaceId,
+    });
+  }
+}

@@ -68,6 +68,34 @@ Practical rule:
 - shell transitions should never visually promise KeepCozy when the space is
   actually messenger-first
 
+## Home Contract
+
+Messenger `Home` should now stay intentionally narrow.
+
+Primary content:
+
+- personal profile summary
+- current status block
+- logout/session action
+- one admin-only `Space participants` module
+
+Messenger `Home` should not act as a second chat launcher.
+
+Do not place these on messenger `Home`:
+
+- `Open chats` CTA blocks
+- create-DM or create-group actions
+- duplicate chat-entry cards
+- redundant `Open profile` buttons when the profile summary is already present
+
+Closed-space rule:
+
+- people do not self-join spaces
+- ordinary members do not browse or discover users outside the current space
+- local roster changes happen only through exact-space admin actions
+- additional accounts are requested through a controlled super-admin or staff
+  review flow, not an open invite surface
+
 ## Prioritized Issues
 
 ### P0. KeepCozy Shell Flash During Messenger Navigation
