@@ -10,6 +10,7 @@ import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
+import { IdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
@@ -35,6 +36,28 @@ type HomeDashboardPageProps = {
     space?: string;
   }>;
 };
+
+function resolveMessengerProfileLabel(input: {
+  displayName: string | null;
+  email: string | null;
+  username: string | null;
+}) {
+  const displayName = input.displayName?.trim();
+
+  if (displayName) {
+    return displayName;
+  }
+
+  const username = input.username?.trim();
+
+  if (username) {
+    return username;
+  }
+
+  const emailLocalPart = input.email?.split('@')[0]?.trim();
+
+  return emailLocalPart || null;
+}
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
   const [user, language] = await Promise.all([
@@ -133,6 +156,16 @@ export default async function HomeDashboardPage({
           })
         : null,
     ]);
+    const profileLabel =
+      resolveMessengerProfileLabel({
+        displayName: currentUserProfile.displayName ?? null,
+        email: currentUserProfile.email ?? user.email ?? null,
+        username: currentUserProfile.username ?? null,
+      }) ?? t.settings.profileTitle;
+    const profileHandle = currentUserProfile.username?.trim()
+      ? `@${currentUserProfile.username.trim()}`
+      : null;
+    const profileEmail = currentUserProfile.email ?? user.email ?? null;
     const visibleError = query.error
       ? sanitizeUserFacingErrorMessage({
           fallback: getUserFacingErrorFallback(language, 'settings'),
