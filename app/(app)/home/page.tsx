@@ -1,4 +1,7 @@
 import { logoutAction } from '../actions';
+import { NotificationReadinessPanel } from '../settings/notification-readiness';
+import { ProfileSettingsForm } from '../settings/profile-settings-form';
+import { ProfileStatusForm } from '../settings/profile-status-form';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requestAdditionalSpaceAccountsAction, removeSpaceParticipantsAction } from './actions';
@@ -8,7 +11,10 @@ import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
 import { IdentityAvatar } from '@/modules/messaging/ui/identity';
-import { sanitizeUserFacingErrorMessage } from '@/modules/messaging/ui/user-facing-errors';
+import {
+  getUserFacingErrorFallback,
+  sanitizeUserFacingErrorMessage,
+} from '@/modules/messaging/ui/user-facing-errors';
 import {
   getManageableSpaceParticipantsForUser,
   isSpaceMembersSchemaCacheErrorMessage,
@@ -30,31 +36,6 @@ type HomeDashboardPageProps = {
     space?: string;
   }>;
 };
-
-function formatMessengerStatusUpdatedAt(
-  value: string | null,
-  language: 'en' | 'ru',
-) {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  const locale = language === 'ru' ? 'ru-RU' : 'en-US';
-
-  return new Intl.DateTimeFormat(
-    locale,
-    {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    },
-  ).format(date);
-}
 
 function resolveMessengerProfileLabel(input: {
   displayName: string | null;
@@ -185,23 +166,15 @@ export default async function HomeDashboardPage({
       ? `@${currentUserProfile.username.trim()}`
       : null;
     const profileEmail = currentUserProfile.email ?? user.email ?? null;
-    const statusEmoji = currentUserProfile.statusEmoji?.trim() ?? '';
-    const statusText = currentUserProfile.statusText?.trim() ?? '';
-    const hasStatus = Boolean(statusEmoji || statusText);
-    const statusUpdatedLabel = formatMessengerStatusUpdatedAt(
-      currentUserProfile.statusUpdatedAt ?? null,
-      language,
-    );
     const visibleError = query.error
       ? sanitizeUserFacingErrorMessage({
-          fallback: t.messengerHome.participantsRemoveFailed,
+          fallback: getUserFacingErrorFallback(language, 'settings'),
           language,
           rawMessage: query.error,
         })
       : null;
     const visibleMessage = query.message?.trim() || null;
-    const participantsDefaultOpen =
-      query.participants?.trim() === 'open' || Boolean(visibleError || visibleMessage);
+    const participantsDefaultOpen = query.participants?.trim() === 'open';
 
     return (
       <section className="stack settings-screen settings-shell activity-screen messenger-home-screen">
@@ -252,34 +225,82 @@ export default async function HomeDashboardPage({
             </div>
           </section>
 
-          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
+          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-profile-editor-card">
             <div className="stack settings-card-copy settings-section-copy">
-              <h2 className="section-title">{t.settings.statusTitle}</h2>
-              <p className="muted">{t.settings.statusSubtitle}</p>
+              <h2 className="section-title">{t.settings.profileTitle}</h2>
+              <p className="muted">{t.settings.profileSubtitle}</p>
             </div>
 
-            {hasStatus ? (
-              <div className="profile-status-pill">
-                {statusEmoji ? (
-                  <span aria-hidden="true" className="profile-status-emoji">
-                    {statusEmoji}
-                  </span>
-                ) : null}
-                <span className="profile-status-text">
-                  {statusText || t.settings.statusEmpty}
-                </span>
-              </div>
-            ) : (
-              <p className="muted messenger-home-status-empty">
-                {t.settings.statusEmpty}
-              </p>
-            )}
+            <ProfileSettingsForm
+              avatarPath={currentUserProfile.avatarPath}
+              defaultDisplayName={currentUserProfile.displayName ?? ''}
+              defaultEmail={profileEmail ?? ''}
+              defaultUsername={currentUserProfile.username ?? ''}
+              hasAvatar={Boolean(currentUserProfile.avatarPath)}
+              labels={{
+                profileTitle: t.settings.profileTitle,
+                profileSubtitle: t.settings.profileSubtitle,
+                profilePhoto: t.settings.profilePhoto,
+                profilePhotoNote: t.settings.profilePhotoNote,
+                profilePhotoCurrent: t.settings.profilePhotoCurrent,
+                profilePhotoEmpty: t.settings.profilePhotoEmpty,
+                displayName: t.settings.displayName,
+                displayNamePlaceholder: t.settings.displayNamePlaceholder,
+                saveChanges: t.settings.saveChanges,
+                editProfile: t.settings.editProfile,
+                cancelEdit: t.settings.cancelEdit,
+                tapPhotoToChange: t.settings.tapPhotoToChange,
+                removePhoto: t.settings.removePhoto,
+                avatarTooLarge: t.settings.avatarTooLarge,
+                avatarInvalidType: t.settings.avatarInvalidType,
+                avatarUploading: t.settings.avatarUploading,
+                avatarUploadFailed: t.settings.avatarUploadFailed,
+                avatarStorageUnavailable: t.settings.avatarStorageUnavailable,
+                profileUpdateFailed: t.settings.profileUpdateFailed,
+                avatarEditorHint: t.settings.avatarEditorHint,
+                avatarEditorZoom: t.settings.avatarEditorZoom,
+                avatarEditorApply: t.settings.avatarEditorApply,
+                avatarEditorDraftReady: t.settings.avatarEditorDraftReady,
+                avatarEditorPreparing: t.settings.avatarEditorPreparing,
+                avatarEditorLoadFailed: t.settings.avatarEditorLoadFailed,
+                avatarEditorApplyBeforeSave: t.settings.avatarEditorApplyBeforeSave,
+              }}
+              redirectSurface="home"
+              spaceId={activeSpace.id}
+              userId={user.id}
+            />
+          </section>
 
-            {statusUpdatedLabel ? (
-              <p className="muted messenger-home-status-updated">
-                {statusUpdatedLabel}
-              </p>
-            ) : null}
+          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
+            <ProfileStatusForm
+              key={`home-profile-status-${currentUserProfile.statusEmoji ?? ''}-${currentUserProfile.statusText ?? ''}-${currentUserProfile.statusUpdatedAt ?? ''}`}
+              defaultStatusEmoji={currentUserProfile.statusEmoji ?? ''}
+              defaultStatusText={currentUserProfile.statusText ?? ''}
+              labels={{
+                statusTitle: t.settings.statusTitle,
+                statusSubtitle: t.settings.statusSubtitle,
+                statusEmpty: t.settings.statusEmpty,
+                statusEmoji: t.settings.statusEmoji,
+                statusText: t.settings.statusText,
+                statusEmojiPlaceholder: t.settings.statusEmojiPlaceholder,
+                statusTextPlaceholder: t.settings.statusTextPlaceholder,
+                statusSave: t.settings.statusSave,
+                statusEdit: t.settings.statusEdit,
+                statusClear: t.settings.statusClear,
+                cancelEdit: t.settings.cancelEdit,
+                statusTextHint: t.settings.statusTextHint,
+                statusEmojiTooLong: t.settings.statusEmojiTooLong,
+                statusTextTooLong: t.settings.statusTextTooLong,
+              }}
+              language={language}
+              redirectSurface="home"
+              spaceId={activeSpace.id}
+              statusUpdatedAt={currentUserProfile.statusUpdatedAt}
+            />
+          </section>
+
+          <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
+            <NotificationReadinessPanel embedded language={language} surface="home" />
           </section>
 
           <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
