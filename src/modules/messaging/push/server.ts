@@ -130,6 +130,20 @@ function logPushFanoutOutcome(
   console.info('[chat-push-fanout]', details);
 }
 
+function logPushTestOutcome(
+  details: Record<string, unknown>,
+  options?: { level?: 'error' | 'info' },
+) {
+  const level = options?.level ?? 'info';
+
+  if (level === 'error') {
+    console.error('[chat-push-test]', details);
+    return;
+  }
+
+  console.info('[chat-push-test]', details);
+}
+
 function getWebPushPublicKey() {
   return (
     process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() ||
@@ -691,6 +705,14 @@ export async function sendPushTestNotificationToUserDevice(input: {
 }): Promise<PushTestSendResult> {
   try {
     if (!ensureWebPushConfigured()) {
+      logPushTestOutcome({
+        attempted: false,
+        sent: false,
+        skippedReason: 'missing-vapid-config',
+        spaceId: input.spaceId ?? null,
+        userId: input.userId,
+      });
+
       return {
         attempted: false,
         disabledCount: 0,
@@ -709,6 +731,21 @@ export async function sendPushTestNotificationToUserDevice(input: {
           : 'Unable to configure VAPID details for test push.',
       userId: input.userId,
     });
+
+    logPushTestOutcome(
+      {
+        attempted: false,
+        errorMessage:
+          error instanceof Error
+            ? error.message
+            : 'Invalid VAPID delivery configuration.',
+        sent: false,
+        skippedReason: 'invalid-vapid-config',
+        spaceId: input.spaceId ?? null,
+        userId: input.userId,
+      },
+      { level: 'error' },
+    );
 
     return {
       attempted: false,
@@ -729,17 +766,26 @@ export async function sendPushTestNotificationToUserDevice(input: {
     userId: input.userId,
   });
 
-    if (!subscription?.endpoint || !subscription.p256dh || !subscription.auth) {
-      return {
-        attempted: false,
-        disabledCount: 0,
-        errorMessage: null,
-        errorStatusCode: null,
-        failedCount: 0,
-        sent: false,
-        skippedReason: 'subscription-not-found',
-      };
-    }
+  if (!subscription?.endpoint || !subscription.p256dh || !subscription.auth) {
+    logPushTestOutcome({
+      attempted: false,
+      sent: false,
+      skippedReason: 'subscription-not-found',
+      spaceId: input.spaceId ?? null,
+      subscriptionFound: false,
+      userId: input.userId,
+    });
+
+    return {
+      attempted: false,
+      disabledCount: 0,
+      errorMessage: null,
+      errorStatusCode: null,
+      failedCount: 0,
+      sent: false,
+      skippedReason: 'subscription-not-found',
+    };
+  }
 
   const payload = JSON.stringify({
     body: 'Test notification for this device.',
@@ -764,6 +810,17 @@ export async function sendPushTestNotificationToUserDevice(input: {
         urgency: 'high',
       },
     );
+
+    logPushTestOutcome({
+      attempted: true,
+      disabledCount: 0,
+      failedCount: 0,
+      sent: true,
+      skippedReason: null,
+      spaceId: input.spaceId ?? null,
+      subscriptionFound: true,
+      userId: input.userId,
+    });
 
     return {
       attempted: true,
@@ -807,6 +864,22 @@ export async function sendPushTestNotificationToUserDevice(input: {
     } else if (statusCode === 401 || statusCode === 403) {
       skippedReason = 'vapid-rejected';
     }
+
+    logPushTestOutcome(
+      {
+        attempted: true,
+        disabledCount,
+        errorMessage,
+        errorStatusCode: statusCode,
+        failedCount: 1,
+        sent: false,
+        skippedReason,
+        spaceId: input.spaceId ?? null,
+        subscriptionFound: true,
+        userId: input.userId,
+      },
+      { level: 'error' },
+    );
 
     return {
       attempted: true,
