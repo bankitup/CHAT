@@ -85,6 +85,24 @@ type PushRecipientResolutionResult = {
   subscriptionCount: number;
 };
 
+type PushDeliveryFailureReason =
+  | 'network-error'
+  | 'payload-invalid'
+  | 'push-service-error'
+  | 'rate-limited'
+  | 'subscription-expired'
+  | 'unknown'
+  | 'vapid-rejected';
+
+type PushDeliveryFailureDetails = {
+  endpointHost: string | null;
+  message: string;
+  nodeCode: string | null;
+  providerBody: string | null;
+  reason: PushDeliveryFailureReason;
+  statusCode: number | null;
+};
+
 let vapidConfigured = false;
 
 function mapStoredPushSubscription(
@@ -142,6 +160,105 @@ function logPushTestOutcome(
   }
 
   console.info('[chat-push-test]', details);
+}
+
+function logPushDeliveryError(details: Record<string, unknown>) {
+  console.error('[chat-push-delivery-error]', details);
+}
+
+function trimPushErrorDetail(value: string | null | undefined, maxLength = 240) {
+  const normalized = value?.replace(/\s+/g, ' ').trim() ?? '';
+
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, maxLength - 3).trimEnd()}...`
+    : normalized;
+}
+
+function getPushEndpointHost(endpoint: string | null | undefined) {
+  if (!endpoint) {
+    return null;
+  }
+
+  try {
+    return new URL(endpoint).host || null;
+  } catch {
+    return null;
+  }
+}
+
+function getPushErrorNodeCode(error: unknown) {
+  const value = error as { code?: unknown } | null;
+  return typeof value?.code === 'string' ? value.code : null;
+}
+
+function getPushErrorBody(error: unknown) {
+  const value = error as { body?: unknown } | null;
+  return typeof value?.body === 'string' ? trimPushErrorDetail(value.body) : null;
+}
+
+function classifyPushDeliveryFailure(input: {
+  error: unknown;
+  statusCode: number | null;
+}): PushDeliveryFailureReason {
+  const nodeCode = getPushErrorNodeCode(input.error);
+
+  if (input.statusCode === 401 || input.statusCode === 403) {
+    return 'vapid-rejected';
+  }
+
+  if (input.statusCode === 404 || input.statusCode === 410) {
+    return 'subscription-expired';
+  }
+
+  if (input.statusCode === 400 || input.statusCode === 413) {
+    return 'payload-invalid';
+  }
+
+  if (input.statusCode === 429) {
+    return 'rate-limited';
+  }
+
+  if (input.statusCode != null && input.statusCode >= 500) {
+    return 'push-service-error';
+  }
+
+  if (
+    nodeCode === 'ECONNRESET' ||
+    nodeCode === 'ENOTFOUND' ||
+    nodeCode === 'ETIMEDOUT' ||
+    nodeCode === 'EAI_AGAIN'
+  ) {
+    return 'network-error';
+  }
+
+  return 'unknown';
+}
+
+function getPushDeliveryFailureDetails(input: {
+  endpoint: string | null | undefined;
+  error: unknown;
+}): PushDeliveryFailureDetails {
+  const statusCode = getPushErrorStatusCode(input.error);
+  const message =
+    input.error instanceof Error
+      ? trimPushErrorDetail(input.error.message) ?? 'Unable to send chat push.'
+      : 'Unable to send chat push.';
+
+  return {
+    endpointHost: getPushEndpointHost(input.endpoint),
+    message,
+    nodeCode: getPushErrorNodeCode(input.error),
+    providerBody: getPushErrorBody(input.error),
+    reason: classifyPushDeliveryFailure({
+      error: input.error,
+      statusCode,
+    }),
+    statusCode,
+  };
 }
 
 function getWebPushPublicKey() {
@@ -1067,6 +1184,12 @@ export async function sendChatPushNotifications(
   let sentCount = 0;
   let disabledCount = 0;
   let failedCount = 0;
+  const failureReasonCounts: Partial<Record<PushDeliveryFailureReason, number>> = {};
+  let firstFailure: (PushDeliveryFailureDetails & {
+    subscriptionCreatedAt: string;
+    subscriptionId: string;
+    subscriptionUpdatedAt: string;
+  }) | null = null;
 
   for (const subscription of subscriptions) {
     try {
@@ -1090,18 +1213,49 @@ export async function sendChatPushNotifications(
     } catch (error) {
       failedCount += 1;
 
-      const statusCode = getPushErrorStatusCode(error);
+      const failure = getPushDeliveryFailureDetails({
+        endpoint: subscription.endpoint,
+        error,
+      });
 
       logPushDiagnostics('send-error', {
         conversationId: input.conversationId,
         endpoint: subscription.endpoint,
-        message:
-          error instanceof Error ? error.message : 'Unable to send chat push.',
+        message: failure.message,
         messageId: input.messageId,
-        statusCode,
+        providerBody: failure.providerBody,
+        reason: failure.reason,
+        statusCode: failure.statusCode,
       });
 
-      if (isExpiredPushEndpointStatusCode(statusCode)) {
+      failureReasonCounts[failure.reason] =
+        (failureReasonCounts[failure.reason] ?? 0) + 1;
+
+      if (!firstFailure) {
+        firstFailure = {
+          ...failure,
+          subscriptionCreatedAt: subscription.created_at,
+          subscriptionId: subscription.id,
+          subscriptionUpdatedAt: subscription.updated_at,
+        };
+      }
+
+      logPushDeliveryError({
+        contentMode: input.contentMode,
+        conversationId: input.conversationId,
+        endpointHost: failure.endpointHost,
+        message: failure.message,
+        messageId: input.messageId,
+        messageKind: input.messageKind,
+        providerBody: failure.providerBody,
+        reason: failure.reason,
+        statusCode: failure.statusCode,
+        subscriptionCreatedAt: subscription.created_at,
+        subscriptionId: subscription.id,
+        subscriptionUpdatedAt: subscription.updated_at,
+      });
+
+      if (isExpiredPushEndpointStatusCode(failure.statusCode)) {
         try {
           await disablePushSubscriptionByEndpoint(subscription.endpoint);
           disabledCount += 1;
@@ -1126,6 +1280,8 @@ export async function sendChatPushNotifications(
       disabledCount,
       eligibleRecipientCount,
       failedCount,
+      failureReasonCounts,
+      firstFailure,
       membershipCount,
       messageId: input.messageId,
       messageKind: input.messageKind,
