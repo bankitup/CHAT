@@ -776,7 +776,7 @@ export async function getManageableSpaceParticipantsForUser(input: {
   const queryClient = serviceClient ?? requestSupabase;
   const membershipResponse = await queryClient
     .from('space_members')
-    .select('user_id, role, created_at')
+    .select('user_id, role, joined_at')
     .eq('space_id', exactSpaceAccess.activeSpace.id);
 
   if (membershipResponse.error) {
@@ -784,7 +784,7 @@ export async function getManageableSpaceParticipantsForUser(input: {
   }
 
   const membershipRows = ((membershipResponse.data ?? []) as Array<{
-    created_at: string | null;
+    joined_at: string | null;
     role: SpaceRole;
     user_id: string;
   }>).filter((row) => Boolean(row.user_id));
@@ -807,7 +807,7 @@ export async function getManageableSpaceParticipantsForUser(input: {
 
       return {
         avatarPath: profile?.avatarPath ?? null,
-        createdAt: membership.created_at ?? null,
+        createdAt: membership.joined_at ?? null,
         displayName: profile?.displayName ?? null,
         email: emailsByUserId.get(membership.user_id) ?? null,
         emailLocalPart: profile?.emailLocalPart ?? null,

@@ -270,7 +270,6 @@ export default async function HomeDashboardPage({
               userId={user.id}
             />
           </section>
-
           <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-status-card">
             <ProfileStatusForm
               key={`home-profile-status-${currentUserProfile.statusEmoji ?? ''}-${currentUserProfile.statusText ?? ''}-${currentUserProfile.statusUpdatedAt ?? ''}`}
@@ -298,7 +297,6 @@ export default async function HomeDashboardPage({
               statusUpdatedAt={currentUserProfile.statusUpdatedAt}
             />
           </section>
-
           <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
             <NotificationReadinessPanel embedded language={language} surface="home" />
           </section>
