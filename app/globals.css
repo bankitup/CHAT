@@ -3590,15 +3590,6 @@ main {
   justify-content: space-between;
 }
 
-.messenger-home-notification-panel {
-  gap: 10px;
-}
-
-.messenger-home-notification-panel .settings-actions .button {
-  width: 100%;
-  justify-content: center;
-}
-
 .messenger-home-entry-card {
   gap: 0;
 }

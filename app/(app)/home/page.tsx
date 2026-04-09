@@ -1,5 +1,4 @@
 import { logoutAction } from '../actions';
-import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { ProfileSettingsForm } from '../settings/profile-settings-form';
 import { ProfileStatusForm } from '../settings/profile-status-form';
 import Link from 'next/link';
@@ -10,7 +9,6 @@ import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
-import { IdentityAvatar } from '@/modules/messaging/ui/identity';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
@@ -36,28 +34,6 @@ type HomeDashboardPageProps = {
     space?: string;
   }>;
 };
-
-function resolveMessengerProfileLabel(input: {
-  displayName: string | null;
-  email: string | null;
-  username: string | null;
-}) {
-  const displayName = input.displayName?.trim();
-
-  if (displayName) {
-    return displayName;
-  }
-
-  const username = input.username?.trim();
-
-  if (username) {
-    return username;
-  }
-
-  const emailLocalPart = input.email?.split('@')[0]?.trim();
-
-  return emailLocalPart || null;
-}
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
   const [user, language] = await Promise.all([
@@ -156,16 +132,6 @@ export default async function HomeDashboardPage({
           })
         : null,
     ]);
-    const profileLabel =
-      resolveMessengerProfileLabel({
-        displayName: currentUserProfile.displayName ?? null,
-        email: currentUserProfile.email ?? user.email ?? null,
-        username: currentUserProfile.username ?? null,
-      }) ?? t.settings.profileTitle;
-    const profileHandle = currentUserProfile.username?.trim()
-      ? `@${currentUserProfile.username.trim()}`
-      : null;
-    const profileEmail = currentUserProfile.email ?? user.email ?? null;
     const visibleError = query.error
       ? sanitizeUserFacingErrorMessage({
           fallback: getUserFacingErrorFallback(language, 'settings'),
@@ -263,10 +229,6 @@ export default async function HomeDashboardPage({
                 spaceId={activeSpace.id}
                 statusUpdatedAt={currentUserProfile.statusUpdatedAt}
               />
-            </section>
-
-            <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-notification-card">
-              <NotificationReadinessPanel embedded language={language} surface="home" />
             </section>
 
             <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { NotificationReadinessPanel } from '../settings/notification-readiness';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
@@ -430,6 +431,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             ) : null}
           </div>
         </section>
+
+        <NotificationReadinessPanel embedded language={language} surface="activity" />
 
         <section className="card stack settings-surface activity-surface messenger-activity-surface">
           <div className="stack messenger-activity-surface-copy">
