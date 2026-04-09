@@ -18,6 +18,7 @@ import {
   type AppLanguage,
 } from '@/modules/i18n';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
+import { ensureDmE2eeDeviceRegistered } from '@/modules/messaging/e2ee/device-registration';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import type { MessagingVoicePlaybackState } from '@/modules/messaging/media';
 import {
@@ -190,6 +191,8 @@ type VoiceMessageRenderState =
 const THREAD_HISTORY_PAGE_SIZE = 26;
 const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
   'local-encrypted-send:retry-missing-envelope';
+const ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON =
+  'dm-e2ee-history:retry-after-bootstrap';
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
   'local-voice-send:retry-attachment-resolution';
@@ -2695,6 +2698,12 @@ export function ThreadHistoryViewport({
   const encryptedDmRecoveryTimeoutsRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
+  const encryptedHistoryBootstrapRecoveryAttemptedMessageIdsRef = useRef(
+    new Set<string>(),
+  );
+  const encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef = useRef(
+    new Set<string>(),
+  );
   const voiceAttachmentRecoveryAttemptsRef = useRef(new Map<string, number>());
   const voiceAttachmentRecoveryTimeoutsRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
@@ -2735,6 +2744,8 @@ export function ThreadHistoryViewport({
 
   useEffect(() => {
     voiceReopenRecoveryRequestedRef.current.clear();
+    encryptedHistoryBootstrapRecoveryAttemptedMessageIdsRef.current.clear();
+    encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef.current.clear();
   }, [conversationId]);
 
   useEffect(() => {
@@ -2816,6 +2827,31 @@ export function ThreadHistoryViewport({
     () => historyState.messages.map((message) => message.id),
     [historyState.messages],
   );
+  const recoverableEncryptedHistoryMessageIds = useMemo(
+    () =>
+      historyState.messages.flatMap((message) => {
+        if (message.kind !== 'text' || message.content_mode !== 'dm_e2ee_v1') {
+          return [];
+        }
+
+        const historyHint =
+          historyState.encryptedHistoryHintsByMessage.get(message.id) ?? null;
+        const hasReadableEnvelope =
+          historyState.encryptedEnvelopesByMessage.has(message.id) ||
+          historyHint?.code === 'envelope-present';
+
+        if (hasReadableEnvelope || historyHint?.code === 'policy-blocked-history') {
+          return [];
+        }
+
+        return [message.id];
+      }),
+    [
+      historyState.encryptedEnvelopesByMessage,
+      historyState.encryptedHistoryHintsByMessage,
+      historyState.messages,
+    ],
+  );
   const recentVoiceMessageIdsNeedingRecovery = useMemo(
     () =>
       resolveRecentVoiceMessageIdsNeedingRecovery({
@@ -2861,6 +2897,95 @@ export function ThreadHistoryViewport({
     conversationId,
     historySyncDiagnosticsEnabled,
     recentVoiceMessageIdsNeedingRecovery,
+  ]);
+
+  useEffect(() => {
+    if (
+      conversationKind !== 'dm' ||
+      recoverableEncryptedHistoryMessageIds.length === 0
+    ) {
+      return;
+    }
+
+    const attemptedMessageIds =
+      encryptedHistoryBootstrapRecoveryAttemptedMessageIdsRef.current;
+    const inFlightMessageIds =
+      encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef.current;
+    const nextMessageIds = recoverableEncryptedHistoryMessageIds.filter(
+      (messageId) =>
+        !attemptedMessageIds.has(messageId) && !inFlightMessageIds.has(messageId),
+    );
+
+    if (nextMessageIds.length === 0) {
+      return;
+    }
+
+    nextMessageIds.forEach((messageId) => {
+      inFlightMessageIds.add(messageId);
+    });
+
+    let cancelled = false;
+
+    void (async () => {
+      const bootstrap = await ensureDmE2eeDeviceRegistered(currentUserId, {
+        forcePublish: false,
+        triggerReason: 'bootstrap-component',
+      });
+
+      if (cancelled || bootstrap.status !== 'registered') {
+        nextMessageIds.forEach((messageId) => {
+          inFlightMessageIds.delete(messageId);
+        });
+        return;
+      }
+
+      nextMessageIds.forEach((messageId) => {
+        inFlightMessageIds.delete(messageId);
+        attemptedMessageIds.add(messageId);
+      });
+
+      if (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
+        console.info(
+          '[chat-history]',
+          'dm-e2ee-history-continuity-recovery:dispatch',
+          {
+            conversationId,
+            messageIds: nextMessageIds,
+            resultKind: bootstrap.result?.resultKind ?? null,
+            serverDeviceRecordId: bootstrap.result?.deviceRecordId ?? null,
+          },
+        );
+      }
+
+      emitThreadHistorySyncRequest({
+        conversationId,
+        messageIds: nextMessageIds,
+        reason: ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON,
+      });
+    })().catch((error) => {
+      nextMessageIds.forEach((messageId) => {
+        inFlightMessageIds.delete(messageId);
+      });
+
+      if (cancelled) {
+        return;
+      }
+
+      console.error('[chat-history]', 'dm-e2ee-history-continuity-recovery-failed', {
+        conversationId,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        messageIds: nextMessageIds,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    conversationId,
+    conversationKind,
+    currentUserId,
+    recoverableEncryptedHistoryMessageIds,
   ]);
 
   const loadOlderMessages = useCallback(async () => {
