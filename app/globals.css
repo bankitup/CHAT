@@ -6373,9 +6373,10 @@ main {
 }
 
 .message-quick-actions {
+  --message-quick-actions-offset: 6px;
   position: absolute;
   left: 0;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + var(--message-quick-actions-offset));
   z-index: 6;
   display: inline-flex;
   align-items: center;
@@ -6400,7 +6401,7 @@ main {
 }
 
 .message-quick-actions[data-placement='below'] {
-  top: calc(100% + 10px);
+  top: calc(100% + var(--message-quick-actions-offset));
   bottom: auto;
   animation-name: message-quick-actions-enter-below;
 }
@@ -6481,7 +6482,7 @@ main {
 @keyframes message-quick-actions-enter {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.96);
+    transform: translateY(5px) scale(0.97);
   }
 
   to {
@@ -6493,7 +6494,7 @@ main {
 @keyframes message-quick-actions-enter-below {
   from {
     opacity: 0;
-    transform: translateY(-8px) scale(0.96);
+    transform: translateY(-5px) scale(0.97);
   }
 
   to {
