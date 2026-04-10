@@ -4310,6 +4310,31 @@ main {
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+.home-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+}
+
+.home-zoom-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: rgba(10, 18, 30, 0.08);
+  pointer-events: auto;
+}
+
+.home-zoom-panel-overlay {
+  position: fixed;
+  top: 0;
+  right: auto;
+  pointer-events: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .messenger-home-profile-header {
   display: grid;
   gap: 4px;
