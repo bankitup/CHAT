@@ -489,21 +489,6 @@ export default async function HomeDashboardPage({
                 statusUpdatedAt={currentUserProfile.statusUpdatedAt}
               />
             </section>
-
-            <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-personal-card messenger-home-session-card">
-              <div className="stack settings-card-copy settings-section-copy">
-                <h2 className="section-title">{t.settings.logoutTitle}</h2>
-                <p className="muted">{t.settings.logoutSubtitle}</p>
-              </div>
-              <form action={logoutAction}>
-                <button
-                  className="button button-secondary settings-logout-button"
-                  type="submit"
-                >
-                  {t.settings.logoutButton}
-                </button>
-              </form>
-            </section>
           </section>
 
           {shouldShowPrivateSpaceCta ? (
@@ -562,6 +547,21 @@ export default async function HomeDashboardPage({
               spaceId={activeSpace.id}
             />
           ) : null}
+
+          <section className="card stack settings-surface settings-home-card settings-home-card-session messenger-home-session-card">
+            <div className="stack settings-card-copy settings-section-copy">
+              <h2 className="section-title">{t.settings.logoutTitle}</h2>
+              <p className="muted">{t.settings.logoutSubtitle}</p>
+            </div>
+            <form action={logoutAction}>
+              <button
+                className="button button-secondary settings-logout-button"
+                type="submit"
+              >
+                {t.settings.logoutButton}
+              </button>
+            </form>
+          </section>
         </div>
       </section>
     );

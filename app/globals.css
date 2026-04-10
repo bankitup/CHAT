@@ -4667,8 +4667,7 @@ main {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     'profile'
-    'status'
-    'session';
+    'status';
 }
 
 .messenger-home-personal-card {
