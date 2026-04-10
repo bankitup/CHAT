@@ -326,6 +326,11 @@ type LanguageDictionary = {
     spaceThemeCurrentBadge: string;
     spaceThemeNote: string;
     spaceThemeSaveFailed: string;
+    privateSpaceCtaTitle: string;
+    privateSpaceCtaBody: string;
+    privateSpaceCtaBadge: string;
+    privateSpaceCtaAction: string;
+    privateSpaceCtaNote: string;
   };
   rooms: {
     title: string;
@@ -1276,6 +1281,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'This appearance setting applies to the current space and is ready for more space-level styling controls later.',
       spaceThemeSaveFailed:
         'Unable to save the space theme right now. Please try again.',
+      privateSpaceCtaTitle: 'Want a private chat space of your own?',
+      privateSpaceCtaBody:
+        'Start a quieter personal space when you are ready for a chat home that belongs just to you.',
+      privateSpaceCtaBadge: 'Personal space',
+      privateSpaceCtaAction: 'Start private space',
+      privateSpaceCtaNote:
+        'We will take you into the current personal-space setup flow from here.',
     },
     rooms: {
       title: 'Rooms',
@@ -2301,6 +2313,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Эта настройка применяется ко всему текущему пространству и готова к расширению на другие параметры внешнего вида.',
       spaceThemeSaveFailed:
         'Сейчас не удалось сохранить тему пространства. Попробуйте ещё раз.',
+      privateSpaceCtaTitle: 'Хотите своё приватное чат-пространство?',
+      privateSpaceCtaBody:
+        'Когда будете готовы, начните более тихое личное пространство для чатов, которое будет только вашим.',
+      privateSpaceCtaBadge: 'Личное пространство',
+      privateSpaceCtaAction: 'Начать приватное пространство',
+      privateSpaceCtaNote:
+        'Отсюда вы перейдёте в текущий поток настройки личного пространства.',
     },
     rooms: {
       title: 'Комнаты',
