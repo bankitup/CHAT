@@ -72,6 +72,11 @@ type EncryptedComposerOutgoingPayload =
     }
   | {
       attachment: File;
+      kind: 'attachment';
+      voiceDurationMs: null;
+    }
+  | {
+      attachment: File;
       kind: 'voice';
       voiceDurationMs: number | null;
     };
@@ -740,6 +745,25 @@ function clearReplyTargetFromCurrentUrl() {
   );
 }
 
+function getComposerAttachmentLabel(input: {
+  attachment: File | null;
+  labels: {
+    attachment: string;
+    file: string;
+    image: string;
+  };
+}) {
+  if (!input.attachment) {
+    return null;
+  }
+
+  if (input.attachment.type.startsWith('image/')) {
+    return input.labels.image;
+  }
+
+  return input.attachment.name.trim() || input.labels.file || input.labels.attachment;
+}
+
 export function EncryptedDmComposerForm({
   accept,
   attachmentHelpText,
@@ -761,6 +785,7 @@ export function EncryptedDmComposerForm({
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
   const lastVoiceEntryAttemptAtRef = useRef(0);
+  const [composerResetKey, setComposerResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
   const [errorDebugDetails, setErrorDebugDetails] =
@@ -849,7 +874,7 @@ export function EncryptedDmComposerForm({
     processItem: async (item) => {
       const payload = item.payload as EncryptedComposerOutgoingPayload;
 
-      if (payload.kind === 'voice') {
+      if (payload.kind === 'voice' || payload.kind === 'attachment') {
         const nextFormData = new FormData();
         nextFormData.set('conversationId', conversationId);
         nextFormData.set('clientId', item.clientId);
@@ -859,12 +884,14 @@ export function EncryptedDmComposerForm({
           nextFormData.set('replyToMessageId', item.replyToMessageId);
         }
 
-        nextFormData.set(
-          'voiceDurationMs',
-          payload.voiceDurationMs !== null
-            ? String(payload.voiceDurationMs)
-            : '',
-        );
+        if (payload.kind === 'voice') {
+          nextFormData.set(
+            'voiceDurationMs',
+            payload.voiceDurationMs !== null
+              ? String(payload.voiceDurationMs)
+              : '',
+          );
+        }
 
         const result = await sendMessageMutationAction(nextFormData);
 
@@ -885,14 +912,18 @@ export function EncryptedDmComposerForm({
         emitThreadHistorySyncRequest({
           conversationId,
           messageIds: [result.data.messageId],
-          reason: 'local-voice-send',
+          reason:
+            payload.kind === 'voice' ? 'local-voice-send' : 'local-send-mutation',
         });
 
         await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
           clientId: result.data.clientId,
           conversationId,
           messageId: result.data.messageId,
-          source: 'voice-message-send',
+          source:
+            payload.kind === 'voice'
+              ? 'voice-message-send'
+              : 'encrypted-dm-attachment-send',
         });
 
         return;
@@ -1115,7 +1146,12 @@ export function EncryptedDmComposerForm({
             ? nextRetryClientId
             : detail.clientId ?? null,
         createdAt: detail.createdAt,
-        kind: detail.kind === 'voice' ? 'voice' : 'text',
+        kind:
+          detail.kind === 'voice'
+            ? 'voice'
+            : detail.kind === 'attachment' && detail.attachment
+              ? 'attachment'
+              : 'text',
         payload:
           detail.kind === 'voice' && detail.attachment
             ? {
@@ -1123,6 +1159,12 @@ export function EncryptedDmComposerForm({
                 kind: 'voice',
                 voiceDurationMs: detail.voiceDurationMs ?? null,
               }
+            : detail.kind === 'attachment' && detail.attachment
+              ? {
+                  attachment: detail.attachment,
+                  kind: 'attachment',
+                  voiceDurationMs: null,
+                }
             : {
                 attachment: null,
                 kind: 'text',
@@ -1170,17 +1212,57 @@ export function EncryptedDmComposerForm({
           return;
         }
 
-        if (!body || attachment) {
-          if (body && attachment) {
-            setErrorMessage(t.chat.encryptedAttachmentsUnsupported);
-            setErrorCode(null);
-            setErrorDebugDetails(null);
-          } else {
-            setErrorMessage(null);
-            setErrorCode(null);
-            setErrorDebugDetails(null);
-          }
+        if (body && attachment) {
+          setErrorMessage(t.chat.encryptedAttachmentsUnsupported);
+          setErrorCode(null);
+          setErrorDebugDetails(null);
+          return;
+        }
 
+        if (!body && !attachment) {
+          return;
+        }
+
+        if (attachment) {
+          setErrorMessage(null);
+          setErrorCode(null);
+          setErrorDebugDetails(null);
+          enqueue({
+            attachment,
+            attachmentLabel: getComposerAttachmentLabel({
+              attachment,
+              labels: {
+                attachment: t.chat.attachment,
+                file: t.chat.file,
+                image: t.chat.image,
+              },
+            }),
+            body: '',
+            kind: 'attachment',
+            payload: {
+              attachment,
+              kind: 'attachment',
+              voiceDurationMs: null,
+            },
+            replyToMessageId: replyToMessageId ?? null,
+          });
+
+          form.reset();
+          setComposerResetKey((current) => current + 1);
+          clearReplyTargetFromCurrentUrl();
+
+          window.requestAnimationFrame(() => {
+            const textarea =
+              formRef.current?.querySelector<HTMLTextAreaElement>(
+                'textarea[name="body"]',
+              );
+
+            if (!textarea) {
+              return;
+            }
+
+            textarea.focus();
+          });
           return;
         }
 
@@ -1203,14 +1285,16 @@ export function EncryptedDmComposerForm({
         setErrorDebugDetails(null);
 
         form.reset();
+        setComposerResetKey((current) => current + 1);
         window.requestAnimationFrame(() => {
-          const textarea = form.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+          const textarea =
+            formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
 
           if (!textarea) {
             return;
           }
 
-          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.focus();
         });
         enqueue({
           body,
@@ -1268,6 +1352,7 @@ export function EncryptedDmComposerForm({
       />
       <div className="composer-input-shell">
         <ComposerAttachmentPicker
+          key={`attachment-${composerResetKey}`}
           accept={accept}
           helperText={attachmentHelpText}
           maxSizeBytes={attachmentMaxSizeBytes}
@@ -1282,6 +1367,7 @@ export function EncryptedDmComposerForm({
             conversationId={conversationId}
             currentUserId={currentUserId}
             currentUserLabel={currentUserLabel}
+            key={`textarea-${composerResetKey}`}
             mentionParticipants={mentionParticipants}
             mentionSuggestionsLabel={mentionSuggestionsLabel}
             name="body"

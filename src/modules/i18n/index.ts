@@ -788,6 +788,7 @@ type LanguageDictionary = {
     member: string;
     attachmentOptions: string;
     photoOrFile: string;
+    photoLibrary: string;
     camera: string;
     soon: string;
     microphone: string;
@@ -1719,6 +1720,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       member: 'Member',
       attachmentOptions: 'Attachment options',
       photoOrFile: 'Photo or file',
+      photoLibrary: 'Photos',
       camera: 'Camera',
       soon: 'Soon',
       microphone: 'Voice message',
@@ -2699,6 +2701,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       member: 'Участник',
       attachmentOptions: 'Вложения',
       photoOrFile: 'Фото или файл',
+      photoLibrary: 'Фото',
       camera: 'Камера',
       soon: 'Скоро',
       microphone: 'Голосовое сообщение',

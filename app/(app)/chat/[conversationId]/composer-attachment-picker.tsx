@@ -11,12 +11,44 @@ type ComposerAttachmentPickerProps = {
   language: AppLanguage;
 };
 
+type AttachmentPickerMode = 'camera' | 'file' | 'gallery';
+
 function formatFileSize(value: number) {
   if (value < 1024 * 1024) {
     return `${Math.max(1, Math.round(value / 1024))} KB`;
   }
 
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function matchesAcceptedFileType(input: {
+  acceptedTypes: Set<string>;
+  fileType: string;
+  mode: AttachmentPickerMode;
+}) {
+  const normalizedFileType = input.fileType.trim().toLowerCase();
+
+  if (!normalizedFileType) {
+    return false;
+  }
+
+  if (input.mode === 'camera' || input.mode === 'gallery') {
+    return normalizedFileType.startsWith('image/');
+  }
+
+  return Array.from(input.acceptedTypes).some((acceptedType) => {
+    const normalizedAcceptedType = acceptedType.trim().toLowerCase();
+
+    if (!normalizedAcceptedType) {
+      return false;
+    }
+
+    if (normalizedAcceptedType.endsWith('/*')) {
+      return normalizedFileType.startsWith(normalizedAcceptedType.slice(0, -1));
+    }
+
+    return normalizedAcceptedType === normalizedFileType;
+  });
 }
 
 export function ComposerAttachmentPicker({
@@ -29,6 +61,7 @@ export function ComposerAttachmentPicker({
   const t = getTranslations(language);
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const pickerModeRef = useRef<AttachmentPickerMode>('file');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasSelectedFile = Boolean(selectedFile);
@@ -59,6 +92,40 @@ export function ComposerAttachmentPicker({
     };
   }, [previewUrl]);
 
+  const clearSelection = () => {
+    if (inputRef.current) {
+      inputRef.current.value = '';
+      inputRef.current.accept = accept;
+      inputRef.current.removeAttribute('capture');
+    }
+
+    pickerModeRef.current = 'file';
+    setSelectedFile(null);
+    setErrorMessage(null);
+  };
+
+  const openPicker = (mode: AttachmentPickerMode) => {
+    const input = inputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    pickerModeRef.current = mode;
+    input.value = '';
+    input.accept = mode === 'file' ? accept : 'image/*';
+
+    if (mode === 'camera') {
+      input.setAttribute('capture', 'environment');
+    } else {
+      input.removeAttribute('capture');
+    }
+
+    setErrorMessage(null);
+    detailsRef.current?.removeAttribute('open');
+    input.click();
+  };
+
   return (
     <>
       {selectedFile ? (
@@ -77,20 +144,13 @@ export function ComposerAttachmentPicker({
           <span className="attachment-selected-copy">
             <span className="attachment-selected-name">{selectedFile.name}</span>
             <span className="attachment-selected-meta">
-              {isImage ? t.chat.image : t.chat.attachment} · {formatFileSize(selectedFile.size)}
+              {isImage ? t.chat.image : t.chat.file} · {formatFileSize(selectedFile.size)}
             </span>
           </span>
           <button
             className="attachment-selected-clear"
             type="button"
-            onClick={() => {
-              if (inputRef.current) {
-                inputRef.current.value = '';
-              }
-
-              setSelectedFile(null);
-              setErrorMessage(null);
-            }}
+            onClick={clearSelection}
           >
             {t.chat.clearAttachment}
           </button>
@@ -112,14 +172,26 @@ export function ComposerAttachmentPicker({
           <button
             className="attachment-option attachment-option-action"
             type="button"
-            onClick={() => inputRef.current?.click()}
+            onClick={() => openPicker('gallery')}
           >
-            <span>{t.chat.photoOrFile}</span>
+            <span>{t.chat.photoLibrary}</span>
             <span className="attachment-option-note">{maxSizeLabel}</span>
           </button>
-          <button className="attachment-option" disabled type="button">
+          <button
+            className="attachment-option attachment-option-action"
+            type="button"
+            onClick={() => openPicker('camera')}
+          >
             <span>{t.chat.camera}</span>
-            <span className="attachment-option-note">{t.chat.soon}</span>
+            <span className="attachment-option-note">{maxSizeLabel}</span>
+          </button>
+          <button
+            className="attachment-option attachment-option-action"
+            type="button"
+            onClick={() => openPicker('file')}
+          >
+            <span>{t.chat.file}</span>
+            <span className="attachment-option-note">{maxSizeLabel}</span>
           </button>
         </div>
       </details>
@@ -131,10 +203,10 @@ export function ComposerAttachmentPicker({
         name="attachment"
         type="file"
         onChange={(event) => {
+          const pickerMode = pickerModeRef.current;
           const nextFile = event.target.files?.[0];
 
           if (!nextFile) {
-            setSelectedFile(null);
             return;
           }
 
@@ -149,7 +221,13 @@ export function ComposerAttachmentPicker({
             return;
           }
 
-          if (!acceptedTypes.has(nextFile.type)) {
+          if (
+            !matchesAcceptedFileType({
+              acceptedTypes,
+              fileType: nextFile.type,
+              mode: pickerMode,
+            })
+          ) {
             if (inputRef.current) {
               inputRef.current.value = '';
             }
@@ -162,6 +240,11 @@ export function ComposerAttachmentPicker({
 
           setSelectedFile(nextFile);
           setErrorMessage(null);
+          if (inputRef.current) {
+            inputRef.current.removeAttribute('capture');
+            inputRef.current.accept = accept;
+          }
+          pickerModeRef.current = 'file';
           detailsRef.current?.removeAttribute('open');
         }}
       />

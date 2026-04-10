@@ -536,9 +536,9 @@ type MessageE2eeEnvelopeRow = {
 export const STARTER_REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🎉'] as const;
 export const CHAT_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const CHAT_ATTACHMENT_ACCEPT =
-  'image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/aac,audio/mp3,audio/m4a';
+  'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,text/plain,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/aac,audio/mp3,audio/m4a';
 export const CHAT_ATTACHMENT_HELP_TEXT =
-  'Supported files: JPG, PNG, WEBP, GIF, PDF, TXT, and common audio files up to 10 MB.';
+  'Supported files: JPG, PNG, WEBP, GIF, HEIC, HEIF, PDF, TXT, and common audio files up to 10 MB.';
 export const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 
@@ -614,6 +614,8 @@ const SUPPORTED_ATTACHMENT_TYPES = new Set([
   'image/png',
   'image/webp',
   'image/gif',
+  'image/heic',
+  'image/heif',
   'application/pdf',
   'text/plain',
   'audio/webm',
@@ -2737,7 +2739,7 @@ function getAttachmentMessageKind(mimeType: string | null) {
     return 'voice' as const;
   }
 
-  return 'text' as const;
+  return 'attachment' as const;
 }
 
 export async function getProfileIdentities(
