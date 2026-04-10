@@ -21,6 +21,7 @@ import {
   editMessage,
   hideConversationForUser,
   isSupportedChatAttachmentType,
+  isSupportedVoiceAttachmentType,
   leaveGroupConversation,
   markConversationRead,
   removeParticipantFromGroupConversation,
@@ -36,6 +37,7 @@ import {
   type InboxConversationSummarySnapshot,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
+import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { sendChatPushNotifications } from '@/modules/messaging/push/server';
 import {
   logControlledUiError,
@@ -465,6 +467,11 @@ export async function sendMessageMutationAction(
 
     try {
       await sendChatPushNotifications({
+        attachmentPreviewKind: attachment
+          ? isSupportedVoiceAttachmentType(attachment.type)
+            ? null
+            : resolveInboxAttachmentPreviewKind(attachment.type)
+          : null,
         body: body || null,
         contentMode: 'plaintext',
         conversationId,

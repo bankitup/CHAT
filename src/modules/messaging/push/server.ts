@@ -16,6 +16,7 @@ import {
   getInboxConversations,
   getProfileIdentities,
 } from '@/modules/messaging/data/server';
+import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
 import {
   getPreviewPrivacyDecision,
@@ -60,8 +61,11 @@ type ChatPushPresentation = {
 };
 
 type ChatPushPreviewLabels = {
+  audio: string;
   attachment: string;
   encryptedMessage: string;
+  file: string;
+  image: string;
   newMessage: string;
   privateMessageBody: string;
   privateMessageTitle: string;
@@ -69,6 +73,7 @@ type ChatPushPreviewLabels = {
 };
 
 type ChatPushSendInput = {
+  attachmentPreviewKind?: InboxAttachmentPreviewKind | null;
   conversationId: string;
   messageId: string;
   senderId: string;
@@ -411,8 +416,11 @@ function getChatPushPreviewLabels(language: AppLanguage): ChatPushPreviewLabels 
   const t = getTranslations(language);
 
   return {
+    audio: t.chat.audio,
     attachment: t.chat.attachment,
     encryptedMessage: t.chat.newEncryptedMessage,
+    file: t.chat.file,
+    image: t.chat.image,
     newMessage: t.chat.newMessage,
     privateMessageBody: t.notifications.privateMessageBody,
     privateMessageTitle: t.notifications.privateMessageTitle,
@@ -421,11 +429,18 @@ function getChatPushPreviewLabels(language: AppLanguage): ChatPushPreviewLabels 
 }
 
 function getChatPushPreview(input: {
+  attachmentPreviewKind?: InboxAttachmentPreviewKind | null;
   body?: string | null;
   contentMode: 'plaintext' | 'dm_e2ee_v1';
   labels: Pick<
     ChatPushPreviewLabels,
-    'attachment' | 'encryptedMessage' | 'newMessage' | 'voiceMessage'
+    | 'attachment'
+    | 'audio'
+    | 'encryptedMessage'
+    | 'file'
+    | 'image'
+    | 'newMessage'
+    | 'voiceMessage'
   >;
   messageKind: 'text' | 'attachment' | 'voice';
 }) {
@@ -438,13 +453,26 @@ function getChatPushPreview(input: {
   }
 
   if (input.messageKind === 'attachment') {
-    return normalizePreviewText(input.body) ?? input.labels.attachment;
+    if (input.attachmentPreviewKind === 'image') {
+      return input.labels.image;
+    }
+
+    if (input.attachmentPreviewKind === 'audio') {
+      return input.labels.audio;
+    }
+
+    if (input.attachmentPreviewKind === 'file') {
+      return input.labels.file;
+    }
+
+    return input.labels.attachment;
   }
 
   return normalizePreviewText(input.body) ?? input.labels.newMessage;
 }
 
 function buildChatPushPayload(input: {
+  attachmentPreviewKind?: InboxAttachmentPreviewKind | null;
   body?: string | null;
   contentMode: 'plaintext' | 'dm_e2ee_v1';
   conversationId: string;
@@ -481,6 +509,7 @@ function buildChatPushPayload(input: {
   }
 
   const preview = getChatPushPreview({
+    attachmentPreviewKind: input.attachmentPreviewKind ?? null,
     body: input.body ?? null,
     contentMode: input.contentMode,
     labels,
