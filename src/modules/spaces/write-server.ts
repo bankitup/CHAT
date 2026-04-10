@@ -6,8 +6,10 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import {
   getDefaultShellRouteForSpaceProfile,
   normalizeSpaceProfile,
+  normalizeSpaceTheme,
   type SpaceProfile,
   type SpaceRole,
+  type SpaceTheme,
 } from './model';
 import {
   requireSpaceMemberManagementForUser,
@@ -329,34 +331,55 @@ async function insertSpaceRow(input: {
   createdBy: string;
   name: string;
   profile: SpaceProfile;
+  theme: SpaceTheme;
   serviceClient: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
 }) {
   const now = new Date().toISOString();
+  const insertPayload: {
+    created_by: string;
+    name: string;
+    profile?: SpaceProfile;
+    theme?: SpaceTheme;
+    updated_at: string;
+  } = {
+    created_by: input.createdBy,
+    name: input.name,
+    profile: input.profile,
+    theme: input.theme,
+    updated_at: now,
+  };
+
   let response = await input.serviceClient
     .from('spaces')
-    .insert({
-      created_by: input.createdBy,
-      name: input.name,
-      profile: input.profile,
-      updated_at: now,
-    })
+    .insert(insertPayload)
     .select('id, name')
     .single();
 
   let profilePersisted = true;
+  let themePersisted = true;
+
+  if (
+    response.error &&
+    isMissingColumnErrorMessage(response.error.message, 'theme')
+  ) {
+    themePersisted = false;
+    delete insertPayload.theme;
+    response = await input.serviceClient
+      .from('spaces')
+      .insert(insertPayload)
+      .select('id, name')
+      .single();
+  }
 
   if (
     response.error &&
     isMissingColumnErrorMessage(response.error.message, 'profile')
   ) {
     profilePersisted = false;
+    delete insertPayload.profile;
     response = await input.serviceClient
       .from('spaces')
-      .insert({
-        created_by: input.createdBy,
-        name: input.name,
-        updated_at: now,
-      })
+      .insert(insertPayload)
       .select('id, name')
       .single();
   }
@@ -369,6 +392,7 @@ async function insertSpaceRow(input: {
     id: response.data.id,
     name: response.data.name ?? input.name,
     profilePersisted,
+    themePersisted,
   };
 }
 
@@ -430,6 +454,7 @@ export async function createGovernedSpace(input: {
     createdBy: viewer.id,
     name: spaceName,
     profile,
+    theme: 'dark',
     serviceClient,
   });
 
@@ -608,6 +633,43 @@ export async function addMembersToGovernedSpace(input: {
     spaceId: exactSpaceAccess.activeSpace.id,
     spaceName: exactSpaceAccess.activeSpace.name,
   };
+}
+
+export async function updateGovernedSpaceTheme(input: {
+  spaceId: string;
+  theme: string;
+}) {
+  const viewer = await requireRequestViewer('spaces:update-theme');
+  const exactSpaceAccess = await requireSpaceMemberManagementForUser({
+    requestedSpaceId: input.spaceId,
+    source: 'spaces:update-theme',
+    userEmail: viewer.email ?? null,
+    userId: viewer.id,
+  });
+  const serviceClient = await requireServiceRoleClient();
+  const theme = normalizeSpaceTheme(input.theme) ?? 'dark';
+  const response = await serviceClient
+    .from('spaces')
+    .update({
+      theme,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', exactSpaceAccess.activeSpace.id);
+
+  if (!response.error) {
+    return {
+      spaceId: exactSpaceAccess.activeSpace.id,
+      theme,
+    };
+  }
+
+  if (isMissingColumnErrorMessage(response.error.message, 'theme')) {
+    throw new Error(
+      'Space theme persistence requires public.spaces.theme. Apply /Users/danya/IOS - Apps/CHAT/docs/sql/2026-04-10-spaces-theme-column.sql.',
+    );
+  }
+
+  throw new Error(response.error.message);
 }
 
 export async function removeMembersFromGovernedSpace(input: {

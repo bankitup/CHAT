@@ -12,13 +12,23 @@ import { getRequestLanguage, setLanguageCookie } from '@/modules/i18n/server';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { updateCurrentUserLanguagePreference } from '@/modules/messaging/data/server';
 import {
+  normalizeAppZoomMode,
+  type AppZoomMode,
+} from '@/modules/ui-preferences/app-zoom';
+import { setAppZoomCookie } from '@/modules/ui-preferences/app-zoom-server';
+import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
 } from '@/modules/messaging/ui/user-facing-errors';
 import {
   removeMembersFromGovernedSpace,
   requestAdditionalAccountsForGovernedSpace,
+  updateGovernedSpaceTheme,
 } from '@/modules/spaces/write-server';
+import {
+  normalizeSpaceTheme,
+  type SpaceTheme,
+} from '@/modules/spaces/model';
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
@@ -58,6 +68,8 @@ function getFriendlyHomeErrorMessage(input: {
   language: AppLanguage;
   surface:
     | 'home:language-preference'
+    | 'home:space-theme'
+    | 'home:zoom-preference'
     | 'home:participants-remove'
     | 'home:participants-request';
 }) {
@@ -75,6 +87,82 @@ function getFriendlyHomeErrorMessage(input: {
     language: input.language,
     rawMessage,
   });
+}
+
+export async function saveHomeAppZoomPreferenceAction(input: {
+  language: AppLanguage;
+  zoomMode: AppZoomMode;
+}): Promise<{ ok: true } | { error: string; ok: false }> {
+  const language = normalizeLanguage(input.language);
+  const t = getTranslations(language);
+  const zoomMode = normalizeAppZoomMode(input.zoomMode);
+
+  try {
+    await setAppZoomCookie(zoomMode);
+    revalidatePath('/', 'layout');
+    revalidatePath('/home');
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback: t.zoomSwitcher.saveFailed,
+        language,
+        surface: 'home:zoom-preference',
+      }),
+      ok: false,
+    };
+  }
+}
+
+export async function saveHomeSpaceThemeAction(input: {
+  language: AppLanguage;
+  spaceId: string;
+  theme: SpaceTheme;
+}): Promise<{ ok: true } | { error: string; ok: false }> {
+  const language = normalizeLanguage(input.language);
+  const t = getTranslations(language);
+  const spaceId = input.spaceId.trim();
+  const theme = normalizeSpaceTheme(input.theme) ?? 'dark';
+  const user = await getRequestViewer();
+
+  if (!spaceId) {
+    return {
+      error: t.homeDashboard.spaceThemeSaveFailed,
+      ok: false,
+    };
+  }
+
+  if (!user?.id) {
+    return {
+      error: t.login.managedAccess,
+      ok: false,
+    };
+  }
+
+  try {
+    await updateGovernedSpaceTheme({
+      spaceId,
+      theme,
+    });
+    revalidatePath('/', 'layout');
+    revalidatePath('/home');
+    revalidatePath('/inbox');
+    revalidatePath('/activity');
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback: t.homeDashboard.spaceThemeSaveFailed,
+        language,
+        surface: 'home:space-theme',
+      }),
+      ok: false,
+    };
+  }
 }
 
 export async function updateHomeLanguagePreferenceAction(formData: FormData) {

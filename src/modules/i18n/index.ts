@@ -11,6 +11,24 @@ type LanguageDictionary = {
     ru: string;
     label: string;
   };
+  zoomSwitcher: {
+    label: string;
+    trigger: string;
+    title: string;
+    body: string;
+    standard: string;
+    standardHint: string;
+    larger: string;
+    largerHint: string;
+    largest: string;
+    largestHint: string;
+    currentBadge: string;
+    previewBadge: string;
+    previewNotice: string;
+    confirm: string;
+    cancel: string;
+    saveFailed: string;
+  };
   publicHome: {
     eyebrow: string;
     title: string;
@@ -298,6 +316,16 @@ type LanguageDictionary = {
     testFlowMismatchBody: string;
     openChats: string;
     openSettings: string;
+    spaceThemeTitle: string;
+    spaceThemeBody: string;
+    spaceThemeSpaceWideBadge: string;
+    spaceThemeDarkLabel: string;
+    spaceThemeDarkHint: string;
+    spaceThemeLightLabel: string;
+    spaceThemeLightHint: string;
+    spaceThemeCurrentBadge: string;
+    spaceThemeNote: string;
+    spaceThemeSaveFailed: string;
   };
   rooms: {
     title: string;
@@ -880,6 +908,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       ru: 'RU',
       label: 'Language',
     },
+    zoomSwitcher: {
+      label: 'App zoom',
+      trigger: 'Size',
+      title: 'App zoom',
+      body: 'Preview a larger interface before saving it for this device. The preview updates the shell immediately, including controls and tap targets.',
+      standard: 'Standard',
+      standardHint: 'Balanced layout and default density.',
+      larger: 'Larger',
+      largerHint: 'Bigger text, controls, and spacing.',
+      largest: 'Largest',
+      largestHint: 'Maximum comfort for reading and tapping.',
+      currentBadge: 'Current',
+      previewBadge: 'Preview',
+      previewNotice: 'Preview applies immediately. Confirm to keep this size across the app on this device.',
+      confirm: 'Use this size',
+      cancel: 'Cancel',
+      saveFailed: 'Unable to save the display size right now.',
+    },
     publicHome: {
       eyebrow: 'Build With Care',
       title: 'BWC Products',
@@ -1217,6 +1263,19 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'This branch uses the seeded TEST home as the canonical MVP proof path. Switch homes before validating the flow.',
       openChats: 'Open chats',
       openSettings: 'Open profile',
+      spaceThemeTitle: 'Space theme',
+      spaceThemeBody:
+        'Set the base look for everyone in this space. Dark is the default theme, and you can switch back to a lighter shell whenever needed.',
+      spaceThemeSpaceWideBadge: 'Space-wide',
+      spaceThemeDarkLabel: 'Dark',
+      spaceThemeDarkHint: 'Default base theme with softer glare and stronger contrast.',
+      spaceThemeLightLabel: 'Light',
+      spaceThemeLightHint: 'Brighter shell for spaces that prefer the current classic look.',
+      spaceThemeCurrentBadge: 'Current',
+      spaceThemeNote:
+        'This appearance setting applies to the current space and is ready for more space-level styling controls later.',
+      spaceThemeSaveFailed:
+        'Unable to save the space theme right now. Please try again.',
     },
     rooms: {
       title: 'Rooms',
@@ -1858,6 +1917,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       ru: 'RU',
       label: 'Язык',
     },
+    zoomSwitcher: {
+      label: 'Размер интерфейса',
+      trigger: 'Размер',
+      title: 'Размер интерфейса',
+      body: 'Сначала посмотрите увеличенный интерфейс, а потом сохраните его для этого устройства. Превью сразу обновляет оболочку, кнопки и области касания.',
+      standard: 'Стандартный',
+      standardHint: 'Сбалансированная плотность и обычный размер.',
+      larger: 'Крупнее',
+      largerHint: 'Крупнее текст, кнопки и отступы.',
+      largest: 'Самый крупный',
+      largestHint: 'Максимально комфортно для чтения и касаний.',
+      currentBadge: 'Сейчас',
+      previewBadge: 'Превью',
+      previewNotice: 'Превью применяется сразу. Подтвердите, чтобы сохранить этот размер для всего приложения на этом устройстве.',
+      confirm: 'Сохранить размер',
+      cancel: 'Отмена',
+      saveFailed: 'Сейчас не удалось сохранить размер интерфейса.',
+    },
     publicHome: {
       eyebrow: 'Build With Care',
       title: 'BWC Products',
@@ -2209,6 +2286,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'В этой ветке канонический MVP-путь проверяется через seeded-дом TEST. Переключите дом перед проверкой сценария.',
       openChats: 'Открыть чаты',
       openSettings: 'Открыть профиль',
+      spaceThemeTitle: 'Тема пространства',
+      spaceThemeBody:
+        'Задайте базовый вид для всех участников этого пространства. Темная тема остается стандартной, а при необходимости можно вернуть более светлую оболочку.',
+      spaceThemeSpaceWideBadge: 'Для всего пространства',
+      spaceThemeDarkLabel: 'Тёмная',
+      spaceThemeDarkHint:
+        'Базовая тема по умолчанию с меньшими бликами и более уверенным контрастом.',
+      spaceThemeLightLabel: 'Светлая',
+      spaceThemeLightHint:
+        'Более светлая оболочка для пространств, которым ближе текущий классический вид.',
+      spaceThemeCurrentBadge: 'Сейчас',
+      spaceThemeNote:
+        'Эта настройка применяется ко всему текущему пространству и готова к расширению на другие параметры внешнего вида.',
+      spaceThemeSaveFailed:
+        'Сейчас не удалось сохранить тему пространства. Попробуйте ещё раз.',
     },
     rooms: {
       title: 'Комнаты',

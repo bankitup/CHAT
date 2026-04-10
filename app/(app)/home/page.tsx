@@ -5,7 +5,9 @@ import {
   type HomeSpacePlanCode,
   type HomeSpaceUsageState,
 } from './space-plan-config';
+import { HomeAppZoomControl } from './home-app-zoom-control';
 import { HomeLanguageSwitch } from './home-language-switch';
+import { SpaceThemeCard } from './space-theme-card';
 import {
   getHomeSpaceUsageSnapshot,
   type HomeSpaceUsageSnapshot,
@@ -35,6 +37,7 @@ import {
   isKeepCozyPrimaryTestHomeName,
 } from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
+import { getRequestAppZoomMode } from '@/modules/ui-preferences/app-zoom-server';
 
 type HomeDashboardPageProps = {
   searchParams: Promise<{
@@ -269,6 +272,7 @@ async function requireHomeSpaceContext(requestedSpaceId?: string) {
         id: explicitV1TestSpace.id,
         name: explicitV1TestSpace.name,
         profile: 'keepcozy_ops' as const,
+        theme: 'dark' as const,
       },
       language,
       t: getTranslations(language),
@@ -312,6 +316,7 @@ async function requireHomeSpaceContext(requestedSpaceId?: string) {
           id: fallbackSpace.id,
           name: fallbackSpace.name,
           profile: 'keepcozy_ops' as const,
+          theme: 'dark' as const,
         },
         language,
         t: getTranslations(language),
@@ -330,6 +335,9 @@ export default async function HomeDashboardPage({
   const { activeSpace, language, t, user } = await requireHomeSpaceContext(
     query.space,
   );
+  const currentZoomMode = await getRequestAppZoomMode();
+  const canManageSpaceAppearance =
+    'canManageMembers' in activeSpace && activeSpace.canManageMembers;
 
   if (activeSpace.profile === 'messenger_full') {
     const canManageMessengerMembers =
@@ -372,7 +380,11 @@ export default async function HomeDashboardPage({
 
     return (
       <section className="stack messenger-home-screen messenger-home-shell">
-        <div className="home-language-topbar">
+        <div className="home-utility-topbar">
+          <HomeAppZoomControl
+            initialZoomMode={currentZoomMode}
+            language={language}
+          />
           <HomeLanguageSwitch
             currentLanguage={language}
             spaceId={activeSpace.id}
@@ -484,6 +496,14 @@ export default async function HomeDashboardPage({
 
           {spaceUsage ? <SpaceUsageCard {...spaceUsage} /> : null}
 
+          {canManageSpaceAppearance ? (
+            <SpaceThemeCard
+              currentTheme={activeSpace.theme}
+              language={language}
+              spaceId={activeSpace.id}
+            />
+          ) : null}
+
           {canManageMessengerMembers && manageableParticipants ? (
             <SpaceParticipantsModule
               copy={{
@@ -540,7 +560,11 @@ export default async function HomeDashboardPage({
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
-      <div className="home-language-topbar">
+      <div className="home-utility-topbar">
+        <HomeAppZoomControl
+          initialZoomMode={currentZoomMode}
+          language={language}
+        />
         <HomeLanguageSwitch currentLanguage={language} spaceId={activeSpace.id} />
       </div>
 
@@ -554,6 +578,14 @@ export default async function HomeDashboardPage({
       ) : null}
 
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+
+      {canManageSpaceAppearance ? (
+        <SpaceThemeCard
+          currentTheme={activeSpace.theme}
+          language={language}
+          spaceId={activeSpace.id}
+        />
+      ) : null}
 
       <section className="stack settings-hero keepcozy-hero">
         <p className="eyebrow">{t.homeDashboard.eyebrow}</p>
