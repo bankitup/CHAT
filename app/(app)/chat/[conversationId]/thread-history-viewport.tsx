@@ -177,6 +177,11 @@ type ThreadHistoryState = {
   senderProfilesById: Map<string, MessageSenderProfile>;
 };
 
+type ThreadHistorySessionCacheEntry = {
+  cachedAt: number;
+  state: ThreadHistoryState;
+};
+
 type TimelineItem =
   | { key: string; label: string; type: 'separator' | 'unread' }
   | { key: string; message: ConversationMessageRow; type: 'message' };
@@ -207,6 +212,8 @@ const VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS = [180, 700] as const;
 const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
 const MESSAGE_CLUSTER_MAX_GAP_MS = 5 * 60 * 1000;
+const THREAD_HISTORY_SESSION_CACHE_MAX_ENTRIES = 6;
+const threadHistorySessionCache = new Map<string, ThreadHistorySessionCacheEntry>();
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -1619,6 +1626,13 @@ function getSnapshotRevisionKey(snapshot: ThreadHistoryPageSnapshot) {
   });
 }
 
+function buildThreadHistorySessionCacheKey(input: {
+  conversationId: string;
+  currentUserId: string;
+}) {
+  return `${input.currentUserId.trim()}:${input.conversationId.trim()}`;
+}
+
 function resolveOldestLoadedSeq(
   messages: ConversationMessageRow[],
   fallback: number | null,
@@ -1676,6 +1690,57 @@ function createThreadHistoryState(
     senderProfilesById: new Map(
       snapshot.senderProfiles.map((profile) => [profile.userId, profile] as const),
     ),
+  };
+}
+
+function writeThreadHistorySessionCache(input: {
+  cacheKey: string;
+  state: ThreadHistoryState;
+}) {
+  if (!input.cacheKey) {
+    return;
+  }
+
+  threadHistorySessionCache.delete(input.cacheKey);
+  threadHistorySessionCache.set(input.cacheKey, {
+    cachedAt: Date.now(),
+    state: input.state,
+  });
+
+  while (threadHistorySessionCache.size > THREAD_HISTORY_SESSION_CACHE_MAX_ENTRIES) {
+    const oldestEntry = threadHistorySessionCache.keys().next();
+
+    if (oldestEntry.done) {
+      break;
+    }
+
+    threadHistorySessionCache.delete(oldestEntry.value);
+  }
+}
+
+function resolveInitialThreadHistoryState(input: {
+  cacheKey: string;
+  snapshot: ThreadHistoryPageSnapshot;
+}) {
+  const nextSnapshotKey = getSnapshotRevisionKey(input.snapshot);
+  const cachedEntry = threadHistorySessionCache.get(input.cacheKey) ?? null;
+
+  if (!cachedEntry) {
+    return {
+      snapshotKey: nextSnapshotKey,
+      state: createThreadHistoryState(input.snapshot),
+      usedSessionCache: false,
+    };
+  }
+
+  return {
+    snapshotKey: nextSnapshotKey,
+    state: mergeThreadHistoryState({
+      mode: 'refresh-base',
+      snapshot: input.snapshot,
+      state: cachedEntry.state,
+    }).nextState,
+    usedSessionCache: true,
   };
 }
 
@@ -2829,17 +2894,35 @@ export function ThreadHistoryViewport({
     typeof window !== 'undefined' &&
     (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||
       process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1');
+  const sessionCacheKey = buildThreadHistorySessionCacheKey({
+    conversationId,
+    currentUserId,
+  });
+  const initialResolvedStateRef = useRef<ReturnType<
+    typeof resolveInitialThreadHistoryState
+  > | null>(null);
+
+  if (initialResolvedStateRef.current === null) {
+    initialResolvedStateRef.current = resolveInitialThreadHistoryState({
+      cacheKey: sessionCacheKey,
+      snapshot: initialSnapshot,
+    });
+  }
+
   const renderCountRef = useRef(0);
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
-    createThreadHistoryState(initialSnapshot),
+    initialResolvedStateRef.current?.state ?? createThreadHistoryState(initialSnapshot),
   );
   const historyFetchActiveDeviceIdRef = useRef<string | null>(
     initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null,
   );
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const historyStateRef = useRef(historyState);
+  const activeSessionCacheKeyRef = useRef(sessionCacheKey);
   const lastConversationIdRef = useRef(conversationId);
-  const lastInitialSnapshotKeyRef = useRef(getSnapshotRevisionKey(initialSnapshot));
+  const lastInitialSnapshotKeyRef = useRef(
+    initialResolvedStateRef.current?.snapshotKey ?? getSnapshotRevisionKey(initialSnapshot),
+  );
   const pendingRestoreRef = useRef<PendingScrollRestore | null>(null);
   const pendingByIdSyncRequestRef =
     useRef<PendingByIdThreadHistorySyncRequest | null>(null);
@@ -2876,6 +2959,8 @@ export function ThreadHistoryViewport({
       conversationId,
       initialMessageCount: initialSnapshot.messages.length,
       renderCount: renderCountRef.current,
+      restoredFromSessionCache:
+        initialResolvedStateRef.current?.usedSessionCache ?? false,
     });
 
     return () => {
@@ -2892,6 +2977,10 @@ export function ThreadHistoryViewport({
 
   useEffect(() => {
     historyStateRef.current = historyState;
+    writeThreadHistorySessionCache({
+      cacheKey: activeSessionCacheKeyRef.current,
+      state: historyState,
+    });
   }, [historyState]);
 
   useEffect(() => {
@@ -2904,9 +2993,14 @@ export function ThreadHistoryViewport({
     const nextSnapshotKey = getSnapshotRevisionKey(initialSnapshot);
 
     if (lastConversationIdRef.current !== conversationId) {
-      const resetState = createThreadHistoryState(initialSnapshot);
+      const resolvedState = resolveInitialThreadHistoryState({
+        cacheKey: sessionCacheKey,
+        snapshot: initialSnapshot,
+      });
+      const resetState = resolvedState.state;
       lastConversationIdRef.current = conversationId;
-      lastInitialSnapshotKeyRef.current = nextSnapshotKey;
+      lastInitialSnapshotKeyRef.current = resolvedState.snapshotKey;
+      activeSessionCacheKeyRef.current = sessionCacheKey;
       historyStateRef.current = resetState;
       setHistoryState(resetState);
       historyFetchActiveDeviceIdRef.current =
@@ -2934,7 +3028,7 @@ export function ThreadHistoryViewport({
     });
     historyFetchActiveDeviceIdRef.current =
       initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null;
-  }, [conversationId, initialSnapshot]);
+  }, [conversationId, initialSnapshot, sessionCacheKey]);
 
   const senderNames = useMemo(
     () =>
