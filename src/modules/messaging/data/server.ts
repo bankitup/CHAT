@@ -9628,6 +9628,7 @@ export async function sendMessageWithAttachment(input: {
     >;
   const attachmentMessageKind = getAttachmentMessageKind(input.file.type);
   const committedAssetKind = resolveMessagingAssetKindFromMimeType({
+    fileName: input.file.name,
     messageKind: attachmentMessageKind,
     mimeType: input.file.type,
   });

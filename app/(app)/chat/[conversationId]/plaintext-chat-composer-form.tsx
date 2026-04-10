@@ -10,6 +10,7 @@ import {
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
@@ -77,7 +78,12 @@ function getComposerAttachmentLabel(input: {
     return null;
   }
 
-  if (input.attachment.type.startsWith('image/')) {
+  if (
+    resolveMessagingAssetKindFromMimeType({
+      fileName: input.attachment.name,
+      mimeType: input.attachment.type,
+    }) === 'image'
+  ) {
     return input.labels.image;
   }
 

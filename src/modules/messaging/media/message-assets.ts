@@ -111,7 +111,46 @@ export function resolveMessagingMessageKindForAsset(
   return kind === 'voice-note' ? 'voice' : 'attachment';
 }
 
+const IMAGE_ATTACHMENT_EXTENSIONS = new Set([
+  '.gif',
+  '.heic',
+  '.heif',
+  '.jpeg',
+  '.jpg',
+  '.png',
+  '.webp',
+]);
+
+function getMessageAssetFileExtension(fileName: string | null | undefined) {
+  const normalizedFileName = fileName?.trim() || '';
+
+  if (!normalizedFileName) {
+    return null;
+  }
+
+  const lastSegment = normalizedFileName.split(/[\\/]/).pop()?.trim() || '';
+  const extensionIndex = lastSegment.lastIndexOf('.');
+
+  if (extensionIndex < 0 || extensionIndex === lastSegment.length - 1) {
+    return null;
+  }
+
+  return lastSegment.slice(extensionIndex).toLowerCase();
+}
+
+function isBinaryAttachmentMimeType(mimeType: string | null | undefined) {
+  const normalizedMimeType = mimeType?.trim().toLowerCase() || '';
+
+  return (
+    !normalizedMimeType ||
+    normalizedMimeType === 'application/octet-stream' ||
+    normalizedMimeType === 'binary/octet-stream' ||
+    normalizedMimeType === 'application/x-download'
+  );
+}
+
 export function resolveMessagingAssetKindFromMimeType(input: {
+  fileName?: string | null;
   messageKind?: MessagingMessageKind | null;
   mimeType: string | null | undefined;
 }): MessagingMediaAssetKind {
@@ -127,6 +166,14 @@ export function resolveMessagingAssetKindFromMimeType(input: {
 
   if (normalizedMimeType.startsWith('audio/')) {
     return 'audio';
+  }
+
+  if (isBinaryAttachmentMimeType(normalizedMimeType)) {
+    const fileExtension = getMessageAssetFileExtension(input.fileName);
+
+    if (fileExtension && IMAGE_ATTACHMENT_EXTENSIONS.has(fileExtension)) {
+      return 'image';
+    }
   }
 
   return 'file';

@@ -1,3 +1,4 @@
+import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import type { MessagingMediaAssetKind } from '@/modules/messaging/media/types';
 
 export type InboxAttachmentPreviewKind = 'audio' | 'file' | 'image';
@@ -9,26 +10,26 @@ export type InboxAttachmentPreviewAssetKind =
 
 export function resolveInboxAttachmentPreviewKindFromMetadata(input: {
   assetKind?: MessagingMediaAssetKind | null;
+  fileName?: string | null;
   mimeType?: string | null;
 }): InboxAttachmentPreviewKind {
-  if (input.assetKind === 'image') {
+  const resolvedAssetKind =
+    input.assetKind ??
+    resolveMessagingAssetKindFromMimeType({
+      fileName: input.fileName ?? null,
+      mimeType: input.mimeType ?? null,
+    });
+
+  if (resolvedAssetKind === 'image') {
     return 'image';
   }
 
-  if (input.assetKind === 'audio' || input.assetKind === 'voice-note') {
+  if (resolvedAssetKind === 'audio' || resolvedAssetKind === 'voice-note') {
     return 'audio';
   }
 
-  if (input.assetKind === 'file') {
+  if (resolvedAssetKind === 'file') {
     return 'file';
-  }
-
-  if (input.mimeType?.startsWith('image/')) {
-    return 'image';
-  }
-
-  if (input.mimeType?.startsWith('audio/')) {
-    return 'audio';
   }
 
   return 'file';
@@ -36,8 +37,12 @@ export function resolveInboxAttachmentPreviewKindFromMetadata(input: {
 
 export function resolveInboxAttachmentPreviewKind(
   mimeType: string | null | undefined,
+  fileName?: string | null,
 ): InboxAttachmentPreviewKind {
-  return resolveInboxAttachmentPreviewKindFromMetadata({ mimeType: mimeType ?? null });
+  return resolveInboxAttachmentPreviewKindFromMetadata({
+    fileName: fileName ?? null,
+    mimeType: mimeType ?? null,
+  });
 }
 
 export function resolveInboxAttachmentPreviewKindFromAsset(input: {
