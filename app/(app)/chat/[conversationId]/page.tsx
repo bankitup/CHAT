@@ -84,6 +84,7 @@ import { ThreadHistoryViewport } from './thread-history-viewport';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { GroupChatSettingsForm } from './group-chat-settings-form';
+import { JumpToLatestButton } from './jump-to-latest-button';
 import { PlaintextChatComposerForm } from './plaintext-chat-composer-form';
 import { ThreadLiveStateHydrator } from '@/modules/messaging/realtime/thread-live-state-store';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
@@ -1491,6 +1492,11 @@ export default async function ChatPage({
         </section>
 
         <section className="stack composer-card" id="message-composer">
+          <JumpToLatestButton
+            label={t.chat.jumpToLatest}
+            latestVisibleMessageSeq={latestVisibleMessageSeq}
+            targetId="message-thread-scroll"
+          />
           {conversation.kind === 'dm' ? (
             <DmThreadClientSubtree
               conversationId={conversationId}

@@ -656,6 +656,7 @@ type LanguageDictionary = {
     closeAvatarPreview: string;
     openPhotoPreviewAria: (title: string) => string;
     closePhotoPreview: string;
+    jumpToLatest: string;
     directChat: string;
     person: string;
     group: string;
@@ -1589,6 +1590,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       closeAvatarPreview: 'Close avatar preview',
       openPhotoPreviewAria: (title) => `Open photo preview for ${title}`,
       closePhotoPreview: 'Close photo preview',
+      jumpToLatest: 'Jump to latest messages',
       directChat: 'Direct chat',
       person: 'Person',
       group: 'Group',
@@ -2574,6 +2576,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       closeAvatarPreview: 'Закрыть просмотр аватара',
       openPhotoPreviewAria: (title) => `Открыть фото ${title}`,
       closePhotoPreview: 'Закрыть фото',
+      jumpToLatest: 'Перейти к последним сообщениям',
       directChat: 'Личный чат',
       person: 'Человек',
       group: 'Группа',
