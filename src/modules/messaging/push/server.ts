@@ -44,6 +44,8 @@ type PushSubscriptionRow = {
   created_at: string;
   presence_updated_at?: string | null;
   preview_mode?: string | null;
+  platform?: string | null;
+  user_agent?: string | null;
   updated_at: string;
   disabled_at: string | null;
 };
@@ -114,6 +116,7 @@ type PushTestSendResult = {
 
 type PushRecipientResolutionResult = {
   appActiveSuppressedUserCount?: number;
+  dedupedSubscriptionCount?: number;
   eligibleRecipientCount: number;
   membershipCount: number;
   presenceSchemaPresent: boolean;
@@ -733,12 +736,80 @@ function applyPushPresenceSuppression(input: {
   };
 }
 
+function parsePushSubscriptionRecency(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+
+  const parsedValue = new Date(value).getTime();
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
+}
+
+function buildPushSubscriptionDedupeFingerprint(
+  row: PushSubscriptionRow,
+) {
+  const userId = typeof row.user_id === 'string' ? row.user_id.trim() : '';
+
+  if (!userId) {
+    return null;
+  }
+
+  const browserLanguage =
+    typeof row.browser_language === 'string'
+      ? row.browser_language.trim().toLowerCase()
+      : '';
+  const platform =
+    typeof row.platform === 'string' ? row.platform.trim().toLowerCase() : '';
+  const userAgent =
+    typeof row.user_agent === 'string'
+      ? row.user_agent.replace(/\s+/g, ' ').trim().toLowerCase()
+      : '';
+
+  if (!browserLanguage && !platform && !userAgent) {
+    return null;
+  }
+
+  return `${userId}::${platform}::${browserLanguage}::${userAgent}`;
+}
+
+function dedupePushSubscriptionsForDelivery(rows: PushSubscriptionRow[]) {
+  const seenFingerprints = new Set<string>();
+  let dedupedSubscriptionCount = 0;
+  const nextRows = [...rows].sort((left, right) => {
+    return (
+      parsePushSubscriptionRecency(right.updated_at ?? right.created_at) -
+      parsePushSubscriptionRecency(left.updated_at ?? left.created_at)
+    );
+  });
+  const dedupedRows: PushSubscriptionRow[] = [];
+
+  for (const row of nextRows) {
+    const fingerprint = buildPushSubscriptionDedupeFingerprint(row);
+
+    if (fingerprint) {
+      if (seenFingerprints.has(fingerprint)) {
+        dedupedSubscriptionCount += 1;
+        continue;
+      }
+
+      seenFingerprints.add(fingerprint);
+    }
+
+    dedupedRows.push(row);
+  }
+
+  return {
+    dedupedSubscriptionCount,
+    rows: dedupedRows,
+  };
+}
+
 async function getPushSubscriptionRowsForRecipients(input: {
   client: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
   userIds: string[];
 }) {
   const baseSelect =
-    'id, user_id, endpoint, expiration_time, p256dh, auth, browser_language, created_at, updated_at, disabled_at';
+    'id, user_id, endpoint, expiration_time, p256dh, auth, browser_language, platform, user_agent, created_at, updated_at, disabled_at';
   const attempts = [
     {
       presenceSchemaPresent: true,
@@ -899,13 +970,26 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
     });
   }
 
+  const dedupedRows = dedupePushSubscriptionsForDelivery(
+    presenceSuppression.rows,
+  );
+
+  if (dedupedRows.dedupedSubscriptionCount > 0) {
+    logPushDiagnostics('recipient-subscription-deduped', {
+      conversationId: input.conversationId,
+      dedupedSubscriptionCount: dedupedRows.dedupedSubscriptionCount,
+      remainingSubscriptionCount: dedupedRows.rows.length,
+    });
+  }
+
   return {
     appActiveSuppressedUserCount:
       presenceSuppression.appActiveSuppressedUserCount,
+    dedupedSubscriptionCount: dedupedRows.dedupedSubscriptionCount,
     eligibleRecipientCount: eligibleUserIds.length,
     membershipCount: membershipRows.length,
     presenceSchemaPresent,
-    rows: presenceSuppression.rows,
+    rows: dedupedRows.rows,
     sameConversationSuppressedUserCount:
       presenceSuppression.sameConversationSuppressedUserCount,
     skippedReason: presenceSuppression.skippedReason,
@@ -1566,6 +1650,7 @@ export async function sendChatPushNotifications(
   let subscriptions: PushSubscriptionRow[] = [];
   let subscriptionSkipReason: string | null = null;
   let appActiveSuppressedUserCount = 0;
+  let dedupedSubscriptionCount = 0;
   let membershipCount = 0;
   let eligibleRecipientCount = 0;
   let presenceSchemaPresent = true;
@@ -1579,6 +1664,7 @@ export async function sendChatPushNotifications(
       senderId: input.senderId,
     });
     appActiveSuppressedUserCount = result.appActiveSuppressedUserCount ?? 0;
+    dedupedSubscriptionCount = result.dedupedSubscriptionCount ?? 0;
     eligibleRecipientCount = result.eligibleRecipientCount;
     membershipCount = result.membershipCount;
     presenceSchemaPresent = result.presenceSchemaPresent;
@@ -1805,6 +1891,7 @@ export async function sendChatPushNotifications(
       messageId: input.messageId,
       messageKind: input.messageKind,
       appActiveSuppressedUserCount,
+      dedupedSubscriptionCount,
       presenceSchemaPresent,
       sameConversationSuppressedUserCount,
       sentCount,
