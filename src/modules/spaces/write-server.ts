@@ -12,6 +12,10 @@ import {
   type SpaceTheme,
 } from './model';
 import {
+  getHomeSpacePlanDefinition,
+  resolveCurrentHomeSpacePlanCode,
+} from './plan-config';
+import {
   requireSpaceMemberManagementForUser,
   resolveSuperAdminGovernanceForUser,
 } from './server';
@@ -136,6 +140,55 @@ function parseSelectedSpaceMemberUserIds(rawValue: string | null | undefined) {
     invalid,
     valid,
   };
+}
+
+function sumFinitePositiveNumbers(values: Array<number | null | undefined>) {
+  return values.reduce<number>((total, value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      return total;
+    }
+
+    return total + value;
+  }, 0);
+}
+
+async function getGovernedSpaceStorageUsageBytes(input: {
+  serviceClient: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
+  spaceId: string;
+}) {
+  const { data: conversationRows, error: conversationsError } =
+    await input.serviceClient
+      .from('conversations')
+      .select('id')
+      .eq('space_id', input.spaceId);
+
+  if (conversationsError) {
+    throw new Error(conversationsError.message);
+  }
+
+  const conversationIds = ((conversationRows ?? []) as Array<{ id: string }>)
+    .map((row) => row.id)
+    .filter(Boolean);
+
+  if (conversationIds.length === 0) {
+    return 0;
+  }
+
+  const { data: assetRows, error: assetsError } = await input.serviceClient
+    .from('message_assets')
+    .select('size_bytes')
+    .eq('source', 'supabase-storage')
+    .in('conversation_id', conversationIds);
+
+  if (assetsError) {
+    throw new Error(assetsError.message);
+  }
+
+  return sumFinitePositiveNumbers(
+    ((assetRows ?? []) as Array<{ size_bytes?: number | null }>).map(
+      (row) => row.size_bytes ?? null,
+    ),
+  );
 }
 
 async function listUsersByEmail(input: {
@@ -712,7 +765,7 @@ export async function removeMembersFromGovernedSpace(input: {
     user_id: string;
   }>;
 
-  if (targetMemberships.length === 0) {
+  if (targetMemberships.length !== selectedUserIds.valid.length) {
     throw new Error('Those participants are no longer active in this space.');
   }
 
@@ -772,6 +825,124 @@ export async function removeMembersFromGovernedSpace(input: {
 
   return {
     removedCount: removableUserIds.length,
+    spaceId: exactSpaceAccess.activeSpace.id,
+  };
+}
+
+export async function promoteMembersToAdminInGovernedSpace(input: {
+  selectedUserIds: string;
+  spaceId: string;
+}) {
+  const viewer = await requireRequestViewer('spaces:promote-members');
+  const exactSpaceAccess = await requireSpaceMemberManagementForUser({
+    requestedSpaceId: input.spaceId,
+    source: 'spaces:promote-members',
+    userEmail: viewer.email ?? null,
+    userId: viewer.id,
+  });
+  const serviceClient = await requireServiceRoleClient();
+  const selectedUserIds = parseSelectedSpaceMemberUserIds(input.selectedUserIds);
+
+  if (selectedUserIds.invalid.length > 0) {
+    throw new Error(
+      `Selected participants are invalid. Use the current-space list only: ${selectedUserIds.invalid.join(', ')}`,
+    );
+  }
+
+  if (selectedUserIds.valid.length === 0) {
+    throw new Error('Select at least one member to promote.');
+  }
+
+  const { data: targetMembershipRows, error: targetMembershipError } =
+    await serviceClient
+      .from('space_members')
+      .select('user_id, role')
+      .eq('space_id', exactSpaceAccess.activeSpace.id)
+      .in('user_id', selectedUserIds.valid);
+
+  if (targetMembershipError) {
+    throw new Error(targetMembershipError.message);
+  }
+
+  const targetMemberships = (targetMembershipRows ?? []) as Array<{
+    role: SpaceRole;
+    user_id: string;
+  }>;
+
+  if (targetMemberships.length === 0) {
+    throw new Error('Those participants are no longer active in this space.');
+  }
+
+  if (targetMemberships.some((membership) => membership.role !== 'member')) {
+    throw new Error(
+      'Select member accounts only. Owners and existing admins cannot be promoted here.',
+    );
+  }
+
+  const { data: allMembershipRows, error: allMembershipError } = await serviceClient
+    .from('space_members')
+    .select('user_id, role')
+    .eq('space_id', exactSpaceAccess.activeSpace.id);
+
+  if (allMembershipError) {
+    throw new Error(allMembershipError.message);
+  }
+
+  const memberships = (allMembershipRows ?? []) as Array<{
+    role: SpaceRole;
+    user_id: string;
+  }>;
+  const adminsUsed = memberships.filter(
+    (membership) =>
+      membership.role === 'owner' || membership.role === 'admin',
+  ).length;
+  const membersUsed = memberships.length;
+  const storageUsedBytes = await getGovernedSpaceStorageUsageBytes({
+    serviceClient,
+    spaceId: exactSpaceAccess.activeSpace.id,
+  });
+  const plan = resolveCurrentHomeSpacePlanCode({
+    adminsUsed,
+    membersUsed,
+    storageUsedBytes,
+  });
+  const adminSeatLimit = getHomeSpacePlanDefinition(plan).limits.admins;
+  const remainingAdminSeats = Math.max(adminSeatLimit - adminsUsed, 0);
+
+  if (remainingAdminSeats <= 0) {
+    throw new Error(
+      'Admin seats are full for this space. Remove an admin or upgrade the plan first.',
+    );
+  }
+
+  if (targetMemberships.length > remainingAdminSeats) {
+    throw new Error(
+      'Selected members exceed the remaining admin seats for this space.',
+    );
+  }
+
+  const promoteUserIds = targetMemberships.map((membership) => membership.user_id);
+  const { error: promoteError } = await serviceClient
+    .from('space_members')
+    .update({ role: 'admin' })
+    .eq('space_id', exactSpaceAccess.activeSpace.id)
+    .in('user_id', promoteUserIds);
+
+  if (promoteError) {
+    throw new Error(promoteError.message);
+  }
+
+  console.info('[spaces-membership]', {
+    action: 'promote-members',
+    actingUserId: viewer.id,
+    promotedUserIds: promoteUserIds,
+    source: 'home-space-participants',
+    spaceId: exactSpaceAccess.activeSpace.id,
+  });
+
+  return {
+    adminSeatLimit,
+    promotedCount: promoteUserIds.length,
     spaceId: exactSpaceAccess.activeSpace.id,
   };
 }

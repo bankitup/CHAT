@@ -4972,6 +4972,24 @@ main {
   gap: 10px;
 }
 
+.messenger-home-participant-inline-form {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.messenger-home-participant-inline-stack {
+  gap: 10px;
+}
+
+.messenger-home-participant-promotion-state {
+  gap: 6px;
+}
+
+.messenger-home-participant-seat-note {
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .messenger-home-participant-actions {
   display: flex;
   flex-wrap: wrap;

@@ -223,6 +223,15 @@ type LanguageDictionary = {
     participantsBody: string;
     participantsEmptyBody: string;
     participantsLockedHint: string;
+    participantsAdminSeatsLabel: string;
+    participantsMakeAdminAction: string;
+    participantsMakeAdminPending: string;
+    participantsMakeAdminSelectionRequired: string;
+    participantsMakeAdminSuccess: string;
+    participantsMakeAdminFailed: string;
+    participantsMakeAdminFailedLimit: string;
+    participantsMakeAdminFailedSelection: string;
+    participantsMakeAdminFailedSelectionOverflow: string;
     participantsRemoveAction: string;
     participantsRemoveConfirmBody: string;
     participantsConfirmRemoveAction: string;
@@ -1154,6 +1163,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       participantsEmptyBody: 'No participants are available in this space yet.',
       participantsLockedHint:
         'Owners and your own account stay protected here. Everything else remains scoped to this space only.',
+      participantsAdminSeatsLabel: 'Admin seats',
+      participantsMakeAdminAction: 'Make admin',
+      participantsMakeAdminPending: 'Promoting...',
+      participantsMakeAdminSelectionRequired:
+        'Select at least one member to promote.',
+      participantsMakeAdminSuccess:
+        'Selected members were promoted to admin.',
+      participantsMakeAdminFailed:
+        'Unable to update admin access right now.',
+      participantsMakeAdminFailedLimit:
+        'Admin seats are full for this space. Remove an admin or upgrade the plan first.',
+      participantsMakeAdminFailedSelection:
+        'Select member accounts only. Owners and existing admins cannot be promoted here.',
+      participantsMakeAdminFailedSelectionOverflow:
+        'Selected members exceed the remaining admin seats for this space.',
       participantsRemoveAction: 'Remove selected',
       participantsRemoveConfirmBody:
         'Confirm removal for the selected participants. This changes access only inside the current space.',
@@ -2175,6 +2199,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       participantsEmptyBody: 'В этом пространстве пока нет доступных участников.',
       participantsLockedHint:
         'Владелец пространства и ваш собственный аккаунт здесь защищены. Все остальные изменения остаются только внутри этого пространства.',
+      participantsAdminSeatsLabel: 'Места администраторов',
+      participantsMakeAdminAction: 'Сделать админом',
+      participantsMakeAdminPending: 'Повышаем...',
+      participantsMakeAdminSelectionRequired:
+        'Выберите хотя бы одного участника для повышения.',
+      participantsMakeAdminSuccess:
+        'Выбранные участники стали администраторами.',
+      participantsMakeAdminFailed:
+        'Сейчас не удалось обновить доступ администратора.',
+      participantsMakeAdminFailedLimit:
+        'Места администраторов в этом пространстве закончились. Сначала снимите одного админа или обновите план.',
+      participantsMakeAdminFailedSelection:
+        'Для повышения выбирайте только участников со статусом member. Владельцев и действующих админов здесь повышать нельзя.',
+      participantsMakeAdminFailedSelectionOverflow:
+        'Выбранных участников больше, чем оставшихся мест администраторов.',
       participantsRemoveAction: 'Удалить выбранных',
       participantsRemoveConfirmBody:
         'Подтвердите удаление выбранных участников. Это меняет доступ только внутри текущего пространства.',
