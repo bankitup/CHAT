@@ -1,7 +1,10 @@
 'use client';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import {
+  resolveInboxAttachmentPreviewKind,
+  resolveInboxAttachmentPreviewKindFromMetadata,
+} from '@/modules/messaging/inbox/preview-kind';
 import { noteWarmNavRouterRefresh } from '@/modules/messaging/performance/warm-nav-client';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useTransition } from 'react';
@@ -130,6 +133,49 @@ export function InboxRealtimeSync({
     const fetchLatestMessageAttachmentKind = async (messageId: string | null) => {
       if (!messageId) {
         return null;
+      }
+
+      const assetResponse = await supabase
+        .from('message_asset_links')
+        .select('message_id, created_at, message_assets!inner(kind, mime_type)')
+        .eq('message_id', messageId)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (!assetResponse.error) {
+        const row =
+          ((assetResponse.data ?? []) as Array<{
+            message_assets:
+              | {
+                  kind?: 'image' | 'file' | 'audio' | 'voice-note' | null;
+                  mime_type?: string | null;
+                }
+              | Array<{
+                  kind?: 'image' | 'file' | 'audio' | 'voice-note' | null;
+                  mime_type?: string | null;
+                }>
+              | null;
+          }>)[0] ?? null;
+        const asset = row
+          ? Array.isArray(row.message_assets)
+            ? row.message_assets[0] ?? null
+            : row.message_assets
+          : null;
+
+        if (asset) {
+          return resolveInboxAttachmentPreviewKindFromMetadata({
+            assetKind: asset.kind ?? null,
+            mimeType: asset.mime_type ?? null,
+          });
+        }
+      } else if (
+        !assetResponse.error.message.includes('message_asset_links') &&
+        !assetResponse.error.message.includes('message_assets')
+      ) {
+        logDiagnostics('summary-asset-kind:error', {
+          message: assetResponse.error.message,
+          messageId,
+        });
       }
 
       const response = await supabase

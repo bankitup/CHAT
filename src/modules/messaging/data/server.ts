@@ -17,8 +17,10 @@ import {
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import {
   resolveInboxAttachmentPreviewKind,
+  resolveInboxAttachmentPreviewKindFromMetadata,
   type InboxAttachmentPreviewKind,
 } from '@/modules/messaging/inbox/preview-kind';
+import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import {
   canAddParticipantsToGroupConversation,
   canEditGroupConversationIdentity,
@@ -404,6 +406,21 @@ type MessageAttachmentPreviewRow = {
   created_at: string | null;
   message_id: string;
   mime_type: string | null;
+};
+
+type MessageAssetPreviewRow = {
+  created_at: string | null;
+  message_assets:
+    | {
+        kind: 'image' | 'file' | 'audio' | 'voice-note';
+        mime_type?: string | null;
+      }
+    | Array<{
+        kind: 'image' | 'file' | 'audio' | 'voice-note';
+        mime_type?: string | null;
+      }>
+    | null;
+  message_id: string;
 };
 
 export type MessageAttachment = {
@@ -7276,28 +7293,82 @@ async function getInboxAttachmentPreviewKindsByMessageId(
     return new Map<string, InboxAttachmentPreviewKind>();
   }
 
-  const loadRows = async (client: MessageAttachmentLookupClient) => {
+  const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const canIgnoreMessageAssetPreviewError = (message: string) =>
+    isMissingRelationErrorMessage(message, 'message_asset_links') ||
+    isMissingRelationErrorMessage(message, 'message_assets');
+  const loadAssetRows = async (client: MessageAttachmentLookupClient) =>
+    client
+      .from('message_asset_links')
+      .select('message_id, created_at, message_assets!inner(kind, mime_type)')
+      .in('message_id', uniqueMessageIds)
+      .order('created_at', { ascending: true });
+
+  let assetResponse = await loadAssetRows(supabase);
+
+  if (assetResponse.error) {
+    if (!canIgnoreMessageAssetPreviewError(assetResponse.error.message) && serviceSupabase) {
+      assetResponse = await loadAssetRows(
+        serviceSupabase as MessageAttachmentLookupClient,
+      );
+    }
+
+    if (assetResponse.error && !canIgnoreMessageAssetPreviewError(assetResponse.error.message)) {
+      throw new Error(assetResponse.error.message);
+    }
+  }
+
+  if (!assetResponse.error) {
+    for (const row of (assetResponse.data ?? []) as MessageAssetPreviewRow[]) {
+      if (previewKindsByMessageId.has(row.message_id)) {
+        continue;
+      }
+
+      const asset = normalizeJoinedRecord(row.message_assets);
+
+      if (!asset) {
+        continue;
+      }
+
+      previewKindsByMessageId.set(
+        row.message_id,
+        resolveInboxAttachmentPreviewKindFromMetadata({
+          assetKind: asset.kind,
+          mimeType: asset.mime_type ?? null,
+        }),
+      );
+    }
+  }
+
+  const remainingMessageIds = uniqueMessageIds.filter(
+    (messageId) => !previewKindsByMessageId.has(messageId),
+  );
+
+  if (remainingMessageIds.length === 0) {
+    return previewKindsByMessageId;
+  }
+
+  const loadLegacyRows = async (client: MessageAttachmentLookupClient) => {
     return client
       .from('message_attachments')
       .select('message_id, mime_type, created_at')
-      .in('message_id', uniqueMessageIds)
+      .in('message_id', remainingMessageIds)
       .order('created_at', { ascending: true });
   };
 
-  let response = await loadRows(supabase);
+  let response = await loadLegacyRows(supabase);
 
   if (response.error) {
     if (isMissingRelationErrorMessage(response.error.message, 'message_attachments')) {
-      return new Map<string, InboxAttachmentPreviewKind>();
+      return previewKindsByMessageId;
     }
-
-    const serviceSupabase = createSupabaseServiceRoleClient();
 
     if (!serviceSupabase) {
       throw new Error(response.error.message);
     }
 
-    const serviceResponse = await loadRows(
+    const serviceResponse = await loadLegacyRows(
       serviceSupabase as MessageAttachmentLookupClient,
     );
 
@@ -7308,7 +7379,7 @@ async function getInboxAttachmentPreviewKindsByMessageId(
           'message_attachments',
         )
       ) {
-        return new Map<string, InboxAttachmentPreviewKind>();
+        return previewKindsByMessageId;
       }
 
       throw new Error(serviceResponse.error.message);
@@ -7318,7 +7389,6 @@ async function getInboxAttachmentPreviewKindsByMessageId(
   }
 
   const rows = (response.data ?? []) as MessageAttachmentPreviewRow[];
-  const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
 
   for (const row of rows) {
     if (previewKindsByMessageId.has(row.message_id)) {
@@ -7611,6 +7681,21 @@ export async function deleteDirectConversationForUser(input: {
       throw new Error(attachmentRowsError.message);
     }
 
+    const { data: assetLinkRows, error: assetLinkRowsError } = await serviceSupabase
+      .from('message_asset_links')
+      .select(
+        'message_id, message_assets!inner(id, source, storage_bucket, storage_object_path)',
+      )
+      .in('message_id', messageIds);
+
+    if (
+      assetLinkRowsError &&
+      !isMissingRelationErrorMessage(assetLinkRowsError.message, 'message_asset_links') &&
+      !isMissingRelationErrorMessage(assetLinkRowsError.message, 'message_assets')
+    ) {
+      throw new Error(assetLinkRowsError.message);
+    }
+
     const { error: attachmentsError } = await serviceSupabase
       .from('message_attachments')
       .delete()
@@ -7654,6 +7739,38 @@ export async function deleteDirectConversationForUser(input: {
       const existing = storageObjectsByBucket.get(bucket) ?? [];
       existing.push(objectPath);
       storageObjectsByBucket.set(bucket, existing);
+    }
+
+    for (const row of (assetLinkRows ?? []) as Array<{
+      message_assets:
+        | {
+            id: string;
+            source: 'supabase-storage' | 'external-url';
+            storage_bucket?: string | null;
+            storage_object_path?: string | null;
+          }
+        | Array<{
+            id: string;
+            source: 'supabase-storage' | 'external-url';
+            storage_bucket?: string | null;
+            storage_object_path?: string | null;
+          }>
+        | null;
+    }>) {
+      const asset = normalizeJoinedRecord(row.message_assets);
+
+      if (
+        !asset ||
+        asset.source !== 'supabase-storage' ||
+        !asset.storage_bucket?.trim() ||
+        !asset.storage_object_path?.trim()
+      ) {
+        continue;
+      }
+
+      const existing = storageObjectsByBucket.get(asset.storage_bucket.trim()) ?? [];
+      existing.push(asset.storage_object_path.trim());
+      storageObjectsByBucket.set(asset.storage_bucket.trim(), existing);
     }
 
     for (const [bucket, objectPaths] of storageObjectsByBucket) {
@@ -9318,25 +9435,34 @@ export async function leaveGroupConversation(input: {
   }
 }
 
-async function insertCommittedVoiceAssetAndLink(input: {
+async function insertCommittedMessageAssetAndLink(input: {
+  assetKind: 'image' | 'file' | 'audio' | 'voice-note';
   client: MessageAssetsWriteClient;
   conversationId: string;
   durationMs: number | null;
   file: File;
   messageId: string;
   objectPath: string;
+  schemaRequirementErrorMessage: string;
   senderId: string;
 }) {
-  const normalizedDurationMs = normalizeVoiceDurationMs(input.durationMs);
-  logVoiceSendDiagnostics('message-assets-insert:started', {
-    conversationId: input.conversationId,
-    durationMs: normalizedDurationMs,
-    fileName: sanitizeAttachmentFileName(input.file.name),
-    messageId: input.messageId,
-    mimeType: input.file.type,
-    objectPath: input.objectPath,
-    sizeBytes: input.file.size,
-  });
+  const isVoiceAsset = input.assetKind === 'voice-note';
+  const normalizedDurationMs = isVoiceAsset
+    ? normalizeVoiceDurationMs(input.durationMs)
+    : null;
+
+  if (isVoiceAsset) {
+    logVoiceSendDiagnostics('message-assets-insert:started', {
+      conversationId: input.conversationId,
+      durationMs: normalizedDurationMs,
+      fileName: sanitizeAttachmentFileName(input.file.name),
+      messageId: input.messageId,
+      mimeType: input.file.type,
+      objectPath: input.objectPath,
+      sizeBytes: input.file.size,
+    });
+  }
+
   const { data: assetRow, error: assetError } = await input.client
     .from('message_assets')
     .insert({
@@ -9344,7 +9470,7 @@ async function insertCommittedVoiceAssetAndLink(input: {
       created_by: input.senderId,
       duration_ms: normalizedDurationMs,
       file_name: sanitizeAttachmentFileName(input.file.name),
-      kind: 'voice-note',
+      kind: input.assetKind,
       mime_type: input.file.type,
       size_bytes: input.file.size,
       source: 'supabase-storage',
@@ -9355,25 +9481,27 @@ async function insertCommittedVoiceAssetAndLink(input: {
     .single();
 
   if (assetError) {
-    logVoiceSendDiagnostics(
-      'message-assets-insert:failed',
-      {
-        conversationId: input.conversationId,
-        errorMessage: assetError.message,
-        messageId: input.messageId,
-        objectPath: input.objectPath,
-      },
-      'error',
-    );
+    if (isVoiceAsset) {
+      logVoiceSendDiagnostics(
+        'message-assets-insert:failed',
+        {
+          conversationId: input.conversationId,
+          errorMessage: assetError.message,
+          messageId: input.messageId,
+          objectPath: input.objectPath,
+        },
+        'error',
+      );
+    }
+
     if (
       isMissingRelationErrorMessage(assetError.message, 'message_assets') ||
-      isMissingColumnErrorMessage(assetError.message, 'duration_ms') ||
       isMissingColumnErrorMessage(assetError.message, 'storage_bucket') ||
-      isMissingColumnErrorMessage(assetError.message, 'storage_object_path')
+      isMissingColumnErrorMessage(assetError.message, 'storage_object_path') ||
+      (isVoiceAsset &&
+        isMissingColumnErrorMessage(assetError.message, 'duration_ms'))
     ) {
-      throw createSchemaRequirementError(
-        'Voice message media schema is missing.',
-      );
+      throw createSchemaRequirementError(input.schemaRequirementErrorMessage);
     }
 
     throw new Error(assetError.message);
@@ -9382,19 +9510,22 @@ async function insertCommittedVoiceAssetAndLink(input: {
   const assetId = String(assetRow?.id ?? '').trim();
 
   if (!assetId) {
-    throw new Error('Voice message asset insert did not return an asset id.');
+    throw new Error('Message asset insert did not return an asset id.');
   }
 
-  logVoiceSendDiagnostics('message-assets-insert:completed', {
-    assetId,
-    conversationId: input.conversationId,
-    messageId: input.messageId,
-  });
-  logVoiceSendDiagnostics('message-asset-links-insert:started', {
-    assetId,
-    conversationId: input.conversationId,
-    messageId: input.messageId,
-  });
+  if (isVoiceAsset) {
+    logVoiceSendDiagnostics('message-assets-insert:completed', {
+      assetId,
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+    });
+    logVoiceSendDiagnostics('message-asset-links-insert:started', {
+      assetId,
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+    });
+  }
+
   const { error: linkError } = await input.client.from('message_asset_links').insert({
     asset_id: assetId,
     message_id: input.messageId,
@@ -9410,7 +9541,7 @@ async function insertCommittedVoiceAssetAndLink(input: {
       .delete()
       .eq('id', assetId);
 
-    if (assetCleanupError) {
+    if (assetCleanupError && isVoiceAsset) {
       logVoiceSendDiagnostics(
         'message-assets-cleanup:failed',
         {
@@ -9423,33 +9554,36 @@ async function insertCommittedVoiceAssetAndLink(input: {
       );
     }
 
-    logVoiceSendDiagnostics(
-      'message-asset-links-insert:failed',
-      {
-        assetId,
-        conversationId: input.conversationId,
-        errorMessage: linkError.message,
-        messageId: input.messageId,
-      },
-      'error',
-    );
+    if (isVoiceAsset) {
+      logVoiceSendDiagnostics(
+        'message-asset-links-insert:failed',
+        {
+          assetId,
+          conversationId: input.conversationId,
+          errorMessage: linkError.message,
+          messageId: input.messageId,
+        },
+        'error',
+      );
+    }
+
     if (
       isMissingRelationErrorMessage(linkError.message, 'message_asset_links') ||
       isMissingColumnErrorMessage(linkError.message, 'render_as_primary')
     ) {
-      throw createSchemaRequirementError(
-        'Voice message media schema is missing.',
-      );
+      throw createSchemaRequirementError(input.schemaRequirementErrorMessage);
     }
 
     throw new Error(linkError.message);
   }
 
-  logVoiceSendDiagnostics('message-asset-links-insert:completed', {
-    assetId,
-    conversationId: input.conversationId,
-    messageId: input.messageId,
-  });
+  if (isVoiceAsset) {
+    logVoiceSendDiagnostics('message-asset-links-insert:completed', {
+      assetId,
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+    });
+  }
 }
 
 export async function sendMessageWithAttachment(input: {
@@ -9480,8 +9614,19 @@ export async function sendMessageWithAttachment(input: {
       ReturnType<typeof createSupabaseServerClient>
     >;
   const attachmentMessageKind = getAttachmentMessageKind(input.file.type);
+  const committedAssetKind = resolveMessagingAssetKindFromMimeType({
+    messageKind: attachmentMessageKind,
+    mimeType: input.file.type,
+  });
   const isVoiceMessageSend = attachmentMessageKind === 'voice';
-  const storageFolder = attachmentMessageKind === 'voice' ? 'voice' : 'files';
+  const storageFolder =
+    committedAssetKind === 'voice-note'
+      ? 'voice'
+      : committedAssetKind === 'image'
+        ? 'images'
+        : committedAssetKind === 'audio'
+          ? 'audio'
+          : 'files';
 
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('send:start', {
@@ -9658,58 +9803,57 @@ export async function sendMessageWithAttachment(input: {
     });
   }
 
-  const attachmentError =
-    attachmentMessageKind === 'voice'
-      ? await (async () => {
-          try {
-            logVoiceSendDiagnostics('asset-link-commit:started', {
-              conversationId: input.conversationId,
-              messageId: messageResult.messageId,
-              objectPath,
-            });
-            await insertCommittedVoiceAssetAndLink({
-              client: supabase,
-              conversationId: input.conversationId,
-              durationMs: input.voiceDurationMs ?? null,
-              file: input.file,
-              messageId: messageResult.messageId,
-              objectPath,
-              senderId: input.senderId,
-            });
-            logVoiceSendDiagnostics('asset-link-commit:completed', {
-              conversationId: input.conversationId,
-              messageId: messageResult.messageId,
-            });
-            return null;
-          } catch (error) {
-            logVoiceSendDiagnostics(
-              'asset-link-commit:failed',
-              {
-                conversationId: input.conversationId,
-                errorMessage:
-                  error instanceof Error ? error.message : String(error),
-                messageId: messageResult.messageId,
-              },
-              'error',
-            );
-            return error instanceof Error ? error : new Error('Unknown voice asset error');
-          }
-        })()
-      : await (async () => {
-          const { error } = await supabase
-            .from('message_attachments')
-            .insert({
-              message_id: messageResult.messageId,
-              bucket: CHAT_ATTACHMENT_BUCKET,
-              object_path: objectPath,
-              mime_type: input.file.type,
-              size_bytes: input.file.size,
-            });
+  const assetCommitError = await (async () => {
+    try {
+      if (isVoiceMessageSend) {
+        logVoiceSendDiagnostics('asset-link-commit:started', {
+          conversationId: input.conversationId,
+          messageId: messageResult.messageId,
+          objectPath,
+        });
+      }
 
-          return error ? new Error(error.message) : null;
-        })();
+      await insertCommittedMessageAssetAndLink({
+        assetKind: committedAssetKind,
+        client: supabase,
+        conversationId: input.conversationId,
+        durationMs: input.voiceDurationMs ?? null,
+        file: input.file,
+        messageId: messageResult.messageId,
+        objectPath,
+        schemaRequirementErrorMessage: isVoiceMessageSend
+          ? 'Voice message media schema is missing.'
+          : 'Chat media asset schema is missing.',
+        senderId: input.senderId,
+      });
 
-  if (attachmentError) {
+      if (isVoiceMessageSend) {
+        logVoiceSendDiagnostics('asset-link-commit:completed', {
+          conversationId: input.conversationId,
+          messageId: messageResult.messageId,
+        });
+      }
+
+      return null;
+    } catch (error) {
+      if (isVoiceMessageSend) {
+        logVoiceSendDiagnostics(
+          'asset-link-commit:failed',
+          {
+            conversationId: input.conversationId,
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
+            messageId: messageResult.messageId,
+          },
+          'error',
+        );
+      }
+
+      return error instanceof Error ? error : new Error('Unknown media asset error');
+    }
+  })();
+
+  if (assetCommitError) {
     if (isVoiceMessageSend) {
       logVoiceSendDiagnostics(
         'send:rollback-after-attachment-failure',
@@ -9717,7 +9861,7 @@ export async function sendMessageWithAttachment(input: {
           bucket: CHAT_ATTACHMENT_BUCKET,
           clientId: messageResult.clientId,
           conversationId: input.conversationId,
-          errorMessage: attachmentError.message,
+          errorMessage: assetCommitError.message,
           messageId: messageResult.messageId,
           objectPath,
         },
@@ -9726,7 +9870,7 @@ export async function sendMessageWithAttachment(input: {
     }
     await cleanupUploadedObject('attachment-metadata');
     await cleanupFailedMessageShell('attachment-metadata');
-    throw attachmentError;
+    throw assetCommitError;
   }
 
   await syncConversationSummaryProjectionByMessageId(
