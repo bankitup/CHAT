@@ -73,6 +73,72 @@ function buildThreadReactionSuppressionKey(input: {
   ].join(':');
 }
 
+function adjustThreadReactionRealtimeSuppression(input: {
+  conversationId: string;
+  delta: number;
+  direction: 'increment' | 'decrement';
+  emoji: string;
+  messageId: string;
+  userId: string;
+}) {
+  const suppressionKey = buildThreadReactionSuppressionKey(input);
+  const nextCount =
+    (threadReactionRealtimeSuppressions.get(suppressionKey) ?? 0) + input.delta;
+
+  if (nextCount > 0) {
+    threadReactionRealtimeSuppressions.set(suppressionKey, nextCount);
+    return;
+  }
+
+  threadReactionRealtimeSuppressions.delete(suppressionKey);
+}
+
+function patchThreadReactionSelection(input: {
+  conversationId: string;
+  emoji: string;
+  messageId: string;
+  selected: boolean;
+}) {
+  const currentState = getThreadConversationLiveState(input.conversationId);
+  const currentGroups = currentState.reactionsByMessage[input.messageId] ?? [];
+  const existingGroup = currentGroups.find(
+    (group) => group.emoji === input.emoji,
+  );
+
+  if (
+    (input.selected && existingGroup?.selectedByCurrentUser) ||
+    (!input.selected && !existingGroup?.selectedByCurrentUser)
+  ) {
+    return false;
+  }
+
+  const nextCount =
+    (existingGroup?.count ?? 0) + (input.selected ? 1 : -1);
+  const nextGroups = currentGroups
+    .filter((group) => group.emoji !== input.emoji)
+    .concat(
+      nextCount > 0
+        ? [
+            {
+              emoji: input.emoji,
+              count: nextCount,
+              selectedByCurrentUser: input.selected,
+            } satisfies MessageReactionGroup,
+          ]
+        : [],
+    );
+
+  threadLiveStateStore.set(input.conversationId, {
+    ...currentState,
+    reactionsByMessage: {
+      ...currentState.reactionsByMessage,
+      [input.messageId]: normalizeReactionGroups(nextGroups),
+    },
+  });
+
+  return true;
+}
+
 export function subscribeToThreadLiveState(
   conversationId: string,
   listener: () => void,
@@ -297,56 +363,120 @@ export function applyThreadReactionMutationResult(input: {
     return;
   }
 
-  const currentState = getThreadConversationLiveState(normalizedConversationId);
-  const currentGroups = currentState.reactionsByMessage[normalizedMessageId] ?? [];
-  const existingGroup = currentGroups.find(
-    (group) => group.emoji === normalizedEmoji,
-  );
+  const didChange = patchThreadReactionSelection({
+    conversationId: normalizedConversationId,
+    emoji: normalizedEmoji,
+    messageId: normalizedMessageId,
+    selected: input.selected,
+  });
 
-  if (
-    (input.selected && existingGroup?.selectedByCurrentUser) ||
-    (!input.selected && !existingGroup?.selectedByCurrentUser)
-  ) {
+  if (!didChange) {
     return;
   }
 
-  const nextCount =
-    (existingGroup?.count ?? 0) + (input.selected ? 1 : -1);
-  const nextGroups = currentGroups
-    .filter((group) => group.emoji !== normalizedEmoji)
-    .concat(
-      nextCount > 0
-        ? [
-            {
-              emoji: normalizedEmoji,
-              count: nextCount,
-              selectedByCurrentUser: input.selected,
-            } satisfies MessageReactionGroup,
-          ]
-        : [],
-    );
-
-  threadLiveStateStore.set(normalizedConversationId, {
-    ...currentState,
-    reactionsByMessage: {
-      ...currentState.reactionsByMessage,
-      [normalizedMessageId]: normalizeReactionGroups(nextGroups),
-    },
-  });
-
-  const suppressionKey = buildThreadReactionSuppressionKey({
+  adjustThreadReactionRealtimeSuppression({
     conversationId: normalizedConversationId,
+    delta: 1,
     direction: input.selected ? 'increment' : 'decrement',
     emoji: normalizedEmoji,
     messageId: normalizedMessageId,
     userId: normalizedUserId,
   });
-
-  threadReactionRealtimeSuppressions.set(
-    suppressionKey,
-    (threadReactionRealtimeSuppressions.get(suppressionKey) ?? 0) + 1,
-  );
   emitThreadLiveStateChange(normalizedConversationId);
+}
+
+export function rollbackThreadReactionOptimisticMutation(input: {
+  conversationId: string;
+  currentUserId: string;
+  emoji: string;
+  messageId: string;
+  optimisticSelected: boolean;
+}) {
+  const normalizedConversationId = input.conversationId.trim();
+  const normalizedMessageId = input.messageId.trim();
+  const normalizedEmoji = input.emoji.trim();
+  const normalizedUserId = input.currentUserId.trim();
+
+  if (
+    !normalizedConversationId ||
+    !normalizedMessageId ||
+    !normalizedEmoji ||
+    !normalizedUserId
+  ) {
+    return;
+  }
+
+  adjustThreadReactionRealtimeSuppression({
+    conversationId: normalizedConversationId,
+    delta: -1,
+    direction: input.optimisticSelected ? 'increment' : 'decrement',
+    emoji: normalizedEmoji,
+    messageId: normalizedMessageId,
+    userId: normalizedUserId,
+  });
+
+  const didChange = patchThreadReactionSelection({
+    conversationId: normalizedConversationId,
+    emoji: normalizedEmoji,
+    messageId: normalizedMessageId,
+    selected: !input.optimisticSelected,
+  });
+
+  if (didChange) {
+    emitThreadLiveStateChange(normalizedConversationId);
+  }
+}
+
+export function reconcileThreadReactionOptimisticMutation(input: {
+  conversationId: string;
+  currentUserId: string;
+  emoji: string;
+  messageId: string;
+  optimisticSelected: boolean;
+  selected: boolean;
+}) {
+  const normalizedConversationId = input.conversationId.trim();
+  const normalizedMessageId = input.messageId.trim();
+  const normalizedEmoji = input.emoji.trim();
+  const normalizedUserId = input.currentUserId.trim();
+
+  if (
+    !normalizedConversationId ||
+    !normalizedMessageId ||
+    !normalizedEmoji ||
+    !normalizedUserId ||
+    input.optimisticSelected === input.selected
+  ) {
+    return;
+  }
+
+  adjustThreadReactionRealtimeSuppression({
+    conversationId: normalizedConversationId,
+    delta: -1,
+    direction: input.optimisticSelected ? 'increment' : 'decrement',
+    emoji: normalizedEmoji,
+    messageId: normalizedMessageId,
+    userId: normalizedUserId,
+  });
+
+  const didChange = patchThreadReactionSelection({
+    conversationId: normalizedConversationId,
+    emoji: normalizedEmoji,
+    messageId: normalizedMessageId,
+    selected: input.selected,
+  });
+
+  if (didChange) {
+    adjustThreadReactionRealtimeSuppression({
+      conversationId: normalizedConversationId,
+      delta: 1,
+      direction: input.selected ? 'increment' : 'decrement',
+      emoji: normalizedEmoji,
+      messageId: normalizedMessageId,
+      userId: normalizedUserId,
+    });
+    emitThreadLiveStateChange(normalizedConversationId);
+  }
 }
 
 export function useThreadLiveReactionGroups(

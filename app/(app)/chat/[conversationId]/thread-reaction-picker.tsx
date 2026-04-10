@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import {
   applyThreadReactionMutationResult,
+  reconcileThreadReactionOptimisticMutation,
+  rollbackThreadReactionOptimisticMutation,
   useThreadLiveReactionGroups,
 } from '@/modules/messaging/realtime/thread-live-state-store';
 import type { MessageReactionGroup } from '@/modules/messaging/data/server';
@@ -67,6 +69,17 @@ export function ThreadReactionPicker({
                 return;
               }
 
+              const optimisticSelected =
+                !Boolean(currentReaction?.selectedByCurrentUser);
+
+              applyThreadReactionMutationResult({
+                conversationId,
+                currentUserId,
+                emoji,
+                messageId,
+                selected: optimisticSelected,
+              });
+              onReactionSelected?.();
               setPendingEmoji(emoji);
               try {
                 const formData = new FormData();
@@ -76,17 +89,24 @@ export function ThreadReactionPicker({
                 const result = await toggleReactionMutationAction(formData);
 
                 if (!result.ok) {
+                  rollbackThreadReactionOptimisticMutation({
+                    conversationId,
+                    currentUserId,
+                    emoji,
+                    messageId,
+                    optimisticSelected,
+                  });
                   return;
                 }
 
-                applyThreadReactionMutationResult({
+                reconcileThreadReactionOptimisticMutation({
                   conversationId,
                   currentUserId,
                   emoji: result.data.emoji,
                   messageId: result.data.messageId,
+                  optimisticSelected,
                   selected: result.data.selected,
                 });
-                onReactionSelected?.();
               } finally {
                 setPendingEmoji(null);
               }
