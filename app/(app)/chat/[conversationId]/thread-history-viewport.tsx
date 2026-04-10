@@ -4150,7 +4150,7 @@ function ThreadMessageRowComponent({
               <p className="message-edit-unavailable-copy">
                 {t.chat.encryptedEditUnavailable}
               </p>
-              <div className="message-edit-actions">
+            <div className="message-edit-actions">
                 <Link
                   className="pill message-edit-cancel"
                   href={buildChatHref({
@@ -4164,42 +4164,43 @@ function ThreadMessageRowComponent({
                 </Link>
               </div>
             </div>
-          ) : shouldRenderPendingEncryptedCommitShell ? (
-            <p className="message-body">{t.chat.encryptedMessage}</p>
           ) : isEncryptedDmTextMessage(message) ? (
             canAttemptEncryptedRender ? (
               <DmThreadClientSubtree
                 conversationId={conversationId}
                 {...threadClientDiagnostics}
                 fallback={
-                  <EncryptedHistoryUnavailableState
-                    accessState={
-                      isUnavailableHistoricalEncryptedHint
-                        ? encryptedHistoryFallbackAccessState
-                        : 'temporary-local-read-failure'
-                    }
-                    compact={
-                      compactHistoricalUnavailable &&
-                      isUnavailableHistoricalEncryptedHint
-                    }
-                    continuationCount={
-                      isUnavailableHistoricalEncryptedHint
-                        ? historicalUnavailableContinuationCount
-                        : 0
-                    }
-                    note={
-                      isUnavailableHistoricalEncryptedHint
-                        ? encryptedHistoryFallbackNote
-                        : null
-                    }
-                    title={
-                      isUnavailableHistoricalEncryptedHint
-                        ? compactHistoricalUnavailable
+                  isUnavailableHistoricalEncryptedHint ? (
+                    <EncryptedHistoryUnavailableState
+                      accessState={encryptedHistoryFallbackAccessState}
+                      compact={compactHistoricalUnavailable}
+                      continuationCount={historicalUnavailableContinuationCount}
+                      note={encryptedHistoryFallbackNote}
+                      title={
+                        compactHistoricalUnavailable
                           ? t.chat.encryptedMessage
                           : t.chat.olderEncryptedMessage
-                        : t.chat.encryptedMessageUnavailable
-                    }
-                  />
+                      }
+                    />
+                  ) : (
+                    <div
+                      data-dm-e2ee-access-state="temporary-local-read-failure"
+                      data-dm-e2ee-debug-bucket={
+                        process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP ===
+                        '1'
+                          ? encryptedHistoryHint.code
+                          : undefined
+                      }
+                    >
+                      <p className="message-body">{t.chat.encryptedMessage}</p>
+                      {process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP ===
+                      '1' ? (
+                        <p className="message-encryption-debug-label">
+                          {encryptedHistoryHint.code}
+                        </p>
+                      ) : null}
+                    </div>
+                  )
                 }
                 messageId={message.id}
                 surface="encrypted-dm-message-body"
@@ -4224,6 +4225,9 @@ function ThreadMessageRowComponent({
                   messageSenderId={message.sender_id}
                   policyUnavailableNoteLabel={
                     t.chat.encryptedHistoryPolicyBlockedNote
+                  }
+                  preferTemporaryResolvingState={
+                    isPendingEncryptedCommitTransition
                   }
                   retryLabel={t.chat.retryEncryptedAction}
                   setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}

@@ -34,6 +34,7 @@ type EncryptedDmMessageBodyProps = {
   historyUnavailableNoteLabel: string;
   messageSenderId: string | null;
   policyUnavailableNoteLabel: string;
+  preferTemporaryResolvingState?: boolean;
   retryLabel: string;
   setupUnavailableLabel: string;
   unavailableLabel: string;
@@ -87,6 +88,7 @@ export function EncryptedDmMessageBody({
   historyUnavailableNoteLabel,
   messageSenderId,
   policyUnavailableNoteLabel,
+  preferTemporaryResolvingState = false,
   retryLabel,
   setupUnavailableLabel,
   unavailableLabel,
@@ -433,6 +435,7 @@ export function EncryptedDmMessageBody({
     failureKind,
     diagnosticCode,
     fallbackLabel,
+    preferTemporaryResolvingState,
     setupUnavailableLabel,
     unavailableLabel,
   });
