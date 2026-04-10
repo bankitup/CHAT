@@ -4701,6 +4701,7 @@ main {
     0 12px 28px rgba(3, 7, 18, 0.32);
 }
 
+.home-dashboard-main-flow,
 .messenger-home-main-flow {
   width: 100%;
   min-width: 0;
@@ -5152,6 +5153,7 @@ main {
 }
 
 @media (min-width: 760px) {
+  .home-dashboard-main-flow,
   .messenger-home-main-flow {
     gap: 16px;
   }
