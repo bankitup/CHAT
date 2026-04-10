@@ -2994,11 +2994,15 @@ function ThreadMessageRow({
                       aria-haspopup="dialog"
                       aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
                       className="message-attachment-card message-attachment-card-button"
-                      onClick={() => {
+                      onClick={(event) => {
+                        event.stopPropagation();
                         onOpenImagePreview({
                           fileName: previewTitle,
                           signedUrl: attachment.signedUrl!,
                         });
+                      }}
+                      onPointerDown={(event) => {
+                        event.stopPropagation();
                       }}
                       type="button"
                     >
