@@ -3856,6 +3856,23 @@ function ThreadMessageRowComponent({
       ) : null}
     </>
   );
+  const temporaryEncryptedResolutionFallback = (
+    <div
+      data-dm-e2ee-access-state="temporary-local-read-failure"
+      data-dm-e2ee-debug-bucket={
+        process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+          ? encryptedHistoryHint.code
+          : undefined
+      }
+    >
+      <p className="message-body">{t.chat.encryptedMessage}</p>
+      {process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ? (
+        <p className="message-encryption-debug-label">
+          {encryptedHistoryHint.code}
+        </p>
+      ) : null}
+    </div>
+  );
 
   if (isEncryptedDmTextMessage(message)) {
     const encryptedInputIssues = getEncryptedDmServerRenderInputIssues({
@@ -4182,25 +4199,7 @@ function ThreadMessageRowComponent({
                           : t.chat.olderEncryptedMessage
                       }
                     />
-                  ) : (
-                    <div
-                      data-dm-e2ee-access-state="temporary-local-read-failure"
-                      data-dm-e2ee-debug-bucket={
-                        process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP ===
-                        '1'
-                          ? encryptedHistoryHint.code
-                          : undefined
-                      }
-                    >
-                      <p className="message-body">{t.chat.encryptedMessage}</p>
-                      {process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP ===
-                      '1' ? (
-                        <p className="message-encryption-debug-label">
-                          {encryptedHistoryHint.code}
-                        </p>
-                      ) : null}
-                    </div>
-                  )
+                  ) : temporaryEncryptedResolutionFallback
                 }
                 messageId={message.id}
                 surface="encrypted-dm-message-body"
@@ -4238,44 +4237,31 @@ function ThreadMessageRowComponent({
                 />
               </DmThreadClientSubtree>
             ) : (
-              <EncryptedHistoryUnavailableState
-                accessState={
-                  isUnavailableHistoricalEncryptedHint
-                    ? encryptedHistoryFallbackAccessState
-                    : 'temporary-local-read-failure'
-                }
-                compact={
-                  compactHistoricalUnavailable &&
-                  isUnavailableHistoricalEncryptedHint
-                }
-                continuationCount={
-                  isUnavailableHistoricalEncryptedHint
-                    ? historicalUnavailableContinuationCount
-                    : 0
-                }
-                debugBucket={
-                  process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-                    ? encryptedHistoryHint.code
-                    : null
-                }
-                debugLabel={
-                  process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-                    ? encryptedHistoryHint.code
-                    : null
-                }
-                note={
-                  isUnavailableHistoricalEncryptedHint
-                    ? encryptedHistoryFallbackNote
-                    : null
-                }
-                title={
-                  isUnavailableHistoricalEncryptedHint
-                    ? compactHistoricalUnavailable
+              isUnavailableHistoricalEncryptedHint ? (
+                <EncryptedHistoryUnavailableState
+                  accessState={encryptedHistoryFallbackAccessState}
+                  compact={compactHistoricalUnavailable}
+                  continuationCount={historicalUnavailableContinuationCount}
+                  debugBucket={
+                    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+                      ? encryptedHistoryHint.code
+                      : null
+                  }
+                  debugLabel={
+                    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+                      ? encryptedHistoryHint.code
+                      : null
+                  }
+                  note={encryptedHistoryFallbackNote}
+                  title={
+                    compactHistoricalUnavailable
                       ? t.chat.encryptedMessage
                       : t.chat.olderEncryptedMessage
-                    : t.chat.encryptedMessageUnavailable
-                }
-              />
+                  }
+                />
+              ) : (
+                temporaryEncryptedResolutionFallback
+              )
             )
           ) : message.kind === 'voice' ? (
             <div className="message-voice-stack">
