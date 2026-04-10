@@ -60,7 +60,9 @@ export function ThreadReactionPicker({
                 : 'reaction-toggle'
             }
             disabled={pendingEmoji === emoji}
-            onClick={async () => {
+            onClick={async (event) => {
+              event.stopPropagation();
+
               if (pendingEmoji) {
                 return;
               }

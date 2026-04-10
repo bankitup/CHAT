@@ -2818,6 +2818,7 @@ function ThreadMessageRowComponent({
 
       event.preventDefault();
       event.stopPropagation();
+      closeQuickActions();
       const previewTitle =
         event.currentTarget.dataset.previewTitle?.trim() || t.chat.photo;
       const signedUrl = event.currentTarget.dataset.previewUrl?.trim();
@@ -2831,7 +2832,7 @@ function ThreadMessageRowComponent({
         signedUrl,
       });
     },
-    [onOpenImagePreview, t.chat.photo],
+    [closeQuickActions, onOpenImagePreview, t.chat.photo],
   );
 
   const canInlineMessageMeta =
@@ -3011,7 +3012,10 @@ function ThreadMessageRowComponent({
                   aria-label={t.chat.reply}
                   className="message-quick-actions-action"
                   href={replyActionHref}
-                  onClick={closeQuickActions}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    closeQuickActions();
+                  }}
                   prefetch={false}
                   title={t.chat.reply}
                 >
