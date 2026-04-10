@@ -1709,6 +1709,39 @@ function getThreadMessageClientIdentity(
   return `${senderId}:${clientId}`;
 }
 
+function compareThreadMessages(
+  left: ConversationMessageRow,
+  right: ConversationMessageRow,
+) {
+  const leftSeq = normalizeComparableMessageSeq(left.seq);
+  const rightSeq = normalizeComparableMessageSeq(right.seq);
+
+  if (leftSeq !== null && rightSeq !== null && leftSeq !== rightSeq) {
+    return leftSeq - rightSeq;
+  }
+
+  const leftCreatedAt = parseSafeDate(left.created_at);
+  const rightCreatedAt = parseSafeDate(right.created_at);
+
+  if (leftCreatedAt && rightCreatedAt) {
+    const createdAtDelta = leftCreatedAt.getTime() - rightCreatedAt.getTime();
+
+    if (createdAtDelta !== 0) {
+      return createdAtDelta;
+    }
+  } else if (leftCreatedAt && !rightCreatedAt) {
+    return -1;
+  } else if (!leftCreatedAt && rightCreatedAt) {
+    return 1;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function sortThreadMessages(messages: ConversationMessageRow[]) {
+  return [...messages].sort(compareThreadMessages);
+}
+
 function findMatchingThreadMessageIndex(input: {
   message: ConversationMessageRow;
   messages: ConversationMessageRow[];
@@ -1756,7 +1789,9 @@ function dedupeThreadMessages(messages: ConversationMessageRow[]) {
 function createThreadHistoryState(
   snapshot: ThreadHistoryPageSnapshot,
 ): ThreadHistoryState {
-  const dedupedMessages = dedupeThreadMessages(snapshot.messages);
+  const dedupedMessages = sortThreadMessages(
+    dedupeThreadMessages(snapshot.messages),
+  );
 
   return {
     attachmentsByMessage: new Map(
@@ -1916,6 +1951,12 @@ function mergeThreadHistoryState(input: {
       : appendedMessages.length > 0
         ? [...nextMessages, ...appendedMessages]
         : nextMessages;
+  const orderedMessages = sortThreadMessages(
+    dedupeThreadMessages(mergedMessages),
+  );
+  const orderedMessagesById = new Map(
+    orderedMessages.map((message) => [message.id, message] as const),
+  );
 
   for (const profile of input.snapshot.senderProfiles) {
     nextSenderProfilesById.set(profile.userId, profile);
@@ -1985,10 +2026,10 @@ function mergeThreadHistoryState(input: {
         input.mode === 'prepend-older'
           ? input.state.loadedOlderPageCount + 1
           : input.state.loadedOlderPageCount,
-      messages: mergedMessages,
-      messagesById: nextMessagesById,
+      messages: orderedMessages,
+      messagesById: orderedMessagesById,
       oldestLoadedSeq: resolveOldestLoadedSeq(
-        mergedMessages,
+        orderedMessages,
         input.snapshot.oldestMessageSeq ?? input.state.oldestLoadedSeq,
       ),
       reactionsByMessage: nextReactionsByMessage,
@@ -2017,13 +2058,17 @@ function upsertLiveThreadMessage(input: {
     nextMessagesById.set(input.message.id, input.message);
     const nextMessages = [...input.state.messages];
     nextMessages[existingIndex] = input.message;
+    const orderedMessages = sortThreadMessages(nextMessages);
+    const orderedMessagesById = new Map(
+      orderedMessages.map((message) => [message.id, message] as const),
+    );
 
     return {
       ...input.state,
-      messages: nextMessages,
-      messagesById: nextMessagesById,
+      messages: orderedMessages,
+      messagesById: orderedMessagesById,
       oldestLoadedSeq: resolveOldestLoadedSeq(
-        nextMessages,
+        orderedMessages,
         input.state.oldestLoadedSeq,
       ),
     } satisfies ThreadHistoryState;
@@ -2045,13 +2090,17 @@ function upsertLiveThreadMessage(input: {
   }
 
   nextMessages.splice(insertionIndex, 0, input.message);
+  const orderedMessages = sortThreadMessages(nextMessages);
+  const orderedMessagesById = new Map(
+    orderedMessages.map((message) => [message.id, message] as const),
+  );
 
   return {
     ...input.state,
-    messages: nextMessages,
-    messagesById: nextMessagesById,
+    messages: orderedMessages,
+    messagesById: orderedMessagesById,
     oldestLoadedSeq: resolveOldestLoadedSeq(
-      nextMessages,
+      orderedMessages,
       input.state.oldestLoadedSeq,
     ),
   } satisfies ThreadHistoryState;

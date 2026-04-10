@@ -56,6 +56,38 @@ function formatVoiceDuration(durationMs: number | null) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function compareOptimisticThreadMessages(
+  left: OptimisticThreadMessagePayload,
+  right: OptimisticThreadMessagePayload,
+) {
+  const leftCreatedAt = new Date(left.createdAt);
+  const rightCreatedAt = new Date(right.createdAt);
+  const leftTimestamp = Number.isNaN(leftCreatedAt.getTime())
+    ? null
+    : leftCreatedAt.getTime();
+  const rightTimestamp = Number.isNaN(rightCreatedAt.getTime())
+    ? null
+    : rightCreatedAt.getTime();
+
+  if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
+    return leftTimestamp - rightTimestamp;
+  }
+
+  if (leftTimestamp !== null && rightTimestamp === null) {
+    return -1;
+  }
+
+  if (leftTimestamp === null && rightTimestamp !== null) {
+    return 1;
+  }
+
+  return left.clientId.localeCompare(right.clientId);
+}
+
+function sortOptimisticThreadMessages(items: OptimisticThreadMessagePayload[]) {
+  return [...items].sort(compareOptimisticThreadMessages);
+}
+
 export function OptimisticThreadMessages({
   confirmedClientIds,
   conversationId,
@@ -73,8 +105,10 @@ export function OptimisticThreadMessages({
   );
   const visibleItems = useMemo(
     () =>
-      items.filter(
-        (item) => item.status === 'failed' || !confirmedIds.has(item.clientId),
+      sortOptimisticThreadMessages(
+        items.filter(
+          (item) => item.status === 'failed' || !confirmedIds.has(item.clientId),
+        ),
       ),
     [confirmedIds, items],
   );
@@ -119,20 +153,20 @@ export function OptimisticThreadMessages({
         );
 
         if (detail.status === 'failed') {
-          return [...nextItems, detail];
+          return sortOptimisticThreadMessages([...nextItems, detail]);
         }
 
         if (confirmedIds.has(detail.clientId)) {
-          return nextItems;
+          return sortOptimisticThreadMessages(nextItems);
         }
 
-        return [
+        return sortOptimisticThreadMessages([
           ...nextItems,
           {
             ...detail,
             errorMessage: null,
           },
-        ];
+        ]);
       });
 
       window.requestAnimationFrame(() => {
