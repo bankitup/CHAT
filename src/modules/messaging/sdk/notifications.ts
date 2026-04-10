@@ -2,6 +2,10 @@ import type {
   PushSubscriptionPresenceInput,
   PushSubscriptionRecordInput,
 } from '@/modules/messaging/push/contract';
+import {
+  INBOX_SECTION_PREFERENCES_COOKIE,
+  parseInboxSectionPreferencesCookie,
+} from '@/modules/messaging/inbox/preferences';
 
 export type NotificationReadinessStatus =
   | 'unsupported'
@@ -231,6 +235,36 @@ function serializePushSubscription(
   };
 }
 
+function getClientCookieValue(name: string) {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const prefix = `${encodeURIComponent(name)}=`;
+
+  for (const entry of document.cookie.split(';')) {
+    const trimmed = entry.trim();
+
+    if (trimmed.startsWith(prefix)) {
+      const rawValue = trimmed.slice(prefix.length);
+
+      try {
+        return decodeURIComponent(rawValue);
+      } catch {
+        return rawValue;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getCurrentInboxPreviewModeFromCookie() {
+  return parseInboxSectionPreferencesCookie(
+    getClientCookieValue(INBOX_SECTION_PREFERENCES_COOKIE),
+  ).previewMode;
+}
+
 async function syncPushSubscriptionWithServer(subscription: PushSubscription) {
   const response = await fetch('/api/messaging/push-subscriptions', {
     method: 'POST',
@@ -301,6 +335,7 @@ export async function syncCurrentPushSubscriptionPresence(
       endpoint: subscription.endpoint,
       activeConversationId: input.activeInApp ? input.activeConversationId : null,
       activeInApp: input.activeInApp,
+      previewMode: input.previewMode ?? getCurrentInboxPreviewModeFromCookie(),
     } satisfies PushSubscriptionPresenceInput),
   });
 

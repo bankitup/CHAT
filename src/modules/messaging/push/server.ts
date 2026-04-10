@@ -1065,56 +1065,85 @@ export async function upsertPushSubscriptionForUser(input: {
   return mapStoredPushSubscription(data);
 }
 
-export async function updatePushSubscriptionPreviewModeForUser(input: {
-  previewMode: InboxPreviewDisplayMode;
-  userId: string;
-}) {
-  const client = await getPushSubscriptionWriteClient();
-  const { error } = await client
-    .from('push_subscriptions')
-    .update({
-      preview_mode: normalizePreviewPrivacyMode(input.previewMode),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('user_id', input.userId)
-    .is('disabled_at', null);
-
-  if (error && isMissingPushSubscriptionPreviewSchemaMessage(error.message)) {
-    return false;
-  }
-
-  if (error) {
-    throw error;
-  }
-
-  return true;
-}
-
 export async function updatePushSubscriptionPresenceForUser(input: {
   userId: string;
   presence: PushSubscriptionPresenceInput;
 }) {
   const client = await getPushSubscriptionWriteClient();
   const now = new Date().toISOString();
-  const { data, error } = await client
-    .from('push_subscriptions')
-    .update({
-      active_conversation_id: input.presence.activeInApp
-        ? input.presence.activeConversationId
-        : null,
-      presence_updated_at: input.presence.activeInApp ? now : null,
-    })
-    .eq('user_id', input.userId)
-    .eq('endpoint', input.presence.endpoint)
-    .is('disabled_at', null)
-    .select('id')
-    .maybeSingle<{ id: string }>();
+  const attempts = [
+    {
+      includePresence: true,
+      includePreview: input.presence.previewMode != null,
+    },
+    {
+      includePresence: true,
+      includePreview: false,
+    },
+    {
+      includePresence: false,
+      includePreview: input.presence.previewMode != null,
+    },
+  ].filter(
+    (attempt, index, attemptsList) =>
+      (attempt.includePresence || attempt.includePreview) &&
+      attemptsList.findIndex(
+        (candidate) =>
+          candidate.includePresence === attempt.includePresence &&
+          candidate.includePreview === attempt.includePreview,
+      ) === index,
+  );
+  let lastSchemaError: string | null = null;
 
-  if (error) {
+  for (const attempt of attempts) {
+    const payload: Record<string, string | null> = {
+      updated_at: now,
+    };
+
+    if (attempt.includePresence) {
+      payload.active_conversation_id = input.presence.activeInApp
+        ? input.presence.activeConversationId
+        : null;
+      payload.presence_updated_at = input.presence.activeInApp ? now : null;
+    }
+
+    if (attempt.includePreview) {
+      payload.preview_mode = normalizePreviewPrivacyMode(input.presence.previewMode);
+    }
+
+    const { data, error } = await client
+      .from('push_subscriptions')
+      .update(payload)
+      .eq('user_id', input.userId)
+      .eq('endpoint', input.presence.endpoint)
+      .is('disabled_at', null)
+      .select('id')
+      .maybeSingle<{ id: string }>();
+
+    if (!error) {
+      return Boolean(data?.id);
+    }
+
+    const missingPresence =
+      attempt.includePresence &&
+      isMissingPushSubscriptionPresenceSchemaMessage(error.message);
+    const missingPreview =
+      attempt.includePreview &&
+      isMissingPushSubscriptionPreviewSchemaMessage(error.message);
+
+    if (missingPresence || missingPreview) {
+      lastSchemaError = error.message;
+      continue;
+    }
+
     throw error;
   }
 
-  return Boolean(data?.id);
+  if (lastSchemaError) {
+    return false;
+  }
+
+  return false;
 }
 
 export async function getPushSubscriptionStateForUser(input: {
