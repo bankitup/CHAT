@@ -2567,6 +2567,7 @@ main {
 
 .app-shell-chat-route .chat-screen {
   min-height: 0;
+  overflow: visible;
 }
 
 .chat-entry-loading-screen {
@@ -6325,6 +6326,10 @@ main {
   overflow: hidden;
 }
 
+.app-shell-chat-route .chat-main {
+  overflow: visible;
+}
+
 .message-thread {
   display: grid;
   flex: 1 1 auto;
@@ -6332,10 +6337,10 @@ main {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding-top: 14px;
+  padding-top: 18px;
   padding-bottom: var(--chat-thread-bottom-reserve);
   padding-right: 1px;
-  scroll-padding-top: 28px;
+  scroll-padding-top: 34px;
   scroll-padding-bottom: var(--chat-thread-scroll-reserve);
 }
 
