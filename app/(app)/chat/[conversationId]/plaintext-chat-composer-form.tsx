@@ -10,6 +10,7 @@ import {
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
@@ -325,6 +326,7 @@ export function PlaintextChatComposerForm({
       enqueue({
         attachment: detail.attachment ?? null,
         attachmentLabel: detail.attachmentLabel ?? null,
+        attachmentPreviewKind: detail.attachmentPreviewKind ?? null,
         body: detail.body,
         clientId:
           detail.attemptKind === 'retry'
@@ -411,6 +413,9 @@ export function PlaintextChatComposerForm({
               image: t.chat.photo,
             },
           }),
+          attachmentPreviewKind: attachment
+            ? resolveInboxAttachmentPreviewKind(attachment.type, attachment.name)
+            : null,
           body,
           kind: attachment ? 'attachment' : 'text',
           payload: {

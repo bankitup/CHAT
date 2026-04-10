@@ -3,6 +3,7 @@
 import { useCallback, useRef } from 'react';
 import {
   emitOptimisticThreadMessage,
+  type OptimisticAttachmentPreviewKind,
   type OptimisticThreadMessagePayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
 
@@ -16,6 +17,7 @@ export type OutgoingQueueDisplayDraft = Pick<
   OptimisticThreadMessagePayload,
   | 'attachment'
   | 'attachmentLabel'
+  | 'attachmentPreviewKind'
   | 'body'
   | 'clientId'
   | 'createdAt'
@@ -27,6 +29,7 @@ export type OutgoingQueueDisplayDraft = Pick<
 export type OutgoingQueueItem<TPayload> = {
   attachment: File | null;
   attachmentLabel: string | null;
+  attachmentPreviewKind: OptimisticAttachmentPreviewKind | null;
   body: string;
   clientId: string;
   conversationId: string;
@@ -51,6 +54,7 @@ type UseConversationOutgoingQueueOptions<TPayload> = {
 
 type EnqueueOutgoingQueueItemInput<TPayload> = {
   attachmentLabel?: string | null;
+  attachmentPreviewKind?: OptimisticAttachmentPreviewKind | null;
   attachment?: File | null;
   body: string;
   clientId?: string | null;
@@ -65,6 +69,7 @@ function emitLifecycleUpdate(
   item: Pick<
     OptimisticThreadMessagePayload,
     | 'attachmentLabel'
+    | 'attachmentPreviewKind'
     | 'attachment'
     | 'body'
     | 'clientId'
@@ -152,6 +157,7 @@ export function useConversationOutgoingQueue<TPayload>({
       const queuedItem: OutgoingQueueItem<TPayload> = {
         attachment: input.attachment ?? null,
         attachmentLabel: input.attachmentLabel?.trim() || null,
+        attachmentPreviewKind: input.attachmentPreviewKind ?? null,
         body: input.body,
         clientId: input.clientId?.trim() || crypto.randomUUID(),
         conversationId,

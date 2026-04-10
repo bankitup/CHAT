@@ -7269,14 +7269,14 @@ main {
   overflow: hidden;
   width: min(100%, 18rem);
   contain: paint;
-  border: 1px solid rgba(221, 228, 238, 0.82);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(221, 228, 238, 0.56);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
   color: inherit;
   text-decoration: none;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    0 10px 24px rgba(17, 24, 39, 0.06);
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    0 8px 18px rgba(17, 24, 39, 0.045);
 }
 
 .message-photo-card-button {
@@ -7293,8 +7293,8 @@ main {
 }
 
 .message-bubble-own .message-photo-card {
-  border-color: rgba(31, 111, 235, 0.18);
-  background: rgba(245, 249, 255, 0.86);
+  border-color: rgba(31, 111, 235, 0.14);
+  background: rgba(246, 249, 255, 0.8);
 }
 
 .message-photo-card-unavailable {
@@ -7320,21 +7320,21 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px 9px;
+  gap: 6px;
+  padding: 5px 7px 6px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(247, 249, 252, 0.82));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(247, 249, 252, 0.72));
 }
 
 .message-photo-card-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
-  padding: 0 8px;
+  min-height: 18px;
+  padding: 0 6px;
   border-radius: 999px;
-  background: rgba(17, 24, 39, 0.08);
-  color: rgba(36, 45, 58, 0.86);
-  font-size: 0.66rem;
+  background: rgba(17, 24, 39, 0.065);
+  color: rgba(36, 45, 58, 0.82);
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1;
@@ -7342,10 +7342,14 @@ main {
 }
 
 .message-photo-card-meta {
+  min-width: 0;
+  overflow: hidden;
   color: rgba(91, 100, 112, 0.82);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   line-height: 1.18;
   text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message-attachment-card {
