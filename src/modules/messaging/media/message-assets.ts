@@ -111,14 +111,43 @@ export function resolveMessagingMessageKindForAsset(
   return kind === 'voice-note' ? 'voice' : 'attachment';
 }
 
-const IMAGE_ATTACHMENT_EXTENSIONS = new Set([
-  '.gif',
-  '.heic',
-  '.heif',
-  '.jpeg',
-  '.jpg',
-  '.png',
-  '.webp',
+const ATTACHMENT_EXTENSION_TO_MIME_TYPE = new Map<string, string>([
+  ['.aac', 'audio/aac'],
+  ['.csv', 'text/csv'],
+  ['.doc', 'application/msword'],
+  [
+    '.docx',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
+  ['.gif', 'image/gif'],
+  ['.heic', 'image/heic'],
+  ['.heif', 'image/heif'],
+  ['.jpeg', 'image/jpeg'],
+  ['.jpg', 'image/jpeg'],
+  ['.json', 'application/json'],
+  ['.m4a', 'audio/m4a'],
+  ['.markdown', 'text/markdown'],
+  ['.md', 'text/markdown'],
+  ['.mp3', 'audio/mp3'],
+  ['.ogg', 'audio/ogg'],
+  ['.pdf', 'application/pdf'],
+  ['.png', 'image/png'],
+  ['.ppt', 'application/vnd.ms-powerpoint'],
+  [
+    '.pptx',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ],
+  ['.rtf', 'application/rtf'],
+  ['.txt', 'text/plain'],
+  ['.wav', 'audio/wav'],
+  ['.webm', 'audio/webm'],
+  ['.webp', 'image/webp'],
+  ['.xls', 'application/vnd.ms-excel'],
+  [
+    '.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ],
+  ['.zip', 'application/zip'],
 ]);
 
 function getMessageAssetFileExtension(fileName: string | null | undefined) {
@@ -149,6 +178,24 @@ function isBinaryAttachmentMimeType(mimeType: string | null | undefined) {
   );
 }
 
+export function resolveMessagingAttachmentMimeType(input: {
+  fileName?: string | null;
+  mimeType: string | null | undefined;
+}) {
+  const normalizedMimeType = input.mimeType?.trim().toLowerCase() || '';
+
+  if (normalizedMimeType && !isBinaryAttachmentMimeType(normalizedMimeType)) {
+    return normalizedMimeType;
+  }
+
+  const fileExtension = getMessageAssetFileExtension(input.fileName);
+  const fallbackMimeType = fileExtension
+    ? ATTACHMENT_EXTENSION_TO_MIME_TYPE.get(fileExtension) ?? null
+    : null;
+
+  return fallbackMimeType ?? (normalizedMimeType || null);
+}
+
 export function resolveMessagingAssetKindFromMimeType(input: {
   fileName?: string | null;
   messageKind?: MessagingMessageKind | null;
@@ -158,7 +205,11 @@ export function resolveMessagingAssetKindFromMimeType(input: {
     return 'voice-note';
   }
 
-  const normalizedMimeType = input.mimeType?.trim().toLowerCase() || '';
+  const normalizedMimeType =
+    resolveMessagingAttachmentMimeType({
+      fileName: input.fileName,
+      mimeType: input.mimeType,
+    }) ?? '';
 
   if (normalizedMimeType.startsWith('image/')) {
     return 'image';
@@ -166,14 +217,6 @@ export function resolveMessagingAssetKindFromMimeType(input: {
 
   if (normalizedMimeType.startsWith('audio/')) {
     return 'audio';
-  }
-
-  if (isBinaryAttachmentMimeType(normalizedMimeType)) {
-    const fileExtension = getMessageAssetFileExtension(input.fileName);
-
-    if (fileExtension && IMAGE_ATTACHMENT_EXTENSIONS.has(fileExtension)) {
-      return 'image';
-    }
   }
 
   return 'file';

@@ -20,7 +20,10 @@ import {
   resolveInboxAttachmentPreviewKindFromMetadata,
   type InboxAttachmentPreviewKind,
 } from '@/modules/messaging/inbox/preview-kind';
-import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
+import {
+  resolveMessagingAssetKindFromMimeType,
+  resolveMessagingAttachmentMimeType,
+} from '@/modules/messaging/media/message-assets';
 import {
   canAddParticipantsToGroupConversation,
   canEditGroupConversationIdentity,
@@ -9454,6 +9457,7 @@ async function insertCommittedMessageAssetAndLink(input: {
   conversationId: string;
   durationMs: number | null;
   file: File;
+  mimeType: string | null;
   messageId: string;
   objectPath: string;
   schemaRequirementErrorMessage: string;
@@ -9470,7 +9474,7 @@ async function insertCommittedMessageAssetAndLink(input: {
       durationMs: normalizedDurationMs,
       fileName: sanitizeAttachmentFileName(input.file.name),
       messageId: input.messageId,
-      mimeType: input.file.type,
+      mimeType: input.mimeType,
       objectPath: input.objectPath,
       sizeBytes: input.file.size,
     });
@@ -9484,7 +9488,7 @@ async function insertCommittedMessageAssetAndLink(input: {
       duration_ms: normalizedDurationMs,
       file_name: sanitizeAttachmentFileName(input.file.name),
       kind: input.assetKind,
-      mime_type: input.file.type,
+      mime_type: input.mimeType,
       size_bytes: input.file.size,
       source: 'supabase-storage',
       storage_bucket: CHAT_ATTACHMENT_BUCKET,
@@ -9626,11 +9630,17 @@ export async function sendMessageWithAttachment(input: {
     (serviceSupabase ?? supabase) as Awaited<
       ReturnType<typeof createSupabaseServerClient>
     >;
-  const attachmentMessageKind = getAttachmentMessageKind(input.file.type);
+  const effectiveAttachmentMimeType = resolveMessagingAttachmentMimeType({
+    fileName: input.file.name,
+    mimeType: input.file.type,
+  });
+  const attachmentMessageKind = getAttachmentMessageKind(
+    effectiveAttachmentMimeType,
+  );
   const committedAssetKind = resolveMessagingAssetKindFromMimeType({
     fileName: input.file.name,
     messageKind: attachmentMessageKind,
-    mimeType: input.file.type,
+    mimeType: effectiveAttachmentMimeType,
   });
   const isVoiceMessageSend = attachmentMessageKind === 'voice';
   const storageFolder =
@@ -9765,7 +9775,7 @@ export async function sendMessageWithAttachment(input: {
     .from(CHAT_ATTACHMENT_BUCKET)
     .upload(objectPath, fileBuffer, {
       cacheControl: '3600',
-      contentType: input.file.type,
+      contentType: effectiveAttachmentMimeType ?? undefined,
       upsert: false,
     });
 
@@ -9833,6 +9843,7 @@ export async function sendMessageWithAttachment(input: {
         conversationId: input.conversationId,
         durationMs: input.voiceDurationMs ?? null,
         file: input.file,
+        mimeType: effectiveAttachmentMimeType,
         messageId: messageResult.messageId,
         objectPath,
         schemaRequirementErrorMessage: isVoiceMessageSend

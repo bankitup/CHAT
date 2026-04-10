@@ -733,6 +733,30 @@ function getEncryptedDmErrorMessage(
   });
 }
 
+function getEncryptedComposerQueueErrorMessage(
+  error: unknown,
+  t: ReturnType<typeof getTranslations>,
+) {
+  if (error instanceof Error && error.message === 'dm_e2ee_unsupported_browser') {
+    return t.chat.encryptionUnavailableHere;
+  }
+
+  const code =
+    error instanceof Error && 'code' in error
+      ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
+      : null;
+
+  if (code) {
+    return getEncryptedDmErrorMessage(error, t);
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return getEncryptedDmErrorMessage(error, t);
+}
+
 function clearReplyTargetFromCurrentUrl() {
   if (typeof window === 'undefined') {
     return;
@@ -890,7 +914,7 @@ export function EncryptedDmComposerForm({
     );
   const { enqueue } = useConversationOutgoingQueue({
     conversationId,
-    onItemFailed: ({ error }) => {
+    onItemFailed: ({ error, errorMessage }) => {
       const nextCode =
         error instanceof Error && 'code' in error
           ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
@@ -898,7 +922,7 @@ export function EncryptedDmComposerForm({
             ? 'dm_e2ee_unsupported_browser'
             : null;
       setErrorCode(nextCode);
-      setErrorMessage(getEncryptedDmErrorMessage(error, t));
+      setErrorMessage(errorMessage);
       setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
     },
     onItemSent: () => {
@@ -1049,7 +1073,7 @@ export function EncryptedDmComposerForm({
         }
       }
     },
-    resolveErrorMessage: (error) => getEncryptedDmErrorMessage(error, t),
+    resolveErrorMessage: (error) => getEncryptedComposerQueueErrorMessage(error, t),
   });
 
   const getActiveRecipientBundleSoftFailureError = useCallback(() => {
