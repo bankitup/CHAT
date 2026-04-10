@@ -36,6 +36,24 @@ type NewChatSheetProps = {
 
 export type NewChatMode = 'dm' | 'group';
 
+function filterNewChatUsers(
+  users: NewChatSheetUser[],
+  normalizedPeopleSearch: string,
+) {
+  if (!normalizedPeopleSearch) {
+    return users;
+  }
+
+  return users.filter((user) => {
+    const haystack = [user.label, user.displayName, user.statusText]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(normalizedPeopleSearch);
+  });
+}
+
 export function NewChatSheet({
   availableDmUsers,
   availableGroupUsers,
@@ -56,35 +74,15 @@ export function NewChatSheet({
   const [groupTitle, setGroupTitle] = useState('');
   const deferredPeopleSearch = useDeferredValue(peopleSearch);
   const normalizedPeopleSearch = deferredPeopleSearch.trim().toLowerCase();
-
-  const filteredDmUsers = useMemo(
-    () =>
-      !normalizedPeopleSearch
-        ? availableDmUsers
-        : availableDmUsers.filter((user) => {
-            const haystack = [user.label, user.displayName, user.statusText]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase();
-
-            return haystack.includes(normalizedPeopleSearch);
-          }),
-    [availableDmUsers, normalizedPeopleSearch],
+  const isDmMode = mode === 'dm';
+  const activeUsers = isDmMode ? availableDmUsers : availableGroupUsers;
+  const filteredUsers = useMemo(
+    () => filterNewChatUsers(activeUsers, normalizedPeopleSearch),
+    [activeUsers, normalizedPeopleSearch],
   );
-  const filteredGroupUsers = useMemo(
-    () =>
-      !normalizedPeopleSearch
-        ? availableGroupUsers
-        : availableGroupUsers.filter((user) => {
-            const haystack = [user.label, user.displayName, user.statusText]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase();
-
-            return haystack.includes(normalizedPeopleSearch);
-          }),
-    [availableGroupUsers, normalizedPeopleSearch],
-  );
+  const filteredDmUsers = isDmMode ? filteredUsers : availableDmUsers;
+  const filteredGroupUsers = isDmMode ? availableGroupUsers : filteredUsers;
+  const visibleUserCount = filteredUsers.length;
 
   const selectedDmUser = useMemo(
     () =>
@@ -128,11 +126,14 @@ export function NewChatSheet({
           </div>
           <button
             aria-label={t.inbox.create.closeAria}
-            className="pill inbox-create-close"
+            className="inbox-create-close"
             onClick={onClose}
             type="button"
           >
-            {t.inbox.create.close}
+            <span aria-hidden="true" className="inbox-create-close-glyph">
+              ×
+            </span>
+            <span className="sr-only">{t.inbox.create.close}</span>
           </button>
         </div>
 
@@ -191,7 +192,7 @@ export function NewChatSheet({
             </div>
             {hasAnyDmUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
-                {filteredDmUsers.length}
+                {visibleUserCount}
               </span>
             ) : null}
           </div>
@@ -218,8 +219,7 @@ export function NewChatSheet({
               {t.inbox.create.noMatches}
             </p>
           ) : (
-            <div className="inbox-create-list-frame">
-              <div className="inbox-compose-user-list inbox-create-user-list">
+            <div className="inbox-compose-user-list inbox-create-user-list">
               {filteredDmUsers.map((availableUser) => {
                 const isSelected = availableUser.userId === selectedDmUserId;
 
@@ -261,14 +261,15 @@ export function NewChatSheet({
                             : 'inbox-create-option-indicator'
                         }
                       />
-                      <span className="inbox-create-option-state">
-                        {isSelected ? t.inbox.create.selected : t.inbox.create.choose}
-                      </span>
+                      {isSelected ? (
+                        <span className="inbox-create-option-state">
+                          {t.inbox.create.selected}
+                        </span>
+                      ) : null}
                     </div>
                   </button>
                 );
               })}
-              </div>
             </div>
           )}
 
@@ -305,7 +306,7 @@ export function NewChatSheet({
             </div>
             {hasAnyUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
-                {filteredGroupUsers.length}
+                {visibleUserCount}
               </span>
             ) : null}
           </div>
@@ -345,8 +346,7 @@ export function NewChatSheet({
               {t.inbox.create.noMatches}
             </p>
           ) : (
-              <div className="inbox-create-list-frame">
-                <div className="inbox-compose-user-list inbox-create-user-list">
+              <div className="inbox-compose-user-list inbox-create-user-list">
                 {filteredGroupUsers.map((availableUser) => {
                   const isSelected = selectedGroupUserIds.includes(
                     availableUser.userId,
@@ -390,14 +390,15 @@ export function NewChatSheet({
                               : 'inbox-create-option-indicator'
                           }
                         />
-                        <span className="inbox-create-option-state">
-                          {isSelected ? t.inbox.create.selected : t.inbox.create.add}
-                        </span>
+                        {isSelected ? (
+                          <span className="inbox-create-option-state">
+                            {t.inbox.create.selected}
+                          </span>
+                        ) : null}
                       </div>
                     </button>
                   );
                 })}
-                </div>
               </div>
             )}
 
