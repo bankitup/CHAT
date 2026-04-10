@@ -41,36 +41,40 @@ export async function GET(
     return new Response('Not found', { status: 404 });
   }
 
-  const resolvedTarget = await resolveConversationAttachmentContentTarget({
+  const resolved = await resolveConversationAttachmentContentTarget({
     attachmentId,
     conversationId,
     messageId,
     userId: user.id,
   });
 
-  if (!resolvedTarget) {
+  if (!resolved) {
     return new Response('Not found', { status: 404 });
   }
 
-  const serviceSupabase = createSupabaseServiceRoleClient();
-  const storageClient = serviceSupabase ?? supabase;
+  const storageClient = createSupabaseServiceRoleClient() ?? supabase;
   const download = await storageClient.storage
-    .from(resolvedTarget.bucket)
-    .download(resolvedTarget.objectPath);
+    .from(resolved.bucket)
+    .download(resolved.objectPath);
 
   if (download.error || !download.data) {
     return new Response('Not found', { status: 404 });
   }
 
   const body = await download.data.arrayBuffer();
-  const headers = new Headers({
-    'Cache-Control': 'private, no-store',
-    'Content-Disposition': buildInlineContentDisposition(resolvedTarget.fileName),
-    'X-Content-Type-Options': 'nosniff',
-  });
+  const headers = new Headers();
+  headers.set('Cache-Control', 'private, no-store');
+  headers.set('Vary', 'Cookie');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set(
+    'Content-Disposition',
+    buildInlineContentDisposition(resolved.fileName),
+  );
 
-  if (download.data.type || resolvedTarget.mimeType) {
-    headers.set('Content-Type', download.data.type || resolvedTarget.mimeType || 'application/octet-stream');
+  const contentType = download.data.type || resolved.mimeType || null;
+
+  if (contentType) {
+    headers.set('Content-Type', contentType);
   }
 
   headers.set('Content-Length', String(body.byteLength));
