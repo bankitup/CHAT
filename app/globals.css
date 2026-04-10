@@ -5479,8 +5479,14 @@ main {
 }
 
 .profile-inline-edit {
-  width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  min-height: 52px;
   padding-inline: 0;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .profile-inline-save {
