@@ -217,6 +217,7 @@ Assumptions:
 - Current file sends persist committed asset rows here with `kind = 'file'`.
 - Current non-voice audio attachment sends persist committed asset rows here with `kind = 'audio'`.
 - `storage_bucket` and `storage_object_path` must point at the real media object in Supabase Storage when `source = 'supabase-storage'`.
+- Current user-facing chat delivery supports only `source = 'supabase-storage'`. `source = 'external-url'` may remain in the broader schema contract, but chat history and signed-URL resolution now treat it as unsupported instead of returning raw direct URLs.
 - `duration_ms` is the committed voice-note duration used by thread UI; inbox/activity must not load the blob to derive it.
 - This table is the forward path for committed media work beyond legacy compatibility.
 
@@ -252,6 +253,7 @@ Assumptions:
 - The older `message-attachments` bucket name should now be treated as stale legacy naming, not an active runtime target.
 - Current voice/media debugging should verify the actual upload target against `message-media`.
 - Media objects in this bucket are expected to stay private. Current app reads them through membership-checked signed URL resolution, not permanent public URLs.
+- Chat attachment read APIs no longer fall back to raw `external_url` delivery for `message_assets`; user-facing media access is expected to flow through the signed-URL route only.
 
 ## `public.message_reactions`
 
