@@ -49,6 +49,15 @@ function getGenericConversationPreviewByKind(
   return labels.attachment;
 }
 
+function shouldUseMessageBodyPreview(conversation: {
+  latestMessageKind: string | null;
+}) {
+  return (
+    conversation.latestMessageKind === null ||
+    conversation.latestMessageKind === 'text'
+  );
+}
+
 export function getInboxPreviewText(
   conversation: {
     lastMessageAt: string | null;
@@ -77,7 +86,7 @@ export function getInboxPreviewText(
 
   const body = conversation.latestMessageBody?.trim();
 
-  if (body) {
+  if (body && shouldUseMessageBodyPreview(conversation)) {
     return body;
   }
 
@@ -110,7 +119,10 @@ export function getMaskedInboxPreviewText(
       : labels.encryptedMessage;
   }
 
-  if (conversation.latestMessageBody?.trim()) {
+  if (
+    conversation.latestMessageBody?.trim() &&
+    shouldUseMessageBodyPreview(conversation)
+  ) {
     return labels.newMessage;
   }
 

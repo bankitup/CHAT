@@ -17,6 +17,7 @@ import {
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import {
   resolveInboxAttachmentPreviewKind,
+  resolveInboxAttachmentPreviewKindFromAsset,
   type InboxAttachmentPreviewKind,
 } from '@/modules/messaging/inbox/preview-kind';
 import {
@@ -404,6 +405,21 @@ type MessageAttachmentPreviewRow = {
   created_at: string | null;
   message_id: string;
   mime_type: string | null;
+};
+
+type MessageAssetAttachmentPreviewRow = {
+  created_at: string | null;
+  message_assets:
+    | {
+        kind: 'audio' | 'file' | 'image' | 'voice-note';
+        mime_type?: string | null;
+      }
+    | Array<{
+        kind: 'audio' | 'file' | 'image' | 'voice-note';
+        mime_type?: string | null;
+      }>
+    | null;
+  message_id: string;
 };
 
 export type MessageAttachment = {
@@ -7191,6 +7207,63 @@ async function getInboxAttachmentPreviewKindsByMessageId(
     return new Map<string, InboxAttachmentPreviewKind>();
   }
 
+  const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
+  const loadAssetRows = async (client: MessageAttachmentLookupClient) =>
+    client
+      .from('message_asset_links')
+      .select('message_id, created_at, message_assets!inner(kind, mime_type)')
+      .in('message_id', uniqueMessageIds)
+      .order('created_at', { ascending: true });
+  const shouldIgnoreAssetPreviewLookupError = (message: string) =>
+    isMissingRelationErrorMessage(message, 'message_asset_links') ||
+    isMissingRelationErrorMessage(message, 'message_assets');
+  let assetResponse = await loadAssetRows(supabase);
+
+  if (assetResponse.error && !shouldIgnoreAssetPreviewLookupError(assetResponse.error.message)) {
+    const serviceSupabase = createSupabaseServiceRoleClient();
+
+    if (!serviceSupabase) {
+      throw new Error(assetResponse.error.message);
+    }
+
+    const serviceAssetResponse = await loadAssetRows(
+      serviceSupabase as MessageAttachmentLookupClient,
+    );
+
+    if (
+      serviceAssetResponse.error &&
+      !shouldIgnoreAssetPreviewLookupError(serviceAssetResponse.error.message)
+    ) {
+      throw new Error(serviceAssetResponse.error.message);
+    }
+
+    assetResponse = serviceAssetResponse;
+  }
+
+  if (!assetResponse.error) {
+    const assetRows = (assetResponse.data ?? []) as MessageAssetAttachmentPreviewRow[];
+
+    for (const row of assetRows) {
+      if (previewKindsByMessageId.has(row.message_id)) {
+        continue;
+      }
+
+      const asset = normalizeJoinedRecord(row.message_assets);
+
+      if (!asset) {
+        continue;
+      }
+
+      previewKindsByMessageId.set(
+        row.message_id,
+        resolveInboxAttachmentPreviewKindFromAsset({
+          kind: asset.kind,
+          mimeType: asset.mime_type ?? null,
+        }),
+      );
+    }
+  }
+
   const loadRows = async (client: MessageAttachmentLookupClient) => {
     return client
       .from('message_attachments')
@@ -7233,7 +7306,6 @@ async function getInboxAttachmentPreviewKindsByMessageId(
   }
 
   const rows = (response.data ?? []) as MessageAttachmentPreviewRow[];
-  const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
 
   for (const row of rows) {
     if (previewKindsByMessageId.has(row.message_id)) {
