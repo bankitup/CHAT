@@ -122,6 +122,20 @@ function areIdentityAvatarPropsEqual(
   );
 }
 
+function isAvatarRenderStateCurrent(input: {
+  avatarPath: string | null;
+  avatarSourceKey: string | null;
+  state: {
+    path: string | null;
+    sourceKey: string | null;
+  };
+}) {
+  return (
+    input.state.path === input.avatarPath &&
+    input.state.sourceKey === input.avatarSourceKey
+  );
+}
+
 function IdentityAvatarBase({
   identity,
   label,
@@ -139,6 +153,8 @@ function IdentityAvatarBase({
     : null;
   const avatarSourceKey = getAvatarSourceKey(avatarPath);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentAvatarPathRef = useRef<string | null>(avatarPath);
+  const currentAvatarSourceKeyRef = useRef<string | null>(avatarSourceKey);
   const hasWarmAvatarSource = Boolean(
     avatarPath && avatarSourceKey && WARMED_AVATAR_SOURCE_KEYS.has(avatarSourceKey),
   );
@@ -149,30 +165,29 @@ function IdentityAvatarBase({
     sourceKey: avatarSourceKey,
     retryAttempt: 0,
   }));
-  const stateMatchesCurrentSourceKey =
-    avatarRenderState.sourceKey === avatarSourceKey;
+  const stateMatchesCurrentAvatarPath = isAvatarRenderStateCurrent({
+    avatarPath,
+    avatarSourceKey,
+    state: avatarRenderState,
+  });
   const resolvedLoadedAvatarPath =
-    stateMatchesCurrentSourceKey && avatarRenderState.loadedAvatarPath
+    stateMatchesCurrentAvatarPath && avatarRenderState.loadedAvatarPath
       ? avatarRenderState.loadedAvatarPath
       : hasWarmAvatarSource
         ? avatarPath
         : null;
   const retryAttempt =
-    stateMatchesCurrentSourceKey ? avatarRenderState.retryAttempt : 0;
+    stateMatchesCurrentAvatarPath ? avatarRenderState.retryAttempt : 0;
   const hasPermanentImageError =
-    stateMatchesCurrentSourceKey
+    stateMatchesCurrentAvatarPath
       ? avatarRenderState.hasPermanentImageError
       : false;
-  const stableAvatarPath =
-    resolvedLoadedAvatarPath && avatarSourceKey
-      ? resolvedLoadedAvatarPath
-      : avatarPath;
   const effectiveAvatarPath = useMemo(
     () =>
-      stableAvatarPath
-        ? withAvatarRetryParam(stableAvatarPath, retryAttempt)
+      avatarPath
+        ? withAvatarRetryParam(avatarPath, retryAttempt)
         : null,
-    [retryAttempt, stableAvatarPath],
+    [avatarPath, retryAttempt],
   );
   const isImageLoaded = Boolean(
     effectiveAvatarPath &&
@@ -191,6 +206,11 @@ function IdentityAvatarBase({
       }
     };
   }, []);
+
+  useEffect(() => {
+    currentAvatarPathRef.current = avatarPath;
+    currentAvatarSourceKeyRef.current = avatarSourceKey;
+  }, [avatarPath, avatarSourceKey]);
 
   useEffect(() => {
     if (!diagnosticsEnabled) {
@@ -267,7 +287,7 @@ function IdentityAvatarBase({
             setAvatarRenderState((currentState) => ({
               ...currentState,
               loadedAvatarPath: null,
-              path: stableAvatarPath,
+              path: avatarPath,
               sourceKey: avatarSourceKey,
             }));
 
@@ -277,14 +297,22 @@ function IdentityAvatarBase({
               }
 
               retryTimeoutRef.current = setTimeout(() => {
+                const currentAvatarPath = currentAvatarPathRef.current;
+                const currentAvatarSourceKey =
+                  currentAvatarSourceKeyRef.current;
+
                 setAvatarRenderState((currentState) => ({
                   hasPermanentImageError: false,
                   loadedAvatarPath: null,
-                  path: stableAvatarPath,
-                  sourceKey: avatarSourceKey,
-                  retryAttempt: stateMatchesCurrentSourceKey
+                  path: currentAvatarPath,
+                  sourceKey: currentAvatarSourceKey,
+                  retryAttempt: isAvatarRenderStateCurrent({
+                    avatarPath: currentAvatarPath,
+                    avatarSourceKey: currentAvatarSourceKey,
+                    state: currentState,
+                  })
                     ? currentState.retryAttempt + 1
-                    : 1,
+                    : 0,
                 }));
                 retryTimeoutRef.current = null;
               }, AVATAR_RETRY_DELAY_MS);
@@ -294,7 +322,7 @@ function IdentityAvatarBase({
             setAvatarRenderState({
               hasPermanentImageError: true,
               loadedAvatarPath: null,
-              path: stableAvatarPath,
+              path: avatarPath,
               sourceKey: avatarSourceKey,
               retryAttempt,
             });
@@ -323,7 +351,7 @@ function IdentityAvatarBase({
             setAvatarRenderState({
               hasPermanentImageError: false,
               loadedAvatarPath: effectiveAvatarPath,
-              path: stableAvatarPath,
+              path: avatarPath,
               sourceKey: avatarSourceKey,
               retryAttempt,
             });
