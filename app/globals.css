@@ -7170,9 +7170,13 @@ main {
   appearance: none;
   -webkit-appearance: none;
   padding: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
   font: inherit;
   text-align: left;
   cursor: zoom-in;
+  touch-action: manipulation;
 }
 
 .message-bubble-own .message-photo-card {

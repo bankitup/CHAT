@@ -213,6 +213,7 @@ type VoiceMessageRenderState =
   | 'unavailable';
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
+const IMAGE_PREVIEW_CLICK_SUPPRESSION_MS = 420;
 const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
   'local-encrypted-send:retry-missing-envelope';
 const ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON =
@@ -2450,6 +2451,7 @@ function ThreadMessageRowComponent({
     typeof setTimeout
   > | null>(null);
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imagePreviewClickSuppressedUntilRef = useRef(0);
   const longPressPointerRef = useRef<{
     pointerId: number;
     startX: number;
@@ -2748,6 +2750,8 @@ function ThreadMessageRowComponent({
         startY: event.clientY,
       };
       longPressTimeoutRef.current = setTimeout(() => {
+        imagePreviewClickSuppressedUntilRef.current =
+          Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
         setIsQuickActionsOpen(true);
         longPressTimeoutRef.current = null;
       }, 280);
@@ -2796,6 +2800,8 @@ function ThreadMessageRowComponent({
       }
 
       event.preventDefault();
+      imagePreviewClickSuppressedUntilRef.current =
+        Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
       clearLongPress();
       setIsQuickActionsOpen(true);
     },
@@ -2803,6 +2809,13 @@ function ThreadMessageRowComponent({
   );
   const handleImageAttachmentPreview = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (Date.now() < imagePreviewClickSuppressedUntilRef.current) {
+        imagePreviewClickSuppressedUntilRef.current = 0;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       event.preventDefault();
       event.stopPropagation();
       const previewTitle =
