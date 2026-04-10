@@ -1947,17 +1947,33 @@ function getEncryptedHistoryHintForMessage(input: {
   envelope: StoredDmE2eeEnvelope | null;
   hint: EncryptedDmServerHistoryHint | null;
   message: ConversationMessageRow;
-}) {
+}): EncryptedDmServerHistoryHint {
+  if (input.envelope) {
+    const baseHint: EncryptedDmServerHistoryHint =
+      input.hint ?? {
+        code: 'envelope-present',
+        committedHistoryState: 'present',
+        currentDeviceAvailability: 'envelope-present',
+        recoveryDisposition: 'already-readable',
+        activeDeviceRecordId: null,
+        messageCreatedAt: input.message.created_at ?? null,
+        viewerJoinedAt: null,
+      };
+
+    return {
+      ...baseHint,
+      code: 'envelope-present',
+      currentDeviceAvailability: 'envelope-present',
+      recoveryDisposition: 'already-readable',
+    };
+  }
+
   return (
     input.hint ?? {
-      code: input.envelope ? 'envelope-present' : 'missing-envelope',
+      code: 'missing-envelope',
       committedHistoryState: 'present',
-      currentDeviceAvailability: input.envelope
-        ? 'envelope-present'
-        : 'missing-envelope',
-      recoveryDisposition: input.envelope
-        ? 'already-readable'
-        : 'not-supported-v1',
+      currentDeviceAvailability: 'missing-envelope',
+      recoveryDisposition: 'not-supported-v1',
       activeDeviceRecordId: null,
       messageCreatedAt: input.message.created_at ?? null,
       viewerJoinedAt: null,
