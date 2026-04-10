@@ -201,6 +201,25 @@ type TimelineItem =
   | { key: string; label: string; type: 'separator' | 'unread' }
   | { key: string; message: ConversationMessageRow; type: 'message' };
 
+type TimelineLabels = {
+  earlier: string;
+  today: string;
+  unreadMessages: string;
+  yesterday: string;
+};
+
+type TimelineRenderItem =
+  | { key: string; label: string; type: 'separator' | 'unread' }
+  | {
+      compactHistoricalUnavailable: boolean;
+      historicalUnavailableContinuationCount: number;
+      isClusteredWithNext: boolean;
+      isClusteredWithPrevious: boolean;
+      key: string;
+      message: ConversationMessageRow;
+      type: 'message';
+    };
+
 type EncryptedUnavailableRunMeta = {
   continuationCount: number;
   isContinuation: boolean;
@@ -237,6 +256,12 @@ const THREAD_MOUNT_RECOVERY_REASON = 'thread-mount-recovery';
 const EMPTY_MESSAGE_ATTACHMENTS: MessageAttachment[] = [];
 const EMPTY_MESSAGE_REACTIONS: MessageReactionGroup[] = [];
 const threadHistorySessionCache = new Map<string, ThreadHistorySessionCacheEntry>();
+const threadTimeFormatterByLanguage = new Map<AppLanguage, Intl.DateTimeFormat>();
+const threadShortDateFormatterByLanguage = new Map<AppLanguage, Intl.DateTimeFormat>();
+const threadShortDateWithYearFormatterByLanguage = new Map<
+  AppLanguage,
+  Intl.DateTimeFormat
+>();
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -314,7 +339,7 @@ function getCalendarDayKey(value: string | null) {
 function formatMessageTimestamp(
   value: string | null,
   language: AppLanguage,
-  t: ReturnType<typeof getTranslations>,
+  yesterdayLabel: string,
 ) {
   const parsedDate = parseSafeDate(value);
 
@@ -333,33 +358,29 @@ function formatMessageTimestamp(
   );
 
   if (compareDate.getTime() === today.getTime()) {
-    return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(parsedDate);
+    return getThreadTimeFormatter(language).format(parsedDate);
   }
 
   if (compareDate.getTime() === yesterday.getTime()) {
-    return t.chat.yesterday;
+    return yesterdayLabel;
   }
 
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    month: 'short',
-    day: 'numeric',
-    year:
-      parsedDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  }).format(parsedDate);
+  return (
+    parsedDate.getFullYear() === now.getFullYear()
+      ? getThreadShortDateFormatter(language)
+      : getThreadShortDateWithYearFormatter(language)
+  ).format(parsedDate);
 }
 
 function formatDaySeparatorLabel(
   value: string | null,
   language: AppLanguage,
-  t: ReturnType<typeof getTranslations>,
+  labels: Pick<TimelineLabels, 'earlier' | 'today' | 'yesterday'>,
 ) {
   const targetDate = parseSafeDate(value);
 
   if (!targetDate) {
-    return t.chat.earlier;
+    return labels.earlier;
   }
 
   const now = new Date();
@@ -373,19 +394,64 @@ function formatDaySeparatorLabel(
   );
 
   if (compareDate.getTime() === today.getTime()) {
-    return t.chat.today;
+    return labels.today;
   }
 
   if (compareDate.getTime() === yesterday.getTime()) {
-    return t.chat.yesterday;
+    return labels.yesterday;
   }
 
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+  return (
+    targetDate.getFullYear() === now.getFullYear()
+      ? getThreadShortDateFormatter(language)
+      : getThreadShortDateWithYearFormatter(language)
+  ).format(targetDate);
+}
+
+function getThreadTimeFormatter(language: AppLanguage) {
+  const cachedFormatter = threadTimeFormatterByLanguage.get(language);
+
+  if (cachedFormatter) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  threadTimeFormatterByLanguage.set(language, formatter);
+  return formatter;
+}
+
+function getThreadShortDateFormatter(language: AppLanguage) {
+  const cachedFormatter = threadShortDateFormatterByLanguage.get(language);
+
+  if (cachedFormatter) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     month: 'short',
     day: 'numeric',
-    year:
-      targetDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  }).format(targetDate);
+  });
+  threadShortDateFormatterByLanguage.set(language, formatter);
+  return formatter;
+}
+
+function getThreadShortDateWithYearFormatter(language: AppLanguage) {
+  const cachedFormatter = threadShortDateWithYearFormatterByLanguage.get(language);
+
+  if (cachedFormatter) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  threadShortDateWithYearFormatterByLanguage.set(language, formatter);
+  return formatter;
 }
 
 function normalizeMessageBodyText(value: unknown) {
@@ -1765,10 +1831,10 @@ function resolveMissingOwnEncryptedMessageIdsForRetry(input: {
 }
 
 function buildTimelineItems(input: {
+  labels: TimelineLabels;
   language: AppLanguage;
   lastReadMessageSeq: number | null;
   messages: ConversationMessageRow[];
-  t: ReturnType<typeof getTranslations>;
 }) {
   return input.messages.flatMap<TimelineItem>((message, index) => {
     const previousMessage = input.messages[index - 1];
@@ -1782,7 +1848,7 @@ function buildTimelineItems(input: {
       items.push({
         type: 'separator',
         key: `day-${currentDayKey}-${message.id}`,
-        label: formatDaySeparatorLabel(message.created_at, input.language, input.t),
+        label: formatDaySeparatorLabel(message.created_at, input.language, input.labels),
       });
     }
 
@@ -1800,7 +1866,7 @@ function buildTimelineItems(input: {
       items.push({
         type: 'unread',
         key: `unread-${message.id}`,
-        label: input.t.chat.unreadMessages,
+        label: input.labels.unreadMessages,
       });
     }
 
@@ -2420,6 +2486,44 @@ function buildUnavailableEncryptedHistoryRunMeta(input: {
   }
 
   return runMetaByMessageId;
+}
+
+function buildTimelineRenderItems(input: {
+  timelineItems: TimelineItem[];
+  unavailableEncryptedHistoryRunMeta: Map<string, EncryptedUnavailableRunMeta>;
+}) {
+  return input.timelineItems.map<TimelineRenderItem>((item, index) => {
+    if (item.type !== 'message') {
+      return item;
+    }
+
+    const previousTimelineItem = input.timelineItems[index - 1];
+    const nextTimelineItem = input.timelineItems[index + 1];
+    const previousMessage =
+      previousTimelineItem?.type === 'message'
+        ? previousTimelineItem.message
+        : null;
+    const nextMessage =
+      nextTimelineItem?.type === 'message'
+        ? nextTimelineItem.message
+        : null;
+    const unavailableRunMeta =
+      input.unavailableEncryptedHistoryRunMeta.get(item.message.id) ?? null;
+
+    return {
+      compactHistoricalUnavailable: unavailableRunMeta?.isContinuation ?? false,
+      historicalUnavailableContinuationCount:
+        unavailableRunMeta?.continuationCount ?? 0,
+      isClusteredWithNext: canClusterAdjacentMessages(item.message, nextMessage),
+      isClusteredWithPrevious: canClusterAdjacentMessages(
+        previousMessage,
+        item.message,
+      ),
+      key: item.key,
+      message: item.message,
+      type: 'message',
+    };
+  });
 }
 
 type ThreadMessageRowProps = {
@@ -3170,7 +3274,8 @@ function ThreadMessageRowComponent({
     nonVoiceAttachments.length === 0 &&
     !isEncryptedDmTextMessage(message);
   const messageTimestampLabel =
-    formatMessageTimestamp(message.created_at, language, t) || t.chat.justNow;
+    formatMessageTimestamp(message.created_at, language, t.chat.yesterday) ||
+    t.chat.justNow;
   const messageMetaContent = (
     <>
       <span>{messageTimestampLabel}</span>
@@ -3982,15 +4087,24 @@ export function ThreadHistoryViewport({
       ),
     [historyState.senderProfilesById, language],
   );
+  const timelineLabels = useMemo(
+    () => ({
+      earlier: t.chat.earlier,
+      today: t.chat.today,
+      unreadMessages: t.chat.unreadMessages,
+      yesterday: t.chat.yesterday,
+    }),
+    [t.chat.earlier, t.chat.today, t.chat.unreadMessages, t.chat.yesterday],
+  );
   const timelineItems = useMemo(
     () =>
       buildTimelineItems({
+        labels: timelineLabels,
         language,
         lastReadMessageSeq: currentReadMessageSeq,
         messages: historyState.messages,
-        t,
       }),
-    [currentReadMessageSeq, historyState.messages, language, t],
+    [currentReadMessageSeq, historyState.messages, language, timelineLabels],
   );
   const unavailableEncryptedHistoryRunMeta = useMemo(
     () =>
@@ -4004,6 +4118,14 @@ export function ThreadHistoryViewport({
       historyState.encryptedHistoryHintsByMessage,
       timelineItems,
     ],
+  );
+  const timelineRenderItems = useMemo(
+    () =>
+      buildTimelineRenderItems({
+        timelineItems,
+        unavailableEncryptedHistoryRunMeta,
+      }),
+    [timelineItems, unavailableEncryptedHistoryRunMeta],
   );
   const oldestLoadedSeq = historyState.oldestLoadedSeq;
   const hasMoreOlder = historyState.hasMoreOlder;
@@ -5129,7 +5251,7 @@ export function ThreadHistoryViewport({
           <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
         </div>
       ) : (
-        timelineItems.map((item, index) => {
+        timelineRenderItems.map((item) => {
           if (item.type === 'separator') {
             return (
               <div
@@ -5155,17 +5277,6 @@ export function ThreadHistoryViewport({
           }
 
           if (item.type === 'message') {
-            const previousTimelineItem = timelineItems[index - 1];
-            const nextTimelineItem = timelineItems[index + 1];
-            const previousMessage =
-              previousTimelineItem?.type === 'message'
-                ? previousTimelineItem.message
-                : null;
-            const nextMessage =
-              nextTimelineItem?.type === 'message'
-                ? nextTimelineItem.message
-                : null;
-
             return (
               <ThreadMessageRow
                 key={item.message.id}
@@ -5173,27 +5284,17 @@ export function ThreadHistoryViewport({
                 activeEditMessageId={activeEditMessageId}
                 activeSpaceId={activeSpaceId}
                 attachmentsByMessage={historyState.attachmentsByMessage}
-                compactHistoricalUnavailable={
-                  unavailableEncryptedHistoryRunMeta.get(item.message.id)
-                    ?.isContinuation ?? false
-                }
+                compactHistoricalUnavailable={item.compactHistoricalUnavailable}
                 conversationId={conversationId}
                 conversationKind={conversationKind}
                 currentUserId={currentUserId}
                 encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
                 encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
                 historicalUnavailableContinuationCount={
-                  unavailableEncryptedHistoryRunMeta.get(item.message.id)
-                    ?.continuationCount ?? 0
+                  item.historicalUnavailableContinuationCount
                 }
-                isClusteredWithNext={canClusterAdjacentMessages(
-                  item.message,
-                  nextMessage,
-                )}
-                isClusteredWithPrevious={canClusterAdjacentMessages(
-                  previousMessage,
-                  item.message,
-                )}
+                isClusteredWithNext={item.isClusteredWithNext}
+                isClusteredWithPrevious={item.isClusteredWithPrevious}
                 language={language}
                 latestVisibleMessageSeq={latestCommittedMessageSeq}
                 message={item.message}
