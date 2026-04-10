@@ -72,6 +72,12 @@ export function ComposerTypingTextarea({
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingBroadcastAtRef = useRef(0);
   const mentionKeyRef = useRef<string | null>(null);
+  const activeMentionRef = useRef<ActiveMention | null>(null);
+  const isMentionSelectionInProgressRef = useRef(false);
+  const lastPointerHandledMentionRef = useRef<{
+    handledAt: number;
+    userId: string;
+  } | null>(null);
   const [activeMention, setActiveMention] = useState<ActiveMention | null>(null);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const hasMentionSupport = (mentionParticipants?.length ?? 0) > 0;
@@ -114,6 +120,7 @@ export function ComposerTypingTextarea({
 
     if (!textarea || !hasMentionSupport) {
       mentionKeyRef.current = null;
+      activeMentionRef.current = null;
       setActiveMention(null);
       return;
     }
@@ -126,8 +133,16 @@ export function ComposerTypingTextarea({
       setActiveSuggestionIndex(0);
     }
 
+    activeMentionRef.current = nextMention;
     setActiveMention(nextMention);
   }, [hasMentionSupport]);
+
+  const clearMentionState = useCallback(() => {
+    mentionKeyRef.current = null;
+    activeMentionRef.current = null;
+    setActiveMention(null);
+    setActiveSuggestionIndex(0);
+  }, []);
 
   const broadcastTypingState = (isTyping: boolean) => {
     const channel = channelRef.current;
@@ -199,10 +214,12 @@ export function ComposerTypingTextarea({
     (participant: MentionParticipant) => {
       const textarea = textareaRef.current;
       const mention =
+        activeMentionRef.current ??
         activeMention ??
         (textarea ? getActiveMention(textarea.value, textarea.selectionStart) : null);
 
       if (!textarea || !mention) {
+        isMentionSelectionInProgressRef.current = false;
         return;
       }
 
@@ -225,11 +242,10 @@ export function ComposerTypingTextarea({
       textarea.focus();
       textarea.setSelectionRange(nextCursorPosition, nextCursorPosition);
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
-      mentionKeyRef.current = null;
-      setActiveMention(null);
-      setActiveSuggestionIndex(0);
+      clearMentionState();
+      isMentionSelectionInProgressRef.current = false;
     },
-    [activeMention],
+    [activeMention, clearMentionState],
   );
 
   return (
@@ -239,6 +255,11 @@ export function ComposerTypingTextarea({
         ref={textareaRef}
         maxHeight={maxHeight}
         onBlur={(event) => {
+          if (isMentionSelectionInProgressRef.current) {
+            props.onBlur?.(event);
+            return;
+          }
+
           if (stopTimerRef.current) {
             clearTimeout(stopTimerRef.current);
           }
@@ -247,8 +268,7 @@ export function ComposerTypingTextarea({
             broadcastTypingState(false);
           }
 
-          mentionKeyRef.current = null;
-          setActiveMention(null);
+          clearMentionState();
           props.onBlur?.(event);
         }}
         onClick={(event) => {
@@ -288,9 +308,15 @@ export function ComposerTypingTextarea({
                   Math.min(activeSuggestionIndex, mentionSuggestions.length - 1)
                 ]!,
               );
+            } else if (event.key === 'Enter') {
+              event.preventDefault();
+              insertMention(
+                mentionSuggestions[
+                  Math.min(activeSuggestionIndex, mentionSuggestions.length - 1)
+                ]!,
+              );
             } else if (event.key === 'Escape') {
-              mentionKeyRef.current = null;
-              setActiveMention(null);
+              clearMentionState();
             }
           }
 
@@ -327,12 +353,41 @@ export function ComposerTypingTextarea({
                 role="option"
                 type="button"
                 onMouseDown={(event) => {
+                  isMentionSelectionInProgressRef.current = true;
                   event.preventDefault();
                 }}
                 onPointerDown={(event) => {
+                  isMentionSelectionInProgressRef.current = true;
                   event.preventDefault();
                 }}
+                onPointerCancel={() => {
+                  isMentionSelectionInProgressRef.current = false;
+                }}
+                onPointerUp={(event) => {
+                  if (event.pointerType === 'mouse') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  event.stopPropagation();
+                  lastPointerHandledMentionRef.current = {
+                    handledAt: Date.now(),
+                    userId: participant.userId,
+                  };
+                  insertMention(participant);
+                }}
                 onClick={() => {
+                  const lastPointerHandledMention =
+                    lastPointerHandledMentionRef.current;
+
+                  if (
+                    lastPointerHandledMention?.userId === participant.userId &&
+                    Date.now() - lastPointerHandledMention.handledAt < 800
+                  ) {
+                    lastPointerHandledMentionRef.current = null;
+                    return;
+                  }
+
                   insertMention(participant);
                 }}
               >
