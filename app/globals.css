@@ -1746,6 +1746,7 @@ main {
   flex-direction: column;
   gap: 12px;
   width: min(100%, 720px);
+  min-height: 0;
   max-height: min(
     calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 68px),
     920px
@@ -1753,9 +1754,7 @@ main {
   margin: 0 auto;
   padding: 10px 12px calc(18px + env(safe-area-inset-bottom));
   border-radius: 28px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(247, 250, 253, 0.975));
   box-shadow:
@@ -1807,6 +1806,10 @@ main {
 .inbox-create-copy,
 .inbox-create-section {
   gap: 4px;
+}
+
+.inbox-create-section {
+  min-height: 0;
 }
 
 .inbox-create-copy .section-title {
@@ -1895,8 +1898,13 @@ main {
 }
 
 .inbox-create-panel {
+  flex: 1 1 auto;
   gap: 10px;
-  padding: 8px 4px 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 4px calc(10px + env(safe-area-inset-bottom));
   border-radius: 0;
   background: transparent;
   border: 0;
@@ -1941,9 +1949,10 @@ main {
 }
 
 .inbox-create-user-list {
-  max-height: min(48dvh, 460px);
+  max-height: none;
+  overflow: visible;
   gap: 8px;
-  padding-right: 2px;
+  padding-right: 0;
 }
 
 .inbox-create-person-option {
@@ -4984,6 +4993,24 @@ main {
 .messenger-home-participant-form,
 .messenger-home-account-request-form {
   gap: 10px;
+}
+
+.messenger-home-participant-inline-form {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.messenger-home-participant-inline-stack {
+  gap: 10px;
+}
+
+.messenger-home-participant-promotion-state {
+  gap: 6px;
+}
+
+.messenger-home-participant-seat-note {
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .messenger-home-participant-actions {

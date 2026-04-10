@@ -8,7 +8,7 @@ import {
   resolveNextHomeSpacePlanCode,
   type HomeSpacePlanCode,
   type HomeSpaceUsageState,
-} from './space-plan-config';
+} from '@/modules/spaces/plan-config';
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import type { SpaceParticipantRecord } from '@/modules/spaces/server';

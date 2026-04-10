@@ -21,6 +21,7 @@ import {
   sanitizeUserFacingErrorMessage,
 } from '@/modules/messaging/ui/user-facing-errors';
 import {
+  promoteMembersToAdminInGovernedSpace,
   removeMembersFromGovernedSpace,
   requestAdditionalAccountsForGovernedSpace,
   updateGovernedSpaceTheme,
@@ -70,6 +71,7 @@ function getFriendlyHomeErrorMessage(input: {
     | 'home:language-preference'
     | 'home:space-theme'
     | 'home:zoom-preference'
+    | 'home:participants-promote'
     | 'home:participants-remove'
     | 'home:participants-request';
 }) {
@@ -261,6 +263,58 @@ export async function removeSpaceParticipantsAction(formData: FormData) {
         fallback: t.messengerHome.participantsRemoveFailed,
         language,
         surface: 'home:participants-remove',
+      }),
+      openParticipants: true,
+      spaceId,
+    });
+  }
+}
+
+export async function promoteSpaceParticipantsToAdminAction(formData: FormData) {
+  const language = await getRequestLanguage();
+  const t = getTranslations(language);
+  const spaceId = readText(formData, 'spaceId');
+  const selectedUserIds = readText(formData, 'selectedUserIds');
+
+  if (!spaceId) {
+    redirect('/spaces');
+  }
+
+  if (!selectedUserIds) {
+    redirectToHomeSurface({
+      error: t.messengerHome.participantsMakeAdminSelectionRequired,
+      openParticipants: true,
+      spaceId,
+    });
+  }
+
+  try {
+    await promoteMembersToAdminInGovernedSpace({
+      selectedUserIds,
+      spaceId,
+    });
+
+    revalidatePath('/home');
+    revalidatePath('/inbox');
+    revalidatePath('/activity');
+    revalidatePath('/spaces');
+
+    redirectToHomeSurface({
+      message: t.messengerHome.participantsMakeAdminSuccess,
+      openParticipants: true,
+      spaceId,
+    });
+  } catch (error) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+
+    redirectToHomeSurface({
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback: t.messengerHome.participantsMakeAdminFailed,
+        language,
+        surface: 'home:participants-promote',
       }),
       openParticipants: true,
       spaceId,

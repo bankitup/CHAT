@@ -15,7 +15,11 @@ import {
 } from './space-usage-data';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { requestAdditionalSpaceAccountsAction, removeSpaceParticipantsAction } from './actions';
+import {
+  promoteSpaceParticipantsToAdminAction,
+  requestAdditionalSpaceAccountsAction,
+  removeSpaceParticipantsAction,
+} from './actions';
 import { SpaceParticipantsModule } from './space-participants-module';
 import { SpaceUsageCard, type SpaceUsageMetricViewModel } from './space-usage-card';
 import { getRequestViewer } from '@/lib/request-context/server';
@@ -517,12 +521,20 @@ export default async function HomeDashboardPage({
           {canManageMessengerMembers && manageableParticipants ? (
             <SpaceParticipantsModule
               copy={{
+                adminSeatsLabel: t.messengerHome.participantsAdminSeatsLabel,
                 body: t.messengerHome.participantsBody,
                 cancelRemoveAction: t.messengerHome.participantsCancelRemoveAction,
                 confirmRemoveAction: t.messengerHome.participantsConfirmRemoveAction,
                 currentUserBadge: t.messengerHome.currentUserBadge,
                 emptyBody: t.messengerHome.participantsEmptyBody,
                 lockedHint: t.messengerHome.participantsLockedHint,
+                makeAdminAction: t.messengerHome.participantsMakeAdminAction,
+                makeAdminFailedLimit: t.messengerHome.participantsMakeAdminFailedLimit,
+                makeAdminFailedSelection:
+                  t.messengerHome.participantsMakeAdminFailedSelection,
+                makeAdminFailedSelectionOverflow:
+                  t.messengerHome.participantsMakeAdminFailedSelectionOverflow,
+                makeAdminPending: t.messengerHome.participantsMakeAdminPending,
                 removeAction: t.messengerHome.participantsRemoveAction,
                 removeConfirmBody: t.messengerHome.participantsRemoveConfirmBody,
                 removePending: t.messengerHome.participantsRemovePending,
@@ -535,8 +547,11 @@ export default async function HomeDashboardPage({
                 ),
                 title: t.messengerHome.participantsTitle,
               }}
+              adminSeatLimit={spaceUsageSnapshot?.admins.limit ?? 0}
+              adminSeatsUsed={spaceUsageSnapshot?.admins.used ?? 0}
               defaultOpen={participantsDefaultOpen}
               participants={manageableParticipants.participants}
+              promoteAction={promoteSpaceParticipantsToAdminAction}
               removeAction={removeSpaceParticipantsAction}
               requestAction={requestAdditionalSpaceAccountsAction}
               roleLabels={{

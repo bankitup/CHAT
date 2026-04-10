@@ -6,12 +6,18 @@ import { IdentityAvatar } from '@/modules/messaging/ui/identity';
 import type { SpaceParticipantRecord } from '@/modules/spaces/server';
 
 type SpaceParticipantsModuleCopy = {
+  adminSeatsLabel: string;
   body: string;
   cancelRemoveAction: string;
   confirmRemoveAction: string;
   currentUserBadge: string;
   emptyBody: string;
   lockedHint: string;
+  makeAdminAction: string;
+  makeAdminFailedLimit: string;
+  makeAdminFailedSelection: string;
+  makeAdminFailedSelectionOverflow: string;
+  makeAdminPending: string;
   removeAction: string;
   removeConfirmBody: string;
   removePending: string;
@@ -23,9 +29,12 @@ type SpaceParticipantsModuleCopy = {
 };
 
 type SpaceParticipantsModuleProps = {
+  adminSeatLimit: number;
+  adminSeatsUsed: number;
   copy: SpaceParticipantsModuleCopy;
   defaultOpen?: boolean;
   participants: SpaceParticipantRecord[];
+  promoteAction: (formData: FormData) => Promise<void>;
   removeAction: (formData: FormData) => Promise<void>;
   requestAction: (formData: FormData) => Promise<void>;
   roleLabels: Record<'admin' | 'member' | 'owner', string>;
@@ -58,9 +67,12 @@ function getParticipantSecondaryLabel(participant: SpaceParticipantRecord) {
 }
 
 export function SpaceParticipantsModule({
+  adminSeatLimit,
+  adminSeatsUsed,
   copy,
   defaultOpen = false,
   participants,
+  promoteAction,
   removeAction,
   requestAction,
   roleLabels,
@@ -74,6 +86,28 @@ export function SpaceParticipantsModule({
   const removableParticipants = participants.filter(
     (participant) => participant.role !== 'owner' && !participant.isCurrentUser,
   );
+  const promotableUserIds = new Set(
+    participants
+      .filter((participant) => participant.role === 'member' && !participant.isCurrentUser)
+      .map((participant) => participant.userId),
+  );
+  const selectedPromotableUserIds = selectedUserIds.filter((userId) =>
+    promotableUserIds.has(userId),
+  );
+  const selectedPromotableKey = selectedPromotableUserIds.join(',');
+  const selectedIncludesNonPromotableParticipant =
+    selectedPromotableUserIds.length !== selectedUserIds.length;
+  const remainingAdminSeats = Math.max(adminSeatLimit - adminSeatsUsed, 0);
+  const promotionSelectionExceedsSeatLimit =
+    selectedPromotableUserIds.length > remainingAdminSeats;
+  const promotionBlockedMessage =
+    remainingAdminSeats <= 0
+      ? copy.makeAdminFailedLimit
+      : selectedIncludesNonPromotableParticipant
+        ? copy.makeAdminFailedSelection
+        : promotionSelectionExceedsSeatLimit
+          ? copy.makeAdminFailedSelectionOverflow
+          : null;
 
   return (
     <section className="card stack settings-surface messenger-home-participants-card">
@@ -176,32 +210,66 @@ export function SpaceParticipantsModule({
             </div>
           )}
 
-          <form action={removeAction} className="stack messenger-home-participant-form">
-            <input name="spaceId" type="hidden" value={spaceId} />
-            <input name="selectedUserIds" type="hidden" value={selectedKey} />
+          <div className="stack messenger-home-participant-form">
+            <div className="stack messenger-home-participant-promotion-state">
+              <p className="muted messenger-home-participant-seat-note">
+                {copy.adminSeatsLabel}: {adminSeatsUsed} / {adminSeatLimit}
+              </p>
+              {promotionBlockedMessage ? (
+                <p className="notice notice-inline">{promotionBlockedMessage}</p>
+              ) : null}
+            </div>
 
             {isConfirmingRemoval ? (
-              <div className="stack messenger-home-participant-confirmation">
-                <p className="notice notice-inline">{copy.removeConfirmBody}</p>
-                <div className="messenger-home-participant-actions">
-                  <PendingSubmitButton
-                    className="button"
-                    pendingLabel={copy.removePending}
-                    type="submit"
-                  >
-                    {copy.confirmRemoveAction}
-                  </PendingSubmitButton>
-                  <button
-                    className="button button-secondary"
-                    onClick={() => setIsConfirmingRemoval(false)}
-                    type="button"
-                  >
-                    {copy.cancelRemoveAction}
-                  </button>
+              <form action={removeAction} className="stack messenger-home-participant-inline-stack">
+                <input name="spaceId" type="hidden" value={spaceId} />
+                <input name="selectedUserIds" type="hidden" value={selectedKey} />
+
+                <div className="stack messenger-home-participant-confirmation">
+                  <p className="notice notice-inline">{copy.removeConfirmBody}</p>
+                  <div className="messenger-home-participant-actions">
+                    <PendingSubmitButton
+                      className="button"
+                      pendingLabel={copy.removePending}
+                      type="submit"
+                    >
+                      {copy.confirmRemoveAction}
+                    </PendingSubmitButton>
+                    <button
+                      className="button button-secondary"
+                      onClick={() => setIsConfirmingRemoval(false)}
+                      type="button"
+                    >
+                      {copy.cancelRemoveAction}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </form>
             ) : (
               <div className="messenger-home-participant-actions">
+                <form
+                  action={promoteAction}
+                  className="messenger-home-participant-inline-form"
+                >
+                  <input name="spaceId" type="hidden" value={spaceId} />
+                  <input
+                    name="selectedUserIds"
+                    type="hidden"
+                    value={selectedPromotableKey}
+                  />
+                  <PendingSubmitButton
+                    className="button button-secondary"
+                    disabled={
+                      selectedPromotableUserIds.length === 0 ||
+                      Boolean(promotionBlockedMessage)
+                    }
+                    pendingLabel={copy.makeAdminPending}
+                    type="submit"
+                  >
+                    {copy.makeAdminAction}
+                  </PendingSubmitButton>
+                </form>
+
                 <button
                   className="button"
                   disabled={removableParticipants.length === 0 || selectedUserIds.length === 0}
@@ -212,7 +280,7 @@ export function SpaceParticipantsModule({
                 </button>
               </div>
             )}
-          </form>
+          </div>
 
           <form action={requestAction} className="stack messenger-home-account-request-form">
             <input name="spaceId" type="hidden" value={spaceId} />
