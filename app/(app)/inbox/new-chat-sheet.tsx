@@ -89,6 +89,10 @@ export function NewChatSheet({
   const filteredDmUsers = isDmMode ? filteredUsers : availableDmUsers;
   const filteredGroupUsers = isDmMode ? availableGroupUsers : filteredUsers;
   const visibleUserCount = filteredUsers.length;
+  const shouldShowDmLoadingState =
+    isCandidatesLoading && availableDmUsers.length === 0;
+  const shouldShowGroupLoadingState =
+    isCandidatesLoading && availableGroupUsers.length === 0;
 
   const selectedDmUser = useMemo(
     () =>
@@ -196,21 +200,21 @@ export function NewChatSheet({
               <h3 className="card-title">{t.inbox.create.peopleTitle}</h3>
               <p className="muted">{t.inbox.create.peopleSubtitle}</p>
             </div>
-            {!isCandidatesLoading && hasAnyDmUsers ? (
+            {!shouldShowDmLoadingState && hasAnyDmUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
                 {visibleUserCount}
               </span>
             ) : null}
           </div>
 
-          {isCandidatesLoading ? (
+          {shouldShowDmLoadingState ? (
             <div className="stack inbox-create-loading-state" aria-live="polite">
               <span aria-hidden="true" className="message-status-spinner" />
               <p className="muted inbox-compose-empty">
                 {t.inbox.create.loadingCandidates}
               </p>
             </div>
-          ) : loadCandidatesError ? (
+          ) : loadCandidatesError && availableDmUsers.length === 0 ? (
             <div className="stack inbox-compose-empty-state">
               <p className="muted inbox-compose-empty">{loadCandidatesError}</p>
               {onRetryLoadCandidates ? (
@@ -330,7 +334,7 @@ export function NewChatSheet({
               <h3 className="card-title">{t.inbox.create.groupTitle}</h3>
               <p className="muted">{t.inbox.create.groupSubtitle}</p>
             </div>
-            {!isCandidatesLoading && hasAnyUsers ? (
+            {!shouldShowGroupLoadingState && hasAnyUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
                 {visibleUserCount}
               </span>
@@ -354,14 +358,14 @@ export function NewChatSheet({
               />
             </label>
 
-            {isCandidatesLoading ? (
+            {shouldShowGroupLoadingState ? (
               <div className="stack inbox-create-loading-state" aria-live="polite">
                 <span aria-hidden="true" className="message-status-spinner" />
                 <p className="muted inbox-compose-empty">
                   {t.inbox.create.loadingCandidates}
                 </p>
               </div>
-            ) : loadCandidatesError ? (
+            ) : loadCandidatesError && availableGroupUsers.length === 0 ? (
               <div className="stack inbox-compose-empty-state">
                 <p className="muted inbox-compose-empty">{loadCandidatesError}</p>
                 {onRetryLoadCandidates ? (

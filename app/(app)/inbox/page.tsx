@@ -316,16 +316,63 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     },
     new Map<string, (typeof participantIdentities)[number][]>(),
   );
-  const availableUserEntries =
-    [] as Array<{
+  // Seed create-chat from identities the inbox already resolved for visible
+  // conversations, then let the sheet hydrate any missing space members later.
+  const visibleKnownParticipantsByUserId = new Map<
+    string,
+    {
       avatarPath?: string | null;
       displayName: string | null;
+      emailLocalPart?: string | null;
       label: string;
       statusEmoji?: string | null;
       statusText?: string | null;
       userId: string;
-    }>;
-  const availableDmUserEntries = availableUserEntries;
+      username?: string | null;
+    }
+  >();
+
+  for (const participant of participantIdentities) {
+    if (!participant.userId || participant.userId === user.id) {
+      continue;
+    }
+
+    const existingParticipant = visibleKnownParticipantsByUserId.get(
+      participant.userId,
+    );
+
+    visibleKnownParticipantsByUserId.set(participant.userId, {
+      avatarPath: participant.avatarPath ?? existingParticipant?.avatarPath ?? null,
+      displayName:
+        participant.displayName ?? existingParticipant?.displayName ?? null,
+      emailLocalPart:
+        participant.emailLocalPart ?? existingParticipant?.emailLocalPart ?? null,
+      label: resolvePublicIdentityLabel(participant, t.chat.unknownUser),
+      statusEmoji: participant.statusEmoji ?? existingParticipant?.statusEmoji ?? null,
+      statusText: participant.statusText ?? existingParticipant?.statusText ?? null,
+      userId: participant.userId,
+      username: participant.username ?? existingParticipant?.username ?? null,
+    });
+  }
+
+  const visibleExistingDmPartnerUserIds = new Set(
+    allVisibleConversations.flatMap((conversation) => {
+      if (conversation.kind !== 'dm') {
+        return [];
+      }
+
+      const participants =
+        participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
+
+      return participants
+        .map((participant) => participant.userId)
+        .filter((participantUserId) => participantUserId && participantUserId !== user.id);
+    }),
+  );
+  const availableUserEntries = Array.from(visibleKnownParticipantsByUserId.values());
+  const availableDmUserEntries = availableUserEntries.filter(
+    (availableUser) => !visibleExistingDmPartnerUserIds.has(availableUser.userId),
+  );
   const buildConversationItems = (input: InboxConversation[]) =>
     input.map((conversation) => {
       const participantOptions =
