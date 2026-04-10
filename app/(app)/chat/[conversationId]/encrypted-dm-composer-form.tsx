@@ -39,6 +39,7 @@ import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
 import { sendMessageMutationAction } from './actions';
+import { clearReplyTargetFromCurrentUrl } from './thread-local-reply-target';
 import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
@@ -105,6 +106,7 @@ type EncryptedDmComposerFormProps = {
   mentionParticipants?: MentionParticipant[];
   mentionSuggestionsLabel: string;
   messagePlaceholder: string;
+  onReplyTargetConsumed?: () => void;
   recipientUserId?: string | null;
   replyToMessageId?: string | null;
 };
@@ -758,20 +760,6 @@ function getEncryptedComposerQueueErrorMessage(
   return getEncryptedDmErrorMessage(error, t);
 }
 
-function clearReplyTargetFromCurrentUrl() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.delete('replyToMessageId');
-  window.history.replaceState(
-    window.history.state,
-    '',
-    `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
-  );
-}
-
 function getComposerAttachmentLabel(input: {
   attachment: File | null;
   labels: {
@@ -833,6 +821,7 @@ export function EncryptedDmComposerForm({
   mentionParticipants,
   mentionSuggestionsLabel,
   messagePlaceholder,
+  onReplyTargetConsumed,
   recipientUserId,
   replyToMessageId,
 }: EncryptedDmComposerFormProps) {
@@ -1351,6 +1340,7 @@ export function EncryptedDmComposerForm({
           form.reset();
           setIsSendReady(false);
           setComposerResetKey((current) => current + 1);
+          onReplyTargetConsumed?.();
           clearReplyTargetFromCurrentUrl();
 
           window.requestAnimationFrame(() => {
@@ -1410,6 +1400,7 @@ export function EncryptedDmComposerForm({
           },
           replyToMessageId: replyToMessageId ?? null,
         });
+        onReplyTargetConsumed?.();
         clearReplyTargetFromCurrentUrl();
       }}
     >
@@ -1450,6 +1441,7 @@ export function EncryptedDmComposerForm({
             voiceDurationMs: voiceDraft.draft.durationMs ?? null,
           });
           voiceDraft.clearDraft();
+          onReplyTargetConsumed?.();
           clearReplyTargetFromCurrentUrl();
         }}
         onStop={voiceDraft.stopRecording}
