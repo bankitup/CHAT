@@ -386,18 +386,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
           userId={user.id}
         />
 
-        <section className="stack settings-hero activity-hero messenger-activity-head">
-          <div className="stack activity-focus-copy messenger-activity-copy">
-            <span className="activity-focus-kicker">{t.shell.messengerActivity}</span>
-            <h1 className="activity-focus-title">
-              {t.messengerActivity.overviewTitle}
-            </h1>
-            <p className="muted activity-focus-body">
-              {t.messengerActivity.overviewBody}
-            </p>
-          </div>
-        </section>
-
         <NotificationReadinessPanel
           allowTestSend={allowNotificationTestSend}
           embedded
@@ -683,38 +671,6 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
         }))}
         userId={user.id}
       />
-
-      <section className="stack settings-hero activity-hero">
-        <section className="activity-focus-card">
-          <div className="stack activity-focus-copy">
-            <span className="activity-focus-kicker">{t.activity.overviewTitle}</span>
-            <h2 className="activity-focus-title">{t.activity.operationsTitle}</h2>
-            <p className="muted activity-focus-body">{t.activity.overviewBody}</p>
-            <div className="keepcozy-meta-row">
-              <span className="keepcozy-meta-pill">
-                {t.homeDashboard.currentHomeLabel}: {activeSpace.name}
-              </span>
-            </div>
-          </div>
-
-          <div className="keepcozy-card-actions keepcozy-focus-actions">
-            <Link
-              className="activity-focus-action button"
-              href={withSpaceParam('/tasks', activeSpace.id)}
-              prefetch={false}
-            >
-              {t.activity.openTasks}
-            </Link>
-            <Link
-              className="pill"
-              href={withSpaceParam('/home', activeSpace.id)}
-              prefetch={false}
-            >
-              {t.activity.openHome}
-            </Link>
-          </div>
-        </section>
-      </section>
 
       <section className="card stack settings-surface activity-surface">
         <section className="stack settings-section">

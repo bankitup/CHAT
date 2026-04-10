@@ -4179,6 +4179,10 @@ main {
   min-width: 0;
 }
 
+.home-zoom-control-compact {
+  z-index: 6;
+}
+
 .home-zoom-trigger {
   display: inline-flex;
   align-items: center;
@@ -4204,6 +4208,14 @@ main {
   background: rgba(247, 250, 255, 0.96);
 }
 
+.home-zoom-trigger-compact {
+  gap: calc(6px * var(--app-zoom-space-scale));
+  min-height: calc(38px * var(--app-zoom-control-scale));
+  padding:
+    calc(4px * var(--app-zoom-space-scale))
+    calc(10px * var(--app-zoom-space-scale));
+}
+
 .home-zoom-trigger-glyph {
   display: inline-flex;
   align-items: center;
@@ -4219,10 +4231,22 @@ main {
   letter-spacing: 0.01em;
 }
 
+.home-zoom-trigger-compact .home-zoom-trigger-glyph {
+  min-width: calc(24px * var(--app-zoom-control-scale));
+  min-height: calc(24px * var(--app-zoom-control-scale));
+  padding: 0 calc(5px * var(--app-zoom-space-scale));
+  font-size: 0.69rem;
+}
+
 .home-zoom-trigger-copy {
   display: grid;
   gap: 1px;
   text-align: left;
+}
+
+.home-zoom-trigger-compact .home-zoom-trigger-copy {
+  display: inline-flex;
+  align-items: center;
 }
 
 .home-zoom-trigger-label {
@@ -4234,10 +4258,20 @@ main {
   text-transform: uppercase;
 }
 
+.home-zoom-trigger-compact .home-zoom-trigger-label {
+  display: none;
+}
+
 .home-zoom-trigger-value {
   font-size: 0.76rem;
   font-weight: 700;
   line-height: 1.15;
+}
+
+.home-zoom-trigger-compact .home-zoom-trigger-value {
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .home-zoom-panel {
@@ -4271,40 +4305,30 @@ main {
   min-width: 0;
 }
 
-.messenger-home-profile-language {
-  display: flex;
+.messenger-home-profile-controls {
+  display: inline-flex;
+  align-items: center;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
 }
 
-.messenger-home-profile-language .settings-language-compact {
+.messenger-home-profile-controls > * {
+  flex: 0 0 auto;
+}
+
+.messenger-home-profile-controls .settings-language-compact {
+  flex-wrap: nowrap;
   max-width: 100%;
 }
 
-.messenger-home-profile-zoom {
-  min-width: 0;
-}
-
-.messenger-home-profile-zoom .home-zoom-control {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-}
-
-.messenger-home-profile-zoom .home-zoom-trigger {
-  width: 100%;
-  max-width: 100%;
-  justify-content: space-between;
-}
-
-.messenger-home-profile-zoom .home-zoom-panel {
-  position: static;
-  top: auto;
-  right: auto;
-  width: 100%;
-  max-width: 100%;
+.messenger-home-profile-controls .home-zoom-panel-compact {
+  right: 0;
+  width: min(20rem, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
 }
 
 .home-zoom-panel-copy {
@@ -4643,8 +4667,7 @@ main {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     'profile'
-    'status'
-    'session';
+    'status';
 }
 
 .messenger-home-personal-card {
@@ -5462,7 +5485,7 @@ main {
 .profile-inline-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -5479,23 +5502,29 @@ main {
 }
 
 .profile-inline-edit {
-  width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  min-height: 52px;
   padding-inline: 0;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .profile-inline-save {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 52px;
+  height: 52px;
   border: 1px solid rgba(31, 111, 235, 0.76);
   border-radius: 999px;
   background:
     linear-gradient(180deg, rgba(48, 126, 245, 0.98), rgba(31, 111, 235, 0.98));
   color: #fff;
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 1rem;
   font-weight: 800;
   line-height: 1;
   box-shadow: 0 10px 20px rgba(31, 111, 235, 0.14);
