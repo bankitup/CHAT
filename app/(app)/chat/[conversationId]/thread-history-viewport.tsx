@@ -2543,6 +2543,33 @@ function ThreadMessageRowComponent({
     replyToMessageId: message.id,
     spaceId: activeSpaceId,
   });
+  const inlineEditLabels = useMemo(
+    () => ({
+      cancel: t.chat.cancel,
+      save: t.chat.save,
+    }),
+    [t.chat.cancel, t.chat.save],
+  );
+  const deleteConfirmLabels = useMemo(
+    () => ({
+      cancel: t.chat.cancel,
+      confirm: t.chat.delete,
+      prompt: t.chat.deleteConfirm,
+    }),
+    [t.chat.cancel, t.chat.delete, t.chat.deleteConfirm],
+  );
+  const liveOutgoingStatusLabels = useMemo(
+    () => ({
+      delivered: t.chat.delivered,
+      seen: t.chat.seen,
+      sent: t.chat.sent,
+    }),
+    [t.chat.delivered, t.chat.seen, t.chat.sent],
+  );
+  const sentStatusFallback = useMemo(
+    () => <MessageStatusIndicator label={t.chat.sent} status="sent" />,
+    [t.chat.sent],
+  );
 
   const clearLongPress = useCallback(() => {
     if (longPressTimeoutRef.current) {
@@ -2770,6 +2797,30 @@ function ThreadMessageRowComponent({
     },
     [canShowQuickActions, clearLongPress],
   );
+  const handleImageAttachmentPreviewPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+  const handleImageAttachmentPreview = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      const previewTitle =
+        event.currentTarget.dataset.previewTitle?.trim() || t.chat.photo;
+      const signedUrl = event.currentTarget.dataset.previewUrl?.trim();
+
+      if (!signedUrl) {
+        return;
+      }
+
+      onOpenImagePreview({
+        fileName: previewTitle,
+        signedUrl,
+      });
+    },
+    [onOpenImagePreview, t.chat.photo],
+  );
 
   const canInlineMessageMeta =
     Boolean(normalizedMessageBody) &&
@@ -2794,22 +2845,13 @@ function ThreadMessageRowComponent({
           <DmThreadClientSubtree
             conversationId={conversationId}
             {...threadClientDiagnostics}
-            fallback={
-              <MessageStatusIndicator
-                label={t.chat.sent}
-                status="sent"
-              />
-            }
+            fallback={sentStatusFallback}
             messageId={message.id}
             surface="live-outgoing-message-status"
           >
             <LiveOutgoingMessageStatus
               conversationId={conversationId}
-              labels={{
-                delivered: t.chat.delivered,
-                seen: t.chat.seen,
-                sent: t.chat.sent,
-              }}
+              labels={liveOutgoingStatusLabels}
               messageSeq={message.seq}
               otherParticipantReadSeq={otherParticipantReadSeq}
               status={outgoingMessageStatus}
@@ -3109,10 +3151,7 @@ function ThreadMessageRowComponent({
                   ? ''
                   : normalizedMessageBody ?? ''
               }
-              labels={{
-                cancel: t.chat.cancel,
-                save: t.chat.save,
-              }}
+              labels={inlineEditLabels}
               messageId={message.id}
             />
           ) : activeEditMessageId === message.id &&
@@ -3429,12 +3468,10 @@ function ThreadMessageRowComponent({
                       aria-haspopup="dialog"
                       aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
                       className="message-attachment-card message-attachment-card-button"
-                      onClick={() => {
-                        onOpenImagePreview({
-                          fileName: previewTitle,
-                          signedUrl: attachment.signedUrl!,
-                        });
-                      }}
+                      data-preview-title={previewTitle}
+                      data-preview-url={attachment.signedUrl}
+                      onClick={handleImageAttachmentPreview}
+                      onPointerDown={handleImageAttachmentPreviewPointerDown}
                       type="button"
                     >
                       {attachmentContent}
@@ -3490,11 +3527,7 @@ function ThreadMessageRowComponent({
               spaceId: activeSpaceId,
             })}
             conversationId={conversationId}
-            labels={{
-              cancel: t.chat.cancel,
-              confirm: t.chat.delete,
-              prompt: t.chat.deleteConfirm,
-            }}
+            labels={deleteConfirmLabels}
             messageId={message.id}
           />
         ) : null}
@@ -4759,6 +4792,41 @@ export function ThreadHistoryViewport({
   const closeImagePreview = useCallback(() => {
     setActiveImagePreview(null);
   }, []);
+  const requestOlderMessages = useCallback(() => {
+    void loadOlderMessages();
+  }, [loadOlderMessages]);
+  const optimisticMessageLabels = useMemo(
+    () => ({
+      attachment: t.chat.attachment,
+      delete: t.chat.delete,
+      failed: t.chat.sendFailed,
+      justNow: t.chat.justNow,
+      queued: t.chat.messageQueued,
+      remove: t.chat.remove,
+      retry: t.chat.retrySend,
+      sending: t.chat.sending,
+      sent: t.chat.sent,
+      voiceFailed: t.chat.voiceMessageFailed,
+      voicePendingHint: t.chat.voiceMessagePendingHint,
+      voiceProcessing: t.chat.voiceMessageProcessing,
+      voiceUploading: t.chat.voiceMessageUploading,
+    }),
+    [
+      t.chat.attachment,
+      t.chat.delete,
+      t.chat.sendFailed,
+      t.chat.justNow,
+      t.chat.messageQueued,
+      t.chat.remove,
+      t.chat.retrySend,
+      t.chat.sending,
+      t.chat.sent,
+      t.chat.voiceMessageFailed,
+      t.chat.voiceMessagePendingHint,
+      t.chat.voiceMessageProcessing,
+      t.chat.voiceMessageUploading,
+    ],
+  );
 
   return (
     <>
@@ -4774,9 +4842,7 @@ export function ThreadHistoryViewport({
             idleLabel={t.chat.olderMessagesAutoLoad}
             isLoadingOlder={isLoadingOlder}
             loadingLabel={t.chat.loadingOlderMessages}
-            onRequestOlder={() => {
-              void loadOlderMessages();
-            }}
+            onRequestOlder={requestOlderMessages}
             targetId="message-thread-scroll"
           />
         </DmThreadClientSubtree>
@@ -4787,9 +4853,7 @@ export function ThreadHistoryViewport({
           idleLabel={t.chat.olderMessagesAutoLoad}
           isLoadingOlder={isLoadingOlder}
           loadingLabel={t.chat.loadingOlderMessages}
-          onRequestOlder={() => {
-            void loadOlderMessages();
-          }}
+          onRequestOlder={requestOlderMessages}
           targetId="message-thread-scroll"
         />
       )}
@@ -4916,42 +4980,14 @@ export function ThreadHistoryViewport({
           <OptimisticThreadMessages
             confirmedClientIds={resolvedConfirmedClientIds}
             conversationId={conversationId}
-            labels={{
-              attachment: t.chat.attachment,
-              delete: t.chat.delete,
-              failed: t.chat.sendFailed,
-              justNow: t.chat.justNow,
-              queued: t.chat.messageQueued,
-              remove: t.chat.remove,
-              retry: t.chat.retrySend,
-              sending: t.chat.sending,
-              sent: t.chat.sent,
-              voiceFailed: t.chat.voiceMessageFailed,
-              voicePendingHint: t.chat.voiceMessagePendingHint,
-              voiceProcessing: t.chat.voiceMessageProcessing,
-              voiceUploading: t.chat.voiceMessageUploading,
-            }}
+            labels={optimisticMessageLabels}
           />
         </DmThreadClientSubtree>
       ) : (
         <OptimisticThreadMessages
           confirmedClientIds={resolvedConfirmedClientIds}
           conversationId={conversationId}
-          labels={{
-            attachment: t.chat.attachment,
-            delete: t.chat.delete,
-            failed: t.chat.sendFailed,
-            justNow: t.chat.justNow,
-            queued: t.chat.messageQueued,
-            remove: t.chat.remove,
-            retry: t.chat.retrySend,
-            sending: t.chat.sending,
-            sent: t.chat.sent,
-            voiceFailed: t.chat.voiceMessageFailed,
-            voicePendingHint: t.chat.voiceMessagePendingHint,
-            voiceProcessing: t.chat.voiceMessageProcessing,
-            voiceUploading: t.chat.voiceMessageUploading,
-          }}
+          labels={optimisticMessageLabels}
         />
       )}
       {conversationKind === 'dm' ? (
