@@ -5,11 +5,25 @@ import {
   resolveConversationAttachmentContentTarget,
 } from '@/modules/messaging/data/server';
 
+type ConversationAttachmentContentRouteContext = {
+  params: Promise<{
+    attachmentId: string;
+    conversationId: string;
+    messageId: string;
+  }>;
+};
+
+function buildInlineContentDisposition(fileName: string | null) {
+  if (!fileName?.trim()) {
+    return 'inline';
+  }
+
+  return `inline; filename*=UTF-8''${encodeURIComponent(fileName.trim())}`;
+}
+
 export async function GET(
   _request: Request,
-  context: {
-    params: Promise<unknown>;
-  },
+  context: ConversationAttachmentContentRouteContext,
 ) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -20,11 +34,7 @@ export async function GET(
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const { attachmentId, conversationId, messageId } = (await context.params) as {
-    attachmentId: string;
-    conversationId: string;
-    messageId: string;
-  };
+  const { attachmentId, conversationId, messageId } = await context.params;
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
@@ -52,11 +62,14 @@ export async function GET(
   }
 
   const body = await download.data.arrayBuffer();
-  const headers = new Headers({
-    'Cache-Control': 'private, no-store',
-    Vary: 'Cookie',
-    'X-Content-Type-Options': 'nosniff',
-  });
+  const headers = new Headers();
+  headers.set('Cache-Control', 'private, no-store');
+  headers.set('Vary', 'Cookie');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set(
+    'Content-Disposition',
+    buildInlineContentDisposition(resolved.fileName),
+  );
 
   const contentType = download.data.type || resolved.mimeType || null;
 
