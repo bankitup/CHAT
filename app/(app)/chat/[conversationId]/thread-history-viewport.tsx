@@ -475,6 +475,98 @@ function formatAttachmentSize(value: number | null) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function normalizeAttachmentSignedUrl(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeAttachmentDisplayName(
+  value: unknown,
+  fallbackLabel: string,
+) {
+  if (typeof value !== 'string') {
+    return fallbackLabel;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || fallbackLabel;
+}
+
+function hasRecoverableAttachmentLocator(
+  attachment:
+    | Pick<MessageAttachment, 'bucket' | 'id' | 'messageId' | 'objectPath'>
+    | null
+    | undefined,
+  expectedMessageId?: string | null,
+) {
+  const attachmentId =
+    typeof attachment?.id === 'string' ? attachment.id.trim() : '';
+  const attachmentMessageId =
+    typeof attachment?.messageId === 'string' ? attachment.messageId.trim() : '';
+  const bucket =
+    typeof attachment?.bucket === 'string' ? attachment.bucket.trim() : '';
+  const objectPath =
+    typeof attachment?.objectPath === 'string'
+      ? attachment.objectPath.trim()
+      : '';
+  const normalizedExpectedMessageId =
+    typeof expectedMessageId === 'string' ? expectedMessageId.trim() : '';
+
+  if (!attachmentId || !attachmentMessageId || !bucket || !objectPath) {
+    return false;
+  }
+
+  if (
+    normalizedExpectedMessageId &&
+    attachmentMessageId !== normalizedExpectedMessageId
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function filterRenderableMessageAttachments(
+  messageId: string,
+  attachments: MessageAttachment[],
+) {
+  return attachments.filter((attachment) => {
+    const attachmentMessageId =
+      typeof attachment.messageId === 'string'
+        ? attachment.messageId.trim()
+        : '';
+
+    return !attachmentMessageId || attachmentMessageId === messageId;
+  });
+}
+
+function getRenderableAttachmentKey(
+  attachment: MessageAttachment,
+  index: number,
+) {
+  const normalizedId =
+    typeof attachment.id === 'string' ? attachment.id.trim() : '';
+
+  if (normalizedId) {
+    return normalizedId;
+  }
+
+  const fallbackKey = [
+    typeof attachment.messageId === 'string' ? attachment.messageId.trim() : '',
+    typeof attachment.objectPath === 'string' ? attachment.objectPath.trim() : '',
+    typeof attachment.fileName === 'string' ? attachment.fileName.trim() : '',
+    typeof attachment.createdAt === 'string' ? attachment.createdAt.trim() : '',
+  ]
+    .filter(Boolean)
+    .join(':');
+
+  return fallbackKey || `attachment-${index}`;
+}
+
 function formatVoiceDuration(valueMs: number | null | undefined) {
   if (!valueMs || Number.isNaN(valueMs) || valueMs < 0) {
     return '--:--';
@@ -492,6 +584,10 @@ function resolveVoiceMessageRenderState(input: {
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
+  const normalizedSignedUrl = normalizeAttachmentSignedUrl(
+    input.attachment?.signedUrl,
+  );
+
   if (input.stageHint === 'uploading') {
     return 'uploading' satisfies VoiceMessageRenderState;
   }
@@ -504,16 +600,11 @@ function resolveVoiceMessageRenderState(input: {
     return 'failed' satisfies VoiceMessageRenderState;
   }
 
-  if (input.attachment?.signedUrl) {
+  if (normalizedSignedUrl) {
     return 'ready' satisfies VoiceMessageRenderState;
   }
 
-  if (
-    input.attachment?.id &&
-    input.attachment?.messageId &&
-    input.attachment?.bucket &&
-    input.attachment?.objectPath
-  ) {
+  if (hasRecoverableAttachmentLocator(input.attachment)) {
     return 'processing' satisfies VoiceMessageRenderState;
   }
 
@@ -525,6 +616,10 @@ function resolveVoiceMessageRenderReason(input: {
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
+  const normalizedSignedUrl = normalizeAttachmentSignedUrl(
+    input.attachment?.signedUrl,
+  );
+
   if (input.stageHint === 'uploading') {
     return 'stage-uploading';
   }
@@ -541,16 +636,11 @@ function resolveVoiceMessageRenderReason(input: {
     return 'playback-failed';
   }
 
-  if (input.attachment?.signedUrl) {
+  if (normalizedSignedUrl) {
     return 'signed-url-ready';
   }
 
-  if (
-    input.attachment?.id &&
-    input.attachment?.messageId &&
-    input.attachment?.bucket &&
-    input.attachment?.objectPath
-  ) {
+  if (hasRecoverableAttachmentLocator(input.attachment)) {
     return 'storage-locator-present-awaiting-url';
   }
 
@@ -572,7 +662,7 @@ function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
 function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
   return attachments.some(
     (attachment) =>
-      Boolean(attachment.signedUrl) &&
+      Boolean(normalizeAttachmentSignedUrl(attachment.signedUrl)) &&
       (Boolean(attachment.isVoiceMessage) || attachment.isAudio),
   );
 }
@@ -603,7 +693,10 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
       }
 
       return !hasPlaybackReadyVoiceAttachment(
-        attachmentsByMessageId.get(messageId) ?? [],
+        filterRenderableMessageAttachments(
+          messageId,
+          attachmentsByMessageId.get(messageId) ?? [],
+        ),
       );
     },
   );
@@ -638,7 +731,10 @@ function resolveRecentVoiceMessageIdsNeedingRecovery(input: {
     .filter(
       (message) =>
         !hasPlaybackReadyVoiceAttachment(
-          input.attachmentsByMessage.get(message.id) ?? [],
+          filterRenderableMessageAttachments(
+            message.id,
+            input.attachmentsByMessage.get(message.id) ?? [],
+          ),
         ),
     )
     .map((message) => message.id);
@@ -975,7 +1071,7 @@ function ThreadVoiceMessageBubble({
   );
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
-    attachment?.signedUrl ?? null,
+    normalizeAttachmentSignedUrl(attachment?.signedUrl),
   );
   const [didFailSignedUrlResolve, setDidFailSignedUrlResolve] = useState(false);
   const [ignoredAttachmentSignedUrl, setIgnoredAttachmentSignedUrl] = useState<
@@ -984,12 +1080,10 @@ function ThreadVoiceMessageBubble({
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
-  const attachmentSignedUrl = attachment?.signedUrl?.trim() || null;
-  const hasRecoverableAttachmentLocator = Boolean(
-    attachment?.id &&
-      attachment?.messageId &&
-      attachment?.bucket &&
-      attachment?.objectPath,
+  const attachmentSignedUrl = normalizeAttachmentSignedUrl(attachment?.signedUrl);
+  const hasRecoverableAttachmentStorageLocator = hasRecoverableAttachmentLocator(
+    attachment,
+    messageId,
   );
 
   const effectiveSignedUrl =
@@ -998,7 +1092,8 @@ function ThreadVoiceMessageBubble({
       ? attachmentSignedUrl
       : null);
   const canResolveSignedUrl =
-    Boolean(conversationId && hasRecoverableAttachmentLocator) && !effectiveSignedUrl;
+    Boolean(conversationId && hasRecoverableAttachmentStorageLocator) &&
+    !effectiveSignedUrl;
   const effectiveStageHint =
     stageHint ??
     (isResolvingSignedUrl && !effectiveSignedUrl ? 'processing' : null);
@@ -1086,7 +1181,7 @@ function ThreadVoiceMessageBubble({
 
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? null);
-    setResolvedSignedUrl(attachment?.signedUrl ?? null);
+    setResolvedSignedUrl(normalizeAttachmentSignedUrl(attachment?.signedUrl));
     setDidFailSignedUrlResolve(false);
     setIgnoredAttachmentSignedUrl(null);
     setHasPendingPlaybackIntent(false);
@@ -1110,12 +1205,18 @@ function ThreadVoiceMessageBubble({
       setDidFailSignedUrlResolve(false);
 
       try {
+        const resolveUrl = buildAttachmentSignedUrlResolveUrl({
+          attachmentId,
+          conversationId,
+          messageId: attachmentMessageId,
+        });
+
+        if (!resolveUrl) {
+          return null;
+        }
+
         const response = await fetch(
-          buildAttachmentSignedUrlResolveUrl({
-            attachmentId,
-            conversationId,
-            messageId: attachmentMessageId,
-          }),
+          resolveUrl,
           {
             cache: 'no-store',
             credentials: 'same-origin',
@@ -1409,7 +1510,7 @@ function ThreadVoiceMessageBubble({
           </div>
         ) : null}
       </div>
-      {effectiveSignedUrl || hasRecoverableAttachmentLocator ? (
+      {effectiveSignedUrl || hasRecoverableAttachmentStorageLocator ? (
         <audio
           ref={audioRef}
           className="message-voice-audio"
@@ -1426,7 +1527,7 @@ function ThreadVoiceMessageBubble({
             event.currentTarget.currentTime = 0;
             setProgressMs(0);
 
-            if (effectiveSignedUrl && hasRecoverableAttachmentLocator) {
+            if (effectiveSignedUrl && hasRecoverableAttachmentStorageLocator) {
               setIgnoredAttachmentSignedUrl(effectiveSignedUrl);
               setDidFailSignedUrlResolve(false);
               setResolvedSignedUrl(null);
@@ -1517,20 +1618,28 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
 
   return (
     <div className="message-attachments">
-      {attachments.map((attachment) => {
+      {attachments.map((attachment, index) => {
+        const attachmentKey = getRenderableAttachmentKey(attachment, index);
+        const attachmentSignedUrl = normalizeAttachmentSignedUrl(
+          attachment.signedUrl,
+        );
+
         if (attachment.isImage) {
-          const previewTitle = attachment.fileName.trim() || t.chat.photo;
+          const previewTitle = normalizeAttachmentDisplayName(
+            attachment.fileName,
+            t.chat.photo,
+          );
           const photoMeta = [
             formatAttachmentSize(attachment.sizeBytes),
-            !attachment.signedUrl ? t.chat.unavailableRightNow : null,
+            !attachmentSignedUrl ? t.chat.unavailableRightNow : null,
           ]
             .filter((value): value is string => Boolean(value))
             .join(' · ');
 
-          if (!attachment.signedUrl) {
+          if (!attachmentSignedUrl) {
             return (
               <div
-                key={attachment.id}
+                key={attachmentKey}
                 className="message-photo-card message-photo-card-unavailable"
               >
                 <span
@@ -1549,13 +1658,13 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
 
           return (
             <button
-              key={attachment.id}
+              key={attachmentKey}
               aria-haspopup="dialog"
               aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
               className="message-photo-card message-photo-card-button"
               data-message-image-preview="true"
               data-preview-title={previewTitle}
-              data-preview-url={attachment.signedUrl}
+              data-preview-url={attachmentSignedUrl}
               onClick={onImagePreviewClick}
               type="button"
             >
@@ -1563,7 +1672,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
                 aria-hidden="true"
                 className="message-photo-card-visual"
                 style={{
-                  backgroundImage: `url("${attachment.signedUrl}")`,
+                  backgroundImage: `url("${attachmentSignedUrl}")`,
                 }}
               />
               <span className="message-photo-card-footer">
@@ -1581,9 +1690,13 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
           : attachment.isAudio
             ? t.chat.audio
             : t.chat.file;
+        const attachmentName = normalizeAttachmentDisplayName(
+          attachment.fileName,
+          attachmentLabel,
+        );
         const attachmentMeta = [
           formatAttachmentSize(attachment.sizeBytes),
-          !attachment.signedUrl ? t.chat.unavailableRightNow : null,
+          !attachmentSignedUrl ? t.chat.unavailableRightNow : null,
         ]
           .filter((value): value is string => Boolean(value))
           .join(' · ');
@@ -1595,7 +1708,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
             <span className="message-attachment-copy">
               <span className="message-attachment-head">
                 <span className="message-attachment-name">
-                  {attachment.fileName}
+                  {attachmentName}
                 </span>
                 <span className="message-attachment-kind">{attachmentLabel}</span>
               </span>
@@ -1606,10 +1719,10 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
           </>
         );
 
-        if (!attachment.signedUrl) {
+        if (!attachmentSignedUrl) {
           return (
             <div
-              key={attachment.id}
+              key={attachmentKey}
               className="message-attachment-card message-attachment-card-unavailable"
             >
               {attachmentContent}
@@ -1620,7 +1733,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
         if (attachment.isAudio) {
           return (
             <div
-              key={attachment.id}
+              key={attachmentKey}
               className="message-attachment-card message-attachment-card-audio"
             >
               {attachmentContent}
@@ -1628,7 +1741,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
                 className="message-attachment-audio"
                 controls
                 preload="metadata"
-                src={attachment.signedUrl}
+                src={attachmentSignedUrl}
               />
             </div>
           );
@@ -1636,9 +1749,9 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
 
         return (
           <a
-            key={attachment.id}
+            key={attachmentKey}
             className="message-attachment-card"
-            href={attachment.signedUrl}
+            href={attachmentSignedUrl}
             rel="noreferrer"
             target="_blank"
           >
@@ -1716,6 +1829,14 @@ function buildAttachmentSignedUrlResolveUrl(input: {
   conversationId: string;
   messageId: string;
 }) {
+  if (
+    !looksLikeUuid(input.attachmentId) ||
+    !looksLikeUuid(input.conversationId) ||
+    !looksLikeUuid(input.messageId)
+  ) {
+    return null;
+  }
+
   return `/api/messaging/conversations/${input.conversationId}/messages/${input.messageId}/attachments/${input.attachmentId}/signed-url`;
 }
 
@@ -2913,7 +3034,10 @@ function ThreadMessageRowComponent({
   const isMessageInDeleteMode =
     activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
   const messageAttachments =
-    attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS;
+    filterRenderableMessageAttachments(
+      message.id,
+      attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
+    );
   const primaryVoiceAttachment =
     message.kind === 'voice'
       ? messageAttachments.find((attachment) => attachment.isVoiceMessage) ??
@@ -2964,7 +3088,10 @@ function ThreadMessageRowComponent({
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
   const repliedMessageAttachments = repliedMessage
-    ? attachmentsByMessage.get(repliedMessage.id) ?? EMPTY_MESSAGE_ATTACHMENTS
+    ? filterRenderableMessageAttachments(
+        repliedMessage.id,
+        attachmentsByMessage.get(repliedMessage.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
+      )
     : EMPTY_MESSAGE_ATTACHMENTS;
   const replyTargetAttachmentKind = resolveReplyTargetAttachmentKind(
     repliedMessageAttachments,
@@ -3250,9 +3377,13 @@ function ThreadMessageRowComponent({
       event.preventDefault();
       event.stopPropagation();
       closeQuickActions();
-      const previewTitle =
-        event.currentTarget.dataset.previewTitle?.trim() || t.chat.photo;
-      const signedUrl = event.currentTarget.dataset.previewUrl?.trim();
+      const previewTitle = normalizeAttachmentDisplayName(
+        event.currentTarget.dataset.previewTitle,
+        t.chat.photo,
+      );
+      const signedUrl = normalizeAttachmentSignedUrl(
+        event.currentTarget.dataset.previewUrl,
+      );
 
       if (!signedUrl) {
         return;
@@ -3842,9 +3973,15 @@ function ThreadImagePreviewOverlay({
   preview,
 }: ThreadImagePreviewOverlayProps) {
   const portalRoot = typeof document !== 'undefined' ? document.body : null;
+  const previewTitle = preview
+    ? normalizeAttachmentDisplayName(preview.fileName, fallbackTitle)
+    : fallbackTitle;
+  const previewSignedUrl = preview
+    ? normalizeAttachmentSignedUrl(preview.signedUrl)
+    : null;
 
   useEffect(() => {
-    if (!preview) {
+    if (!preview || !previewSignedUrl) {
       return;
     }
 
@@ -3863,13 +4000,11 @@ function ThreadImagePreviewOverlay({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose, preview]);
+  }, [onClose, preview, previewSignedUrl]);
 
-  if (!preview || !portalRoot) {
+  if (!preview || !previewSignedUrl || !portalRoot) {
     return null;
   }
-
-  const previewTitle = preview.fileName.trim() || fallbackTitle;
 
   return createPortal(
     <div
@@ -3902,7 +4037,7 @@ function ThreadImagePreviewOverlay({
             <img
               alt={previewTitle}
               className="chat-image-preview-image"
-              src={preview.signedUrl}
+              src={previewSignedUrl}
             />
             <figcaption className="chat-image-preview-caption">
               {previewTitle}
@@ -5154,8 +5289,17 @@ export function ThreadHistoryViewport({
   }, [historyState.messages]);
 
   const openImagePreview = useCallback((preview: ActiveImagePreview) => {
-    setActiveImagePreview(preview);
-  }, []);
+    const signedUrl = normalizeAttachmentSignedUrl(preview.signedUrl);
+
+    if (!signedUrl) {
+      return;
+    }
+
+    setActiveImagePreview({
+      fileName: normalizeAttachmentDisplayName(preview.fileName, t.chat.photo),
+      signedUrl,
+    });
+  }, [t.chat.photo]);
 
   const closeImagePreview = useCallback(() => {
     setActiveImagePreview(null);
