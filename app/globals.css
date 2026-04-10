@@ -7449,6 +7449,58 @@ main {
   box-shadow: none;
 }
 
+.chat-jump-to-latest {
+  position: absolute;
+  top: -58px;
+  right: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(221, 228, 238, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: rgba(36, 45, 58, 0.88);
+  box-shadow:
+    0 10px 24px rgba(17, 24, 39, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    box-shadow 160ms ease,
+    opacity 140ms ease;
+}
+
+.chat-jump-to-latest:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.chat-jump-to-latest:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(31, 111, 235, 0.16),
+    0 10px 24px rgba(17, 24, 39, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.chat-jump-to-latest-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+:root[data-chat-keyboard-open='true'] .chat-jump-to-latest {
+  top: -50px;
+}
+
 :root[data-chat-keyboard-open='true'] .composer-card {
   padding-top: 12px;
 }
