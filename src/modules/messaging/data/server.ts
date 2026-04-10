@@ -4376,27 +4376,27 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
   recipientDebugState.recipientSelectedDeviceAvailablePrekeyCount =
     availablePrekeyCount;
 
-  if (availablePrekeyCount < 1 || availablePrekeys.length === 0) {
-    recipientDebugState.recipientBundleQueryStage = 'prekey-query:none-available';
-    recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: no available one-time prekeys';
-    throw createDmE2eeRecipientReadinessError(
-      'dm_e2ee_recipient_unavailable',
-      'Recipient does not have available one-time prekeys for encrypted direct messages.',
-      recipientDebugState,
-    );
-  }
+  const hasAvailableOneTimePrekey =
+    availablePrekeyCount > 0 && availablePrekeys.length > 0;
 
-  recipientDebugState.recipientBundleQueryStage = 'bundle:resolved';
-  logDmE2eeRecipientBundleDiagnostics('bundle:resolved', {
+  recipientDebugState.recipientBundleQueryStage = hasAvailableOneTimePrekey
+    ? 'bundle:resolved'
+    : 'bundle:resolved:signed-prekey-only';
+  recipientDebugState.recipientReadinessFailedReason = null;
+  logDmE2eeRecipientBundleDiagnostics(
+    hasAvailableOneTimePrekey
+      ? 'bundle:resolved'
+      : 'bundle:resolved:signed-prekey-only',
+    {
     conversationId: input.conversationId,
     recipientUserId: recipientParticipant.userId,
     usedPrivilegedDeviceLookup,
     usedPrivilegedPrekeyLookup,
     ...recipientDebugState,
     hasRecipientDevice: true,
-    hasOneTimePrekey: availablePrekeys.length > 0,
-  });
+    hasOneTimePrekey: hasAvailableOneTimePrekey,
+  },
+  );
 
   return {
     conversationId: input.conversationId,
@@ -4409,8 +4409,12 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
       signedPrekeyId: recipientSignedPrekeyId,
       signedPrekeyPublic: recipientSignedPrekeyPublic,
       signedPrekeySignature: recipientSignedPrekeySignature,
-      oneTimePrekeyId: availablePrekeys[0]?.prekey_id ?? null,
-      oneTimePrekeyPublic: availablePrekeys[0]?.public_key ?? null,
+      oneTimePrekeyId: hasAvailableOneTimePrekey
+        ? availablePrekeys[0]?.prekey_id ?? null
+        : null,
+      oneTimePrekeyPublic: hasAvailableOneTimePrekey
+        ? availablePrekeys[0]?.public_key ?? null
+        : null,
     } satisfies UserDevicePublicBundle,
   } satisfies DmE2eeRecipientBundleResponse;
 }
