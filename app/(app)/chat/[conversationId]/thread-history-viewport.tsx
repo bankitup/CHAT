@@ -1972,12 +1972,6 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
             attachment.fileName,
             t.chat.photo,
           );
-          const photoMeta = [
-            formatAttachmentSize(attachment.sizeBytes),
-            !attachmentSignedUrl ? t.chat.unavailableRightNow : null,
-          ]
-            .filter((value): value is string => Boolean(value))
-            .join(' · ');
 
           if (!attachmentSignedUrl) {
             return (
@@ -1989,12 +1983,6 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
                   aria-hidden="true"
                   className="message-photo-card-visual message-photo-card-visual-unavailable"
                 />
-                <span className="message-photo-card-footer">
-                  <span className="message-photo-card-badge">{t.chat.photo}</span>
-                  {photoMeta ? (
-                    <span className="message-photo-card-meta">{photoMeta}</span>
-                  ) : null}
-                </span>
               </div>
             );
           }
@@ -2018,12 +2006,6 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
                   backgroundImage: `url("${attachmentSignedUrl}")`,
                 }}
               />
-              <span className="message-photo-card-footer">
-                <span className="message-photo-card-badge">{t.chat.photo}</span>
-                {photoMeta ? (
-                  <span className="message-photo-card-meta">{photoMeta}</span>
-                ) : null}
-              </span>
             </button>
           );
         }

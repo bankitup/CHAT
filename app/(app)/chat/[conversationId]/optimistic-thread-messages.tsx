@@ -62,18 +62,6 @@ function formatVoiceDuration(durationMs: number | null) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function formatOptimisticAttachmentSize(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return null;
-  }
-
-  if (value < 1024 * 1024) {
-    return `${Math.max(1, Math.round(value / 1024))} KB`;
-  }
-
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function isOptimisticImageAttachment(input: {
   attachment: File | null | undefined;
   kind: OptimisticAttachmentPreviewKind | null | undefined;
@@ -97,12 +85,11 @@ function OptimisticImageAttachmentCard({
   }, [previewUrl]);
 
   const previewLabel = file.name.trim() || fallbackLabel;
-  const photoMeta = formatOptimisticAttachmentSize(file.size);
 
   return (
     <div
       aria-label={previewLabel}
-      className="message-photo-card"
+      className="message-photo-card message-photo-card-optimistic"
       role="img"
     >
       <span
@@ -112,12 +99,6 @@ function OptimisticImageAttachmentCard({
           backgroundImage: `url("${previewUrl}")`,
         }}
       />
-      <span className="message-photo-card-footer">
-        <span className="message-photo-card-badge">{fallbackLabel}</span>
-        {photoMeta ? (
-          <span className="message-photo-card-meta">{photoMeta}</span>
-        ) : null}
-      </span>
     </div>
   );
 }
@@ -331,6 +312,8 @@ export function OptimisticThreadMessages({
             className={
               isVoiceMessage
                 ? 'message-row message-row-own message-row-optimistic message-row-optimistic-voice'
+                : isImageAttachment
+                  ? 'message-row message-row-own message-row-optimistic message-row-optimistic-media'
                 : 'message-row message-row-own message-row-optimistic'
             }
           >
@@ -345,6 +328,8 @@ export function OptimisticThreadMessages({
                 className={
                   isFailed
                     ? 'message-bubble message-bubble-own message-bubble-optimistic message-bubble-failed'
+                    : isImageAttachment
+                      ? 'message-bubble message-bubble-own message-bubble-optimistic message-bubble-optimistic-media'
                     : 'message-bubble message-bubble-own message-bubble-optimistic'
                 }
               >
