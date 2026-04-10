@@ -18,6 +18,7 @@ import {
   normalizeInboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
 import { setInboxSectionPreferencesCookie } from '@/modules/messaging/inbox/preferences-server';
+import { updatePushSubscriptionPreviewModeForUser } from '@/modules/messaging/push/server';
 import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
@@ -290,7 +291,7 @@ export async function saveInboxPreferencesAction(formData: FormData) {
   const spaceId = readText(formData, 'spaceId');
 
   try {
-    await getAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
 
     const visibleFilters = formData
       .getAll('visibleFilters')
@@ -311,6 +312,19 @@ export async function saveInboxPreferencesAction(formData: FormData) {
     });
 
     await setInboxSectionPreferencesCookie(preferences);
+
+    try {
+      await updatePushSubscriptionPreviewModeForUser({
+        previewMode: preferences.previewMode,
+        userId,
+      });
+    } catch (error) {
+      logControlledUiError({
+        fallback: 'Unable to sync push preview privacy right now.',
+        rawMessage: error instanceof Error ? error.message : null,
+        surface: 'inbox:save-settings:push-preview-sync',
+      });
+    }
   } catch (error) {
     if (isRedirectError(error)) {
       throw error;

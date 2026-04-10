@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getInboxSectionPreferences } from '@/modules/messaging/inbox/preferences-server';
 import type {
   PushSubscriptionPresenceInput,
   PushSubscriptionRecordInput,
@@ -162,7 +163,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    const inboxPreferences = await getInboxSectionPreferences();
     const subscription = await upsertPushSubscriptionForUser({
+      previewMode: inboxPreferences.previewMode,
       userId: user.id,
       subscription: input,
     });

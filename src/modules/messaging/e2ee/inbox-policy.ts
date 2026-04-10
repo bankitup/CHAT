@@ -1,5 +1,6 @@
 import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
+import { getPreviewPrivacyDecision } from '@/modules/messaging/privacy/preview-policy';
 
 export type InboxPreviewLabels = {
   audio: string;
@@ -142,11 +143,12 @@ export function getInboxDisplayPreviewText(
   labels: InboxDisplayPreviewLabels,
   mode: InboxPreviewDisplayMode,
 ) {
-  if (mode === 'mask') {
-    return getMaskedInboxPreviewText(conversation, labels);
-  }
-
-  if (mode === 'reveal_after_open' && (conversation.unreadCount ?? 0) > 0) {
+  if (
+    getPreviewPrivacyDecision({
+      mode,
+      unreadCount: conversation.unreadCount,
+    }).inbox === 'generic'
+  ) {
     return getMaskedInboxPreviewText(conversation, labels);
   }
 

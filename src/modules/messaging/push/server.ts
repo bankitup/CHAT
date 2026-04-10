@@ -4,6 +4,11 @@ import webpush from 'web-push';
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import {
+  getTranslations,
+  normalizeLanguage,
+  type AppLanguage,
+} from '@/modules/i18n';
+import {
   getArchivedConversations,
   getConversationDisplayName,
   getConversationForUser,
@@ -11,6 +16,11 @@ import {
   getInboxConversations,
   getProfileIdentities,
 } from '@/modules/messaging/data/server';
+import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
+import {
+  getPreviewPrivacyDecision,
+  normalizePreviewPrivacyMode,
+} from '@/modules/messaging/privacy/preview-policy';
 import { resolveSuperAdminGovernanceForUser } from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import type {
@@ -28,9 +38,11 @@ type PushSubscriptionRow = {
   expiration_time?: number | null;
   p256dh?: string | null;
   auth?: string | null;
+  browser_language?: string | null;
   active_conversation_id?: string | null;
   created_at: string;
   presence_updated_at?: string | null;
+  preview_mode?: string | null;
   updated_at: string;
   disabled_at: string | null;
 };
@@ -45,6 +57,15 @@ type ChatPushPresentation = {
   conversationLabel: string;
   senderLabel: string;
   spaceId: string | null;
+};
+
+type ChatPushPreviewLabels = {
+  attachment: string;
+  encryptedMessage: string;
+  newMessage: string;
+  privateMessageBody: string;
+  privateMessageTitle: string;
+  voiceMessage: string;
 };
 
 type ChatPushSendInput = {
@@ -380,44 +401,95 @@ function normalizePreviewText(value: string | null | undefined) {
   return normalized.length > 120 ? `${normalized.slice(0, 117).trimEnd()}...` : normalized;
 }
 
+function getPushLanguage(value: string | null | undefined): AppLanguage {
+  const normalized = value?.split(',')[0]?.trim().toLowerCase() ?? '';
+  const primaryTag = normalized.split('-')[0]?.trim().toLowerCase() ?? '';
+  return normalizeLanguage(primaryTag || normalized || null);
+}
+
+function getChatPushPreviewLabels(language: AppLanguage): ChatPushPreviewLabels {
+  const t = getTranslations(language);
+
+  return {
+    attachment: t.chat.attachment,
+    encryptedMessage: t.chat.newEncryptedMessage,
+    newMessage: t.chat.newMessage,
+    privateMessageBody: t.notifications.privateMessageBody,
+    privateMessageTitle: t.notifications.privateMessageTitle,
+    voiceMessage: t.chat.voiceMessage,
+  };
+}
+
 function getChatPushPreview(input: {
   body?: string | null;
   contentMode: 'plaintext' | 'dm_e2ee_v1';
+  labels: Pick<
+    ChatPushPreviewLabels,
+    'attachment' | 'encryptedMessage' | 'newMessage' | 'voiceMessage'
+  >;
   messageKind: 'text' | 'attachment' | 'voice';
 }) {
   if (input.contentMode === 'dm_e2ee_v1') {
-    return 'Sent you an encrypted message.';
+    return input.labels.encryptedMessage;
   }
 
   if (input.messageKind === 'voice') {
-    return 'Sent a voice message.';
+    return input.labels.voiceMessage;
   }
 
   if (input.messageKind === 'attachment') {
-    return normalizePreviewText(input.body) ?? 'Sent an attachment.';
+    return normalizePreviewText(input.body) ?? input.labels.attachment;
   }
 
-  return normalizePreviewText(input.body) ?? 'Sent a message.';
+  return normalizePreviewText(input.body) ?? input.labels.newMessage;
 }
 
 function buildChatPushPayload(input: {
+  body?: string | null;
+  contentMode: 'plaintext' | 'dm_e2ee_v1';
   conversationId: string;
+  language: AppLanguage;
   messageId: string;
-  preview: string;
+  messageKind: 'text' | 'attachment' | 'voice';
   presentation: ChatPushPresentation;
+  previewMode: InboxPreviewDisplayMode;
 }) {
+  const labels = getChatPushPreviewLabels(input.language);
   const title =
     input.presentation.conversationKind === 'group'
       ? input.presentation.conversationLabel
       : input.presentation.senderLabel;
-  const body =
-    input.presentation.conversationKind === 'group'
-      ? `${input.presentation.senderLabel}: ${input.preview}`
-      : input.preview;
   const url = withSpaceParam(
     `/chat/${input.conversationId}`,
     input.presentation.spaceId,
   );
+
+  if (
+    getPreviewPrivacyDecision({
+      mode: input.previewMode,
+    }).push === 'generic'
+  ) {
+    return {
+      title: labels.privateMessageTitle,
+      body: labels.privateMessageBody,
+      url,
+      conversationId: input.conversationId,
+      spaceId: input.presentation.spaceId,
+      messageId: input.messageId,
+      tag: `chat:${input.conversationId}`,
+    } satisfies ChatPushPayload;
+  }
+
+  const preview = getChatPushPreview({
+    body: input.body ?? null,
+    contentMode: input.contentMode,
+    labels,
+    messageKind: input.messageKind,
+  });
+  const body =
+    input.presentation.conversationKind === 'group'
+      ? `${input.presentation.senderLabel}: ${preview}`
+      : preview;
 
   return {
     title,
@@ -510,6 +582,10 @@ export function isMissingPushSubscriptionsSchemaMessage(message: string) {
     normalizedMessage.includes('disabled_at') ||
     normalizedMessage.includes('p256dh')
   );
+}
+
+function isMissingPushSubscriptionPreviewSchemaMessage(message: string) {
+  return message.toLowerCase().includes('preview_mode');
 }
 
 function isMissingPushSubscriptionPresenceSchemaMessage(message: string) {
@@ -628,6 +704,70 @@ function applyPushPresenceSuppression(input: {
   };
 }
 
+async function getPushSubscriptionRowsForRecipients(input: {
+  client: NonNullable<ReturnType<typeof createSupabaseServiceRoleClient>>;
+  userIds: string[];
+}) {
+  const baseSelect =
+    'id, user_id, endpoint, expiration_time, p256dh, auth, browser_language, created_at, updated_at, disabled_at';
+  const attempts = [
+    {
+      presenceSchemaPresent: true,
+      previewModeSchemaPresent: true,
+      select: `${baseSelect}, preview_mode, presence_updated_at, active_conversation_id`,
+    },
+    {
+      presenceSchemaPresent: true,
+      previewModeSchemaPresent: false,
+      select: `${baseSelect}, presence_updated_at, active_conversation_id`,
+    },
+    {
+      presenceSchemaPresent: false,
+      previewModeSchemaPresent: true,
+      select: `${baseSelect}, preview_mode`,
+    },
+    {
+      presenceSchemaPresent: false,
+      previewModeSchemaPresent: false,
+      select: baseSelect,
+    },
+  ] as const;
+  let lastSchemaErrorMessage: string | null = null;
+
+  for (const attempt of attempts) {
+    const result = await input.client
+      .from('push_subscriptions')
+      .select(attempt.select)
+      .in('user_id', input.userIds)
+      .is('disabled_at', null);
+
+    if (!result.error) {
+      return {
+        presenceSchemaPresent: attempt.presenceSchemaPresent,
+        previewModeSchemaPresent: attempt.previewModeSchemaPresent,
+        rows: (result.data ?? []) as unknown as PushSubscriptionRow[],
+      };
+    }
+
+    const message = result.error.message;
+    const previewSchemaMissing =
+      attempt.previewModeSchemaPresent &&
+      isMissingPushSubscriptionPreviewSchemaMessage(message);
+    const presenceSchemaMissing =
+      attempt.presenceSchemaPresent &&
+      isMissingPushSubscriptionPresenceSchemaMessage(message);
+
+    if (previewSchemaMissing || presenceSchemaMissing) {
+      lastSchemaErrorMessage = message;
+      continue;
+    }
+
+    throw new Error(message);
+  }
+
+  throw new Error(lastSchemaErrorMessage ?? 'Unable to resolve push subscriptions.');
+}
+
 async function getActivePushSubscriptionRowsForRecipients(input: {
   conversationId: string;
   senderId: string;
@@ -700,38 +840,12 @@ async function getActivePushSubscriptionRowsForRecipients(input: {
     };
   }
 
-  const selectBase =
-    'id, user_id, endpoint, expiration_time, p256dh, auth, created_at, updated_at, disabled_at';
-  const selectWithPresence = `${selectBase}, presence_updated_at, active_conversation_id`;
-  const subscriptionsWithPresence = await client
-    .from('push_subscriptions')
-    .select(selectWithPresence)
-    .in('user_id', eligibleUserIds)
-    .is('disabled_at', null);
-  let subscriptionsError = subscriptionsWithPresence.error;
-  let subscriptionRows = (subscriptionsWithPresence.data ?? []) as PushSubscriptionRow[];
-  let presenceSchemaPresent = true;
-
-  if (
-    subscriptionsError &&
-    isMissingPushSubscriptionPresenceSchemaMessage(
-      subscriptionsError.message,
-    )
-  ) {
-    const subscriptionsWithoutPresence = await client
-      .from('push_subscriptions')
-      .select(selectBase)
-      .in('user_id', eligibleUserIds)
-      .is('disabled_at', null);
-
-    subscriptionsError = subscriptionsWithoutPresence.error;
-    subscriptionRows = (subscriptionsWithoutPresence.data ?? []) as PushSubscriptionRow[];
-    presenceSchemaPresent = false;
-  }
-
-  if (subscriptionsError) {
-    throw new Error(subscriptionsError.message);
-  }
+  const subscriptionsResult = await getPushSubscriptionRowsForRecipients({
+    client,
+    userIds: eligibleUserIds,
+  });
+  const subscriptionRows = subscriptionsResult.rows;
+  const presenceSchemaPresent = subscriptionsResult.presenceSchemaPresent;
 
   const rows = subscriptionRows.filter(
     (row) => row.endpoint && row.p256dh && row.auth,
@@ -866,25 +980,30 @@ export async function getChatUnreadBadgeStateForUser(input: {
 }
 
 export async function upsertPushSubscriptionForUser(input: {
+  previewMode?: InboxPreviewDisplayMode | null;
   userId: string;
   subscription: PushSubscriptionRecordInput;
 }) {
   const client = await getPushSubscriptionWriteClient();
   const now = new Date().toISOString();
-  const { data, error } = await client
+  const basePayload = {
+    user_id: input.userId,
+    endpoint: input.subscription.endpoint,
+    expiration_time: input.subscription.expirationTime,
+    p256dh: input.subscription.keys.p256dh,
+    auth: input.subscription.keys.auth,
+    user_agent: input.subscription.userAgent,
+    platform: input.subscription.platform,
+    browser_language: input.subscription.language,
+    updated_at: now,
+    disabled_at: null,
+  };
+  let { data, error } = await client
     .from('push_subscriptions')
     .upsert(
       {
-        user_id: input.userId,
-        endpoint: input.subscription.endpoint,
-        expiration_time: input.subscription.expirationTime,
-        p256dh: input.subscription.keys.p256dh,
-        auth: input.subscription.keys.auth,
-        user_agent: input.subscription.userAgent,
-        platform: input.subscription.platform,
-        browser_language: input.subscription.language,
-        updated_at: now,
-        disabled_at: null,
+        ...basePayload,
+        preview_mode: normalizePreviewPrivacyMode(input.previewMode),
       },
       {
         onConflict: 'endpoint',
@@ -893,11 +1012,53 @@ export async function upsertPushSubscriptionForUser(input: {
     .select('id, endpoint, created_at, updated_at, disabled_at')
     .single<PushSubscriptionRow>();
 
+  if (error && isMissingPushSubscriptionPreviewSchemaMessage(error.message)) {
+    const fallbackResult = await client
+      .from('push_subscriptions')
+      .upsert(basePayload, {
+        onConflict: 'endpoint',
+      })
+      .select('id, endpoint, created_at, updated_at, disabled_at')
+      .single<PushSubscriptionRow>();
+
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
+
   if (error) {
     throw error;
   }
 
+  if (!data) {
+    throw new Error('Push subscription upsert returned no row.');
+  }
+
   return mapStoredPushSubscription(data);
+}
+
+export async function updatePushSubscriptionPreviewModeForUser(input: {
+  previewMode: InboxPreviewDisplayMode;
+  userId: string;
+}) {
+  const client = await getPushSubscriptionWriteClient();
+  const { error } = await client
+    .from('push_subscriptions')
+    .update({
+      preview_mode: normalizePreviewPrivacyMode(input.previewMode),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', input.userId)
+    .is('disabled_at', null);
+
+  if (error && isMissingPushSubscriptionPreviewSchemaMessage(error.message)) {
+    return false;
+  }
+
+  if (error) {
+    throw error;
+  }
+
+  return true;
 }
 
 export async function updatePushSubscriptionPresenceForUser(input: {
@@ -1344,20 +1505,6 @@ export async function sendChatPushNotifications(
     };
   }
 
-  const preview = getChatPushPreview({
-    body: input.body ?? null,
-    contentMode: input.contentMode,
-    messageKind: input.messageKind,
-  });
-  const payload = JSON.stringify(
-    buildChatPushPayload({
-      conversationId: input.conversationId,
-      messageId: input.messageId,
-      preview,
-      presentation,
-    }),
-  );
-
   let subscriptions: PushSubscriptionRow[] = [];
   let subscriptionSkipReason: string | null = null;
   let appActiveSuppressedUserCount = 0;
@@ -1494,6 +1641,19 @@ export async function sendChatPushNotifications(
 
   for (const subscription of subscriptions) {
     try {
+      const payload = JSON.stringify(
+        buildChatPushPayload({
+          body: input.body ?? null,
+          contentMode: input.contentMode,
+          conversationId: input.conversationId,
+          language: getPushLanguage(subscription.browser_language),
+          messageId: input.messageId,
+          messageKind: input.messageKind,
+          presentation,
+          previewMode: normalizePreviewPrivacyMode(subscription.preview_mode),
+        }),
+      );
+
       await webpush.sendNotification(
         {
           endpoint: subscription.endpoint,
