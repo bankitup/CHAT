@@ -75,12 +75,6 @@ export async function GET(
 
   if (contentType) {
     headers.set('Content-Type', contentType);
-    'Content-Disposition': buildInlineContentDisposition(resolvedTarget.fileName),
-    'X-Content-Type-Options': 'nosniff',
-  });
-
-  if (download.data.type || resolvedTarget.mimeType) {
-    headers.set('Content-Type', download.data.type || resolvedTarget.mimeType || 'application/octet-stream');
   }
 
   headers.set('Content-Length', String(body.byteLength));
