@@ -233,6 +233,7 @@ const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
 const MESSAGE_CLUSTER_MAX_GAP_MS = 5 * 60 * 1000;
 const THREAD_HISTORY_SESSION_CACHE_MAX_ENTRIES = 6;
+const THREAD_MOUNT_RECOVERY_REASON = 'thread-mount-recovery';
 const EMPTY_MESSAGE_ATTACHMENTS: MessageAttachment[] = [];
 const EMPTY_MESSAGE_REACTIONS: MessageReactionGroup[] = [];
 const threadHistorySessionCache = new Map<string, ThreadHistorySessionCacheEntry>();
@@ -1700,9 +1701,103 @@ function resolveLatestLoadedSeq(
   );
 }
 
+function getThreadMessageClientIdentity(
+  message: Pick<ConversationMessageRow, 'client_id' | 'sender_id'>,
+) {
+  const clientId = message.client_id?.trim() || '';
+  const senderId = message.sender_id?.trim() || '';
+
+  if (!clientId || !senderId) {
+    return null;
+  }
+
+  return `${senderId}:${clientId}`;
+}
+
+function compareThreadMessages(
+  left: ConversationMessageRow,
+  right: ConversationMessageRow,
+) {
+  const leftSeq = normalizeComparableMessageSeq(left.seq);
+  const rightSeq = normalizeComparableMessageSeq(right.seq);
+
+  if (leftSeq !== null && rightSeq !== null && leftSeq !== rightSeq) {
+    return leftSeq - rightSeq;
+  }
+
+  const leftCreatedAt = parseSafeDate(left.created_at);
+  const rightCreatedAt = parseSafeDate(right.created_at);
+
+  if (leftCreatedAt && rightCreatedAt) {
+    const createdAtDelta = leftCreatedAt.getTime() - rightCreatedAt.getTime();
+
+    if (createdAtDelta !== 0) {
+      return createdAtDelta;
+    }
+  } else if (leftCreatedAt && !rightCreatedAt) {
+    return -1;
+  } else if (!leftCreatedAt && rightCreatedAt) {
+    return 1;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function sortThreadMessages(messages: ConversationMessageRow[]) {
+  return [...messages].sort(compareThreadMessages);
+}
+
+function findMatchingThreadMessageIndex(input: {
+  message: ConversationMessageRow;
+  messages: ConversationMessageRow[];
+}) {
+  const directMatchIndex = input.messages.findIndex(
+    (candidate) => candidate.id === input.message.id,
+  );
+
+  if (directMatchIndex >= 0) {
+    return directMatchIndex;
+  }
+
+  const clientIdentity = getThreadMessageClientIdentity(input.message);
+
+  if (!clientIdentity) {
+    return -1;
+  }
+
+  return input.messages.findIndex(
+    (candidate) =>
+      getThreadMessageClientIdentity(candidate) === clientIdentity,
+  );
+}
+
+function dedupeThreadMessages(messages: ConversationMessageRow[]) {
+  const dedupedMessages: ConversationMessageRow[] = [];
+
+  for (const message of messages) {
+    const existingIndex = findMatchingThreadMessageIndex({
+      message,
+      messages: dedupedMessages,
+    });
+
+    if (existingIndex >= 0) {
+      dedupedMessages[existingIndex] = message;
+      continue;
+    }
+
+    dedupedMessages.push(message);
+  }
+
+  return dedupedMessages;
+}
+
 function createThreadHistoryState(
   snapshot: ThreadHistoryPageSnapshot,
 ): ThreadHistoryState {
+  const dedupedMessages = sortThreadMessages(
+    dedupeThreadMessages(snapshot.messages),
+  );
+
   return {
     attachmentsByMessage: new Map(
       snapshot.attachmentsByMessage.map((entry) => [
@@ -1724,12 +1819,12 @@ function createThreadHistoryState(
     ),
     hasMoreOlder: snapshot.hasMoreOlder,
     loadedOlderPageCount: 0,
-    messages: [...snapshot.messages],
+    messages: dedupedMessages,
     messagesById: new Map(
-      snapshot.messages.map((message) => [message.id, message] as const),
+      dedupedMessages.map((message) => [message.id, message] as const),
     ),
     oldestLoadedSeq: resolveOldestLoadedSeq(
-      snapshot.messages,
+      dedupedMessages,
       snapshot.oldestMessageSeq,
     ),
     reactionsByMessage: new Map(
@@ -1802,9 +1897,6 @@ function mergeThreadHistoryState(input: {
 }) {
   const nextMessagesById = new Map(input.state.messagesById);
   const nextMessages = [...input.state.messages];
-  const nextMessageIndexes = new Map(
-    nextMessages.map((message, index) => [message.id, index] as const),
-  );
   const nextSenderProfilesById = new Map(input.state.senderProfilesById);
   const nextReactionsByMessage = new Map(input.state.reactionsByMessage);
   const nextAttachmentsByMessage = new Map(input.state.attachmentsByMessage);
@@ -1820,10 +1912,12 @@ function mergeThreadHistoryState(input: {
   const currentLatestSeq = resolveLatestLoadedSeq(input.state.messages, null);
 
   for (const message of input.snapshot.messages) {
-    const existingIndex = nextMessageIndexes.get(message.id);
-    nextMessagesById.set(message.id, message);
+    const existingIndex = findMatchingThreadMessageIndex({
+      message,
+      messages: nextMessages,
+    });
 
-    if (existingIndex === undefined) {
+    if (existingIndex < 0) {
       const nextMessageSeq = normalizeComparableMessageSeq(message.seq);
       const shouldInsertUnseenMessage =
         input.mode !== 'sync-topology' ||
@@ -1846,6 +1940,13 @@ function mergeThreadHistoryState(input: {
       continue;
     }
 
+    const existingMessage = nextMessages[existingIndex];
+
+    if (existingMessage && existingMessage.id !== message.id) {
+      nextMessagesById.delete(existingMessage.id);
+    }
+
+    nextMessagesById.set(message.id, message);
     nextMessages[existingIndex] = message;
   }
 
@@ -1855,6 +1956,12 @@ function mergeThreadHistoryState(input: {
       : appendedMessages.length > 0
         ? [...nextMessages, ...appendedMessages]
         : nextMessages;
+  const orderedMessages = sortThreadMessages(
+    dedupeThreadMessages(mergedMessages),
+  );
+  const orderedMessagesById = new Map(
+    orderedMessages.map((message) => [message.id, message] as const),
+  );
 
   for (const profile of input.snapshot.senderProfiles) {
     nextSenderProfilesById.set(profile.userId, profile);
@@ -1924,10 +2031,10 @@ function mergeThreadHistoryState(input: {
         input.mode === 'prepend-older'
           ? input.state.loadedOlderPageCount + 1
           : input.state.loadedOlderPageCount,
-      messages: mergedMessages,
-      messagesById: nextMessagesById,
+      messages: orderedMessages,
+      messagesById: orderedMessagesById,
       oldestLoadedSeq: resolveOldestLoadedSeq(
-        mergedMessages,
+        orderedMessages,
         input.snapshot.oldestMessageSeq ?? input.state.oldestLoadedSeq,
       ),
       reactionsByMessage: nextReactionsByMessage,
@@ -1940,27 +2047,39 @@ function upsertLiveThreadMessage(input: {
   message: ConversationMessageRow;
   state: ThreadHistoryState;
 }) {
-  const existingIndex = input.state.messages.findIndex(
-    (message) => message.id === input.message.id,
-  );
+  const existingIndex = findMatchingThreadMessageIndex({
+    message: input.message,
+    messages: input.state.messages,
+  });
   const nextMessagesById = new Map(input.state.messagesById);
-  nextMessagesById.set(input.message.id, input.message);
 
   if (existingIndex >= 0) {
+    const existingMessage = input.state.messages[existingIndex];
+
+    if (existingMessage && existingMessage.id !== input.message.id) {
+      nextMessagesById.delete(existingMessage.id);
+    }
+
+    nextMessagesById.set(input.message.id, input.message);
     const nextMessages = [...input.state.messages];
     nextMessages[existingIndex] = input.message;
+    const orderedMessages = sortThreadMessages(nextMessages);
+    const orderedMessagesById = new Map(
+      orderedMessages.map((message) => [message.id, message] as const),
+    );
 
     return {
       ...input.state,
-      messages: nextMessages,
-      messagesById: nextMessagesById,
+      messages: orderedMessages,
+      messagesById: orderedMessagesById,
       oldestLoadedSeq: resolveOldestLoadedSeq(
-        nextMessages,
+        orderedMessages,
         input.state.oldestLoadedSeq,
       ),
     } satisfies ThreadHistoryState;
   }
 
+  nextMessagesById.set(input.message.id, input.message);
   const nextMessages = [...input.state.messages];
   const nextMessageSeq = normalizeComparableMessageSeq(input.message.seq);
   let insertionIndex = nextMessages.length;
@@ -1976,13 +2095,17 @@ function upsertLiveThreadMessage(input: {
   }
 
   nextMessages.splice(insertionIndex, 0, input.message);
+  const orderedMessages = sortThreadMessages(nextMessages);
+  const orderedMessagesById = new Map(
+    orderedMessages.map((message) => [message.id, message] as const),
+  );
 
   return {
     ...input.state,
-    messages: nextMessages,
-    messagesById: nextMessagesById,
+    messages: orderedMessages,
+    messagesById: orderedMessagesById,
     oldestLoadedSeq: resolveOldestLoadedSeq(
-      nextMessages,
+      orderedMessages,
       input.state.oldestLoadedSeq,
     ),
   } satisfies ThreadHistoryState;
@@ -4267,6 +4390,7 @@ export function ThreadHistoryViewport({
 
   const performSyncFetch = useCallback(
     async (input: {
+      allowLatest?: boolean;
       afterSeq?: number | null;
       messageIds?: string[] | null;
       reason: string | null;
@@ -4274,10 +4398,12 @@ export function ThreadHistoryViewport({
       const normalizedMessageIds = Array.from(
         new Set((input.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
       );
-      const mode = resolveHistoryFetchMode({
+      const requestedMode = resolveHistoryFetchMode({
         afterSeq: input.afterSeq ?? null,
         messageIds: normalizedMessageIds,
       });
+      const mode =
+        requestedMode === 'noop' && input.allowLatest ? 'latest' : requestedMode;
 
       if (mode === 'noop') {
         if (historySyncDiagnosticsEnabled) {
@@ -4303,14 +4429,14 @@ export function ThreadHistoryViewport({
       const response = await fetch(
         buildHistoryPageUrl({
           activeDeviceId: historyFetchActiveDeviceIdRef.current,
-          afterSeq: input.afterSeq ?? null,
+          afterSeq: mode === 'after-seq' ? input.afterSeq ?? null : null,
           conversationId,
           debugRequestId:
             process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
               ? crypto.randomUUID()
               : null,
           limit: THREAD_HISTORY_PAGE_SIZE,
-          messageIds: input.messageIds ?? null,
+          messageIds: mode === 'by-id' ? input.messageIds ?? null : null,
         }),
         {
           cache: 'no-store',
@@ -4651,11 +4777,8 @@ export function ThreadHistoryViewport({
               null,
             );
 
-            if (latestLoadedSeq === null) {
-              break;
-            }
-
             const snapshot = await performSyncFetch({
+              allowLatest: latestLoadedSeq === null,
               afterSeq: latestLoadedSeq,
               reason: request.reason,
             });
@@ -4674,7 +4797,10 @@ export function ThreadHistoryViewport({
               return nextState;
             });
 
-            if (snapshot.messages.length < THREAD_HISTORY_PAGE_SIZE) {
+            if (
+              latestLoadedSeq === null ||
+              snapshot.messages.length < THREAD_HISTORY_PAGE_SIZE
+            ) {
               break;
             }
           }
@@ -4772,6 +4898,22 @@ export function ThreadHistoryViewport({
     scheduleMissingEncryptedDmEnvelopeRecovery,
     scheduleVoiceAttachmentRecovery,
   ]);
+
+  useEffect(() => {
+    if (historySyncDiagnosticsEnabled) {
+      console.info('[chat-history]', 'topology-sync:mount-recovery-requested', {
+        conversationId,
+        latestLoadedSeq: resolveLatestLoadedSeq(historyStateRef.current.messages, null),
+        reason: THREAD_MOUNT_RECOVERY_REASON,
+      });
+    }
+
+    emitThreadHistorySyncRequest({
+      conversationId,
+      newerThanLatest: true,
+      reason: THREAD_MOUNT_RECOVERY_REASON,
+    });
+  }, [conversationId, historySyncDiagnosticsEnabled]);
 
   useLayoutEffect(() => {
     const pendingRestore = pendingRestoreRef.current;
