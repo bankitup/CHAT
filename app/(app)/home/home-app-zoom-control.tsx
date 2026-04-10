@@ -52,6 +52,18 @@ function resolveZoomModeHint(input: {
   }
 }
 
+function resolveCompactZoomModeToken(mode: AppZoomMode) {
+  switch (mode) {
+    case 'larger':
+      return 'A+';
+    case 'largest':
+      return 'A++';
+    case 'standard':
+    default:
+      return 'A';
+  }
+}
+
 export function HomeAppZoomControl({
   compact = false,
   initialZoomMode,
@@ -91,6 +103,13 @@ export function HomeAppZoomControl({
         t,
       }),
     [hasUnsavedPreview, previewZoomMode, savedZoomMode, t],
+  );
+  const currentCompactZoomToken = useMemo(
+    () =>
+      resolveCompactZoomModeToken(
+        hasUnsavedPreview ? previewZoomMode : savedZoomMode,
+      ),
+    [hasUnsavedPreview, previewZoomMode, savedZoomMode],
   );
 
   const closePanel = useCallback(() => {
@@ -195,7 +214,9 @@ export function HomeAppZoomControl({
           <span className="home-zoom-trigger-label">
             {t.zoomSwitcher.trigger}
           </span>
-          <span className="home-zoom-trigger-value">{currentZoomModeLabel}</span>
+          <span className="home-zoom-trigger-value">
+            {compact ? currentCompactZoomToken : currentZoomModeLabel}
+          </span>
         </span>
       </button>
 
