@@ -201,6 +201,25 @@ type TimelineItem =
   | { key: string; label: string; type: 'separator' | 'unread' }
   | { key: string; message: ConversationMessageRow; type: 'message' };
 
+type TimelineLabels = {
+  earlier: string;
+  today: string;
+  unreadMessages: string;
+  yesterday: string;
+};
+
+type TimelineRenderItem =
+  | { key: string; label: string; type: 'separator' | 'unread' }
+  | {
+      compactHistoricalUnavailable: boolean;
+      historicalUnavailableContinuationCount: number;
+      isClusteredWithNext: boolean;
+      isClusteredWithPrevious: boolean;
+      key: string;
+      message: ConversationMessageRow;
+      type: 'message';
+    };
+
 type EncryptedUnavailableRunMeta = {
   continuationCount: number;
   isContinuation: boolean;
@@ -237,6 +256,13 @@ const THREAD_MOUNT_RECOVERY_REASON = 'thread-mount-recovery';
 const EMPTY_MESSAGE_ATTACHMENTS: MessageAttachment[] = [];
 const EMPTY_MESSAGE_REACTIONS: MessageReactionGroup[] = [];
 const threadHistorySessionCache = new Map<string, ThreadHistorySessionCacheEntry>();
+const threadTimeFormatterByLanguage = new Map<AppLanguage, Intl.DateTimeFormat>();
+const threadShortDateFormatterByLanguage = new Map<AppLanguage, Intl.DateTimeFormat>();
+const threadShortDateWithYearFormatterByLanguage = new Map<
+  AppLanguage,
+  Intl.DateTimeFormat
+>();
+const loggedThreadGuardDiagnosticKeys = new Set<string>();
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -314,7 +340,7 @@ function getCalendarDayKey(value: string | null) {
 function formatMessageTimestamp(
   value: string | null,
   language: AppLanguage,
-  t: ReturnType<typeof getTranslations>,
+  yesterdayLabel: string,
 ) {
   const parsedDate = parseSafeDate(value);
 
@@ -333,33 +359,29 @@ function formatMessageTimestamp(
   );
 
   if (compareDate.getTime() === today.getTime()) {
-    return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(parsedDate);
+    return getThreadTimeFormatter(language).format(parsedDate);
   }
 
   if (compareDate.getTime() === yesterday.getTime()) {
-    return t.chat.yesterday;
+    return yesterdayLabel;
   }
 
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
-    month: 'short',
-    day: 'numeric',
-    year:
-      parsedDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  }).format(parsedDate);
+  return (
+    parsedDate.getFullYear() === now.getFullYear()
+      ? getThreadShortDateFormatter(language)
+      : getThreadShortDateWithYearFormatter(language)
+  ).format(parsedDate);
 }
 
 function formatDaySeparatorLabel(
   value: string | null,
   language: AppLanguage,
-  t: ReturnType<typeof getTranslations>,
+  labels: Pick<TimelineLabels, 'earlier' | 'today' | 'yesterday'>,
 ) {
   const targetDate = parseSafeDate(value);
 
   if (!targetDate) {
-    return t.chat.earlier;
+    return labels.earlier;
   }
 
   const now = new Date();
@@ -373,19 +395,64 @@ function formatDaySeparatorLabel(
   );
 
   if (compareDate.getTime() === today.getTime()) {
-    return t.chat.today;
+    return labels.today;
   }
 
   if (compareDate.getTime() === yesterday.getTime()) {
-    return t.chat.yesterday;
+    return labels.yesterday;
   }
 
-  return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+  return (
+    targetDate.getFullYear() === now.getFullYear()
+      ? getThreadShortDateFormatter(language)
+      : getThreadShortDateWithYearFormatter(language)
+  ).format(targetDate);
+}
+
+function getThreadTimeFormatter(language: AppLanguage) {
+  const cachedFormatter = threadTimeFormatterByLanguage.get(language);
+
+  if (cachedFormatter) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  threadTimeFormatterByLanguage.set(language, formatter);
+  return formatter;
+}
+
+function getThreadShortDateFormatter(language: AppLanguage) {
+  const cachedFormatter = threadShortDateFormatterByLanguage.get(language);
+
+  if (cachedFormatter) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     month: 'short',
     day: 'numeric',
-    year:
-      targetDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
-  }).format(targetDate);
+  });
+  threadShortDateFormatterByLanguage.set(language, formatter);
+  return formatter;
+}
+
+function getThreadShortDateWithYearFormatter(language: AppLanguage) {
+  const cachedFormatter = threadShortDateWithYearFormatterByLanguage.get(language);
+
+  if (cachedFormatter) {
+    return cachedFormatter;
+  }
+
+  const formatter = new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  threadShortDateWithYearFormatterByLanguage.set(language, formatter);
+  return formatter;
 }
 
 function normalizeMessageBodyText(value: unknown) {
@@ -409,6 +476,181 @@ function formatAttachmentSize(value: number | null) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function normalizeAttachmentSignedUrl(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeAttachmentDisplayName(
+  value: unknown,
+  fallbackLabel: string,
+) {
+  if (typeof value !== 'string') {
+    return fallbackLabel;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || fallbackLabel;
+}
+
+function shouldLogThreadGuardDiagnostics() {
+  return (
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1'
+  );
+}
+
+function logThreadGuardDiagnostic(
+  stage: string,
+  dedupeKey: string,
+  details: Record<string, unknown>,
+) {
+  if (!shouldLogThreadGuardDiagnostics()) {
+    return;
+  }
+
+  const key = `${stage}:${dedupeKey}`;
+
+  if (loggedThreadGuardDiagnosticKeys.has(key)) {
+    return;
+  }
+
+  loggedThreadGuardDiagnosticKeys.add(key);
+  console.info('[chat-thread-guards]', stage, details);
+}
+
+function shouldLogVoiceThreadDiagnostics() {
+  return (
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1'
+  );
+}
+
+function logVoiceThreadDiagnostic(
+  stage: string,
+  details: Record<string, unknown>,
+) {
+  if (!shouldLogVoiceThreadDiagnostics()) {
+    return;
+  }
+
+  console.info('[voice-thread]', stage, details);
+}
+
+function hasRecoverableAttachmentLocator(
+  attachment:
+    | Pick<MessageAttachment, 'bucket' | 'id' | 'messageId' | 'objectPath'>
+    | null
+    | undefined,
+  expectedMessageId?: string | null,
+) {
+  const attachmentId =
+    typeof attachment?.id === 'string' ? attachment.id.trim() : '';
+  const attachmentMessageId =
+    typeof attachment?.messageId === 'string' ? attachment.messageId.trim() : '';
+  const bucket =
+    typeof attachment?.bucket === 'string' ? attachment.bucket.trim() : '';
+  const objectPath =
+    typeof attachment?.objectPath === 'string'
+      ? attachment.objectPath.trim()
+      : '';
+  const normalizedExpectedMessageId =
+    typeof expectedMessageId === 'string' ? expectedMessageId.trim() : '';
+
+  if (!attachmentId || !attachmentMessageId || !bucket || !objectPath) {
+    return false;
+  }
+
+  if (
+    normalizedExpectedMessageId &&
+    attachmentMessageId !== normalizedExpectedMessageId
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function filterRenderableMessageAttachments(
+  messageId: string,
+  attachments: MessageAttachment[],
+) {
+  if (!attachments.length) {
+    return attachments;
+  }
+
+  let filteredAttachments: MessageAttachment[] | null = null;
+  const droppedAttachmentIds: string[] = [];
+
+  for (const [index, attachment] of attachments.entries()) {
+    const attachmentMessageId =
+      typeof attachment.messageId === 'string'
+        ? attachment.messageId.trim()
+        : '';
+
+    if (!attachmentMessageId || attachmentMessageId === messageId) {
+      if (filteredAttachments) {
+        filteredAttachments.push(attachment);
+      }
+      continue;
+    }
+
+    if (!filteredAttachments) {
+      // Preserve the original array reference when nothing is filtered out so
+      // row-level memoization can still short-circuit on unrelated updates.
+      filteredAttachments = attachments.slice(0, index);
+    }
+
+    if (droppedAttachmentIds.length < 3) {
+      droppedAttachmentIds.push(getRenderableAttachmentKey(attachment, index));
+    }
+  }
+
+  if (!filteredAttachments) {
+    return attachments;
+  }
+
+  logThreadGuardDiagnostic(
+    'attachment-mismatch-dropped',
+    `${messageId}:${droppedAttachmentIds.join(',')}`,
+    {
+      droppedAttachmentIds,
+      droppedCount: attachments.length - filteredAttachments.length,
+      messageId,
+      totalAttachmentCount: attachments.length,
+    },
+  );
+
+  return filteredAttachments;
+}
+
+function getRenderableAttachmentKey(
+  attachment: MessageAttachment,
+  index: number,
+) {
+  const normalizedId =
+    typeof attachment.id === 'string' ? attachment.id.trim() : '';
+
+  if (normalizedId) {
+    return normalizedId;
+  }
+
+  const fallbackKey = [
+    typeof attachment.messageId === 'string' ? attachment.messageId.trim() : '',
+    typeof attachment.objectPath === 'string' ? attachment.objectPath.trim() : '',
+    typeof attachment.fileName === 'string' ? attachment.fileName.trim() : '',
+    typeof attachment.createdAt === 'string' ? attachment.createdAt.trim() : '',
+  ]
+    .filter(Boolean)
+    .join(':');
+
+  return fallbackKey || `attachment-${index}`;
+}
+
 function formatVoiceDuration(valueMs: number | null | undefined) {
   if (!valueMs || Number.isNaN(valueMs) || valueMs < 0) {
     return '--:--';
@@ -426,6 +668,10 @@ function resolveVoiceMessageRenderState(input: {
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
+  const normalizedSignedUrl = normalizeAttachmentSignedUrl(
+    input.attachment?.signedUrl,
+  );
+
   if (input.stageHint === 'uploading') {
     return 'uploading' satisfies VoiceMessageRenderState;
   }
@@ -438,16 +684,11 @@ function resolveVoiceMessageRenderState(input: {
     return 'failed' satisfies VoiceMessageRenderState;
   }
 
-  if (input.attachment?.signedUrl) {
+  if (normalizedSignedUrl) {
     return 'ready' satisfies VoiceMessageRenderState;
   }
 
-  if (
-    input.attachment?.id &&
-    input.attachment?.messageId &&
-    input.attachment?.bucket &&
-    input.attachment?.objectPath
-  ) {
+  if (hasRecoverableAttachmentLocator(input.attachment)) {
     return 'processing' satisfies VoiceMessageRenderState;
   }
 
@@ -459,6 +700,10 @@ function resolveVoiceMessageRenderReason(input: {
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
+  const normalizedSignedUrl = normalizeAttachmentSignedUrl(
+    input.attachment?.signedUrl,
+  );
+
   if (input.stageHint === 'uploading') {
     return 'stage-uploading';
   }
@@ -475,16 +720,11 @@ function resolveVoiceMessageRenderReason(input: {
     return 'playback-failed';
   }
 
-  if (input.attachment?.signedUrl) {
+  if (normalizedSignedUrl) {
     return 'signed-url-ready';
   }
 
-  if (
-    input.attachment?.id &&
-    input.attachment?.messageId &&
-    input.attachment?.bucket &&
-    input.attachment?.objectPath
-  ) {
+  if (hasRecoverableAttachmentLocator(input.attachment)) {
     return 'storage-locator-present-awaiting-url';
   }
 
@@ -506,7 +746,7 @@ function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
 function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
   return attachments.some(
     (attachment) =>
-      Boolean(attachment.signedUrl) &&
+      Boolean(normalizeAttachmentSignedUrl(attachment.signedUrl)) &&
       (Boolean(attachment.isVoiceMessage) || attachment.isAudio),
   );
 }
@@ -537,7 +777,10 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
       }
 
       return !hasPlaybackReadyVoiceAttachment(
-        attachmentsByMessageId.get(messageId) ?? [],
+        filterRenderableMessageAttachments(
+          messageId,
+          attachmentsByMessageId.get(messageId) ?? [],
+        ),
       );
     },
   );
@@ -572,7 +815,10 @@ function resolveRecentVoiceMessageIdsNeedingRecovery(input: {
     .filter(
       (message) =>
         !hasPlaybackReadyVoiceAttachment(
-          input.attachmentsByMessage.get(message.id) ?? [],
+          filterRenderableMessageAttachments(
+            message.id,
+            input.attachmentsByMessage.get(message.id) ?? [],
+          ),
         ),
     )
     .map((message) => message.id);
@@ -909,7 +1155,7 @@ function ThreadVoiceMessageBubble({
   );
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
-    attachment?.signedUrl ?? null,
+    normalizeAttachmentSignedUrl(attachment?.signedUrl),
   );
   const [didFailSignedUrlResolve, setDidFailSignedUrlResolve] = useState(false);
   const [ignoredAttachmentSignedUrl, setIgnoredAttachmentSignedUrl] = useState<
@@ -918,12 +1164,10 @@ function ThreadVoiceMessageBubble({
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
-  const attachmentSignedUrl = attachment?.signedUrl?.trim() || null;
-  const hasRecoverableAttachmentLocator = Boolean(
-    attachment?.id &&
-      attachment?.messageId &&
-      attachment?.bucket &&
-      attachment?.objectPath,
+  const attachmentSignedUrl = normalizeAttachmentSignedUrl(attachment?.signedUrl);
+  const hasRecoverableAttachmentStorageLocator = hasRecoverableAttachmentLocator(
+    attachment,
+    messageId,
   );
 
   const effectiveSignedUrl =
@@ -932,7 +1176,8 @@ function ThreadVoiceMessageBubble({
       ? attachmentSignedUrl
       : null);
   const canResolveSignedUrl =
-    Boolean(conversationId && hasRecoverableAttachmentLocator) && !effectiveSignedUrl;
+    Boolean(conversationId && hasRecoverableAttachmentStorageLocator) &&
+    !effectiveSignedUrl;
   const effectiveStageHint =
     stageHint ??
     (isResolvingSignedUrl && !effectiveSignedUrl ? 'processing' : null);
@@ -1020,7 +1265,7 @@ function ThreadVoiceMessageBubble({
 
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? null);
-    setResolvedSignedUrl(attachment?.signedUrl ?? null);
+    setResolvedSignedUrl(normalizeAttachmentSignedUrl(attachment?.signedUrl));
     setDidFailSignedUrlResolve(false);
     setIgnoredAttachmentSignedUrl(null);
     setHasPendingPlaybackIntent(false);
@@ -1044,12 +1289,23 @@ function ThreadVoiceMessageBubble({
       setDidFailSignedUrlResolve(false);
 
       try {
-        const response = await fetch(
-          buildAttachmentSignedUrlResolveUrl({
+        const resolveUrl = buildAttachmentSignedUrlResolveUrl({
+          attachmentId,
+          conversationId,
+          messageId: attachmentMessageId,
+        });
+
+        if (!resolveUrl) {
+          logVoiceThreadDiagnostic('attachment-url-resolve-skipped-invalid-locator', {
             attachmentId,
             conversationId,
             messageId: attachmentMessageId,
-          }),
+          });
+          return null;
+        }
+
+        const response = await fetch(
+          resolveUrl,
           {
             cache: 'no-store',
             credentials: 'same-origin',
@@ -1075,32 +1331,22 @@ function ThreadVoiceMessageBubble({
           setResolvedSignedUrl(nextSignedUrl);
         }
 
-        if (
-          process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
-          typeof window !== 'undefined'
-        ) {
-          console.info('[voice-thread]', 'attachment-url-resolved', {
-            attachmentId,
-            conversationId,
-            messageId: attachmentMessageId,
-            resolved: Boolean(nextSignedUrl),
-          });
-        }
+        logVoiceThreadDiagnostic('attachment-url-resolved', {
+          attachmentId,
+          conversationId,
+          messageId: attachmentMessageId,
+          resolved: Boolean(nextSignedUrl),
+        });
 
         return nextSignedUrl;
       } catch (error) {
         setDidFailSignedUrlResolve(true);
-        if (
-          process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
-          typeof window !== 'undefined'
-        ) {
-          console.info('[voice-thread]', 'attachment-url-resolve-failed', {
-            attachmentId,
-            conversationId,
-            errorMessage: error instanceof Error ? error.message : String(error),
-            messageId: attachmentMessageId,
-          });
-        }
+        logVoiceThreadDiagnostic('attachment-url-resolve-failed', {
+          attachmentId,
+          conversationId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          messageId: attachmentMessageId,
+        });
 
         return null;
       } finally {
@@ -1165,14 +1411,7 @@ function ThreadVoiceMessageBubble({
   );
 
   useEffect(() => {
-    if (
-      process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE !== '1' ||
-      typeof window === 'undefined'
-    ) {
-      return;
-    }
-
-    console.info('[voice-thread]', 'render-state', {
+    logVoiceThreadDiagnostic('render-state', {
       attachmentId: attachment?.id ?? null,
       attachmentMessageId: attachment?.messageId ?? null,
       canResolveSignedUrl,
@@ -1343,7 +1582,7 @@ function ThreadVoiceMessageBubble({
           </div>
         ) : null}
       </div>
-      {effectiveSignedUrl || hasRecoverableAttachmentLocator ? (
+      {effectiveSignedUrl || hasRecoverableAttachmentStorageLocator ? (
         <audio
           ref={audioRef}
           className="message-voice-audio"
@@ -1360,7 +1599,7 @@ function ThreadVoiceMessageBubble({
             event.currentTarget.currentTime = 0;
             setProgressMs(0);
 
-            if (effectiveSignedUrl && hasRecoverableAttachmentLocator) {
+            if (effectiveSignedUrl && hasRecoverableAttachmentStorageLocator) {
               setIgnoredAttachmentSignedUrl(effectiveSignedUrl);
               setDidFailSignedUrlResolve(false);
               setResolvedSignedUrl(null);
@@ -1418,6 +1657,191 @@ function ThreadVoiceMessageBubble({
     </div>
   );
 }
+
+const MemoizedThreadVoiceMessageBubble = memo(
+  ThreadVoiceMessageBubble,
+  (previous, next) =>
+    previous.conversationId === next.conversationId &&
+    previous.isOwnMessage === next.isOwnMessage &&
+    previous.language === next.language &&
+    previous.messageId === next.messageId &&
+    previous.stageHint === next.stageHint &&
+    areMessageAttachmentValuesEqual(previous.attachment, next.attachment),
+);
+
+MemoizedThreadVoiceMessageBubble.displayName = 'MemoizedThreadVoiceMessageBubble';
+
+type ThreadMessageAttachmentsProps = {
+  attachments: MessageAttachment[];
+  language: AppLanguage;
+  onImagePreviewClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+};
+
+const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
+  attachments,
+  language,
+  onImagePreviewClick,
+}: ThreadMessageAttachmentsProps) {
+  const t = getTranslations(language);
+
+  if (!attachments.length) {
+    return null;
+  }
+
+  return (
+    <div className="message-attachments">
+      {attachments.map((attachment, index) => {
+        const attachmentKey = getRenderableAttachmentKey(attachment, index);
+        const attachmentSignedUrl = normalizeAttachmentSignedUrl(
+          attachment.signedUrl,
+        );
+
+        if (attachment.isImage) {
+          const previewTitle = normalizeAttachmentDisplayName(
+            attachment.fileName,
+            t.chat.photo,
+          );
+          const photoMeta = [
+            formatAttachmentSize(attachment.sizeBytes),
+            !attachmentSignedUrl ? t.chat.unavailableRightNow : null,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join(' · ');
+
+          if (!attachmentSignedUrl) {
+            return (
+              <div
+                key={attachmentKey}
+                className="message-photo-card message-photo-card-unavailable"
+              >
+                <span
+                  aria-hidden="true"
+                  className="message-photo-card-visual message-photo-card-visual-unavailable"
+                />
+                <span className="message-photo-card-footer">
+                  <span className="message-photo-card-badge">{t.chat.photo}</span>
+                  {photoMeta ? (
+                    <span className="message-photo-card-meta">{photoMeta}</span>
+                  ) : null}
+                </span>
+              </div>
+            );
+          }
+
+          return (
+            <button
+              key={attachmentKey}
+              aria-haspopup="dialog"
+              aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
+              className="message-photo-card message-photo-card-button"
+              data-message-image-preview="true"
+              data-preview-title={previewTitle}
+              data-preview-url={attachmentSignedUrl}
+              onClick={onImagePreviewClick}
+              type="button"
+            >
+              <span
+                aria-hidden="true"
+                className="message-photo-card-visual"
+                style={{
+                  backgroundImage: `url("${attachmentSignedUrl}")`,
+                }}
+              />
+              <span className="message-photo-card-footer">
+                <span className="message-photo-card-badge">{t.chat.photo}</span>
+                {photoMeta ? (
+                  <span className="message-photo-card-meta">{photoMeta}</span>
+                ) : null}
+              </span>
+            </button>
+          );
+        }
+
+        const attachmentLabel = attachment.isVoiceMessage
+          ? t.chat.voiceMessage
+          : attachment.isAudio
+            ? t.chat.audio
+            : t.chat.file;
+        const attachmentName = normalizeAttachmentDisplayName(
+          attachment.fileName,
+          attachmentLabel,
+        );
+        const attachmentMeta = [
+          formatAttachmentSize(attachment.sizeBytes),
+          !attachmentSignedUrl ? t.chat.unavailableRightNow : null,
+        ]
+          .filter((value): value is string => Boolean(value))
+          .join(' · ');
+        const attachmentContent = (
+          <>
+            <span aria-hidden="true" className="message-attachment-file">
+              {attachment.isAudio ? t.chat.audio : t.chat.file}
+            </span>
+            <span className="message-attachment-copy">
+              <span className="message-attachment-head">
+                <span className="message-attachment-name">
+                  {attachmentName}
+                </span>
+                <span className="message-attachment-kind">{attachmentLabel}</span>
+              </span>
+              {attachmentMeta ? (
+                <span className="message-attachment-meta">{attachmentMeta}</span>
+              ) : null}
+            </span>
+          </>
+        );
+
+        if (!attachmentSignedUrl) {
+          return (
+            <div
+              key={attachmentKey}
+              className="message-attachment-card message-attachment-card-unavailable"
+            >
+              {attachmentContent}
+            </div>
+          );
+        }
+
+        if (attachment.isAudio) {
+          return (
+            <div
+              key={attachmentKey}
+              className="message-attachment-card message-attachment-card-audio"
+            >
+              {attachmentContent}
+              <audio
+                className="message-attachment-audio"
+                controls
+                preload="metadata"
+                src={attachmentSignedUrl}
+              />
+            </div>
+          );
+        }
+
+        return (
+          <a
+            key={attachmentKey}
+            className="message-attachment-card"
+            href={attachmentSignedUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {attachmentContent}
+          </a>
+        );
+      })}
+    </div>
+  );
+}, (previous, next) => {
+  return (
+    previous.language === next.language &&
+    previous.onImagePreviewClick === next.onImagePreviewClick &&
+    areMessageAttachmentsEqual(previous.attachments, next.attachments)
+  );
+});
+
+ThreadMessageAttachments.displayName = 'ThreadMessageAttachments';
 
 function looksLikeUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -1477,6 +1901,16 @@ function buildAttachmentSignedUrlResolveUrl(input: {
   conversationId: string;
   messageId: string;
 }) {
+  if (
+    !looksLikeUuid(input.attachmentId) ||
+    !looksLikeUuid(input.conversationId) ||
+    !looksLikeUuid(input.messageId)
+  ) {
+    // Skip doomed recovery fetches when a stale runtime payload no longer has
+    // a trustworthy storage locator tuple.
+    return null;
+  }
+
   return `/api/messaging/conversations/${input.conversationId}/messages/${input.messageId}/attachments/${input.attachmentId}/signed-url`;
 }
 
@@ -1592,10 +2026,10 @@ function resolveMissingOwnEncryptedMessageIdsForRetry(input: {
 }
 
 function buildTimelineItems(input: {
+  labels: TimelineLabels;
   language: AppLanguage;
   lastReadMessageSeq: number | null;
   messages: ConversationMessageRow[];
-  t: ReturnType<typeof getTranslations>;
 }) {
   return input.messages.flatMap<TimelineItem>((message, index) => {
     const previousMessage = input.messages[index - 1];
@@ -1609,7 +2043,7 @@ function buildTimelineItems(input: {
       items.push({
         type: 'separator',
         key: `day-${currentDayKey}-${message.id}`,
-        label: formatDaySeparatorLabel(message.created_at, input.language, input.t),
+        label: formatDaySeparatorLabel(message.created_at, input.language, input.labels),
       });
     }
 
@@ -1627,7 +2061,7 @@ function buildTimelineItems(input: {
       items.push({
         type: 'unread',
         key: `unread-${message.id}`,
-        label: input.t.chat.unreadMessages,
+        label: input.labels.unreadMessages,
       });
     }
 
@@ -2249,6 +2683,44 @@ function buildUnavailableEncryptedHistoryRunMeta(input: {
   return runMetaByMessageId;
 }
 
+function buildTimelineRenderItems(input: {
+  timelineItems: TimelineItem[];
+  unavailableEncryptedHistoryRunMeta: Map<string, EncryptedUnavailableRunMeta>;
+}) {
+  return input.timelineItems.map<TimelineRenderItem>((item, index) => {
+    if (item.type !== 'message') {
+      return item;
+    }
+
+    const previousTimelineItem = input.timelineItems[index - 1];
+    const nextTimelineItem = input.timelineItems[index + 1];
+    const previousMessage =
+      previousTimelineItem?.type === 'message'
+        ? previousTimelineItem.message
+        : null;
+    const nextMessage =
+      nextTimelineItem?.type === 'message'
+        ? nextTimelineItem.message
+        : null;
+    const unavailableRunMeta =
+      input.unavailableEncryptedHistoryRunMeta.get(item.message.id) ?? null;
+
+    return {
+      compactHistoricalUnavailable: unavailableRunMeta?.isContinuation ?? false,
+      historicalUnavailableContinuationCount:
+        unavailableRunMeta?.continuationCount ?? 0,
+      isClusteredWithNext: canClusterAdjacentMessages(item.message, nextMessage),
+      isClusteredWithPrevious: canClusterAdjacentMessages(
+        previousMessage,
+        item.message,
+      ),
+      key: item.key,
+      message: item.message,
+      type: 'message',
+    };
+  });
+}
+
 type ThreadMessageRowProps = {
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
@@ -2334,6 +2806,34 @@ function areMessageAttachmentsEqual(
       attachment.createdAt === nextAttachment.createdAt
     );
   });
+}
+
+function areMessageAttachmentValuesEqual(
+  left: MessageAttachment | null,
+  right: MessageAttachment | null,
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.id === right.id &&
+    left.fileName === right.fileName &&
+    left.signedUrl === right.signedUrl &&
+    left.sizeBytes === right.sizeBytes &&
+    left.durationMs === right.durationMs &&
+    left.isAudio === right.isAudio &&
+    left.isImage === right.isImage &&
+    left.isVoiceMessage === right.isVoiceMessage &&
+    left.bucket === right.bucket &&
+    left.objectPath === right.objectPath &&
+    left.messageId === right.messageId &&
+    left.createdAt === right.createdAt
+  );
 }
 
 function areMessageReactionGroupsEqual(
@@ -2608,7 +3108,10 @@ function ThreadMessageRowComponent({
   const isMessageInDeleteMode =
     activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
   const messageAttachments =
-    attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS;
+    filterRenderableMessageAttachments(
+      message.id,
+      attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
+    );
   const primaryVoiceAttachment =
     message.kind === 'voice'
       ? messageAttachments.find((attachment) => attachment.isVoiceMessage) ??
@@ -2659,7 +3162,10 @@ function ThreadMessageRowComponent({
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
   const repliedMessageAttachments = repliedMessage
-    ? attachmentsByMessage.get(repliedMessage.id) ?? EMPTY_MESSAGE_ATTACHMENTS
+    ? filterRenderableMessageAttachments(
+        repliedMessage.id,
+        attachmentsByMessage.get(repliedMessage.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
+      )
     : EMPTY_MESSAGE_ATTACHMENTS;
   const replyTargetAttachmentKind = resolveReplyTargetAttachmentKind(
     repliedMessageAttachments,
@@ -2945,9 +3451,13 @@ function ThreadMessageRowComponent({
       event.preventDefault();
       event.stopPropagation();
       closeQuickActions();
-      const previewTitle =
-        event.currentTarget.dataset.previewTitle?.trim() || t.chat.photo;
-      const signedUrl = event.currentTarget.dataset.previewUrl?.trim();
+      const previewTitle = normalizeAttachmentDisplayName(
+        event.currentTarget.dataset.previewTitle,
+        t.chat.photo,
+      );
+      const signedUrl = normalizeAttachmentSignedUrl(
+        event.currentTarget.dataset.previewUrl,
+      );
 
       if (!signedUrl) {
         return;
@@ -2969,7 +3479,8 @@ function ThreadMessageRowComponent({
     nonVoiceAttachments.length === 0 &&
     !isEncryptedDmTextMessage(message);
   const messageTimestampLabel =
-    formatMessageTimestamp(message.created_at, language, t) || t.chat.justNow;
+    formatMessageTimestamp(message.created_at, language, t.chat.yesterday) ||
+    t.chat.justNow;
   const messageMetaContent = (
     <>
       <span>{messageTimestampLabel}</span>
@@ -3426,11 +3937,10 @@ function ThreadMessageRowComponent({
             )
           ) : message.kind === 'voice' ? (
             <div className="message-voice-stack">
-              <ThreadVoiceMessageBubble
+              <MemoizedThreadVoiceMessageBubble
                 attachment={primaryVoiceAttachment}
                 conversationId={conversationId}
                 isOwnMessage={isOwnMessage}
-                key={`${primaryVoiceAttachment?.id ?? message.id}:${primaryVoiceAttachment?.signedUrl ?? 'none'}`}
                 language={language}
                 messageId={message.id}
               />
@@ -3467,174 +3977,11 @@ function ThreadMessageRowComponent({
             <p className="message-body">{t.chat.emptyMessage}</p>
           ) : null}
           {nonVoiceAttachments.length && !isDeletedMessage ? (
-            <div className="message-attachments">
-              {nonVoiceAttachments.map((attachment) => {
-                if (attachment.isImage) {
-                  const photoMeta = [
-                    formatAttachmentSize(attachment.sizeBytes),
-                    !attachment.signedUrl ? t.chat.unavailableRightNow : null,
-                  ]
-                    .filter((value): value is string => Boolean(value))
-                    .join(' · ');
-
-                  if (!attachment.signedUrl) {
-                    return (
-                      <div
-                        key={attachment.id}
-                        className="message-photo-card message-photo-card-unavailable"
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="message-photo-card-visual message-photo-card-visual-unavailable"
-                        />
-                        <span className="message-photo-card-footer">
-                          <span className="message-photo-card-badge">
-                            {t.chat.photo}
-                          </span>
-                          {photoMeta ? (
-                            <span className="message-photo-card-meta">
-                              {photoMeta}
-                            </span>
-                          ) : null}
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <button
-                      key={attachment.id}
-                      aria-haspopup="dialog"
-                      aria-label={t.chat.openPhotoPreviewAria(
-                        attachment.fileName.trim() || t.chat.photo,
-                      )}
-                      className="message-photo-card message-photo-card-button"
-                      data-message-image-preview="true"
-                      data-preview-title={attachment.fileName.trim() || t.chat.photo}
-                      data-preview-url={attachment.signedUrl}
-                      onClick={handleImageAttachmentPreview}
-                      type="button"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="message-photo-card-visual"
-                        style={{
-                          backgroundImage: `url("${attachment.signedUrl}")`,
-                        }}
-                      />
-                      <span className="message-photo-card-footer">
-                        <span className="message-photo-card-badge">
-                          {t.chat.photo}
-                        </span>
-                        {photoMeta ? (
-                          <span className="message-photo-card-meta">
-                            {photoMeta}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                }
-
-                const attachmentLabel = attachment.isVoiceMessage
-                  ? t.chat.voiceMessage
-                  : attachment.isAudio
-                    ? t.chat.audio
-                    : t.chat.file;
-                const attachmentMeta = [
-                  formatAttachmentSize(attachment.sizeBytes),
-                  !attachment.signedUrl ? t.chat.unavailableRightNow : null,
-                ]
-                  .filter((value): value is string => Boolean(value))
-                  .join(' · ');
-                const attachmentContent = (
-                  <>
-                    <span
-                      aria-hidden="true"
-                      className="message-attachment-file"
-                    >
-                      {attachment.isAudio ? t.chat.audio : t.chat.file}
-                    </span>
-                    <span className="message-attachment-copy">
-                      <span className="message-attachment-head">
-                        <span className="message-attachment-name">
-                          {attachment.fileName}
-                        </span>
-                        <span className="message-attachment-kind">
-                          {attachmentLabel}
-                        </span>
-                      </span>
-                      {attachmentMeta ? (
-                        <span className="message-attachment-meta">
-                          {attachmentMeta}
-                        </span>
-                      ) : null}
-                    </span>
-                  </>
-                );
-
-                if (!attachment.signedUrl) {
-                  return (
-                    <div
-                      key={attachment.id}
-                      className="message-attachment-card message-attachment-card-unavailable"
-                    >
-                      {attachmentContent}
-                    </div>
-                  );
-                }
-
-                if (attachment.isAudio) {
-                  return (
-                    <div
-                      key={attachment.id}
-                      className="message-attachment-card message-attachment-card-audio"
-                    >
-                      {attachmentContent}
-                      <audio
-                        className="message-attachment-audio"
-                        controls
-                        preload="metadata"
-                        src={attachment.signedUrl}
-                      />
-                    </div>
-                  );
-                }
-
-                if (attachment.isImage) {
-                  const previewTitle =
-                    attachment.fileName.trim() || t.chat.photo;
-
-                  return (
-                    <button
-                      key={attachment.id}
-                      aria-haspopup="dialog"
-                      aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
-                      className="message-attachment-card message-attachment-card-button"
-                      data-message-image-preview="true"
-                      data-preview-title={previewTitle}
-                      data-preview-url={attachment.signedUrl}
-                      onClick={handleImageAttachmentPreview}
-                      type="button"
-                    >
-                      {attachmentContent}
-                    </button>
-                  );
-                }
-
-                return (
-                  <a
-                    key={attachment.id}
-                    className="message-attachment-card"
-                    href={attachment.signedUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {attachmentContent}
-                  </a>
-                );
-              })}
-            </div>
+            <ThreadMessageAttachments
+              attachments={nonVoiceAttachments}
+              language={language}
+              onImagePreviewClick={handleImageAttachmentPreview}
+            />
           ) : null}
         </div>
         </div>
@@ -3700,9 +4047,15 @@ function ThreadImagePreviewOverlay({
   preview,
 }: ThreadImagePreviewOverlayProps) {
   const portalRoot = typeof document !== 'undefined' ? document.body : null;
+  const previewTitle = preview
+    ? normalizeAttachmentDisplayName(preview.fileName, fallbackTitle)
+    : fallbackTitle;
+  const previewSignedUrl = preview
+    ? normalizeAttachmentSignedUrl(preview.signedUrl)
+    : null;
 
   useEffect(() => {
-    if (!preview) {
+    if (!preview || !previewSignedUrl) {
       return;
     }
 
@@ -3721,13 +4074,11 @@ function ThreadImagePreviewOverlay({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose, preview]);
+  }, [onClose, preview, previewSignedUrl]);
 
-  if (!preview || !portalRoot) {
+  if (!preview || !previewSignedUrl || !portalRoot) {
     return null;
   }
-
-  const previewTitle = preview.fileName.trim() || fallbackTitle;
 
   return createPortal(
     <div
@@ -3760,7 +4111,7 @@ function ThreadImagePreviewOverlay({
             <img
               alt={previewTitle}
               className="chat-image-preview-image"
-              src={preview.signedUrl}
+              src={previewSignedUrl}
             />
             <figcaption className="chat-image-preview-caption">
               {previewTitle}
@@ -3945,15 +4296,24 @@ export function ThreadHistoryViewport({
       ),
     [historyState.senderProfilesById, language],
   );
+  const timelineLabels = useMemo(
+    () => ({
+      earlier: t.chat.earlier,
+      today: t.chat.today,
+      unreadMessages: t.chat.unreadMessages,
+      yesterday: t.chat.yesterday,
+    }),
+    [t.chat.earlier, t.chat.today, t.chat.unreadMessages, t.chat.yesterday],
+  );
   const timelineItems = useMemo(
     () =>
       buildTimelineItems({
+        labels: timelineLabels,
         language,
         lastReadMessageSeq: currentReadMessageSeq,
         messages: historyState.messages,
-        t,
       }),
-    [currentReadMessageSeq, historyState.messages, language, t],
+    [currentReadMessageSeq, historyState.messages, language, timelineLabels],
   );
   const unavailableEncryptedHistoryRunMeta = useMemo(
     () =>
@@ -3967,6 +4327,14 @@ export function ThreadHistoryViewport({
       historyState.encryptedHistoryHintsByMessage,
       timelineItems,
     ],
+  );
+  const timelineRenderItems = useMemo(
+    () =>
+      buildTimelineRenderItems({
+        timelineItems,
+        unavailableEncryptedHistoryRunMeta,
+      }),
+    [timelineItems, unavailableEncryptedHistoryRunMeta],
   );
   const oldestLoadedSeq = historyState.oldestLoadedSeq;
   const hasMoreOlder = historyState.hasMoreOlder;
@@ -4995,8 +5363,29 @@ export function ThreadHistoryViewport({
   }, [historyState.messages]);
 
   const openImagePreview = useCallback((preview: ActiveImagePreview) => {
-    setActiveImagePreview(preview);
-  }, []);
+    const signedUrl = normalizeAttachmentSignedUrl(preview.signedUrl);
+    const previewTitle = normalizeAttachmentDisplayName(
+      preview.fileName,
+      t.chat.photo,
+    );
+
+    if (!signedUrl) {
+      logThreadGuardDiagnostic(
+        'image-preview-suppressed-missing-url',
+        `${conversationId}:${previewTitle}`,
+        {
+          conversationId,
+          fileName: previewTitle,
+        },
+      );
+      return;
+    }
+
+    setActiveImagePreview({
+      fileName: previewTitle,
+      signedUrl,
+    });
+  }, [conversationId, t.chat.photo]);
 
   const closeImagePreview = useCallback(() => {
     setActiveImagePreview(null);
@@ -5092,7 +5481,7 @@ export function ThreadHistoryViewport({
           <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
         </div>
       ) : (
-        timelineItems.map((item, index) => {
+        timelineRenderItems.map((item) => {
           if (item.type === 'separator') {
             return (
               <div
@@ -5118,17 +5507,6 @@ export function ThreadHistoryViewport({
           }
 
           if (item.type === 'message') {
-            const previousTimelineItem = timelineItems[index - 1];
-            const nextTimelineItem = timelineItems[index + 1];
-            const previousMessage =
-              previousTimelineItem?.type === 'message'
-                ? previousTimelineItem.message
-                : null;
-            const nextMessage =
-              nextTimelineItem?.type === 'message'
-                ? nextTimelineItem.message
-                : null;
-
             return (
               <ThreadMessageRow
                 key={item.message.id}
@@ -5136,27 +5514,17 @@ export function ThreadHistoryViewport({
                 activeEditMessageId={activeEditMessageId}
                 activeSpaceId={activeSpaceId}
                 attachmentsByMessage={historyState.attachmentsByMessage}
-                compactHistoricalUnavailable={
-                  unavailableEncryptedHistoryRunMeta.get(item.message.id)
-                    ?.isContinuation ?? false
-                }
+                compactHistoricalUnavailable={item.compactHistoricalUnavailable}
                 conversationId={conversationId}
                 conversationKind={conversationKind}
                 currentUserId={currentUserId}
                 encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
                 encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
                 historicalUnavailableContinuationCount={
-                  unavailableEncryptedHistoryRunMeta.get(item.message.id)
-                    ?.continuationCount ?? 0
+                  item.historicalUnavailableContinuationCount
                 }
-                isClusteredWithNext={canClusterAdjacentMessages(
-                  item.message,
-                  nextMessage,
-                )}
-                isClusteredWithPrevious={canClusterAdjacentMessages(
-                  previousMessage,
-                  item.message,
-                )}
+                isClusteredWithNext={item.isClusteredWithNext}
+                isClusteredWithPrevious={item.isClusteredWithPrevious}
                 language={language}
                 latestVisibleMessageSeq={latestCommittedMessageSeq}
                 message={item.message}

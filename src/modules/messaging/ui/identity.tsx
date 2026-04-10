@@ -129,8 +129,11 @@ function IdentityAvatarBase({
   className,
   diagnosticsSurface,
 }: IdentityAvatarProps) {
-  const toneClass = getStableTone(identity?.userId || label);
-  const initials = getIdentityInitials(label);
+  const toneClass = useMemo(
+    () => getStableTone(identity?.userId || label),
+    [identity?.userId, label],
+  );
+  const initials = useMemo(() => getIdentityInitials(label), [label]);
   const avatarPath = isRenderableAvatarPath(identity?.avatarPath)
     ? (identity?.avatarPath ?? null)
     : null;
@@ -247,6 +250,8 @@ function IdentityAvatarBase({
               ? 'identity-avatar-image identity-avatar-image-ready'
               : 'identity-avatar-image'
           }
+          decoding="async"
+          draggable={false}
           loading="lazy"
           onError={() => {
             if (diagnosticsEnabled) {
