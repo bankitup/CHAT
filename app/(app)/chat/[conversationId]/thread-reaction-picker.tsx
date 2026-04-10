@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   applyThreadReactionMutationResult,
   reconcileThreadReactionOptimisticMutation,
@@ -39,6 +39,68 @@ export function ThreadReactionPicker({
     initialReactions,
   );
   const [pendingEmoji, setPendingEmoji] = useState<string | null>(null);
+  const lastPointerHandledReactionRef = useRef<{
+    emoji: string;
+    handledAt: number;
+  } | null>(null);
+
+  const selectReaction = useCallback(
+    async (input: {
+      emoji: string;
+      optimisticSelected: boolean;
+    }) => {
+      if (pendingEmoji) {
+        return;
+      }
+
+      applyThreadReactionMutationResult({
+        conversationId,
+        currentUserId,
+        emoji: input.emoji,
+        messageId,
+        selected: input.optimisticSelected,
+      });
+      onReactionSelected?.();
+      setPendingEmoji(input.emoji);
+
+      try {
+        const formData = new FormData();
+        formData.set('conversationId', conversationId);
+        formData.set('emoji', input.emoji);
+        formData.set('messageId', messageId);
+        const result = await toggleReactionMutationAction(formData);
+
+        if (!result.ok) {
+          rollbackThreadReactionOptimisticMutation({
+            conversationId,
+            currentUserId,
+            emoji: input.emoji,
+            messageId,
+            optimisticSelected: input.optimisticSelected,
+          });
+          return;
+        }
+
+        reconcileThreadReactionOptimisticMutation({
+          conversationId,
+          currentUserId,
+          emoji: result.data.emoji,
+          messageId: result.data.messageId,
+          optimisticSelected: input.optimisticSelected,
+          selected: result.data.selected,
+        });
+      } finally {
+        setPendingEmoji(null);
+      }
+    },
+    [
+      conversationId,
+      currentUserId,
+      messageId,
+      onReactionSelected,
+      pendingEmoji,
+    ],
+  );
 
   return (
     <div
@@ -62,54 +124,49 @@ export function ThreadReactionPicker({
                 : 'reaction-toggle'
             }
             disabled={pendingEmoji === emoji}
-            onClick={async (event) => {
+            onClick={(event) => {
               event.stopPropagation();
 
-              if (pendingEmoji) {
+              const lastPointerHandledReaction =
+                lastPointerHandledReactionRef.current;
+
+              if (
+                lastPointerHandledReaction?.emoji === emoji &&
+                Date.now() - lastPointerHandledReaction.handledAt < 800
+              ) {
+                lastPointerHandledReactionRef.current = null;
                 return;
               }
 
-              const optimisticSelected =
-                !Boolean(currentReaction?.selectedByCurrentUser);
-
-              applyThreadReactionMutationResult({
-                conversationId,
-                currentUserId,
+              void selectReaction({
                 emoji,
-                messageId,
-                selected: optimisticSelected,
+                optimisticSelected: !Boolean(
+                  currentReaction?.selectedByCurrentUser,
+                ),
               });
-              onReactionSelected?.();
-              setPendingEmoji(emoji);
-              try {
-                const formData = new FormData();
-                formData.set('conversationId', conversationId);
-                formData.set('emoji', emoji);
-                formData.set('messageId', messageId);
-                const result = await toggleReactionMutationAction(formData);
-
-                if (!result.ok) {
-                  rollbackThreadReactionOptimisticMutation({
-                    conversationId,
-                    currentUserId,
-                    emoji,
-                    messageId,
-                    optimisticSelected,
-                  });
-                  return;
-                }
-
-                reconcileThreadReactionOptimisticMutation({
-                  conversationId,
-                  currentUserId,
-                  emoji: result.data.emoji,
-                  messageId: result.data.messageId,
-                  optimisticSelected,
-                  selected: result.data.selected,
-                });
-              } finally {
-                setPendingEmoji(null);
+            }}
+            onPointerUp={(event) => {
+              if (
+                event.pointerType === 'mouse' ||
+                event.button !== 0 ||
+                pendingEmoji
+              ) {
+                return;
               }
+
+              event.preventDefault();
+              event.stopPropagation();
+              lastPointerHandledReactionRef.current = {
+                emoji,
+                handledAt: Date.now(),
+              };
+
+              void selectReaction({
+                emoji,
+                optimisticSelected: !Boolean(
+                  currentReaction?.selectedByCurrentUser,
+                ),
+              });
             }}
             type="button"
           >

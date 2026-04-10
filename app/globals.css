@@ -7652,6 +7652,7 @@ main {
   font-size: 0.72rem;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .reaction-pill-selected,
