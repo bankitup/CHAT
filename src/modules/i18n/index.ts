@@ -553,6 +553,8 @@ type LanguageDictionary = {
     permissionReadyNote: string;
     notConfiguredNote: string;
     syncFailedNote: string;
+    privateMessageTitle: string;
+    privateMessageBody: string;
     sendTest: string;
     sendingTest: string;
     testReadyNote: string;
@@ -1471,6 +1473,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       notConfiguredNote:
         'Add a web-push VAPID public key for runtime config and apply the push-subscriptions SQL before enabling this here.',
       syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
+      privateMessageTitle: 'New message',
+      privateMessageBody: 'Open the app to read it.',
       sendTest: 'Send test notification',
       sendingTest: 'Sending test notification…',
       testReadyNote: 'Send a test notification to verify this browser.',
@@ -2450,6 +2454,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Добавьте VAPID public key для runtime-настройки push и примените SQL для push_subscriptions, прежде чем включать это здесь.',
       syncFailedNote:
         'Сейчас не удалось подключить этот браузер к push-уведомлениям. Попробуйте ещё раз.',
+      privateMessageTitle: 'Новое сообщение',
+      privateMessageBody: 'Откройте приложение, чтобы прочитать его.',
       sendTest: 'Отправить тестовое уведомление',
       sendingTest: 'Отправляем тестовое уведомление…',
       testReadyNote: 'Отправьте тестовое уведомление, чтобы проверить этот браузер.',
