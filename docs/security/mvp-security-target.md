@@ -22,6 +22,13 @@ Current assumption:
 - RLS should become the raw row-visibility backstop for authenticated user-session reads
 - service-role access stays narrow and explicit for admin workflows, multi-row maintenance, cleanup, and controlled delivery helpers
 
+Current implementation snapshot:
+
+- the outer-tenancy slice for `public.spaces` and `public.space_members` is now live
+- media metadata and private bucket access already have first-pass hardening
+- `public.conversations`, `public.conversation_members`, `public.messages`, and `public.message_reactions` still need later slices
+- the practical current state is tracked in [mvp-security-posture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/mvp-security-posture.md)
+
 ## MVP target model
 
 | Area | Frontend-readable via normal user session | Backend-only via privileged server path | Never directly user-readable | Primary boundary |

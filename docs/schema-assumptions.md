@@ -19,6 +19,14 @@ Current rollout assumption:
 
 - existing messaging activity is backfilled into one default space named `TEST`
 
+## Current security posture snapshot
+
+- `public.spaces` and `public.space_members` now have live authenticated read RLS scoped to actual space membership.
+- `public.message_assets` and `public.message_asset_links` already have first-pass RLS for active conversation members.
+- chat media blobs are expected to stay in the private `message-media` bucket and are delivered through membership-checked signed URLs.
+- `public.conversations`, `public.conversation_members`, `public.messages`, and `public.message_reactions` are still pending later hardening slices.
+- the practical current posture is summarized in [docs/security/mvp-security-posture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/mvp-security-posture.md).
+
 ## Tables in active use
 
 - `public.profiles`
