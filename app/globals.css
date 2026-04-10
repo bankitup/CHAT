@@ -4185,6 +4185,8 @@ main {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
   gap: 8px;
   padding: 2px 2px 0;
 }
@@ -4525,6 +4527,8 @@ main {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 10px;
 }
 
@@ -4563,6 +4567,8 @@ main {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: 10px;
 }
 
@@ -4714,7 +4720,16 @@ main {
 .messenger-home-main-flow {
   width: 100%;
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
   gap: 14px;
+}
+
+.home-dashboard-main-flow > *,
+.messenger-home-main-flow > * {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .messenger-home-personal-grid {
@@ -4726,6 +4741,12 @@ main {
   grid-template-areas:
     'profile'
     'status';
+}
+
+.messenger-home-personal-grid > * {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .messenger-home-personal-card {
@@ -4872,12 +4893,9 @@ main {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-}
-
-.messenger-home-usage-header,
-.messenger-home-usage-plan-band {
   flex-wrap: wrap;
+  min-width: 0;
+  gap: 10px;
 }
 
 .messenger-home-usage-copy,
@@ -4994,7 +5012,8 @@ main {
   font-weight: 600;
   line-height: 1.25;
   text-align: right;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .messenger-home-usage-metric-value-group {
@@ -5002,6 +5021,7 @@ main {
   justify-items: end;
   gap: 4px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .messenger-home-usage-meter {
@@ -5190,14 +5210,14 @@ main {
   }
 
   .messenger-home-usage-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (min-width: 560px) {
   .messenger-home-entry-actions,
   .messenger-home-admin-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
