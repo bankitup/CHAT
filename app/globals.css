@@ -4312,50 +4312,54 @@ main {
 
 .messenger-home-profile-header {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .messenger-home-profile-topline {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .messenger-home-profile-copy {
-  flex: 1 1 12rem;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
 .messenger-home-profile-controls {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 5px;
+  width: fit-content;
   flex: 0 1 auto;
+  margin-left: auto;
   min-width: 0;
   max-width: 100%;
 }
 
 .messenger-home-profile-controls > * {
   flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .messenger-home-profile-controls .settings-language-compact {
   flex-wrap: nowrap;
-  gap: calc(3px * var(--app-zoom-space-scale));
+  gap: calc(2px * var(--app-zoom-space-scale));
   max-width: 100%;
-  padding: calc(3px * var(--app-zoom-space-scale));
+  padding: calc(2px * var(--app-zoom-space-scale));
 }
 
 .messenger-home-profile-controls .settings-language-compact-button {
-  min-width: calc(34px * var(--app-zoom-control-scale));
-  min-height: calc(28px * var(--app-zoom-control-scale));
-  padding: 0 calc(8px * var(--app-zoom-space-scale));
-  font-size: 0.68rem;
+  min-width: calc(30px * var(--app-zoom-control-scale));
+  min-height: calc(26px * var(--app-zoom-control-scale));
+  padding: 0 calc(7px * var(--app-zoom-space-scale));
+  font-size: 0.65rem;
 }
 
 .messenger-home-profile-controls .home-zoom-panel-compact {
@@ -4365,25 +4369,26 @@ main {
 }
 
 .messenger-home-profile-controls .home-zoom-trigger-compact {
-  min-height: calc(34px * var(--app-zoom-control-scale));
+  min-height: calc(30px * var(--app-zoom-control-scale));
   padding:
-    calc(3px * var(--app-zoom-space-scale))
-    calc(9px * var(--app-zoom-space-scale));
+    calc(2px * var(--app-zoom-space-scale))
+    calc(7px * var(--app-zoom-space-scale));
 }
 
 .messenger-home-profile-controls
   .home-zoom-trigger-compact
   .home-zoom-trigger-glyph {
-  min-width: calc(22px * var(--app-zoom-control-scale));
-  min-height: calc(22px * var(--app-zoom-control-scale));
-  padding: 0 calc(4px * var(--app-zoom-space-scale));
-  font-size: 0.64rem;
+  min-width: calc(18px * var(--app-zoom-control-scale));
+  min-height: calc(18px * var(--app-zoom-control-scale));
+  padding: 0 calc(3px * var(--app-zoom-space-scale));
+  font-size: 0.57rem;
 }
 
 .messenger-home-profile-controls
   .home-zoom-trigger-compact
   .home-zoom-trigger-value {
-  font-size: 0.69rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.01em;
 }
 
 .home-zoom-panel-copy {
@@ -4782,81 +4787,82 @@ main {
 
 .messenger-home-profile-editor-card {
   grid-area: profile;
-  padding-top: 14px;
-  padding-bottom: 12px;
+  padding-top: 12px;
+  padding-bottom: 10px;
 }
 
 .messenger-home-profile-editor-card .profile-settings-form {
-  gap: 8px;
+  gap: 6px;
 }
 
 .messenger-home-profile-editor-card .profile-inline-shell {
-  gap: 8px;
+  gap: 6px;
   padding: 0;
 }
 
 .messenger-home-profile-editor-card .profile-inline-top-row {
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
 }
 
 .messenger-home-profile-editor-card .profile-inline-main {
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
 }
 
 .messenger-home-profile-editor-card .profile-inline-avatar .identity-avatar {
-  width: 72px;
-  height: 72px;
-  font-size: 1.22rem;
+  width: 64px;
+  height: 64px;
+  font-size: 1.08rem;
 }
 
 .messenger-home-profile-editor-card .profile-inline-avatar-badge {
-  width: 20px;
-  height: 20px;
-  font-size: 0.64rem;
+  width: 18px;
+  height: 18px;
+  font-size: 0.58rem;
 }
 
 .messenger-home-profile-editor-card .profile-inline-copy {
-  gap: 4px;
+  gap: 3px;
   padding-top: 0;
 }
 
 .messenger-home-profile-editor-card .profile-inline-name-input {
-  min-height: 38px;
-  padding-inline: 12px;
+  min-height: 36px;
+  padding-inline: 11px;
 }
 
 .messenger-home-profile-editor-card .profile-inline-view {
-  gap: 3px;
+  gap: 2px;
 }
 
 .messenger-home-profile-editor-card .profile-inline-name {
-  font-size: 1rem;
-  line-height: 1.12;
+  font-size: 0.97rem;
+  line-height: 1.1;
 }
 
 .messenger-home-profile-editor-card .profile-inline-meta {
-  gap: 6px;
+  gap: 5px;
 }
 
 .messenger-home-profile-editor-card .profile-inline-email {
-  font-size: 0.78rem;
-  line-height: 1.24;
+  font-size: 0.76rem;
+  line-height: 1.2;
 }
 
 .messenger-home-profile-editor-card .profile-inline-handle {
-  min-height: 22px;
-  padding: 3px 8px;
-  font-size: 0.68rem;
+  min-height: 20px;
+  padding: 2px 7px;
+  font-size: 0.64rem;
 }
 
 .messenger-home-profile-editor-card .profile-field-note {
-  font-size: 0.72rem;
-  line-height: 1.24;
+  font-size: 0.69rem;
+  line-height: 1.2;
 }
 
 .messenger-home-profile-editor-card .profile-inline-actions {
-  gap: 8px;
+  gap: 6px;
 }
 
 .messenger-home-profile-editor-card .profile-inline-cancel {
