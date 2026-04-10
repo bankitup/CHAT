@@ -1,39 +1,39 @@
 import 'server-only';
 
+import {
+  getHomeSpacePlanDefinition,
+  resolveCurrentHomeSpacePlanCode,
+  resolveHomeSpaceOverallUsageState,
+  resolveHomeSpaceUsageState,
+  resolveNextHomeSpacePlanCode,
+  type HomeSpacePlanCode,
+  type HomeSpaceUsageState,
+} from './space-plan-config';
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import type { SpaceParticipantRecord } from '@/modules/spaces/server';
 
-export type HomeSpaceUsagePlanCode = 'starter';
-
-export type HomeSpaceUsageSnapshot = {
-  plan: HomeSpaceUsagePlanCode;
-  membersUsed: number;
-  membersLimit: number;
-  adminsUsed: number;
-  adminsLimit: number;
-  storageUsedBytes: number;
-  storageLimitBytes: number;
-  callMinutesUsed: number;
-  callMinutesLimit: number;
-  upgradeRecommended: boolean;
+export type HomeSpaceUsageMetricSnapshot = {
+  limit: number;
+  state: HomeSpaceUsageState;
+  used: number;
 };
 
-const HOME_SPACE_USAGE_PLAN_LIMITS: Record<
-  HomeSpaceUsagePlanCode,
-  {
-    admins: number;
-    callMinutes: number;
-    members: number;
-    storageBytes: number;
-  }
-> = {
-  starter: {
-    admins: 3,
-    callMinutes: 600,
-    members: 24,
-    storageBytes: 25 * 1024 * 1024 * 1024,
-  },
+export type HomeSpaceStorageUsageMetricSnapshot = {
+  limitBytes: number;
+  state: HomeSpaceUsageState;
+  usedBytes: number;
+};
+
+export type HomeSpaceUsageSnapshot = {
+  admins: HomeSpaceUsageMetricSnapshot;
+  callMinutes: HomeSpaceUsageMetricSnapshot;
+  members: HomeSpaceUsageMetricSnapshot;
+  nextPlan: HomeSpacePlanCode | null;
+  overallState: Exclude<HomeSpaceUsageState, 'future'>;
+  plan: HomeSpacePlanCode;
+  storage: HomeSpaceStorageUsageMetricSnapshot;
+  upgradeRecommended: boolean;
 };
 
 function sumFinitePositiveNumbers(values: Array<number | null | undefined>) {
@@ -91,29 +91,61 @@ export async function getHomeSpaceUsageSnapshot(input: {
   participants: SpaceParticipantRecord[];
   spaceId: string;
 }): Promise<HomeSpaceUsageSnapshot> {
-  const plan = 'starter' satisfies HomeSpaceUsagePlanCode;
-  const limits = HOME_SPACE_USAGE_PLAN_LIMITS[plan];
   const membersUsed = input.participants.length;
   const adminsUsed = input.participants.filter(
     (participant) =>
       participant.role === 'owner' || participant.role === 'admin',
   ).length;
   const storageUsedBytes = await getSpaceStorageUsageBytes(input.spaceId);
-  const upgradeRecommended =
-    membersUsed / limits.members >= 0.8 ||
-    adminsUsed / limits.admins >= 0.8 ||
-    storageUsedBytes / limits.storageBytes >= 0.8;
+  const plan = resolveCurrentHomeSpacePlanCode({
+    adminsUsed,
+    membersUsed,
+    storageUsedBytes,
+  });
+  const planDefinition = getHomeSpacePlanDefinition(plan);
+  const nextPlan = resolveNextHomeSpacePlanCode(plan);
+  const members = {
+    limit: planDefinition.limits.members,
+    state: resolveHomeSpaceUsageState({
+      limit: planDefinition.limits.members,
+      used: membersUsed,
+    }),
+    used: membersUsed,
+  } satisfies HomeSpaceUsageMetricSnapshot;
+  const admins = {
+    limit: planDefinition.limits.admins,
+    state: resolveHomeSpaceUsageState({
+      limit: planDefinition.limits.admins,
+      used: adminsUsed,
+    }),
+    used: adminsUsed,
+  } satisfies HomeSpaceUsageMetricSnapshot;
+  const storage = {
+    limitBytes: planDefinition.limits.storageBytes,
+    state: resolveHomeSpaceUsageState({
+      limit: planDefinition.limits.storageBytes,
+      used: storageUsedBytes,
+    }),
+    usedBytes: storageUsedBytes,
+  } satisfies HomeSpaceStorageUsageMetricSnapshot;
+  const overallState = resolveHomeSpaceOverallUsageState([
+    members.state,
+    admins.state,
+    storage.state,
+  ]);
 
   return {
-    adminsLimit: limits.admins,
-    adminsUsed,
-    callMinutesLimit: limits.callMinutes,
-    callMinutesUsed: 0,
-    membersLimit: limits.members,
-    membersUsed,
+    admins,
+    callMinutes: {
+      limit: planDefinition.limits.callMinutes,
+      state: 'future',
+      used: 0,
+    },
+    members,
+    nextPlan,
+    overallState,
     plan,
-    storageLimitBytes: limits.storageBytes,
-    storageUsedBytes,
-    upgradeRecommended,
+    storage,
+    upgradeRecommended: overallState !== 'normal',
   } satisfies HomeSpaceUsageSnapshot;
 }

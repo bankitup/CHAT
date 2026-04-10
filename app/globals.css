@@ -3945,11 +3945,26 @@ main {
     0 8px 20px rgba(17, 24, 39, 0.05);
 }
 
-.messenger-home-usage-plan-band-upgrade {
-  border-color: rgba(31, 111, 235, 0.24);
+.messenger-home-usage-plan-band-nearing {
+  border-color: rgba(193, 152, 42, 0.34);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 10px 24px rgba(31, 111, 235, 0.08);
+    0 10px 24px rgba(193, 152, 42, 0.08);
+}
+
+.messenger-home-usage-plan-band-over {
+  border-color: rgba(214, 96, 56, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 10px 24px rgba(214, 96, 56, 0.08);
+}
+
+.messenger-home-usage-plan-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .messenger-home-usage-kicker {
@@ -3964,6 +3979,13 @@ main {
 .messenger-home-usage-plan-value {
   font-size: 1.02rem;
   line-height: 1.2;
+}
+
+.messenger-home-usage-plan-summary {
+  margin: 0;
+  color: rgba(91, 100, 112, 0.84);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .messenger-home-usage-actions {
@@ -3991,6 +4013,18 @@ main {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.messenger-home-usage-metric-nearing {
+  border-color: rgba(193, 152, 42, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 245, 0.98), rgba(255, 249, 237, 0.9));
+}
+
+.messenger-home-usage-metric-over {
+  border-color: rgba(214, 96, 56, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 248, 245, 0.98), rgba(255, 241, 236, 0.92));
+}
+
 .messenger-home-usage-metric-future {
   background: rgba(248, 250, 253, 0.92);
 }
@@ -4011,6 +4045,13 @@ main {
   white-space: nowrap;
 }
 
+.messenger-home-usage-metric-value-group {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 0;
+}
+
 .messenger-home-usage-meter {
   display: block;
   width: 100%;
@@ -4029,9 +4070,49 @@ main {
     linear-gradient(90deg, rgba(31, 111, 235, 0.92), rgba(90, 156, 255, 0.74));
 }
 
+.messenger-home-usage-metric-nearing .messenger-home-usage-meter-fill {
+  background:
+    linear-gradient(90deg, rgba(197, 150, 22, 0.92), rgba(232, 187, 69, 0.78));
+}
+
+.messenger-home-usage-metric-over .messenger-home-usage-meter-fill {
+  background:
+    linear-gradient(90deg, rgba(214, 96, 56, 0.94), rgba(236, 137, 94, 0.8));
+}
+
 .messenger-home-usage-metric-future .messenger-home-usage-meter-fill {
   background:
     linear-gradient(90deg, rgba(160, 170, 184, 0.82), rgba(188, 197, 209, 0.68));
+}
+
+.messenger-home-usage-state-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  max-width: 100%;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(234, 239, 246, 0.9);
+  color: rgba(86, 96, 110, 0.88);
+  font-size: 0.67rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.messenger-home-usage-state-pill-nearing {
+  background: rgba(255, 244, 219, 0.96);
+  color: rgba(137, 97, 16, 0.92);
+}
+
+.messenger-home-usage-state-pill-over {
+  background: rgba(255, 233, 227, 0.98);
+  color: rgba(170, 70, 34, 0.94);
+}
+
+.messenger-home-usage-state-pill-future {
+  background: rgba(234, 239, 246, 0.92);
+  color: rgba(100, 110, 123, 0.84);
 }
 
 .messenger-home-usage-note {

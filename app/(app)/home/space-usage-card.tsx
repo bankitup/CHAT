@@ -5,6 +5,8 @@ export type SpaceUsageMetricViewModel = {
   label: string;
   limitLabel: string;
   progressPercent: number;
+  state: 'future' | 'nearing' | 'normal' | 'over';
+  stateLabel?: string | null;
   tone: 'future' | 'live';
   usedLabel: string;
 };
@@ -17,23 +19,68 @@ type SpaceUsageCardProps = {
     managePlanAction: string;
     previewPill: string;
     title: string;
-    upgradeAction: string;
   };
   managePlanHref: string;
   metrics: SpaceUsageMetricViewModel[];
   planLabel: string;
+  planState: 'nearing' | 'normal' | 'over';
+  planStateLabel?: string | null;
+  planSummary?: string | null;
   upgradeRecommended?: boolean;
+  upgradeActionLabel: string;
   upgradeHref: string;
 };
+
+function resolveMetricClassName(metric: SpaceUsageMetricViewModel) {
+  const classNames = ['messenger-home-usage-metric'];
+
+  if (metric.tone === 'future') {
+    classNames.push('messenger-home-usage-metric-future');
+  }
+
+  if (metric.state === 'nearing') {
+    classNames.push('messenger-home-usage-metric-nearing');
+  }
+
+  if (metric.state === 'over') {
+    classNames.push('messenger-home-usage-metric-over');
+  }
+
+  return classNames.join(' ');
+}
+
+function resolveUsageStatePillClassName(state: SpaceUsageMetricViewModel['state']) {
+  switch (state) {
+    case 'future':
+      return 'messenger-home-usage-state-pill messenger-home-usage-state-pill-future';
+    case 'nearing':
+      return 'messenger-home-usage-state-pill messenger-home-usage-state-pill-nearing';
+    case 'over':
+      return 'messenger-home-usage-state-pill messenger-home-usage-state-pill-over';
+    default:
+      return 'messenger-home-usage-state-pill';
+  }
+}
 
 export function SpaceUsageCard({
   copy,
   managePlanHref,
   metrics,
   planLabel,
+  planState,
+  planStateLabel = null,
+  planSummary = null,
   upgradeRecommended = false,
+  upgradeActionLabel,
   upgradeHref,
 }: SpaceUsageCardProps) {
+  const planBandClassName =
+    planState === 'over'
+      ? 'messenger-home-usage-plan-band messenger-home-usage-plan-band-over'
+      : planState === 'nearing'
+        ? 'messenger-home-usage-plan-band messenger-home-usage-plan-band-nearing'
+        : 'messenger-home-usage-plan-band';
+
   return (
     <section
       className="card stack settings-surface settings-home-card messenger-home-usage-card"
@@ -51,19 +98,25 @@ export function SpaceUsageCard({
         </div>
 
         <section
-          className={
-            upgradeRecommended
-              ? 'messenger-home-usage-plan-band messenger-home-usage-plan-band-upgrade'
-              : 'messenger-home-usage-plan-band'
-          }
+          className={planBandClassName}
         >
           <div className="stack messenger-home-usage-plan-copy">
-            <span className="messenger-home-usage-kicker">
-              {copy.currentPlanLabel}
-            </span>
+            <div className="messenger-home-usage-plan-topline">
+              <span className="messenger-home-usage-kicker">
+                {copy.currentPlanLabel}
+              </span>
+              {planStateLabel ? (
+                <span className={resolveUsageStatePillClassName(planState)}>
+                  {planStateLabel}
+                </span>
+              ) : null}
+            </div>
             <h3 className="card-title messenger-home-usage-plan-value">
               {planLabel}
             </h3>
+            {planSummary ? (
+              <p className="messenger-home-usage-plan-summary">{planSummary}</p>
+            ) : null}
           </div>
 
           <div className="messenger-home-usage-actions">
@@ -83,7 +136,7 @@ export function SpaceUsageCard({
               href={upgradeHref}
               prefetch={false}
             >
-              {copy.upgradeAction}
+              {upgradeActionLabel}
             </Link>
           </div>
         </section>
@@ -92,18 +145,21 @@ export function SpaceUsageCard({
           {metrics.map((metric) => (
             <article
               key={metric.id}
-              className={
-                metric.tone === 'future'
-                  ? 'messenger-home-usage-metric messenger-home-usage-metric-future'
-                  : 'messenger-home-usage-metric'
-              }
+              className={resolveMetricClassName(metric)}
             >
               <div className="messenger-home-usage-metric-topline">
                 <span className="messenger-home-usage-metric-label">
                   {metric.label}
                 </span>
-                <span className="messenger-home-usage-metric-value">
-                  {metric.usedLabel} / {metric.limitLabel}
+                <span className="messenger-home-usage-metric-value-group">
+                  <span className="messenger-home-usage-metric-value">
+                    {metric.usedLabel} / {metric.limitLabel}
+                  </span>
+                  {metric.stateLabel ? (
+                    <span className={resolveUsageStatePillClassName(metric.state)}>
+                      {metric.stateLabel}
+                    </span>
+                  ) : null}
                 </span>
               </div>
               <span aria-hidden="true" className="messenger-home-usage-meter">

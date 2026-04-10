@@ -223,13 +223,21 @@ type LanguageDictionary = {
     spaceUsagePreviewPill: string;
     spaceUsageCurrentPlanLabel: string;
     spaceUsageManagePlanAction: string;
-    spaceUsageUpgradeAction: string;
     spaceUsageMembersLabel: string;
     spaceUsageAdminsLabel: string;
     spaceUsageStorageLabel: string;
     spaceUsageCallMinutesLabel: string;
     spaceUsageFutureTrackingNote: string;
-    spaceUsageStarterPlanLabel: string;
+    spaceUsagePrivatePlanLabel: string;
+    spaceUsagePrivatePlanSummary: string;
+    spaceUsageCommunityPlanLabel: string;
+    spaceUsageCommunityPlanSummary: string;
+    spaceUsageFutureLabel: string;
+    spaceUsageNearingLimitLabel: string;
+    spaceUsageOverLimitLabel: string;
+    spaceUsageUpgradeRecommendedLabel: string;
+    spaceUsageUpgradeToCommunityAction: string;
+    spaceUsageViewUsageAction: string;
     spaceUsageStorageUnit: string;
     spaceUsageMinutesUnit: string;
     currentUserBadge: string;
@@ -1119,14 +1127,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaceUsagePreviewPill: 'Admin view',
       spaceUsageCurrentPlanLabel: 'Current plan',
       spaceUsageManagePlanAction: 'Manage plan',
-      spaceUsageUpgradeAction: 'Upgrade',
       spaceUsageMembersLabel: 'Members',
       spaceUsageAdminsLabel: 'Admins',
       spaceUsageStorageLabel: 'Storage',
       spaceUsageCallMinutesLabel: 'Call minutes',
       spaceUsageFutureTrackingNote:
         'Call minutes stay on preview counters until live usage tracking is enabled for this space.',
-      spaceUsageStarterPlanLabel: 'Starter',
+      spaceUsagePrivatePlanLabel: 'Private',
+      spaceUsagePrivatePlanSummary:
+        '1 space · DM + basic groups · fixed history',
+      spaceUsageCommunityPlanLabel: 'Community',
+      spaceUsageCommunityPlanSummary:
+        '1 space · moderation · activity logs · metadata exports',
+      spaceUsageFutureLabel: 'Later',
+      spaceUsageNearingLimitLabel: 'Nearing limit',
+      spaceUsageOverLimitLabel: 'Over limit',
+      spaceUsageUpgradeRecommendedLabel: 'Upgrade recommended',
+      spaceUsageUpgradeToCommunityAction: 'Upgrade to Community',
+      spaceUsageViewUsageAction: 'View usage',
       spaceUsageStorageUnit: 'GB',
       spaceUsageMinutesUnit: 'min',
       currentUserBadge: 'You',
@@ -2095,14 +2113,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaceUsagePreviewPill: 'Только для админов',
       spaceUsageCurrentPlanLabel: 'Текущий план',
       spaceUsageManagePlanAction: 'Управлять планом',
-      spaceUsageUpgradeAction: 'Обновить план',
       spaceUsageMembersLabel: 'Участники',
       spaceUsageAdminsLabel: 'Админы',
       spaceUsageStorageLabel: 'Хранилище',
       spaceUsageCallMinutesLabel: 'Минуты звонков',
       spaceUsageFutureTrackingNote:
         'Минуты звонков пока остаются preview-счётчиками, пока для этого пространства не включён живой usage tracking.',
-      spaceUsageStarterPlanLabel: 'Starter',
+      spaceUsagePrivatePlanLabel: 'Private',
+      spaceUsagePrivatePlanSummary:
+        '1 пространство · личные сообщения + базовые группы · фиксированная история',
+      spaceUsageCommunityPlanLabel: 'Community',
+      spaceUsageCommunityPlanSummary:
+        '1 пространство · модерация · логи активности · экспорт метаданных',
+      spaceUsageFutureLabel: 'Позже',
+      spaceUsageNearingLimitLabel: 'Почти лимит',
+      spaceUsageOverLimitLabel: 'Лимит превышен',
+      spaceUsageUpgradeRecommendedLabel: 'Рекомендуем апгрейд',
+      spaceUsageUpgradeToCommunityAction: 'Перейти на Community',
+      spaceUsageViewUsageAction: 'Посмотреть использование',
       spaceUsageStorageUnit: 'ГБ',
       spaceUsageMinutesUnit: 'мин',
       currentUserBadge: 'Вы',

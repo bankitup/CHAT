@@ -2,6 +2,10 @@ import { logoutAction } from '../actions';
 import { ProfileSettingsForm } from '../settings/profile-settings-form';
 import { ProfileStatusForm } from '../settings/profile-status-form';
 import {
+  type HomeSpacePlanCode,
+  type HomeSpaceUsageState,
+} from './space-plan-config';
+import {
   getHomeSpaceUsageSnapshot,
   type HomeSpaceUsageSnapshot,
 } from './space-usage-data';
@@ -65,6 +69,75 @@ function formatStorageUsageBytes(input: {
   }).format(roundedValue)} ${input.unitLabel}`;
 }
 
+function resolveHomeSpacePlanLabel(input: {
+  plan: HomeSpacePlanCode;
+  t: ReturnType<typeof getTranslations>;
+}) {
+  switch (input.plan) {
+    case 'private':
+      return input.t.messengerHome.spaceUsagePrivatePlanLabel;
+    case 'community':
+      return input.t.messengerHome.spaceUsageCommunityPlanLabel;
+    default:
+      return input.plan;
+  }
+}
+
+function resolveHomeSpacePlanSummary(input: {
+  plan: HomeSpacePlanCode;
+  t: ReturnType<typeof getTranslations>;
+}) {
+  switch (input.plan) {
+    case 'private':
+      return input.t.messengerHome.spaceUsagePrivatePlanSummary;
+    case 'community':
+      return input.t.messengerHome.spaceUsageCommunityPlanSummary;
+    default:
+      return null;
+  }
+}
+
+function resolveHomeSpaceMetricStateLabel(input: {
+  state: HomeSpaceUsageState;
+  t: ReturnType<typeof getTranslations>;
+}) {
+  switch (input.state) {
+    case 'future':
+      return input.t.messengerHome.spaceUsageFutureLabel;
+    case 'nearing':
+      return input.t.messengerHome.spaceUsageNearingLimitLabel;
+    case 'over':
+      return input.t.messengerHome.spaceUsageOverLimitLabel;
+    default:
+      return null;
+  }
+}
+
+function resolveHomeSpacePlanStateLabel(input: {
+  state: HomeSpaceUsageSnapshot['overallState'];
+  t: ReturnType<typeof getTranslations>;
+}) {
+  switch (input.state) {
+    case 'nearing':
+      return input.t.messengerHome.spaceUsageNearingLimitLabel;
+    case 'over':
+      return input.t.messengerHome.spaceUsageUpgradeRecommendedLabel;
+    default:
+      return null;
+  }
+}
+
+function resolveHomeSpaceUpgradeActionLabel(input: {
+  nextPlan: HomeSpaceUsageSnapshot['nextPlan'];
+  t: ReturnType<typeof getTranslations>;
+}) {
+  if (input.nextPlan === 'community') {
+    return input.t.messengerHome.spaceUsageUpgradeToCommunityAction;
+  }
+
+  return input.t.messengerHome.spaceUsageViewUsageAction;
+}
+
 function buildMessengerSpaceUsageData(input: {
   managePlanHref: string;
   snapshot: HomeSpaceUsageSnapshot;
@@ -75,49 +148,69 @@ function buildMessengerSpaceUsageData(input: {
     {
       id: 'members',
       label: input.t.messengerHome.spaceUsageMembersLabel,
-      limitLabel: String(input.snapshot.membersLimit),
+      limitLabel: String(input.snapshot.members.limit),
       progressPercent: resolveUsageProgressPercent({
-        limit: input.snapshot.membersLimit,
-        used: input.snapshot.membersUsed,
+        limit: input.snapshot.members.limit,
+        used: input.snapshot.members.used,
+      }),
+      state: input.snapshot.members.state,
+      stateLabel: resolveHomeSpaceMetricStateLabel({
+        state: input.snapshot.members.state,
+        t: input.t,
       }),
       tone: 'live',
-      usedLabel: String(input.snapshot.membersUsed),
+      usedLabel: String(input.snapshot.members.used),
     },
     {
       id: 'admins',
       label: input.t.messengerHome.spaceUsageAdminsLabel,
-      limitLabel: String(input.snapshot.adminsLimit),
+      limitLabel: String(input.snapshot.admins.limit),
       progressPercent: resolveUsageProgressPercent({
-        limit: input.snapshot.adminsLimit,
-        used: input.snapshot.adminsUsed,
+        limit: input.snapshot.admins.limit,
+        used: input.snapshot.admins.used,
+      }),
+      state: input.snapshot.admins.state,
+      stateLabel: resolveHomeSpaceMetricStateLabel({
+        state: input.snapshot.admins.state,
+        t: input.t,
       }),
       tone: 'live',
-      usedLabel: String(input.snapshot.adminsUsed),
+      usedLabel: String(input.snapshot.admins.used),
     },
     {
       id: 'storage',
       label: input.t.messengerHome.spaceUsageStorageLabel,
       limitLabel: formatStorageUsageBytes({
         unitLabel: input.t.messengerHome.spaceUsageStorageUnit,
-        valueBytes: input.snapshot.storageLimitBytes,
+        valueBytes: input.snapshot.storage.limitBytes,
       }),
       progressPercent: resolveUsageProgressPercent({
-        limit: input.snapshot.storageLimitBytes,
-        used: input.snapshot.storageUsedBytes,
+        limit: input.snapshot.storage.limitBytes,
+        used: input.snapshot.storage.usedBytes,
+      }),
+      state: input.snapshot.storage.state,
+      stateLabel: resolveHomeSpaceMetricStateLabel({
+        state: input.snapshot.storage.state,
+        t: input.t,
       }),
       tone: 'live',
       usedLabel: formatStorageUsageBytes({
         unitLabel: input.t.messengerHome.spaceUsageStorageUnit,
-        valueBytes: input.snapshot.storageUsedBytes,
+        valueBytes: input.snapshot.storage.usedBytes,
       }),
     },
     {
       id: 'call-minutes',
       label: input.t.messengerHome.spaceUsageCallMinutesLabel,
-      limitLabel: `${input.snapshot.callMinutesLimit} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
+      limitLabel: `${input.snapshot.callMinutes.limit} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
       progressPercent: 0,
+      state: input.snapshot.callMinutes.state,
+      stateLabel: resolveHomeSpaceMetricStateLabel({
+        state: input.snapshot.callMinutes.state,
+        t: input.t,
+      }),
       tone: 'future',
-      usedLabel: `${input.snapshot.callMinutesUsed} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
+      usedLabel: `${input.snapshot.callMinutes.used} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
     },
   ];
 
@@ -129,15 +222,27 @@ function buildMessengerSpaceUsageData(input: {
       managePlanAction: input.t.messengerHome.spaceUsageManagePlanAction,
       previewPill: input.t.messengerHome.spaceUsagePreviewPill,
       title: input.t.messengerHome.spaceUsageTitle,
-      upgradeAction: input.t.messengerHome.spaceUsageUpgradeAction,
     },
     managePlanHref: input.managePlanHref,
     metrics,
-    planLabel:
-      input.snapshot.plan === 'starter'
-        ? input.t.messengerHome.spaceUsageStarterPlanLabel
-        : input.snapshot.plan,
+    planLabel: resolveHomeSpacePlanLabel({
+      plan: input.snapshot.plan,
+      t: input.t,
+    }),
+    planState: input.snapshot.overallState,
+    planStateLabel: resolveHomeSpacePlanStateLabel({
+      state: input.snapshot.overallState,
+      t: input.t,
+    }),
+    planSummary: resolveHomeSpacePlanSummary({
+      plan: input.snapshot.plan,
+      t: input.t,
+    }),
     upgradeHref: input.upgradeHref,
+    upgradeActionLabel: resolveHomeSpaceUpgradeActionLabel({
+      nextPlan: input.snapshot.nextPlan,
+      t: input.t,
+    }),
     upgradeRecommended: input.snapshot.upgradeRecommended,
   };
 }
