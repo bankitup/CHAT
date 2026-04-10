@@ -386,7 +386,7 @@ Planned columns:
 - `space_id`
 - `user_id`
 - `role`
-- `created_at`
+- `joined_at`
 
 Current assumptions:
 
@@ -395,6 +395,7 @@ Current assumptions:
 - exactly one owner per space is the intended v1 default
 - `space_members` is broader than `conversation_members`; it is the outer access boundary, not the per-chat participant list
 - inbox, activity, and chat access rely on `space_members` to decide which spaces a user may actively enter
+- active-space ordering and Home participant rendering currently depend on `space_members.joined_at`
 - current first-step rollout backfills current conversation participants into the default `TEST` space
 
 ### `public.conversations.space_id`
@@ -462,10 +463,13 @@ Operational note:
 
 ## Recommended hardening before broader testing
 
-1. `public.conversations.dm_key`
+1. `public.spaces` / `public.space_members` outer-tenancy RLS
+   Source file: [2026-04-10-spaces-and-space-members-rls.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-10-spaces-and-space-members-rls.sql)
+
+2. `public.conversations.dm_key`
    Source file: [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
 
-2. `public.conversations.avatar_path`
+3. `public.conversations.avatar_path`
    Source file: [2026-04-05-conversations-avatar-path.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-05-conversations-avatar-path.sql)
 
 ## Historical space-scoping migrations
@@ -483,6 +487,9 @@ when `public.conversations.space_id` is missing, nullable, or not backfilled.
 3. production alignment patch when `spaces`/`space_members` already exist but
    `conversations.space_id` is missing or not backfilled
    Source file: [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
+
+4. `public.space_members.joined_at` runtime align for chooser and participant ordering
+   Source file: [2026-04-10-space-members-joined-at-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-10-space-members-joined-at-runtime-align.sql)
 
 ## Required migrations before enabling DM E2EE bootstrap
 
