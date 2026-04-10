@@ -408,19 +408,17 @@ export default async function HomeDashboardPage({
                     <h2 className="section-title">{t.settings.profileTitle}</h2>
                   </div>
 
-                  <div className="messenger-home-profile-language">
+                  <div className="messenger-home-profile-controls">
                     <HomeLanguageSwitch
                       currentLanguage={language}
                       spaceId={activeSpace.id}
                     />
+                    <HomeAppZoomControl
+                      compact
+                      initialZoomMode={currentZoomMode}
+                      language={language}
+                    />
                   </div>
-                </div>
-
-                <div className="messenger-home-profile-zoom">
-                  <HomeAppZoomControl
-                    initialZoomMode={currentZoomMode}
-                    language={language}
-                  />
                 </div>
               </div>
 

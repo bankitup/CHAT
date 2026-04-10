@@ -17,6 +17,7 @@ import {
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 
 type HomeAppZoomControlProps = {
+  compact?: boolean;
   initialZoomMode: AppZoomMode;
   language: AppLanguage;
 };
@@ -52,6 +53,7 @@ function resolveZoomModeHint(input: {
 }
 
 export function HomeAppZoomControl({
+  compact = false,
   initialZoomMode,
   language,
 }: HomeAppZoomControlProps) {
@@ -156,14 +158,24 @@ export function HomeAppZoomControl({
   }, [language, previewZoomMode, router]);
 
   return (
-    <div className="home-zoom-control" ref={containerRef}>
+    <div
+      className={
+        compact ? 'home-zoom-control home-zoom-control-compact' : 'home-zoom-control'
+      }
+      ref={containerRef}
+    >
       <button
+        aria-label={`${t.zoomSwitcher.trigger}: ${currentZoomModeLabel}`}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         className={
           isOpen
-            ? 'home-zoom-trigger home-zoom-trigger-active'
-            : 'home-zoom-trigger'
+            ? compact
+              ? 'home-zoom-trigger home-zoom-trigger-compact home-zoom-trigger-active'
+              : 'home-zoom-trigger home-zoom-trigger-active'
+            : compact
+              ? 'home-zoom-trigger home-zoom-trigger-compact'
+              : 'home-zoom-trigger'
         }
         onClick={() => {
           if (isOpen) {
@@ -190,7 +202,9 @@ export function HomeAppZoomControl({
       {isOpen ? (
         <div
           aria-label={t.zoomSwitcher.title}
-          className="card home-zoom-panel"
+          className={
+            compact ? 'card home-zoom-panel home-zoom-panel-compact' : 'card home-zoom-panel'
+          }
           role="dialog"
         >
           <div className="stack home-zoom-panel-copy">
