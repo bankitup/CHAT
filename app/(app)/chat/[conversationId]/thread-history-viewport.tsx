@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -228,6 +229,8 @@ const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
 const MESSAGE_CLUSTER_MAX_GAP_MS = 5 * 60 * 1000;
 const THREAD_HISTORY_SESSION_CACHE_MAX_ENTRIES = 6;
+const EMPTY_MESSAGE_ATTACHMENTS: MessageAttachment[] = [];
+const EMPTY_MESSAGE_REACTIONS: MessageReactionGroup[] = [];
 const threadHistorySessionCache = new Map<string, ThreadHistorySessionCacheEntry>();
 
 const activeThreadVoicePlayback: {
@@ -2141,7 +2144,277 @@ type ThreadMessageRowProps = {
   threadClientDiagnostics: DmThreadClientDiagnostics;
 };
 
-function ThreadMessageRow({
+function areConversationMessagesEqual(
+  left: ConversationMessageRow | null,
+  right: ConversationMessageRow | null,
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.id === right.id &&
+    left.body === right.body &&
+    left.client_id === right.client_id &&
+    left.content_mode === right.content_mode &&
+    left.conversation_id === right.conversation_id &&
+    left.created_at === right.created_at &&
+    left.deleted_at === right.deleted_at &&
+    left.edited_at === right.edited_at &&
+    left.kind === right.kind &&
+    left.reply_to_message_id === right.reply_to_message_id &&
+    left.sender_device_id === right.sender_device_id &&
+    left.sender_id === right.sender_id &&
+    left.seq === right.seq
+  );
+}
+
+function areMessageAttachmentsEqual(
+  left: MessageAttachment[],
+  right: MessageAttachment[],
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((attachment, index) => {
+    const nextAttachment = right[index];
+
+    return (
+      attachment.id === nextAttachment?.id &&
+      attachment.fileName === nextAttachment.fileName &&
+      attachment.signedUrl === nextAttachment.signedUrl &&
+      attachment.sizeBytes === nextAttachment.sizeBytes &&
+      attachment.durationMs === nextAttachment.durationMs &&
+      attachment.isAudio === nextAttachment.isAudio &&
+      attachment.isImage === nextAttachment.isImage &&
+      attachment.isVoiceMessage === nextAttachment.isVoiceMessage &&
+      attachment.bucket === nextAttachment.bucket &&
+      attachment.objectPath === nextAttachment.objectPath &&
+      attachment.messageId === nextAttachment.messageId &&
+      attachment.createdAt === nextAttachment.createdAt
+    );
+  });
+}
+
+function areMessageReactionGroupsEqual(
+  left: MessageReactionGroup[],
+  right: MessageReactionGroup[],
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((reaction, index) => {
+    const nextReaction = right[index];
+
+    return (
+      reaction.emoji === nextReaction?.emoji &&
+      reaction.count === nextReaction.count &&
+      reaction.selectedByCurrentUser === nextReaction.selectedByCurrentUser
+    );
+  });
+}
+
+function areStoredDmE2eeEnvelopesEqual(
+  left: StoredDmE2eeEnvelope | null,
+  right: StoredDmE2eeEnvelope | null,
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.messageId === right.messageId &&
+    left.senderDeviceRecordId === right.senderDeviceRecordId &&
+    left.recipientDeviceRecordId === right.recipientDeviceRecordId &&
+    left.envelopeType === right.envelopeType &&
+    left.ciphertext === right.ciphertext &&
+    left.usedOneTimePrekeyId === right.usedOneTimePrekeyId &&
+    left.createdAt === right.createdAt
+  );
+}
+
+function areEncryptedHistoryHintsEqual(
+  left: EncryptedDmServerHistoryHint | null,
+  right: EncryptedDmServerHistoryHint | null,
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.code === right.code &&
+    left.committedHistoryState === right.committedHistoryState &&
+    left.currentDeviceAvailability === right.currentDeviceAvailability &&
+    left.recoveryDisposition === right.recoveryDisposition &&
+    left.activeDeviceRecordId === right.activeDeviceRecordId &&
+    left.messageCreatedAt === right.messageCreatedAt &&
+    left.viewerJoinedAt === right.viewerJoinedAt
+  );
+}
+
+function areThreadClientDiagnosticsEqual(
+  left: DmThreadClientDiagnostics,
+  right: DmThreadClientDiagnostics,
+) {
+  return (
+    left.debugRequestId === right.debugRequestId &&
+    left.deploymentId === right.deploymentId &&
+    left.gitCommitSha === right.gitCommitSha &&
+    left.vercelUrl === right.vercelUrl
+  );
+}
+
+function getReplyTargetMessage(
+  message: ConversationMessageRow,
+  messagesById: Map<string, ConversationMessageRow>,
+) {
+  return message.reply_to_message_id
+    ? messagesById.get(message.reply_to_message_id) ?? null
+    : null;
+}
+
+function getReplyTargetSenderLabel(
+  repliedMessage: ConversationMessageRow | null,
+  senderNames: Map<string, string>,
+) {
+  if (!repliedMessage?.sender_id) {
+    return null;
+  }
+
+  return senderNames.get(repliedMessage.sender_id) ?? null;
+}
+
+function areThreadMessageRowPropsEqual(
+  previousProps: ThreadMessageRowProps,
+  nextProps: ThreadMessageRowProps,
+) {
+  if (
+    previousProps.activeDeleteMessageId !== nextProps.activeDeleteMessageId ||
+    previousProps.activeEditMessageId !== nextProps.activeEditMessageId ||
+    previousProps.activeSpaceId !== nextProps.activeSpaceId ||
+    previousProps.compactHistoricalUnavailable !==
+      nextProps.compactHistoricalUnavailable ||
+    previousProps.conversationId !== nextProps.conversationId ||
+    previousProps.conversationKind !== nextProps.conversationKind ||
+    previousProps.currentUserId !== nextProps.currentUserId ||
+    previousProps.historicalUnavailableContinuationCount !==
+      nextProps.historicalUnavailableContinuationCount ||
+    previousProps.isClusteredWithNext !== nextProps.isClusteredWithNext ||
+    previousProps.isClusteredWithPrevious !==
+      nextProps.isClusteredWithPrevious ||
+    previousProps.language !== nextProps.language ||
+    previousProps.latestVisibleMessageSeq !== nextProps.latestVisibleMessageSeq ||
+    previousProps.onOpenImagePreview !== nextProps.onOpenImagePreview ||
+    previousProps.otherParticipantReadSeq !== nextProps.otherParticipantReadSeq ||
+    previousProps.otherParticipantUserId !== nextProps.otherParticipantUserId ||
+    !areThreadClientDiagnosticsEqual(
+      previousProps.threadClientDiagnostics,
+      nextProps.threadClientDiagnostics,
+    )
+  ) {
+    return false;
+  }
+
+  if (!areConversationMessagesEqual(previousProps.message, nextProps.message)) {
+    return false;
+  }
+
+  const previousAttachments =
+    previousProps.attachmentsByMessage.get(previousProps.message.id) ??
+    EMPTY_MESSAGE_ATTACHMENTS;
+  const nextAttachments =
+    nextProps.attachmentsByMessage.get(nextProps.message.id) ??
+    EMPTY_MESSAGE_ATTACHMENTS;
+
+  if (!areMessageAttachmentsEqual(previousAttachments, nextAttachments)) {
+    return false;
+  }
+
+  const previousReactions =
+    previousProps.reactionsByMessage.get(previousProps.message.id) ??
+    EMPTY_MESSAGE_REACTIONS;
+  const nextReactions =
+    nextProps.reactionsByMessage.get(nextProps.message.id) ??
+    EMPTY_MESSAGE_REACTIONS;
+
+  if (!areMessageReactionGroupsEqual(previousReactions, nextReactions)) {
+    return false;
+  }
+
+  const previousEnvelope =
+    previousProps.encryptedEnvelopesByMessage.get(previousProps.message.id) ?? null;
+  const nextEnvelope =
+    nextProps.encryptedEnvelopesByMessage.get(nextProps.message.id) ?? null;
+
+  if (!areStoredDmE2eeEnvelopesEqual(previousEnvelope, nextEnvelope)) {
+    return false;
+  }
+
+  const previousHistoryHint =
+    previousProps.encryptedHistoryHintsByMessage.get(previousProps.message.id) ??
+    null;
+  const nextHistoryHint =
+    nextProps.encryptedHistoryHintsByMessage.get(nextProps.message.id) ?? null;
+
+  if (!areEncryptedHistoryHintsEqual(previousHistoryHint, nextHistoryHint)) {
+    return false;
+  }
+
+  const previousReplyTarget = getReplyTargetMessage(
+    previousProps.message,
+    previousProps.messagesById,
+  );
+  const nextReplyTarget = getReplyTargetMessage(
+    nextProps.message,
+    nextProps.messagesById,
+  );
+
+  if (!areConversationMessagesEqual(previousReplyTarget, nextReplyTarget)) {
+    return false;
+  }
+
+  const previousReplyAttachments = previousReplyTarget
+    ? previousProps.attachmentsByMessage.get(previousReplyTarget.id) ??
+      EMPTY_MESSAGE_ATTACHMENTS
+    : EMPTY_MESSAGE_ATTACHMENTS;
+  const nextReplyAttachments = nextReplyTarget
+    ? nextProps.attachmentsByMessage.get(nextReplyTarget.id) ??
+      EMPTY_MESSAGE_ATTACHMENTS
+    : EMPTY_MESSAGE_ATTACHMENTS;
+
+  if (!areMessageAttachmentsEqual(previousReplyAttachments, nextReplyAttachments)) {
+    return false;
+  }
+
+  return (
+    getReplyTargetSenderLabel(previousReplyTarget, previousProps.senderNames) ===
+    getReplyTargetSenderLabel(nextReplyTarget, nextProps.senderNames)
+  );
+}
+
+function ThreadMessageRowComponent({
   activeDeleteMessageId,
   activeEditMessageId,
   activeSpaceId,
@@ -2202,7 +2475,8 @@ function ThreadMessageRow({
     !isEncryptedDmTextMessage(message);
   const isMessageInDeleteMode =
     activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
-  const messageAttachments = attachmentsByMessage.get(message.id) ?? [];
+  const messageAttachments =
+    attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS;
   const primaryVoiceAttachment =
     message.kind === 'voice'
       ? messageAttachments.find((attachment) => attachment.isVoiceMessage) ??
@@ -2253,8 +2527,8 @@ function ThreadMessageRow({
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
   const repliedMessageAttachments = repliedMessage
-    ? attachmentsByMessage.get(repliedMessage.id) ?? []
-    : [];
+    ? attachmentsByMessage.get(repliedMessage.id) ?? EMPTY_MESSAGE_ATTACHMENTS
+    : EMPTY_MESSAGE_ATTACHMENTS;
   const replyTargetAttachmentKind = resolveReplyTargetAttachmentKind(
     repliedMessageAttachments,
   );
@@ -2618,7 +2892,6 @@ function ThreadMessageRow({
       ]
         .filter(Boolean)
         .join(' ')}
-      key={message.id}
     >
       <div
         className={[
@@ -2670,7 +2943,9 @@ function ThreadMessageRow({
                   conversationId={conversationId}
                   currentUserId={currentUserId}
                   emojis={MESSAGE_QUICK_REACTIONS}
-                  initialReactions={reactionsByMessage.get(message.id) ?? []}
+                  initialReactions={
+                    reactionsByMessage.get(message.id) ?? EMPTY_MESSAGE_REACTIONS
+                  }
                   isOwnMessage={isOwnMessage}
                   messageId={message.id}
                   onReactionSelected={closeQuickActions}
@@ -3200,7 +3475,9 @@ function ThreadMessageRow({
             ariaLabel={t.chat.messageReactions}
             conversationId={conversationId}
             currentUserId={currentUserId}
-            initialReactions={reactionsByMessage.get(message.id) ?? []}
+            initialReactions={
+              reactionsByMessage.get(message.id) ?? EMPTY_MESSAGE_REACTIONS
+            }
             isOwnMessage={isOwnMessage}
             messageId={message.id}
           />
@@ -3225,6 +3502,13 @@ function ThreadMessageRow({
     </article>
   );
 }
+
+const ThreadMessageRow = memo(
+  ThreadMessageRowComponent,
+  areThreadMessageRowPropsEqual,
+);
+
+ThreadMessageRow.displayName = 'ThreadMessageRow';
 
 type ThreadImagePreviewOverlayProps = {
   closeLabel: string;
@@ -4574,7 +4858,7 @@ export function ThreadHistoryViewport({
 
             return (
               <ThreadMessageRow
-                key={item.key}
+                key={item.message.id}
                 activeDeleteMessageId={activeDeleteMessageId}
                 activeEditMessageId={activeEditMessageId}
                 activeSpaceId={activeSpaceId}
