@@ -1471,9 +1471,6 @@ export default async function ChatPage({
             activeDeleteMessageId={activeDeleteMessageId}
             activeEditMessageId={activeEditMessageId}
             activeSpaceId={activeSpaceId}
-            confirmedClientIds={messages
-              .map((message) => message.client_id ?? null)
-              .filter((clientId): clientId is string => Boolean(clientId))}
             conversationId={conversationId}
             conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
             currentReadMessageSeq={readState.lastReadMessageSeq}

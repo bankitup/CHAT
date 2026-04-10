@@ -132,7 +132,6 @@ type ThreadHistoryViewportProps = {
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
   activeSpaceId: string;
-  confirmedClientIds: string[];
   conversationId: string;
   conversationKind: 'dm' | 'group';
   currentReadMessageSeq: number | null;
@@ -2814,7 +2813,6 @@ export function ThreadHistoryViewport({
   activeDeleteMessageId,
   activeEditMessageId,
   activeSpaceId,
-  confirmedClientIds,
   conversationId,
   conversationKind,
   currentReadMessageSeq,
@@ -2984,15 +2982,12 @@ export function ThreadHistoryViewport({
     () =>
       Array.from(
         new Set(
-          [
-            ...confirmedClientIds,
-            ...historyState.messages
-              .map((message) => message.client_id?.trim() || '')
-              .filter(Boolean),
-          ].filter(Boolean),
+          historyState.messages
+            .map((message) => message.client_id?.trim() || '')
+            .filter(Boolean),
         ),
       ),
-    [confirmedClientIds, historyState.messages],
+    [historyState.messages],
   );
   const historyMessageIds = useMemo(
     () => historyState.messages.map((message) => message.id),
