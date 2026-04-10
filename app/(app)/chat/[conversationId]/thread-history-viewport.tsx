@@ -60,6 +60,7 @@ import { ThreadEditedIndicator } from './thread-edited-indicator';
 import { ThreadInlineEditForm } from './thread-inline-edit-form';
 import { ThreadReactionGroups } from './thread-reaction-groups';
 import { ThreadReactionPicker } from './thread-reaction-picker';
+import { resolveThreadScrollTarget } from './thread-scroll';
 
 type ConversationMessageRow = {
   body: string | null;
@@ -214,6 +215,8 @@ type VoiceMessageRenderState =
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
 const IMAGE_PREVIEW_CLICK_SUPPRESSION_MS = 420;
+const PREPEND_SCROLL_RESTORE_IDLE_MS = 72;
+const PREPEND_SCROLL_RESTORE_MAX_MS = 480;
 const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
   'local-encrypted-send:retry-missing-envelope';
 const ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON =
@@ -4087,10 +4090,7 @@ export function ThreadHistoryViewport({
       return;
     }
 
-    const target =
-      typeof document === 'undefined'
-        ? null
-        : document.getElementById('message-thread-scroll');
+    const target = resolveThreadScrollTarget('message-thread-scroll');
 
     if (target) {
       pendingRestoreRef.current = {
@@ -4780,25 +4780,75 @@ export function ThreadHistoryViewport({
       return;
     }
 
-    const target =
-      typeof document === 'undefined'
-        ? null
-        : document.getElementById('message-thread-scroll');
+    const target = resolveThreadScrollTarget('message-thread-scroll');
 
     if (!target) {
       pendingRestoreRef.current = null;
       return;
     }
 
-    const frameId = requestAnimationFrame(() => {
+    let frameId: number | null = null;
+    let isDisposed = false;
+    let lastMeasuredScrollHeight = -1;
+    let lastHeightChangeAt = performance.now();
+    const startedAt = lastHeightChangeAt;
+
+    const applyPendingRestore = () => {
+      const activeRestore = pendingRestoreRef.current;
+
+      if (!activeRestore) {
+        return false;
+      }
+
+      const nextScrollHeight = target.scrollHeight;
+
+      if (nextScrollHeight !== lastMeasuredScrollHeight) {
+        lastMeasuredScrollHeight = nextScrollHeight;
+        lastHeightChangeAt = performance.now();
+      }
+
       const scrollHeightDelta =
-        target.scrollHeight - pendingRestore.previousScrollHeight;
-      target.scrollTop = pendingRestore.previousScrollTop + scrollHeightDelta;
-      pendingRestoreRef.current = null;
-    });
+        nextScrollHeight - activeRestore.previousScrollHeight;
+      const nextScrollTop =
+        activeRestore.previousScrollTop + scrollHeightDelta;
+
+      if (Math.abs(target.scrollTop - nextScrollTop) > 1) {
+        target.scrollTop = nextScrollTop;
+      }
+
+      const now = performance.now();
+      const isSettled =
+        now - lastHeightChangeAt >= PREPEND_SCROLL_RESTORE_IDLE_MS ||
+        now - startedAt >= PREPEND_SCROLL_RESTORE_MAX_MS;
+
+      if (isSettled) {
+        pendingRestoreRef.current = null;
+      }
+
+      return !isSettled;
+    };
+
+    const continueRestore = () => {
+      if (isDisposed) {
+        return;
+      }
+
+      const shouldContinue = applyPendingRestore();
+
+      if (shouldContinue) {
+        frameId = requestAnimationFrame(continueRestore);
+      }
+    };
+
+    applyPendingRestore();
+    frameId = requestAnimationFrame(continueRestore);
 
     return () => {
-      cancelAnimationFrame(frameId);
+      isDisposed = true;
+
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
     };
   }, [historyState.messages]);
 

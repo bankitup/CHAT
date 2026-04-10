@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { emitOptimisticThreadRetry, LOCAL_OPTIMISTIC_MESSAGE_EVENT, type OptimisticThreadMessagePayload } from '@/modules/messaging/realtime/optimistic-thread';
 import { MessageStatusIndicator } from './message-status-indicator';
+import {
+  isThreadNearBottom,
+  resolveThreadScrollTarget,
+  scrollThreadToBottom,
+} from './thread-scroll';
+
+const MESSAGE_THREAD_SCROLL_TARGET_ID = 'message-thread-scroll';
 
 type OptimisticThreadMessagesProps = {
   confirmedClientIds: string[];
@@ -101,6 +108,11 @@ export function OptimisticThreadMessages({
         return;
       }
 
+      const thread = resolveThreadScrollTarget(MESSAGE_THREAD_SCROLL_TARGET_ID);
+      const shouldAutoScroll =
+        detail.status === 'local_pending' &&
+        (thread ? isThreadNearBottom(thread) : false);
+
       setItems((currentItems) => {
         const nextItems = currentItems.filter(
           (item) => item.clientId !== detail.clientId,
@@ -124,15 +136,15 @@ export function OptimisticThreadMessages({
       });
 
       window.requestAnimationFrame(() => {
-        const thread = document.getElementById('message-thread-scroll');
+        const nextThread = resolveThreadScrollTarget(
+          MESSAGE_THREAD_SCROLL_TARGET_ID,
+        );
 
-        if (!thread) {
+        if (!shouldAutoScroll || !nextThread) {
           return;
         }
 
-        thread.scrollTo({
-          top: thread.scrollHeight,
-        });
+        scrollThreadToBottom(nextThread, 'smooth');
       });
     };
 
