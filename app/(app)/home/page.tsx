@@ -1,17 +1,12 @@
 import { logoutAction } from '../actions';
 import { ProfileSettingsForm } from '../settings/profile-settings-form';
 import { ProfileStatusForm } from '../settings/profile-status-form';
-import {
-  type HomeSpacePlanCode,
-  type HomeSpaceUsageState,
-} from './space-plan-config';
 import { HomeAppZoomControl } from './home-app-zoom-control';
 import { HomeLanguageSwitch } from './home-language-switch';
 import { PrivateSpaceCtaCard } from './private-space-cta-card';
 import { SpaceThemeCard } from './space-theme-card';
 import {
-  getHomeSpaceUsageSnapshot,
-  type HomeSpaceUsageSnapshot,
+  getHomeSpaceUsageCardData,
 } from './space-usage-data';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -21,7 +16,7 @@ import {
   removeSpaceParticipantsAction,
 } from './actions';
 import { SpaceParticipantsModule } from './space-participants-module';
-import { SpaceUsageCard, type SpaceUsageMetricViewModel } from './space-usage-card';
+import { SpaceUsageCard } from './space-usage-card';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
@@ -53,211 +48,8 @@ type HomeDashboardPageProps = {
   }>;
 };
 
-function resolveUsageProgressPercent(input: { limit: number; used: number }) {
-  if (input.limit <= 0) {
-    return 0;
-  }
-
-  return Math.max(0, Math.min((input.used / input.limit) * 100, 100));
-}
-
-function formatStorageUsageBytes(input: {
-  unitLabel: string;
-  valueBytes: number;
-}) {
-  const valueInGigabytes = input.valueBytes / (1024 * 1024 * 1024);
-  const roundedValue =
-    valueInGigabytes >= 10
-      ? Math.round(valueInGigabytes)
-      : Math.round(valueInGigabytes * 10) / 10;
-
-  return `${new Intl.NumberFormat(undefined, {
-    maximumFractionDigits: roundedValue >= 10 ? 0 : 1,
-    minimumFractionDigits:
-      roundedValue > 0 && roundedValue < 10 ? 1 : 0,
-  }).format(roundedValue)} ${input.unitLabel}`;
-}
-
-function resolveHomeSpacePlanLabel(input: {
-  plan: HomeSpacePlanCode;
-  t: ReturnType<typeof getTranslations>;
-}) {
-  switch (input.plan) {
-    case 'private':
-      return input.t.messengerHome.spaceUsagePrivatePlanLabel;
-    case 'community':
-      return input.t.messengerHome.spaceUsageCommunityPlanLabel;
-    default:
-      return input.plan;
-  }
-}
-
-function resolveHomeSpacePlanSummary(input: {
-  plan: HomeSpacePlanCode;
-  t: ReturnType<typeof getTranslations>;
-}) {
-  switch (input.plan) {
-    case 'private':
-      return input.t.messengerHome.spaceUsagePrivatePlanSummary;
-    case 'community':
-      return input.t.messengerHome.spaceUsageCommunityPlanSummary;
-    default:
-      return null;
-  }
-}
-
-function resolveHomeSpaceMetricStateLabel(input: {
-  state: HomeSpaceUsageState;
-  t: ReturnType<typeof getTranslations>;
-}) {
-  switch (input.state) {
-    case 'future':
-      return input.t.messengerHome.spaceUsageFutureLabel;
-    case 'nearing':
-      return input.t.messengerHome.spaceUsageNearingLimitLabel;
-    case 'over':
-      return input.t.messengerHome.spaceUsageOverLimitLabel;
-    default:
-      return null;
-  }
-}
-
-function resolveHomeSpacePlanStateLabel(input: {
-  state: HomeSpaceUsageSnapshot['overallState'];
-  t: ReturnType<typeof getTranslations>;
-}) {
-  switch (input.state) {
-    case 'nearing':
-      return input.t.messengerHome.spaceUsageNearingLimitLabel;
-    case 'over':
-      return input.t.messengerHome.spaceUsageUpgradeRecommendedLabel;
-    default:
-      return null;
-  }
-}
-
-function resolveHomeSpaceUpgradeActionLabel(input: {
-  nextPlan: HomeSpaceUsageSnapshot['nextPlan'];
-  t: ReturnType<typeof getTranslations>;
-}) {
-  if (input.nextPlan === 'community') {
-    return input.t.messengerHome.spaceUsageUpgradeToCommunityAction;
-  }
-
-  return input.t.messengerHome.spaceUsageViewUsageAction;
-}
-
 function buildPrivateSpaceCreateHref(spaceId: string) {
   return withSpaceParam('/spaces/new?profile=messenger_full', spaceId);
-}
-
-function buildMessengerSpaceUsageData(input: {
-  managePlanHref: string;
-  snapshot: HomeSpaceUsageSnapshot;
-  t: ReturnType<typeof getTranslations>;
-  upgradeHref: string;
-}) {
-  const metrics: SpaceUsageMetricViewModel[] = [
-    {
-      id: 'members',
-      label: input.t.messengerHome.spaceUsageMembersLabel,
-      limitLabel: String(input.snapshot.members.limit),
-      progressPercent: resolveUsageProgressPercent({
-        limit: input.snapshot.members.limit,
-        used: input.snapshot.members.used,
-      }),
-      state: input.snapshot.members.state,
-      stateLabel: resolveHomeSpaceMetricStateLabel({
-        state: input.snapshot.members.state,
-        t: input.t,
-      }),
-      tone: 'live',
-      usedLabel: String(input.snapshot.members.used),
-    },
-    {
-      id: 'admins',
-      label: input.t.messengerHome.spaceUsageAdminsLabel,
-      limitLabel: String(input.snapshot.admins.limit),
-      progressPercent: resolveUsageProgressPercent({
-        limit: input.snapshot.admins.limit,
-        used: input.snapshot.admins.used,
-      }),
-      state: input.snapshot.admins.state,
-      stateLabel: resolveHomeSpaceMetricStateLabel({
-        state: input.snapshot.admins.state,
-        t: input.t,
-      }),
-      tone: 'live',
-      usedLabel: String(input.snapshot.admins.used),
-    },
-    {
-      id: 'storage',
-      label: input.t.messengerHome.spaceUsageStorageLabel,
-      limitLabel: formatStorageUsageBytes({
-        unitLabel: input.t.messengerHome.spaceUsageStorageUnit,
-        valueBytes: input.snapshot.storage.limitBytes,
-      }),
-      progressPercent: resolveUsageProgressPercent({
-        limit: input.snapshot.storage.limitBytes,
-        used: input.snapshot.storage.usedBytes,
-      }),
-      state: input.snapshot.storage.state,
-      stateLabel: resolveHomeSpaceMetricStateLabel({
-        state: input.snapshot.storage.state,
-        t: input.t,
-      }),
-      tone: 'live',
-      usedLabel: formatStorageUsageBytes({
-        unitLabel: input.t.messengerHome.spaceUsageStorageUnit,
-        valueBytes: input.snapshot.storage.usedBytes,
-      }),
-    },
-    {
-      id: 'call-minutes',
-      label: input.t.messengerHome.spaceUsageCallMinutesLabel,
-      limitLabel: `${input.snapshot.callMinutes.limit} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
-      progressPercent: 0,
-      state: input.snapshot.callMinutes.state,
-      stateLabel: resolveHomeSpaceMetricStateLabel({
-        state: input.snapshot.callMinutes.state,
-        t: input.t,
-      }),
-      tone: 'future',
-      usedLabel: `${input.snapshot.callMinutes.used} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
-    },
-  ];
-
-  return {
-    copy: {
-      body: input.t.messengerHome.spaceUsageBody,
-      currentPlanLabel: input.t.messengerHome.spaceUsageCurrentPlanLabel,
-      futureTrackingNote: input.t.messengerHome.spaceUsageFutureTrackingNote,
-      managePlanAction: input.t.messengerHome.spaceUsageManagePlanAction,
-      previewPill: input.t.messengerHome.spaceUsagePreviewPill,
-      title: input.t.messengerHome.spaceUsageTitle,
-    },
-    managePlanHref: input.managePlanHref,
-    metrics,
-    planLabel: resolveHomeSpacePlanLabel({
-      plan: input.snapshot.plan,
-      t: input.t,
-    }),
-    planState: input.snapshot.overallState,
-    planStateLabel: resolveHomeSpacePlanStateLabel({
-      state: input.snapshot.overallState,
-      t: input.t,
-    }),
-    planSummary: resolveHomeSpacePlanSummary({
-      plan: input.snapshot.plan,
-      t: input.t,
-    }),
-    upgradeHref: input.upgradeHref,
-    upgradeActionLabel: resolveHomeSpaceUpgradeActionLabel({
-      nextPlan: input.snapshot.nextPlan,
-      t: input.t,
-    }),
-    upgradeRecommended: input.snapshot.upgradeRecommended,
-  };
 }
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
@@ -374,21 +166,16 @@ export default async function HomeDashboardPage({
       : null;
     const visibleMessage = query.message?.trim() || null;
     const participantsDefaultOpen = query.participants?.trim() === 'open';
-    const spaceUsageSnapshot =
+    const spaceUsage =
       canManageMessengerMembers && manageableParticipants
-        ? await getHomeSpaceUsageSnapshot({
+        ? await getHomeSpaceUsageCardData({
+            managePlanHref: withSpaceParam('/spaces', activeSpace.id),
             participants: manageableParticipants.participants,
             spaceId: activeSpace.id,
+            t,
+            upgradeHref: withSpaceParam('/spaces', activeSpace.id),
           })
         : null;
-    const spaceUsage = spaceUsageSnapshot
-      ? buildMessengerSpaceUsageData({
-          managePlanHref: withSpaceParam('/spaces', activeSpace.id),
-          snapshot: spaceUsageSnapshot,
-          t,
-          upgradeHref: withSpaceParam('/spaces', activeSpace.id),
-        })
-      : null;
 
     return (
       <section className="stack messenger-home-screen messenger-home-shell">
@@ -547,8 +334,8 @@ export default async function HomeDashboardPage({
                 ),
                 title: t.messengerHome.participantsTitle,
               }}
-              adminSeatLimit={spaceUsageSnapshot?.admins.limit ?? 0}
-              adminSeatsUsed={spaceUsageSnapshot?.admins.used ?? 0}
+              adminSeatLimit={spaceUsage?.adminSeatUsage.limit ?? 0}
+              adminSeatsUsed={spaceUsage?.adminSeatUsage.used ?? 0}
               defaultOpen={participantsDefaultOpen}
               participants={manageableParticipants.participants}
               promoteAction={promoteSpaceParticipantsToAdminAction}

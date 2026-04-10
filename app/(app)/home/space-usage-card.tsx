@@ -1,37 +1,7 @@
+import type { HomeSpaceUsageCardData, HomeSpaceUsageCardMetric } from './space-usage-contract';
 import Link from 'next/link';
 
-export type SpaceUsageMetricViewModel = {
-  id: 'admins' | 'call-minutes' | 'members' | 'storage';
-  label: string;
-  limitLabel: string;
-  progressPercent: number;
-  state: 'future' | 'nearing' | 'normal' | 'over';
-  stateLabel?: string | null;
-  tone: 'future' | 'live';
-  usedLabel: string;
-};
-
-type SpaceUsageCardProps = {
-  copy: {
-    body: string;
-    currentPlanLabel: string;
-    futureTrackingNote: string;
-    managePlanAction: string;
-    previewPill: string;
-    title: string;
-  };
-  managePlanHref: string;
-  metrics: SpaceUsageMetricViewModel[];
-  planLabel: string;
-  planState: 'nearing' | 'normal' | 'over';
-  planStateLabel?: string | null;
-  planSummary?: string | null;
-  upgradeRecommended?: boolean;
-  upgradeActionLabel: string;
-  upgradeHref: string;
-};
-
-function resolveMetricClassName(metric: SpaceUsageMetricViewModel) {
+function resolveMetricClassName(metric: HomeSpaceUsageCardMetric) {
   const classNames = ['messenger-home-usage-metric'];
 
   if (metric.tone === 'future') {
@@ -49,7 +19,7 @@ function resolveMetricClassName(metric: SpaceUsageMetricViewModel) {
   return classNames.join(' ');
 }
 
-function resolveUsageStatePillClassName(state: SpaceUsageMetricViewModel['state']) {
+function resolveUsageStatePillClassName(state: HomeSpaceUsageCardMetric['state']) {
   switch (state) {
     case 'future':
       return 'messenger-home-usage-state-pill messenger-home-usage-state-pill-future';
@@ -73,7 +43,7 @@ export function SpaceUsageCard({
   upgradeRecommended = false,
   upgradeActionLabel,
   upgradeHref,
-}: SpaceUsageCardProps) {
+}: HomeSpaceUsageCardData) {
   const planBandClassName =
     planState === 'over'
       ? 'messenger-home-usage-plan-band messenger-home-usage-plan-band-over'
