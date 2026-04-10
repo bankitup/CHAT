@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -30,6 +31,7 @@ import {
   type InboxPrimaryFilter,
   type InboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
+import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import { InboxConversationLiveRow } from './inbox-conversation-live-row';
 import { NewChatSheet, type NewChatMode } from './new-chat-sheet';
 
@@ -60,7 +62,31 @@ type AvailableUserEntry = {
   avatarPath?: string | null;
   displayName: string | null;
   label: string;
+  statusEmoji?: string | null;
+  statusText?: string | null;
   userId: string;
+};
+
+type CreateChatTargetUserPayload = {
+  avatarPath?: string | null;
+  displayName: string | null;
+  emailLocalPart?: string | null;
+  statusEmoji?: string | null;
+  statusText?: string | null;
+  userId: string;
+  username?: string | null;
+};
+
+type CreateChatTargetsResponse = {
+  existingDmPartnerUserIds: string[];
+  users: CreateChatTargetUserPayload[];
+};
+
+type CreateChatTargetsState = {
+  availableDmUserEntries: AvailableUserEntry[];
+  availableUserEntries: AvailableUserEntry[];
+  errorMessage: string | null;
+  status: 'idle' | 'seeded' | 'loading' | 'ready' | 'error';
 };
 
 type FilterBucket = {
@@ -161,6 +187,31 @@ const HOT_CHAT_ROUTE_PREFETCH_LIMIT = 6;
 
 function normalizeSearchTerm(value: string) {
   return value.trim().toLowerCase();
+}
+
+function buildAvailableUserEntry(
+  user: CreateChatTargetUserPayload,
+  unknownUserLabel: string,
+) {
+  return {
+    avatarPath: user.avatarPath ?? null,
+    displayName: user.displayName ?? null,
+    label: resolvePublicIdentityLabel(user, unknownUserLabel),
+    statusEmoji: user.statusEmoji ?? null,
+    statusText: user.statusText ?? null,
+    userId: user.userId,
+  } satisfies AvailableUserEntry;
+}
+
+function resolveCreateChatTargetsStatus(input: {
+  availableUserEntries: AvailableUserEntry[];
+  createTargetsLoaded: boolean;
+}) {
+  if (input.createTargetsLoaded) {
+    return 'ready' as const;
+  }
+
+  return input.availableUserEntries.length > 0 ? 'seeded' as const : 'idle' as const;
 }
 
 function buildInboxHref({
@@ -578,8 +629,19 @@ export function InboxFilterableContent({
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(createOpen);
   const [createSheetMode, setCreateSheetMode] =
     useState<NewChatMode>(initialCreateMode);
+  const [createChatTargetsState, setCreateChatTargetsState] =
+    useState<CreateChatTargetsState>(() => ({
+      availableDmUserEntries,
+      availableUserEntries,
+      errorMessage: null,
+      status: resolveCreateChatTargetsStatus({
+        availableUserEntries,
+        createTargetsLoaded,
+      }),
+    }));
   const [pullRefreshOffset, setPullRefreshOffset] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const createTargetsAbortRef = useRef<AbortController | null>(null);
   const touchGestureRef = useRef<{
     pointerX: number;
     pointerY: number;
@@ -609,6 +671,143 @@ export function InboxFilterableContent({
   useEffect(() => {
     setCreateSheetMode(initialCreateMode);
   }, [initialCreateMode]);
+
+  useEffect(() => {
+    setCreateChatTargetsState({
+      availableDmUserEntries,
+      availableUserEntries,
+      errorMessage: null,
+      status: resolveCreateChatTargetsStatus({
+        availableUserEntries,
+        createTargetsLoaded,
+      }),
+    });
+  }, [availableDmUserEntries, availableUserEntries, createTargetsLoaded]);
+
+  const openCreateSheet = useCallback((mode: NewChatMode) => {
+    setCreateSheetMode(mode);
+    setCreateChatTargetsState((currentState) =>
+      currentState.status === 'error'
+        ? {
+            ...currentState,
+            errorMessage: null,
+            status: resolveCreateChatTargetsStatus({
+              availableUserEntries: currentState.availableUserEntries,
+              createTargetsLoaded: false,
+            }),
+          }
+        : currentState,
+    );
+    setIsCreateSheetOpen(true);
+  }, []);
+
+  const closeCreateSheet = useCallback(() => {
+    setIsCreateSheetOpen(false);
+  }, []);
+
+  const retryCreateTargetsLoad = useCallback(() => {
+    setCreateChatTargetsState((currentState) =>
+      currentState.status === 'loading'
+        ? currentState
+        : {
+            ...currentState,
+            errorMessage: null,
+            status: resolveCreateChatTargetsStatus({
+              availableUserEntries: currentState.availableUserEntries,
+              createTargetsLoaded: false,
+            }),
+          },
+    );
+  }, []);
+
+  const loadCreateChatTargets = useCallback(async () => {
+    if (
+      createChatTargetsState.status === 'loading' ||
+      createChatTargetsState.status === 'ready'
+    ) {
+      return;
+    }
+
+    createTargetsAbortRef.current?.abort();
+    const controller = new AbortController();
+    createTargetsAbortRef.current = controller;
+
+    setCreateChatTargetsState((currentState) => ({
+      ...currentState,
+      errorMessage: null,
+      status: 'loading',
+    }));
+
+    try {
+      const response = await fetch(
+        `/api/messaging/inbox/create-targets?space=${encodeURIComponent(activeSpaceId)}`,
+        {
+          cache: 'no-store',
+          signal: controller.signal,
+        },
+      );
+      const payload = (await response
+        .json()
+        .catch(() => null)) as (CreateChatTargetsResponse & {
+        error?: string;
+      }) | null;
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.error?.trim() || t.inbox.create.loadingCandidatesFailed,
+        );
+      }
+
+      const availableUserEntriesNext = Array.isArray(payload?.users)
+        ? payload.users.map((user) =>
+            buildAvailableUserEntry(user, t.chat.unknownUser),
+          )
+        : [];
+      const existingDmPartnerUserIds = Array.isArray(
+        payload?.existingDmPartnerUserIds,
+      )
+        ? payload.existingDmPartnerUserIds
+        : [];
+      const existingDmPartnerUserIdsSet = new Set(existingDmPartnerUserIds);
+      const availableDmUserEntriesNext = availableUserEntriesNext.filter(
+        (availableUser) =>
+          !existingDmPartnerUserIdsSet.has(availableUser.userId),
+      );
+
+      if (createTargetsAbortRef.current !== controller) {
+        return;
+      }
+
+      setCreateChatTargetsState({
+        availableDmUserEntries: availableDmUserEntriesNext,
+        availableUserEntries: availableUserEntriesNext,
+        errorMessage: null,
+        status: 'ready',
+      });
+    } catch (error) {
+      if (controller.signal.aborted || createTargetsAbortRef.current !== controller) {
+        return;
+      }
+
+      setCreateChatTargetsState((currentState) => ({
+        ...currentState,
+        errorMessage:
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : t.inbox.create.loadingCandidatesFailed,
+        status: 'error',
+      }));
+    } finally {
+      if (createTargetsAbortRef.current === controller) {
+        createTargetsAbortRef.current = null;
+      }
+    }
+  }, [
+    activeSpaceId,
+    createChatTargetsState.status,
+    t.chat.unknownUser,
+    t.inbox.create.loadingCandidatesFailed,
+  ]);
 
   const getInboxScrollTop = () => {
     if (typeof window === 'undefined') {
@@ -763,36 +962,62 @@ export function InboxFilterableContent({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsCreateSheetOpen(false);
+        closeCreateSheet();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isCreateSheetOpen]);
+  }, [closeCreateSheet, isCreateSheetOpen]);
+
+  useEffect(() => {
+    if (!isCreateSheetOpen) {
+      createTargetsAbortRef.current?.abort();
+      createTargetsAbortRef.current = null;
+      return;
+    }
+
+    if (
+      createChatTargetsState.status !== 'idle' &&
+      createChatTargetsState.status !== 'seeded'
+    ) {
+      return;
+    }
+
+    // Open the sheet first, then hydrate heavy candidate data after the first
+    // paint so the modal never waits on space-member or existing-DM lookups.
+    void loadCreateChatTargets();
+  }, [createChatTargetsState.status, isCreateSheetOpen, loadCreateChatTargets]);
+
+  useEffect(() => {
+    return () => {
+      createTargetsAbortRef.current?.abort();
+      createTargetsAbortRef.current = null;
+    };
+  }, []);
 
   const availableDmUserEntriesFiltered = useMemo(
     () =>
-      availableDmUserEntries.filter((availableUser) => {
+      createChatTargetsState.availableDmUserEntries.filter((availableUser) => {
         if (!searchTerm) {
           return true;
         }
 
         return availableUser.label.toLowerCase().includes(searchTerm);
       }),
-    [availableDmUserEntries, searchTerm],
+    [createChatTargetsState.availableDmUserEntries, searchTerm],
   );
 
   const availableUserEntriesFiltered = useMemo(
     () =>
-      availableUserEntries.filter((availableUser) => {
+      createChatTargetsState.availableUserEntries.filter((availableUser) => {
         if (!searchTerm) {
           return true;
         }
 
         return availableUser.label.toLowerCase().includes(searchTerm);
       }),
-    [availableUserEntries, searchTerm],
+    [createChatTargetsState.availableUserEntries, searchTerm],
   );
   const visibleConversationItems =
     activeView === 'archived' ? archivedConversationItems : mainConversationItems;
@@ -918,24 +1143,9 @@ export function InboxFilterableContent({
     spaceId: activeSpaceId,
     view: activeView,
   });
-  const openCreateDmHref = buildInboxHref({
-    create: true,
-    createMode: 'dm',
-    filter: activeFilter,
-    query: queryValue,
-    spaceId: activeSpaceId,
-    view: activeView,
-  });
-  const openCreateGroupHref = buildInboxHref({
-    create: true,
-    createMode: 'group',
-    filter: activeFilter,
-    query: queryValue,
-    spaceId: activeSpaceId,
-    view: activeView,
-  });
   const messengerFreshBody =
-    !createTargetsLoaded || availableUserEntries.length > 0
+    createChatTargetsState.status !== 'ready' ||
+    createChatTargetsState.availableUserEntries.length > 0
       ? t.inbox.messengerFreshBody
       : canManageMembers
         ? t.inbox.messengerFreshAdminBody
@@ -1094,15 +1304,17 @@ export function InboxFilterableContent({
                 ⚙
               </span>
             </Link>
-            <Link
+            <button
+              aria-haspopup="dialog"
               aria-label={t.inbox.createAria}
               className="inbox-compose-trigger inbox-topbar-action-button"
-              href={openCreateDmHref}
+              onClick={() => openCreateSheet('dm')}
+              type="button"
             >
               <span aria-hidden="true" className="inbox-topbar-action-icon">
                 +
               </span>
-            </Link>
+            </button>
           </div>
         </div>
 
@@ -1251,27 +1463,29 @@ export function InboxFilterableContent({
           </div>
 
           <div className="inbox-empty-actions">
-            {createTargetsLoaded ? (
-              availableDmUserEntries.length > 0 ? (
-                <Link className="button" href={openCreateDmHref}>
-                  {t.inbox.create.createDm}
-                </Link>
-              ) : null
-            ) : (
-              <Link className="button" href={openCreateDmHref}>
+            {createChatTargetsState.status !== 'ready' ||
+            createChatTargetsState.availableDmUserEntries.length > 0 ? (
+              <button
+                className="button"
+                onClick={() => openCreateSheet('dm')}
+                type="button"
+              >
                 {t.inbox.create.createDm}
-              </Link>
-            )}
-            {createTargetsLoaded ? (
-              availableUserEntries.length > 0 ? (
-                <Link className="button button-secondary" href={openCreateGroupHref}>
-                  {t.inbox.create.createGroup}
-                </Link>
-              ) : null
+              </button>
             ) : (
-              <Link className="button button-secondary" href={openCreateGroupHref}>
+              null
+            )}
+            {createChatTargetsState.status !== 'ready' ||
+            createChatTargetsState.availableUserEntries.length > 0 ? (
+              <button
+                className="button button-secondary"
+                onClick={() => openCreateSheet('group')}
+                type="button"
+              >
                 {t.inbox.create.createGroup}
-              </Link>
+              </button>
+            ) : (
+              null
             )}
             {manageMembersHref ? (
               <Link className="pill" href={manageMembersHref}>
@@ -1312,12 +1526,20 @@ export function InboxFilterableContent({
               </Link>
             ) : (
               <>
-                <Link className="button" href={openCreateDmHref}>
+                <button
+                  className="button"
+                  onClick={() => openCreateSheet('dm')}
+                  type="button"
+                >
                   {t.inbox.create.createDm}
-                </Link>
-                <Link className="button button-secondary" href={openCreateGroupHref}>
+                </button>
+                <button
+                  className="button button-secondary"
+                  onClick={() => openCreateSheet('group')}
+                  type="button"
+                >
                   {t.inbox.create.createGroup}
-                </Link>
+                </button>
               </>
             )}
           </div>
@@ -1428,20 +1650,27 @@ export function InboxFilterableContent({
           <button
             aria-label="Close create chat"
             className="inbox-create-backdrop"
-            onClick={() => setIsCreateSheetOpen(false)}
+            onClick={closeCreateSheet}
             type="button"
           />
 
           <NewChatSheet
             availableDmUsers={availableDmUserEntriesFiltered}
             availableGroupUsers={availableUserEntriesFiltered}
-            hasAnyDmUsers={availableDmUserEntries.length > 0}
-            hasAnyUsers={availableUserEntries.length > 0}
+            hasAnyDmUsers={createChatTargetsState.availableDmUserEntries.length > 0}
+            hasAnyUsers={createChatTargetsState.availableUserEntries.length > 0}
             initialMode={createSheetMode}
+            isCandidatesLoading={createChatTargetsState.status === 'loading'}
             language={language}
+            loadCandidatesError={
+              createChatTargetsState.status === 'error'
+                ? createChatTargetsState.errorMessage
+                : null
+            }
             manageMembersHref={manageMembersHref}
-            onClose={() => setIsCreateSheetOpen(false)}
+            onClose={closeCreateSheet}
             onModeChange={setCreateSheetMode}
+            onRetryLoadCandidates={retryCreateTargetsLoad}
             spaceId={activeSpaceId}
           />
         </section>

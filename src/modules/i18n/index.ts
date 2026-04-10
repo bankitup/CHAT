@@ -625,6 +625,8 @@ type LanguageDictionary = {
       subtitle: string;
       closeAria: string;
       close: string;
+      loadingCandidates: string;
+      loadingCandidatesFailed: string;
       modeAria: string;
       direct: string;
       group: string;
@@ -1558,6 +1560,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         subtitle: 'Choose a direct message or start a group.',
         closeAria: 'Close create chat',
         close: 'Close',
+        loadingCandidates: 'Loading people...',
+        loadingCandidatesFailed:
+          'Unable to load people right now. Please try again.',
         modeAria: 'New chat mode',
         direct: 'Direct message',
         group: 'Group chat',
@@ -2544,6 +2549,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         subtitle: 'Выберите личный чат или создайте группу.',
         closeAria: 'Закрыть создание чата',
         close: 'Закрыть',
+        loadingCandidates: 'Загружаем людей...',
+        loadingCandidatesFailed:
+          'Сейчас не удаётся загрузить людей. Попробуйте ещё раз.',
         modeAria: 'Режим нового чата',
         direct: 'Личный чат',
         group: 'Групповой чат',

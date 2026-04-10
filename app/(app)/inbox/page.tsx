@@ -13,12 +13,10 @@ import {
   resolveInboxInitialFilter,
 } from '@/modules/messaging/inbox/preferences';
 import {
-  getAvailableUsers,
   getArchivedConversations,
   getConversationDisplayName,
   getDirectMessageDisplayName,
   getConversationParticipantIdentities,
-  getExistingActiveDmPartnerUserIds,
   getInboxConversations,
   getInboxConversationsStable,
   type InboxConversation,
@@ -142,7 +140,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     requestedSpaceId: query.space,
     source: 'inbox-page-explicit-v1-test-bypass',
   });
-  const isV1TestBypass = Boolean(explicitV1TestSpace);
 
   if (explicitV1TestSpace) {
     // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
@@ -260,11 +257,9 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     logDiagnostics('loader:archived-skip-main-view');
   }
 
-  const [conversations, archivedConversations, availableUsers, existingDmPartnerUserIds]: [
+  const [conversations, archivedConversations]: [
     InboxConversation[],
     InboxConversation[],
-    Awaited<ReturnType<typeof getAvailableUsers>>,
-    string[],
   ] = await Promise.all([
     measureWarmNavServerLoad({
       details: {
@@ -294,42 +289,6 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         return [] as Awaited<ReturnType<typeof getInboxConversations>>;
       }),
     archivedConversationsPromise,
-    isCreateOpen
-      ? getAvailableUsers(user.id, {
-          spaceId: activeSpaceId,
-          source: isV1TestBypass ? 'inbox-page-v1-test-bypass' : 'inbox-page',
-        })
-          .then((value) => {
-            logDiagnostics('loader:users-ok', { count: value.length });
-            return value;
-          })
-          .catch((error) => {
-            const message = error instanceof Error ? error.message : String(error);
-            logDiagnostics('loader:users-error', { message });
-
-            if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-              logDiagnostics('loader:users-fallback-empty');
-              return [] as Awaited<ReturnType<typeof getAvailableUsers>>;
-            }
-
-            throw error;
-          })
-      : Promise.resolve([] as Awaited<ReturnType<typeof getAvailableUsers>>),
-    isCreateOpen
-      ? getExistingActiveDmPartnerUserIds(user.id, {
-          spaceId: activeSpaceId,
-        })
-          .then((value) => {
-            logDiagnostics('loader:existing-dm-users-ok', { count: value.length });
-            return value;
-          })
-          .catch((error) => {
-            logDiagnostics('loader:existing-dm-users-error', {
-              message: error instanceof Error ? error.message : String(error),
-            });
-            return [] as string[];
-          })
-      : Promise.resolve([] as string[]),
   ]);
   logDiagnostics('loader:all-ok');
   const allVisibleConversations = [...conversations, ...archivedConversations];
@@ -357,31 +316,16 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     },
     new Map<string, (typeof participantIdentities)[number][]>(),
   );
-  const availableUserEntries = availableUsers.map((availableUser) => ({
-    ...availableUser,
-    label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
-  }));
-  const visibleExistingDmPartnerUserIds = new Set(
-    allVisibleConversations.flatMap((conversation) => {
-      if (conversation.kind !== 'dm') {
-        return [];
-      }
-
-      const participants =
-        participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
-
-      return participants
-        .map((participant) => participant.userId)
-        .filter((participantUserId) => participantUserId && participantUserId !== user.id);
-    }),
-  );
-  const existingDmPartnerUserIdsSet = new Set([
-    ...existingDmPartnerUserIds,
-    ...visibleExistingDmPartnerUserIds,
-  ]);
-  const availableDmUserEntries = availableUserEntries.filter(
-    (availableUser) => !existingDmPartnerUserIdsSet.has(availableUser.userId),
-  );
+  const availableUserEntries =
+    [] as Array<{
+      avatarPath?: string | null;
+      displayName: string | null;
+      label: string;
+      statusEmoji?: string | null;
+      statusText?: string | null;
+      userId: string;
+    }>;
+  const availableDmUserEntries = availableUserEntries;
   const buildConversationItems = (input: InboxConversation[]) =>
     input.map((conversation) => {
       const participantOptions =
@@ -495,7 +439,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         availableUserEntries={availableUserEntries}
         canManageMembers={canManageMembers}
         createOpen={isCreateOpen}
-        createTargetsLoaded={isCreateOpen}
+        createTargetsLoaded={false}
         currentUserId={user.id}
         initialCreateMode={initialCreateMode}
         initialFilter={activeFilter}

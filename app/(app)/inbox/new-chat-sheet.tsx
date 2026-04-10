@@ -27,6 +27,9 @@ type NewChatSheetProps = {
   hasAnyDmUsers: boolean;
   hasAnyUsers: boolean;
   initialMode: NewChatMode;
+  isCandidatesLoading?: boolean;
+  loadCandidatesError?: string | null;
+  onRetryLoadCandidates?: (() => void) | null;
   onClose: () => void;
   onModeChange?: (mode: NewChatMode) => void;
   language: AppLanguage;
@@ -60,6 +63,9 @@ export function NewChatSheet({
   hasAnyDmUsers,
   hasAnyUsers,
   initialMode,
+  isCandidatesLoading = false,
+  loadCandidatesError = null,
+  onRetryLoadCandidates = null,
   onClose,
   onModeChange,
   language,
@@ -190,14 +196,34 @@ export function NewChatSheet({
               <h3 className="card-title">{t.inbox.create.peopleTitle}</h3>
               <p className="muted">{t.inbox.create.peopleSubtitle}</p>
             </div>
-            {hasAnyDmUsers ? (
+            {!isCandidatesLoading && hasAnyDmUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
                 {visibleUserCount}
               </span>
             ) : null}
           </div>
 
-          {!hasAnyUsers ? (
+          {isCandidatesLoading ? (
+            <div className="stack inbox-create-loading-state" aria-live="polite">
+              <span aria-hidden="true" className="message-status-spinner" />
+              <p className="muted inbox-compose-empty">
+                {t.inbox.create.loadingCandidates}
+              </p>
+            </div>
+          ) : loadCandidatesError ? (
+            <div className="stack inbox-compose-empty-state">
+              <p className="muted inbox-compose-empty">{loadCandidatesError}</p>
+              {onRetryLoadCandidates ? (
+                <button
+                  className="button button-secondary"
+                  onClick={onRetryLoadCandidates}
+                  type="button"
+                >
+                  {t.shell.retry}
+                </button>
+              ) : null}
+            </div>
+          ) : !hasAnyUsers ? (
             <div className="stack inbox-compose-empty-state">
               <p className="muted inbox-compose-empty">
                 {manageMembersHref
@@ -304,7 +330,7 @@ export function NewChatSheet({
               <h3 className="card-title">{t.inbox.create.groupTitle}</h3>
               <p className="muted">{t.inbox.create.groupSubtitle}</p>
             </div>
-            {hasAnyUsers ? (
+            {!isCandidatesLoading && hasAnyUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
                 {visibleUserCount}
               </span>
@@ -328,7 +354,27 @@ export function NewChatSheet({
               />
             </label>
 
-            {!hasAnyUsers ? (
+            {isCandidatesLoading ? (
+              <div className="stack inbox-create-loading-state" aria-live="polite">
+                <span aria-hidden="true" className="message-status-spinner" />
+                <p className="muted inbox-compose-empty">
+                  {t.inbox.create.loadingCandidates}
+                </p>
+              </div>
+            ) : loadCandidatesError ? (
+              <div className="stack inbox-compose-empty-state">
+                <p className="muted inbox-compose-empty">{loadCandidatesError}</p>
+                {onRetryLoadCandidates ? (
+                  <button
+                    className="button button-secondary"
+                    onClick={onRetryLoadCandidates}
+                    type="button"
+                  >
+                    {t.shell.retry}
+                  </button>
+                ) : null}
+              </div>
+            ) : !hasAnyUsers ? (
               <div className="stack inbox-compose-empty-state">
                 <p className="muted inbox-compose-empty">
                   {manageMembersHref
