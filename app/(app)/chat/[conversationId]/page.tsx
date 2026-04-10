@@ -1460,15 +1460,7 @@ export default async function ChatPage({
               conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
               groupAvatarPath={conversation.avatarPath}
               openLabel={t.chat.openAvatarPreviewAria(directConversationDisplayTitle)}
-              participant={
-                directParticipantIdentity
-                  ? {
-                      avatarPath: directParticipantIdentity.avatarPath ?? null,
-                      displayName: directParticipantIdentity.displayName ?? null,
-                      userId: directParticipantIdentity.userId,
-                    }
-                  : null
-              }
+              participant={directParticipantIdentity}
               title={directConversationDisplayTitle}
             />
           </div>
