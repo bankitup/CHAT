@@ -1125,7 +1125,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaceUsageStorageLabel: 'Storage',
       spaceUsageCallMinutesLabel: 'Call minutes',
       spaceUsageFutureTrackingNote:
-        'Storage and call minutes stay on preview counters until live usage tracking is enabled for this space.',
+        'Call minutes stay on preview counters until live usage tracking is enabled for this space.',
       spaceUsageStarterPlanLabel: 'Starter',
       spaceUsageStorageUnit: 'GB',
       spaceUsageMinutesUnit: 'min',
@@ -2101,7 +2101,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       spaceUsageStorageLabel: 'Хранилище',
       spaceUsageCallMinutesLabel: 'Минуты звонков',
       spaceUsageFutureTrackingNote:
-        'Хранилище и минуты звонков пока остаются preview-счётчиками, пока для этого пространства не включён живой usage tracking.',
+        'Минуты звонков пока остаются preview-счётчиками, пока для этого пространства не включён живой usage tracking.',
       spaceUsageStarterPlanLabel: 'Starter',
       spaceUsageStorageUnit: 'ГБ',
       spaceUsageMinutesUnit: 'мин',

@@ -1,6 +1,10 @@
 import { logoutAction } from '../actions';
 import { ProfileSettingsForm } from '../settings/profile-settings-form';
 import { ProfileStatusForm } from '../settings/profile-status-form';
+import {
+  getHomeSpaceUsageSnapshot,
+  type HomeSpaceUsageSnapshot,
+} from './space-usage-data';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requestAdditionalSpaceAccountsAction, removeSpaceParticipantsAction } from './actions';
@@ -19,7 +23,6 @@ import {
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
   resolveV1TestSpaceFallback,
-  type SpaceParticipantRecord,
 } from '@/modules/spaces/server';
 import {
   getKeepCozyPrimaryTestFlowHints,
@@ -37,13 +40,6 @@ type HomeDashboardPageProps = {
   }>;
 };
 
-const HOME_SPACE_USAGE_STARTER_LIMITS = {
-  admins: 3,
-  callMinutes: 600,
-  members: 24,
-  storageGb: 25,
-} as const;
-
 function resolveUsageProgressPercent(input: { limit: number; used: number }) {
   if (input.limit <= 0) {
     return 0;
@@ -52,55 +48,76 @@ function resolveUsageProgressPercent(input: { limit: number; used: number }) {
   return Math.max(0, Math.min((input.used / input.limit) * 100, 100));
 }
 
+function formatStorageUsageBytes(input: {
+  unitLabel: string;
+  valueBytes: number;
+}) {
+  const valueInGigabytes = input.valueBytes / (1024 * 1024 * 1024);
+  const roundedValue =
+    valueInGigabytes >= 10
+      ? Math.round(valueInGigabytes)
+      : Math.round(valueInGigabytes * 10) / 10;
+
+  return `${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: roundedValue >= 10 ? 0 : 1,
+    minimumFractionDigits:
+      roundedValue > 0 && roundedValue < 10 ? 1 : 0,
+  }).format(roundedValue)} ${input.unitLabel}`;
+}
+
 function buildMessengerSpaceUsageData(input: {
   managePlanHref: string;
-  participants: SpaceParticipantRecord[];
+  snapshot: HomeSpaceUsageSnapshot;
   t: ReturnType<typeof getTranslations>;
   upgradeHref: string;
 }) {
-  const memberCount = input.participants.length;
-  const adminCount = input.participants.filter(
-    (participant) =>
-      participant.role === 'owner' || participant.role === 'admin',
-  ).length;
   const metrics: SpaceUsageMetricViewModel[] = [
     {
       id: 'members',
       label: input.t.messengerHome.spaceUsageMembersLabel,
-      limitLabel: String(HOME_SPACE_USAGE_STARTER_LIMITS.members),
+      limitLabel: String(input.snapshot.membersLimit),
       progressPercent: resolveUsageProgressPercent({
-        limit: HOME_SPACE_USAGE_STARTER_LIMITS.members,
-        used: memberCount,
+        limit: input.snapshot.membersLimit,
+        used: input.snapshot.membersUsed,
       }),
       tone: 'live',
-      usedLabel: String(memberCount),
+      usedLabel: String(input.snapshot.membersUsed),
     },
     {
       id: 'admins',
       label: input.t.messengerHome.spaceUsageAdminsLabel,
-      limitLabel: String(HOME_SPACE_USAGE_STARTER_LIMITS.admins),
+      limitLabel: String(input.snapshot.adminsLimit),
       progressPercent: resolveUsageProgressPercent({
-        limit: HOME_SPACE_USAGE_STARTER_LIMITS.admins,
-        used: adminCount,
+        limit: input.snapshot.adminsLimit,
+        used: input.snapshot.adminsUsed,
       }),
       tone: 'live',
-      usedLabel: String(adminCount),
+      usedLabel: String(input.snapshot.adminsUsed),
     },
     {
       id: 'storage',
       label: input.t.messengerHome.spaceUsageStorageLabel,
-      limitLabel: `${HOME_SPACE_USAGE_STARTER_LIMITS.storageGb} ${input.t.messengerHome.spaceUsageStorageUnit}`,
-      progressPercent: 0,
-      tone: 'future',
-      usedLabel: `0 ${input.t.messengerHome.spaceUsageStorageUnit}`,
+      limitLabel: formatStorageUsageBytes({
+        unitLabel: input.t.messengerHome.spaceUsageStorageUnit,
+        valueBytes: input.snapshot.storageLimitBytes,
+      }),
+      progressPercent: resolveUsageProgressPercent({
+        limit: input.snapshot.storageLimitBytes,
+        used: input.snapshot.storageUsedBytes,
+      }),
+      tone: 'live',
+      usedLabel: formatStorageUsageBytes({
+        unitLabel: input.t.messengerHome.spaceUsageStorageUnit,
+        valueBytes: input.snapshot.storageUsedBytes,
+      }),
     },
     {
       id: 'call-minutes',
       label: input.t.messengerHome.spaceUsageCallMinutesLabel,
-      limitLabel: `${HOME_SPACE_USAGE_STARTER_LIMITS.callMinutes} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
+      limitLabel: `${input.snapshot.callMinutesLimit} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
       progressPercent: 0,
       tone: 'future',
-      usedLabel: `0 ${input.t.messengerHome.spaceUsageMinutesUnit}`,
+      usedLabel: `${input.snapshot.callMinutesUsed} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
     },
   ];
 
@@ -116,8 +133,12 @@ function buildMessengerSpaceUsageData(input: {
     },
     managePlanHref: input.managePlanHref,
     metrics,
-    planLabel: input.t.messengerHome.spaceUsageStarterPlanLabel,
+    planLabel:
+      input.snapshot.plan === 'starter'
+        ? input.t.messengerHome.spaceUsageStarterPlanLabel
+        : input.snapshot.plan,
     upgradeHref: input.upgradeHref,
+    upgradeRecommended: input.snapshot.upgradeRecommended,
   };
 }
 
@@ -227,10 +248,17 @@ export default async function HomeDashboardPage({
       : null;
     const visibleMessage = query.message?.trim() || null;
     const participantsDefaultOpen = query.participants?.trim() === 'open';
-    const spaceUsage = canManageMessengerMembers && manageableParticipants
+    const spaceUsageSnapshot =
+      canManageMessengerMembers && manageableParticipants
+        ? await getHomeSpaceUsageSnapshot({
+            participants: manageableParticipants.participants,
+            spaceId: activeSpace.id,
+          })
+        : null;
+    const spaceUsage = spaceUsageSnapshot
       ? buildMessengerSpaceUsageData({
           managePlanHref: withSpaceParam('/spaces', activeSpace.id),
-          participants: manageableParticipants.participants,
+          snapshot: spaceUsageSnapshot,
           t,
           upgradeHref: withSpaceParam('/spaces', activeSpace.id),
         })

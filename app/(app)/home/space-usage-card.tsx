@@ -22,6 +22,7 @@ type SpaceUsageCardProps = {
   managePlanHref: string;
   metrics: SpaceUsageMetricViewModel[];
   planLabel: string;
+  upgradeRecommended?: boolean;
   upgradeHref: string;
 };
 
@@ -30,6 +31,7 @@ export function SpaceUsageCard({
   managePlanHref,
   metrics,
   planLabel,
+  upgradeRecommended = false,
   upgradeHref,
 }: SpaceUsageCardProps) {
   return (
@@ -48,7 +50,13 @@ export function SpaceUsageCard({
           </span>
         </div>
 
-        <section className="messenger-home-usage-plan-band">
+        <section
+          className={
+            upgradeRecommended
+              ? 'messenger-home-usage-plan-band messenger-home-usage-plan-band-upgrade'
+              : 'messenger-home-usage-plan-band'
+          }
+        >
           <div className="stack messenger-home-usage-plan-copy">
             <span className="messenger-home-usage-kicker">
               {copy.currentPlanLabel}
@@ -66,7 +74,15 @@ export function SpaceUsageCard({
             >
               {copy.managePlanAction}
             </Link>
-            <Link className="pill" href={upgradeHref} prefetch={false}>
+            <Link
+              className={
+                upgradeRecommended
+                  ? 'button messenger-home-usage-upgrade-action'
+                  : 'pill'
+              }
+              href={upgradeHref}
+              prefetch={false}
+            >
               {copy.upgradeAction}
             </Link>
           </div>
