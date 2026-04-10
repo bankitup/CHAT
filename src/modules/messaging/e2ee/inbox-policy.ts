@@ -1,5 +1,6 @@
 import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
+import { getPreviewPrivacyDecision } from '@/modules/messaging/privacy/preview-policy';
 
 export type InboxPreviewLabels = {
   audio: string;
@@ -49,8 +50,18 @@ function getGenericConversationPreviewByKind(
   return labels.attachment;
 }
 
+<<<<<<< feature/chat-media-send-pass
 function shouldUseBodyPreview(latestMessageKind: string | null) {
   return latestMessageKind !== 'attachment' && latestMessageKind !== 'voice';
+=======
+function shouldUseMessageBodyPreview(conversation: {
+  latestMessageKind: string | null;
+}) {
+  return (
+    conversation.latestMessageKind === null ||
+    conversation.latestMessageKind === 'text'
+  );
+>>>>>>> main
 }
 
 export function getInboxPreviewText(
@@ -81,7 +92,11 @@ export function getInboxPreviewText(
 
   const body = conversation.latestMessageBody?.trim();
 
+<<<<<<< feature/chat-media-send-pass
   if (body && shouldUseBodyPreview(conversation.latestMessageKind)) {
+=======
+  if (body && shouldUseMessageBodyPreview(conversation)) {
+>>>>>>> main
     return body;
   }
 
@@ -116,7 +131,11 @@ export function getMaskedInboxPreviewText(
 
   if (
     conversation.latestMessageBody?.trim() &&
+<<<<<<< feature/chat-media-send-pass
     shouldUseBodyPreview(conversation.latestMessageKind)
+=======
+    shouldUseMessageBodyPreview(conversation)
+>>>>>>> main
   ) {
     return labels.newMessage;
   }
@@ -137,11 +156,12 @@ export function getInboxDisplayPreviewText(
   labels: InboxDisplayPreviewLabels,
   mode: InboxPreviewDisplayMode,
 ) {
-  if (mode === 'mask') {
-    return getMaskedInboxPreviewText(conversation, labels);
-  }
-
-  if (mode === 'reveal_after_open' && (conversation.unreadCount ?? 0) > 0) {
+  if (
+    getPreviewPrivacyDecision({
+      mode,
+      unreadCount: conversation.unreadCount,
+    }).inbox === 'generic'
+  ) {
     return getMaskedInboxPreviewText(conversation, labels);
   }
 

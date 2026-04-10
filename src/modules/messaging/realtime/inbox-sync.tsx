@@ -3,7 +3,11 @@
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
   resolveInboxAttachmentPreviewKind,
+<<<<<<< feature/chat-media-send-pass
   resolveInboxAttachmentPreviewKindFromMetadata,
+=======
+  resolveInboxAttachmentPreviewKindFromAsset,
+>>>>>>> main
 } from '@/modules/messaging/inbox/preview-kind';
 import { noteWarmNavRouterRefresh } from '@/modules/messaging/performance/warm-nav-client';
 import { useRouter } from 'next/navigation';
@@ -137,11 +141,16 @@ export function InboxRealtimeSync({
 
       const assetResponse = await supabase
         .from('message_asset_links')
+<<<<<<< feature/chat-media-send-pass
         .select('message_id, created_at, message_assets!inner(kind, mime_type)')
+=======
+        .select('created_at, message_assets!inner(kind, mime_type)')
+>>>>>>> main
         .eq('message_id', messageId)
         .order('created_at', { ascending: true })
         .limit(1);
 
+<<<<<<< feature/chat-media-send-pass
       if (!assetResponse.error) {
         const row =
           ((assetResponse.data ?? []) as Array<{
@@ -176,6 +185,36 @@ export function InboxRealtimeSync({
           message: assetResponse.error.message,
           messageId,
         });
+=======
+      if (assetResponse.error) {
+        logDiagnostics('summary-attachment-kind:asset-error', {
+          message: assetResponse.error.message,
+          messageId,
+        });
+      } else {
+        const assetRow = ((assetResponse.data ?? []) as Array<{
+          message_assets?:
+            | {
+                kind?: 'audio' | 'file' | 'image' | 'voice-note' | null;
+                mime_type?: string | null;
+              }
+            | Array<{
+                kind?: 'audio' | 'file' | 'image' | 'voice-note' | null;
+                mime_type?: string | null;
+              }>
+            | null;
+        }>)[0] ?? null;
+        const asset = Array.isArray(assetRow?.message_assets)
+          ? assetRow.message_assets[0] ?? null
+          : assetRow?.message_assets ?? null;
+
+        if (asset) {
+          return resolveInboxAttachmentPreviewKindFromAsset({
+            kind: asset.kind ?? null,
+            mimeType: asset.mime_type ?? null,
+          });
+        }
+>>>>>>> main
       }
 
       const response = await supabase

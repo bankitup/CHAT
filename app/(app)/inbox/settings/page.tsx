@@ -10,6 +10,7 @@ import {
 } from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { saveInboxPreferencesAction } from '../actions';
+import { InboxPreviewPushSync } from '../inbox-preview-push-sync';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
 
@@ -103,6 +104,8 @@ export default async function InboxSettingsPage({
       </section>
 
       <section className="card stack settings-surface inbox-settings-route-surface">
+        <InboxPreviewPushSync previewMode={preferences.previewMode} />
+
         {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
 
         {hasSavedState ? (

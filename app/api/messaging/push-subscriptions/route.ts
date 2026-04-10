@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getInboxSectionPreferences } from '@/modules/messaging/inbox/preferences-server';
+import { normalizeInboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
 import type {
   PushSubscriptionPresenceInput,
   PushSubscriptionRecordInput,
@@ -65,6 +67,9 @@ function isPushSubscriptionPresenceInput(
     typeof candidate.endpoint === 'string' &&
     candidate.endpoint.trim().length > 0 &&
     typeof candidate.activeInApp === 'boolean' &&
+    (candidate.previewMode === undefined ||
+      candidate.previewMode === null ||
+      typeof candidate.previewMode === 'string') &&
     (candidate.activeConversationId === null ||
       typeof candidate.activeConversationId === 'string')
   );
@@ -162,7 +167,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    const inboxPreferences = await getInboxSectionPreferences();
     const subscription = await upsertPushSubscriptionForUser({
+      previewMode: inboxPreferences.previewMode,
       userId: user.id,
       subscription: input,
     });
@@ -292,6 +299,10 @@ export async function PATCH(request: Request) {
           : null,
         activeInApp: input.activeInApp,
         endpoint: input.endpoint.trim(),
+        previewMode:
+          input.previewMode == null
+            ? null
+            : normalizeInboxPreviewDisplayMode(input.previewMode),
       },
     });
 

@@ -17,7 +17,11 @@ import {
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import {
   resolveInboxAttachmentPreviewKind,
+<<<<<<< feature/chat-media-send-pass
   resolveInboxAttachmentPreviewKindFromMetadata,
+=======
+  resolveInboxAttachmentPreviewKindFromAsset,
+>>>>>>> main
   type InboxAttachmentPreviewKind,
 } from '@/modules/messaging/inbox/preview-kind';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
@@ -408,6 +412,7 @@ type MessageAttachmentPreviewRow = {
   mime_type: string | null;
 };
 
+<<<<<<< feature/chat-media-send-pass
 type MessageAssetPreviewRow = {
   created_at: string | null;
   message_assets:
@@ -417,6 +422,17 @@ type MessageAssetPreviewRow = {
       }
     | Array<{
         kind: 'image' | 'file' | 'audio' | 'voice-note';
+=======
+type MessageAssetAttachmentPreviewRow = {
+  created_at: string | null;
+  message_assets:
+    | {
+        kind: 'audio' | 'file' | 'image' | 'voice-note';
+        mime_type?: string | null;
+      }
+    | Array<{
+        kind: 'audio' | 'file' | 'image' | 'voice-note';
+>>>>>>> main
         mime_type?: string | null;
       }>
     | null;
@@ -7294,16 +7310,20 @@ async function getInboxAttachmentPreviewKindsByMessageId(
   }
 
   const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
+<<<<<<< feature/chat-media-send-pass
   const serviceSupabase = createSupabaseServiceRoleClient();
   const canIgnoreMessageAssetPreviewError = (message: string) =>
     isMissingRelationErrorMessage(message, 'message_asset_links') ||
     isMissingRelationErrorMessage(message, 'message_assets');
+=======
+>>>>>>> main
   const loadAssetRows = async (client: MessageAttachmentLookupClient) =>
     client
       .from('message_asset_links')
       .select('message_id, created_at, message_assets!inner(kind, mime_type)')
       .in('message_id', uniqueMessageIds)
       .order('created_at', { ascending: true });
+<<<<<<< feature/chat-media-send-pass
 
   let assetResponse = await loadAssetRows(supabase);
 
@@ -7321,6 +7341,38 @@ async function getInboxAttachmentPreviewKindsByMessageId(
 
   if (!assetResponse.error) {
     for (const row of (assetResponse.data ?? []) as MessageAssetPreviewRow[]) {
+=======
+  const shouldIgnoreAssetPreviewLookupError = (message: string) =>
+    isMissingRelationErrorMessage(message, 'message_asset_links') ||
+    isMissingRelationErrorMessage(message, 'message_assets');
+  let assetResponse = await loadAssetRows(supabase);
+
+  if (assetResponse.error && !shouldIgnoreAssetPreviewLookupError(assetResponse.error.message)) {
+    const serviceSupabase = createSupabaseServiceRoleClient();
+
+    if (!serviceSupabase) {
+      throw new Error(assetResponse.error.message);
+    }
+
+    const serviceAssetResponse = await loadAssetRows(
+      serviceSupabase as MessageAttachmentLookupClient,
+    );
+
+    if (
+      serviceAssetResponse.error &&
+      !shouldIgnoreAssetPreviewLookupError(serviceAssetResponse.error.message)
+    ) {
+      throw new Error(serviceAssetResponse.error.message);
+    }
+
+    assetResponse = serviceAssetResponse;
+  }
+
+  if (!assetResponse.error) {
+    const assetRows = (assetResponse.data ?? []) as MessageAssetAttachmentPreviewRow[];
+
+    for (const row of assetRows) {
+>>>>>>> main
       if (previewKindsByMessageId.has(row.message_id)) {
         continue;
       }
@@ -7333,14 +7385,20 @@ async function getInboxAttachmentPreviewKindsByMessageId(
 
       previewKindsByMessageId.set(
         row.message_id,
+<<<<<<< feature/chat-media-send-pass
         resolveInboxAttachmentPreviewKindFromMetadata({
           assetKind: asset.kind,
+=======
+        resolveInboxAttachmentPreviewKindFromAsset({
+          kind: asset.kind,
+>>>>>>> main
           mimeType: asset.mime_type ?? null,
         }),
       );
     }
   }
 
+<<<<<<< feature/chat-media-send-pass
   const remainingMessageIds = uniqueMessageIds.filter(
     (messageId) => !previewKindsByMessageId.has(messageId),
   );
@@ -7350,6 +7408,9 @@ async function getInboxAttachmentPreviewKindsByMessageId(
   }
 
   const loadLegacyRows = async (client: MessageAttachmentLookupClient) => {
+=======
+  const loadRows = async (client: MessageAttachmentLookupClient) => {
+>>>>>>> main
     return client
       .from('message_attachments')
       .select('message_id, mime_type, created_at')
