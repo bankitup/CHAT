@@ -11,6 +11,24 @@ type LanguageDictionary = {
     ru: string;
     label: string;
   };
+  zoomSwitcher: {
+    label: string;
+    trigger: string;
+    title: string;
+    body: string;
+    standard: string;
+    standardHint: string;
+    larger: string;
+    largerHint: string;
+    largest: string;
+    largestHint: string;
+    currentBadge: string;
+    previewBadge: string;
+    previewNotice: string;
+    confirm: string;
+    cancel: string;
+    saveFailed: string;
+  };
   publicHome: {
     eyebrow: string;
     title: string;
@@ -879,6 +897,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       en: 'EN',
       ru: 'RU',
       label: 'Language',
+    },
+    zoomSwitcher: {
+      label: 'App zoom',
+      trigger: 'Size',
+      title: 'App zoom',
+      body: 'Preview a larger interface before saving it for this device. The preview updates the shell immediately, including controls and tap targets.',
+      standard: 'Standard',
+      standardHint: 'Balanced layout and default density.',
+      larger: 'Larger',
+      largerHint: 'Bigger text, controls, and spacing.',
+      largest: 'Largest',
+      largestHint: 'Maximum comfort for reading and tapping.',
+      currentBadge: 'Current',
+      previewBadge: 'Preview',
+      previewNotice: 'Preview applies immediately. Confirm to keep this size across the app on this device.',
+      confirm: 'Use this size',
+      cancel: 'Cancel',
+      saveFailed: 'Unable to save the display size right now.',
     },
     publicHome: {
       eyebrow: 'Build With Care',
@@ -1857,6 +1893,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       en: 'EN',
       ru: 'RU',
       label: 'Язык',
+    },
+    zoomSwitcher: {
+      label: 'Размер интерфейса',
+      trigger: 'Размер',
+      title: 'Размер интерфейса',
+      body: 'Сначала посмотрите увеличенный интерфейс, а потом сохраните его для этого устройства. Превью сразу обновляет оболочку, кнопки и области касания.',
+      standard: 'Стандартный',
+      standardHint: 'Сбалансированная плотность и обычный размер.',
+      larger: 'Крупнее',
+      largerHint: 'Крупнее текст, кнопки и отступы.',
+      largest: 'Самый крупный',
+      largestHint: 'Максимально комфортно для чтения и касаний.',
+      currentBadge: 'Сейчас',
+      previewBadge: 'Превью',
+      previewNotice: 'Превью применяется сразу. Подтвердите, чтобы сохранить этот размер для всего приложения на этом устройстве.',
+      confirm: 'Сохранить размер',
+      cancel: 'Отмена',
+      saveFailed: 'Сейчас не удалось сохранить размер интерфейса.',
     },
     publicHome: {
       eyebrow: 'Build With Care',

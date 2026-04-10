@@ -5,6 +5,7 @@ import {
   type HomeSpacePlanCode,
   type HomeSpaceUsageState,
 } from './space-plan-config';
+import { HomeAppZoomControl } from './home-app-zoom-control';
 import { HomeLanguageSwitch } from './home-language-switch';
 import {
   getHomeSpaceUsageSnapshot,
@@ -35,6 +36,7 @@ import {
   isKeepCozyPrimaryTestHomeName,
 } from '@/modules/keepcozy/server';
 import { withSpaceParam } from '@/modules/spaces/url';
+import { getRequestAppZoomMode } from '@/modules/ui-preferences/app-zoom-server';
 
 type HomeDashboardPageProps = {
   searchParams: Promise<{
@@ -330,6 +332,7 @@ export default async function HomeDashboardPage({
   const { activeSpace, language, t, user } = await requireHomeSpaceContext(
     query.space,
   );
+  const currentZoomMode = await getRequestAppZoomMode();
 
   if (activeSpace.profile === 'messenger_full') {
     const canManageMessengerMembers =
@@ -372,7 +375,11 @@ export default async function HomeDashboardPage({
 
     return (
       <section className="stack messenger-home-screen messenger-home-shell">
-        <div className="home-language-topbar">
+        <div className="home-utility-topbar">
+          <HomeAppZoomControl
+            initialZoomMode={currentZoomMode}
+            language={language}
+          />
           <HomeLanguageSwitch
             currentLanguage={language}
             spaceId={activeSpace.id}
@@ -540,7 +547,11 @@ export default async function HomeDashboardPage({
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
-      <div className="home-language-topbar">
+      <div className="home-utility-topbar">
+        <HomeAppZoomControl
+          initialZoomMode={currentZoomMode}
+          language={language}
+        />
         <HomeLanguageSwitch currentLanguage={language} spaceId={activeSpace.id} />
       </div>
 

@@ -12,6 +12,11 @@ import { getRequestLanguage, setLanguageCookie } from '@/modules/i18n/server';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { updateCurrentUserLanguagePreference } from '@/modules/messaging/data/server';
 import {
+  normalizeAppZoomMode,
+  type AppZoomMode,
+} from '@/modules/ui-preferences/app-zoom';
+import { setAppZoomCookie } from '@/modules/ui-preferences/app-zoom-server';
+import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
 } from '@/modules/messaging/ui/user-facing-errors';
@@ -58,6 +63,7 @@ function getFriendlyHomeErrorMessage(input: {
   language: AppLanguage;
   surface:
     | 'home:language-preference'
+    | 'home:zoom-preference'
     | 'home:participants-remove'
     | 'home:participants-request';
 }) {
@@ -75,6 +81,33 @@ function getFriendlyHomeErrorMessage(input: {
     language: input.language,
     rawMessage,
   });
+}
+
+export async function saveHomeAppZoomPreferenceAction(input: {
+  language: AppLanguage;
+  zoomMode: AppZoomMode;
+}): Promise<{ ok: true } | { error: string; ok: false }> {
+  const language = normalizeLanguage(input.language);
+  const t = getTranslations(language);
+  const zoomMode = normalizeAppZoomMode(input.zoomMode);
+
+  try {
+    await setAppZoomCookie(zoomMode);
+    revalidatePath('/', 'layout');
+    revalidatePath('/home');
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback: t.zoomSwitcher.saveFailed,
+        language,
+        surface: 'home:zoom-preference',
+      }),
+      ok: false,
+    };
+  }
 }
 
 export async function updateHomeLanguagePreferenceAction(formData: FormData) {
