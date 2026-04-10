@@ -844,32 +844,80 @@ function resolveConversationVisibleReadFloorSeq(
   return Math.max(0, visibleFromSeq - 1);
 }
 
-function resolveConversationUnreadCount(input: {
+function resolveConversationEffectiveLastReadSeq(input: {
   lastReadMessageSeq: number | null;
-  latestMessageSeq: number | null;
   visibleFromSeq?: number | null;
 }) {
-  const latestMessageSeq = input.latestMessageSeq;
-
-  if (latestMessageSeq === null) {
-    return 0;
-  }
-
   const baselineReadFloorSeq = resolveConversationVisibleReadFloorSeq(
     input.visibleFromSeq ?? null,
   );
-  const effectiveLastReadSeq =
-    input.lastReadMessageSeq === null
-      ? baselineReadFloorSeq
-      : baselineReadFloorSeq === null
-        ? input.lastReadMessageSeq
-        : Math.max(input.lastReadMessageSeq, baselineReadFloorSeq);
+  return input.lastReadMessageSeq === null
+    ? baselineReadFloorSeq
+    : baselineReadFloorSeq === null
+      ? input.lastReadMessageSeq
+      : Math.max(input.lastReadMessageSeq, baselineReadFloorSeq);
+}
 
-  if (effectiveLastReadSeq === null) {
-    return latestMessageSeq;
+async function countConversationUnreadIncomingMessages(input: {
+  conversationId: string;
+  currentUserId: string;
+  lastReadMessageSeq: number | null;
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  visibleFromSeq?: number | null;
+}) {
+  const effectiveLastReadSeq = resolveConversationEffectiveLastReadSeq({
+    lastReadMessageSeq: input.lastReadMessageSeq,
+    visibleFromSeq: input.visibleFromSeq ?? null,
+  });
+
+  let unreadQuery = input.supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', input.conversationId)
+    .neq('sender_id', input.currentUserId);
+
+  if (effectiveLastReadSeq !== null) {
+    unreadQuery = unreadQuery.gt('seq', effectiveLastReadSeq);
   }
 
-  return Math.max(0, latestMessageSeq - effectiveLastReadSeq);
+  const unreadResponse = await unreadQuery;
+
+  if (unreadResponse.error) {
+    throw new Error(unreadResponse.error.message);
+  }
+
+  return Number(unreadResponse.count ?? 0);
+}
+
+async function loadUnreadIncomingCountByConversation(input: {
+  currentUserId: string;
+  rows: ConversationMemberRow[];
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+}) {
+  const unreadCounts = await Promise.all(
+    input.rows.map(async (row) => {
+      const lastReadMessageSeq =
+        typeof row.last_read_message_seq === 'number'
+          ? row.last_read_message_seq
+          : null;
+      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+        row.visible_from_seq,
+      );
+
+      return [
+        row.conversation_id,
+        await countConversationUnreadIncomingMessages({
+          conversationId: row.conversation_id,
+          currentUserId: input.currentUserId,
+          lastReadMessageSeq,
+          supabase: input.supabase,
+          visibleFromSeq,
+        }),
+      ] as const;
+    }),
+  );
+
+  return new Map(unreadCounts);
 }
 
 function getConversationSummarySelect(input?: {
@@ -1401,6 +1449,7 @@ async function getConversationsByVisibility(
     mapInboxConversations(
       await attachConversationsToMembershipRows(membershipRows, supabase, options),
       supabase,
+      userId,
     );
 
   try {
@@ -1441,6 +1490,7 @@ async function getConversationsByVisibility(
     return mapInboxConversations(
       await attachConversationsToMembershipRows(scopedMembershipRows, supabase, options),
       supabase,
+      userId,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1466,22 +1516,33 @@ async function getConversationsWithoutArchiveVisibility(
 ) {
   const supabase = await createSupabaseServerClient();
   const baseMembershipSelect =
-    'conversation_id, state, last_read_message_seq, last_read_at';
+    'conversation_id, state, last_read_message_seq, last_read_at, visible_from_seq';
   const baseMemberships = await supabase
     .from('conversation_members')
     .select(baseMembershipSelect)
     .eq('user_id', userId)
     .eq('state', 'active');
+  const fallbackBaseMemberships =
+    baseMemberships.error &&
+    isMissingColumnErrorMessage(baseMemberships.error.message, 'visible_from_seq')
+      ? await supabase
+          .from('conversation_members')
+          .select('conversation_id, state, last_read_message_seq, last_read_at')
+          .eq('user_id', userId)
+          .eq('state', 'active')
+      : null;
+  const resolvedBaseMemberships = fallbackBaseMemberships ?? baseMemberships;
 
-  if (baseMemberships.error) {
-    throw new Error(baseMemberships.error.message);
+  if (resolvedBaseMemberships.error) {
+    throw new Error(resolvedBaseMemberships.error.message);
   }
 
-  const membershipRows = (baseMemberships.data ?? []) as ConversationMemberRow[];
+  const membershipRows = (resolvedBaseMemberships.data ?? []) as ConversationMemberRow[];
 
   return mapInboxConversations(
     await attachConversationsToMembershipRows(membershipRows, supabase, options),
     supabase,
+    userId,
   );
 }
 
@@ -1663,6 +1724,7 @@ async function attachConversationsToMembershipRows(
 async function mapInboxConversations(
   rows: ConversationMemberRow[],
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  currentUserId: string,
 ) {
   const conversationIds = rows.map((row) => row.conversation_id);
   const latestMessageSeqByConversation = new Map<string, number>();
@@ -1678,7 +1740,12 @@ async function mapInboxConversations(
       deletedAt: string | null;
     }
   >();
-  const unreadCountByConversation = new Map<string, number>();
+  const unreadCountByConversation =
+    await loadUnreadIncomingCountByConversation({
+      currentUserId,
+      rows,
+      supabase,
+    });
   const latestMessageRowsByConversationId =
     await loadLatestConversationSummaryMessageRowsByConversationId(
       supabase,
@@ -1706,22 +1773,6 @@ async function mapInboxConversations(
       latestMessageSeqByConversation.set(membershipRow.conversation_id, latestSeq);
     }
 
-    const lastReadSeq =
-      typeof membershipRow.last_read_message_seq === 'number'
-        ? membershipRow.last_read_message_seq
-        : null;
-    const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
-      membershipRow.visible_from_seq,
-    );
-
-    unreadCountByConversation.set(
-      membershipRow.conversation_id,
-      resolveConversationUnreadCount({
-        lastReadMessageSeq: lastReadSeq,
-        latestMessageSeq: latestSeq,
-        visibleFromSeq,
-      }),
-    );
   }
 
   const latestMessageAttachmentKindByMessageId =
@@ -2070,9 +2121,11 @@ export async function getConversationSummaryForUser(
   const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
     scopedRow.visible_from_seq,
   );
-  const unreadCount = resolveConversationUnreadCount({
+  const unreadCount = await countConversationUnreadIncomingMessages({
+    conversationId,
+    currentUserId: userId,
     lastReadMessageSeq,
-    latestMessageSeq,
+    supabase,
     visibleFromSeq,
   });
   const latestMessageVisible =
