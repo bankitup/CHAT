@@ -16,6 +16,7 @@ import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
 import { sendMessageMutationAction } from './actions';
+import { clearReplyTargetFromCurrentUrl } from './thread-local-reply-target';
 import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
@@ -48,24 +49,11 @@ type PlaintextChatComposerFormProps = {
   mentionParticipants?: MentionParticipant[];
   mentionSuggestionsLabel: string;
   messagePlaceholder: string;
+  onReplyTargetConsumed?: () => void;
   replyToMessageId?: string | null;
 };
 
 const COMPOSER_SEND_GUARD_MS = 320;
-
-function clearReplyTargetFromCurrentUrl() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.delete('replyToMessageId');
-  window.history.replaceState(
-    window.history.state,
-    '',
-    `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
-  );
-}
 
 function getComposerAttachmentLabel(input: {
   attachment: File | null;
@@ -127,6 +115,7 @@ export function PlaintextChatComposerForm({
   mentionParticipants,
   mentionSuggestionsLabel,
   messagePlaceholder,
+  onReplyTargetConsumed,
   replyToMessageId,
 }: PlaintextChatComposerFormProps) {
   const t = getTranslations(language);
@@ -429,6 +418,7 @@ export function PlaintextChatComposerForm({
         form.reset();
         setIsSendReady(false);
         setComposerResetKey((current) => current + 1);
+        onReplyTargetConsumed?.();
         clearReplyTargetFromCurrentUrl();
 
         window.requestAnimationFrame(() => {
@@ -479,6 +469,7 @@ export function PlaintextChatComposerForm({
             voiceDurationMs: voiceDraft.draft.durationMs ?? null,
           });
           voiceDraft.clearDraft();
+          onReplyTargetConsumed?.();
           clearReplyTargetFromCurrentUrl();
         }}
         onStop={voiceDraft.stopRecording}

@@ -71,21 +71,16 @@ import { ChatHeaderAvatarPreviewTrigger } from './chat-header-avatar-preview-tri
 import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import {
   DmThreadClientSubtree,
-  DmThreadComposerFallback,
   DmThreadPresenceScope,
 } from './dm-thread-client-diagnostics';
 import { DmChatDeleteConfirmForm } from './dm-chat-delete-confirm-form';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
 import {
-  DmReplyTargetSnippet,
   resolveReplyTargetAttachmentKind,
 } from './dm-reply-target-snippet';
+import { ThreadComposerRuntime } from './thread-composer-runtime';
 import { ThreadHistoryViewport } from './thread-history-viewport';
-import { TypingIndicator } from './typing-indicator';
-import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { GroupChatSettingsForm } from './group-chat-settings-form';
-import { JumpToLatestButton } from './jump-to-latest-button';
-import { PlaintextChatComposerForm } from './plaintext-chat-composer-form';
 import { ThreadLiveStateHydrator } from '@/modules/messaging/realtime/thread-live-state-store';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
@@ -1131,6 +1126,19 @@ export default async function ChatPage({
         attachmentsByMessageId.get(activeReplyTarget.id) ?? [],
       )
     : null;
+  const initialReplyTarget = activeReplyTarget
+    ? {
+        attachmentKind: activeReplyTargetAttachmentKind,
+        body: activeReplyTarget.body,
+        deletedAt: activeReplyTarget.deleted_at,
+        id: activeReplyTarget.id,
+        isEncrypted: isEncryptedDmTextMessage(activeReplyTarget),
+        kind: activeReplyTarget.kind,
+        senderId: activeReplyTarget.sender_id ?? null,
+        senderLabel:
+          senderNames.get(activeReplyTarget.sender_id ?? '') || t.chat.unknownUser,
+      }
+    : null;
   const activeEditMessageId = query.editMessageId?.trim() || null;
   const activeDeleteMessageId = query.deleteMessageId?.trim() || null;
   const currentUserGroupRole =
@@ -1491,135 +1499,25 @@ export default async function ChatPage({
           />
         </section>
 
-        <section className="stack composer-card" id="message-composer">
-          <JumpToLatestButton
-            label={t.chat.jumpToLatest}
-            latestVisibleMessageSeq={latestVisibleMessageSeq}
-            targetId="message-thread-scroll"
-          />
-          {conversation.kind === 'dm' ? (
-            <DmThreadClientSubtree
-              conversationId={conversationId}
-              {...threadClientDiagnostics}
-              surface="typing-indicator"
-            >
-              <TypingIndicator
-                conversationId={conversationId}
-                currentUserId={user.id}
-                language={language}
-              />
-            </DmThreadClientSubtree>
-          ) : (
-            <TypingIndicator
-              conversationId={conversationId}
-              currentUserId={user.id}
-              language={language}
-            />
-          )}
-          {activeReplyTarget ? (
-            <div className="composer-reply-preview">
-              <span aria-hidden="true" className="composer-reply-accent" />
-              <div className="stack composer-reply-main">
-                <div className="stack composer-reply-copy">
-                  <span className="composer-reply-label">{t.chat.replyingTo}</span>
-                  <span className="composer-reply-sender">
-                    {activeReplyTarget.deleted_at
-                      ? t.chat.deletedMessage
-                      : senderNames.get(activeReplyTarget.sender_id ?? '') ||
-                        t.chat.unknownUser}
-                  </span>
-                  <DmReplyTargetSnippet
-                    body={activeReplyTarget.body}
-                    conversationId={conversationId}
-                    currentUserId={user.id}
-                    debugRequestId={threadRenderRequestId}
-                    attachmentFallbackLabel={t.chat.attachment}
-                    audioFallbackLabel={t.chat.audio}
-                    deletedFallbackLabel={t.chat.thisMessageWasDeleted}
-                    emptyFallbackLabel={t.chat.emptyMessage}
-                    encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
-                    fileFallbackLabel={t.chat.file}
-                    historicalEncryptedFallbackLabel={
-                      t.chat.olderEncryptedMessage
-                    }
-                    encryptedReferenceNote={t.chat.encryptedReplyInfo}
-                    loadedFallbackLabel={t.chat.earlierMessage}
-                    messageId={activeReplyTarget.id}
-                    photoFallbackLabel={t.chat.photo}
-                    surface="composer-reply-preview"
-                    targetAttachmentKind={activeReplyTargetAttachmentKind}
-                    targetDeleted={Boolean(activeReplyTarget.deleted_at)}
-                    targetIsEncrypted={isEncryptedDmTextMessage(activeReplyTarget)}
-                    targetIsLoaded
-                    targetKind={activeReplyTarget.kind}
-                    targetMessageId={activeReplyTarget.id}
-                    voiceFallbackLabel={t.chat.voiceMessage}
-                  />
-                </div>
-              </div>
-              <Link
-                aria-label={t.chat.cancel}
-                className="composer-reply-dismiss"
-                href={buildChatHref({
-                  conversationId,
-                  hash: '#message-composer',
-                  spaceId: activeSpaceId,
-                })}
-                prefetch={false}
-              >
-                <span aria-hidden="true" className="composer-reply-dismiss-glyph">
-                  ×
-                </span>
-                <span className="sr-only">{t.chat.cancel}</span>
-              </Link>
-            </div>
-          ) : null}
-          {conversation.kind === 'dm' ? (
-            <DmThreadClientSubtree
-              conversationId={conversationId}
-              {...threadClientDiagnostics}
-              fallback={
-                <DmThreadComposerFallback
-                  copy={t.chat.encryptionNeedsRefresh}
-                  reloadLabel={t.chat.reloadConversation}
-                />
-              }
-              surface="encrypted-dm-composer-form"
-            >
-              <EncryptedDmComposerForm
-                accept={CHAT_ATTACHMENT_ACCEPT}
-                attachmentHelpText={attachmentHelpText}
-                attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
-                attachmentMaxSizeLabel={attachmentMaxSizeLabel}
-                conversationId={conversationId}
-                currentUserId={user.id}
-                currentUserLabel={currentUserDisplayLabel}
-                encryptedDmEnabled={encryptedDmEnabled}
-                language={language}
-                mentionParticipants={mentionParticipants}
-                mentionSuggestionsLabel={t.chat.mentionSuggestions}
-                messagePlaceholder={t.chat.messagePlaceholder}
-                recipientUserId={otherParticipantUserId}
-                replyToMessageId={activeReplyTarget?.id ?? null}
-              />
-            </DmThreadClientSubtree>
-          ) : (
-            <PlaintextChatComposerForm
-              accept={CHAT_ATTACHMENT_ACCEPT}
-              attachmentHelpText={attachmentHelpText}
-              attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
-              attachmentMaxSizeLabel={attachmentMaxSizeLabel}
-              conversationId={conversationId}
-              currentUserId={user.id}
-              currentUserLabel={currentUserDisplayLabel}
-              language={language}
-              mentionParticipants={mentionParticipants}
-              mentionSuggestionsLabel={t.chat.mentionSuggestions}
-              messagePlaceholder={t.chat.messagePlaceholder}
-              replyToMessageId={activeReplyTarget?.id ?? null}
-            />
-          )}
-        </section>
+        <ThreadComposerRuntime
+          accept={CHAT_ATTACHMENT_ACCEPT}
+          attachmentHelpText={attachmentHelpText}
+          attachmentMaxSizeBytes={CHAT_ATTACHMENT_MAX_SIZE_BYTES}
+          attachmentMaxSizeLabel={attachmentMaxSizeLabel}
+          conversationId={conversationId}
+          conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
+          currentUserId={user.id}
+          currentUserLabel={currentUserDisplayLabel}
+          encryptedDmEnabled={encryptedDmEnabled}
+          initialReplyTarget={initialReplyTarget}
+          language={language}
+          latestVisibleMessageSeq={latestVisibleMessageSeq}
+          mentionParticipants={mentionParticipants}
+          mentionSuggestionsLabel={t.chat.mentionSuggestions}
+          messagePlaceholder={t.chat.messagePlaceholder}
+          recipientUserId={otherParticipantUserId}
+          threadClientDiagnostics={threadClientDiagnostics}
+        />
       </section>
       </DmThreadPresenceScope>
 

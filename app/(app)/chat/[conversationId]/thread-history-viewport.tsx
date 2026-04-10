@@ -58,6 +58,7 @@ import { ProgressiveHistoryLoader } from './progressive-history-loader';
 import { ThreadDeleteMessageConfirm } from './thread-delete-message-confirm';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
 import { ThreadInlineEditForm } from './thread-inline-edit-form';
+import { emitThreadLocalReplyTargetSelection } from './thread-local-reply-target';
 import { ThreadReactionGroups } from './thread-reaction-groups';
 import { ThreadReactionPicker } from './thread-reaction-picker';
 import { resolveThreadScrollTarget } from './thread-scroll';
@@ -3509,12 +3510,6 @@ function ThreadMessageRowComponent({
     !isDeletedMessage &&
     !isMessageInEditMode &&
     !isMessageInDeleteMode;
-  const replyActionHref = buildChatHref({
-    conversationId,
-    hash: '#message-composer',
-    replyToMessageId: message.id,
-    spaceId: activeSpaceId,
-  });
   const inlineEditLabels = useMemo(
     () => ({
       cancel: t.chat.cancel,
@@ -3804,6 +3799,37 @@ function ThreadMessageRowComponent({
     },
     [closeQuickActions, onOpenImagePreview, t.chat.photo],
   );
+  const handleReplyAction = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeQuickActions();
+      emitThreadLocalReplyTargetSelection({
+        conversationId,
+        target: {
+          attachmentKind: resolveReplyTargetAttachmentKind(messageAttachments),
+          body: patchedBody,
+          deletedAt: patchedDeletedAt,
+          id: message.id,
+          isEncrypted: isEncryptedDmTextMessage(message),
+          kind: message.kind,
+          senderId: message.sender_id ?? null,
+          senderLabel:
+            senderNames.get(message.sender_id ?? '') || t.chat.unknownUser,
+        },
+      });
+    },
+    [
+      closeQuickActions,
+      conversationId,
+      message,
+      messageAttachments,
+      patchedBody,
+      patchedDeletedAt,
+      senderNames,
+      t.chat.unknownUser,
+    ],
+  );
 
   const canInlineMessageMeta =
     Boolean(normalizedMessageBody) &&
@@ -3998,16 +4024,12 @@ function ThreadMessageRowComponent({
                 />
               </div>
               <div className="message-quick-actions-secondary">
-                <Link
+                <button
                   aria-label={t.chat.reply}
                   className="message-quick-actions-action"
-                  href={replyActionHref}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    closeQuickActions();
-                  }}
-                  prefetch={false}
+                  onClick={handleReplyAction}
                   title={t.chat.reply}
+                  type="button"
                 >
                   <span
                     aria-hidden="true"
@@ -4018,7 +4040,7 @@ function ThreadMessageRowComponent({
                   <span className="message-quick-actions-action-label">
                     {t.chat.reply}
                   </span>
-                </Link>
+                </button>
               </div>
             </div>
           ) : null}
