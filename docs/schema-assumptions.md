@@ -105,6 +105,8 @@ Operational note:
 - production group/privacy rollouts should now treat `join_policy` as part of the active runtime contract, not only as a future hardening column.
 - some helper paths still degrade safely when `join_policy` is absent, but current `/chat/[conversationId]` production rendering has already shown that missing `public.conversations.join_policy` can break route rendering before those fallbacks are enough.
 - if production is missing both newer group columns, apply [2026-04-06-conversations-group-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-conversations-group-runtime-align.sql).
+- the next RLS target for this table is authenticated `select` visibility tied to active `conversation_members`, but that hardening is not live yet because current runtime still performs conversation inserts and summary-projection updates through the normal request client.
+- the exact deferred rollout plan is recorded in [2026-04-10-conversations-metadata-rls-deferred-plan.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-10-conversations-metadata-rls-deferred-plan.sql); do not enable `public.conversations` RLS until those write paths are moved behind service-role or reviewed security-definer helpers.
 
 ## `public.conversation_members`
 
