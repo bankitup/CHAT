@@ -3869,6 +3869,17 @@ main {
   margin: 0 auto;
 }
 
+.home-language-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 2px 2px 0;
+}
+
+.home-language-switch {
+  flex: 0 0 auto;
+}
+
 .messenger-home-main-flow {
   gap: 14px;
 }

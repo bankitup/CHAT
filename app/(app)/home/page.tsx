@@ -5,6 +5,7 @@ import {
   type HomeSpacePlanCode,
   type HomeSpaceUsageState,
 } from './space-plan-config';
+import { HomeLanguageSwitch } from './home-language-switch';
 import {
   getHomeSpaceUsageSnapshot,
   type HomeSpaceUsageSnapshot,
@@ -371,6 +372,13 @@ export default async function HomeDashboardPage({
 
     return (
       <section className="stack messenger-home-screen messenger-home-shell">
+        <div className="home-language-topbar">
+          <HomeLanguageSwitch
+            currentLanguage={language}
+            spaceId={activeSpace.id}
+          />
+        </div>
+
         {visibleMessage ? (
           <div aria-live="polite" className="notice notice-success notice-inline">
             <span aria-hidden="true" className="notice-check">
@@ -521,9 +529,32 @@ export default async function HomeDashboardPage({
   const primaryFlowHints = getKeepCozyPrimaryTestFlowHints();
   const showPrimaryFlow = isKeepCozyPrimaryTestHomeName(activeSpace.name);
   const testFlowHomeHint = primaryFlow?.homeNameHint ?? 'TEST';
+  const visibleError = query.error
+    ? sanitizeUserFacingErrorMessage({
+        fallback: getUserFacingErrorFallback(language, 'settings'),
+        language,
+        rawMessage: query.error,
+      })
+    : null;
+  const visibleMessage = query.message?.trim() || null;
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
+      <div className="home-language-topbar">
+        <HomeLanguageSwitch currentLanguage={language} spaceId={activeSpace.id} />
+      </div>
+
+      {visibleMessage ? (
+        <div aria-live="polite" className="notice notice-success notice-inline">
+          <span aria-hidden="true" className="notice-check">
+            ✓
+          </span>
+          <span className="notice-copy">{visibleMessage}</span>
+        </div>
+      ) : null}
+
+      {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+
       <section className="stack settings-hero keepcozy-hero">
         <p className="eyebrow">{t.homeDashboard.eyebrow}</p>
         <div className="keepcozy-hero-header">
