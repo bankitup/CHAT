@@ -7057,10 +7057,20 @@ export async function getMessageAttachments(messageIds: string[]) {
         } satisfies MessageAttachment;
       }),
       ...assetRows.map(async (row) => {
-        let signedUrl: string | null = row.external_url ?? null;
+        let signedUrl: string | null = null;
         const isVoiceMessage = row.kind === 'voice-note';
 
-        if (
+        if (row.source === 'external-url') {
+          logChatHistoryDiagnostics(
+            'attachments:external-url-blocked',
+            {
+              attachmentId: row.asset_id,
+              messageId: row.message_id,
+              source: row.source,
+            },
+            'warn',
+          );
+        } else if (
           row.source === 'supabase-storage' &&
           row.storage_bucket &&
           row.storage_object_path
@@ -7225,20 +7235,14 @@ export async function resolveConversationAttachmentSignedUrl(input: {
   }
 
   if (asset.source === 'external-url') {
-    logChatHistoryDiagnostics('attachment-signed-url:external-url', {
+    logChatHistoryDiagnostics('attachment-signed-url:external-url-blocked', {
       attachmentId: normalizedAttachmentId,
       conversationId: normalizedConversationId,
       messageId: normalizedMessageId,
       source: asset.source,
       userId: input.userId,
-    });
-    return {
-      signedUrl:
-        typeof asset.external_url === 'string' && asset.external_url.trim()
-          ? asset.external_url
-          : null,
-      source: 'message-asset-external' as const,
-    };
+    }, 'warn');
+    return null;
   }
 
   if (!asset.storage_bucket || !asset.storage_object_path) {
