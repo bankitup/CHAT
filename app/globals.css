@@ -2581,6 +2581,7 @@ main {
 
 .app-shell-chat-route .chat-screen {
   min-height: 0;
+  overflow: visible;
 }
 
 .chat-entry-loading-screen {
@@ -6339,6 +6340,10 @@ main {
   overflow: hidden;
 }
 
+.app-shell-chat-route .chat-main {
+  overflow: visible;
+}
+
 .message-thread {
   display: grid;
   flex: 1 1 auto;
@@ -6346,10 +6351,10 @@ main {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding-top: 14px;
+  padding-top: 18px;
   padding-bottom: var(--chat-thread-bottom-reserve);
   padding-right: 1px;
-  scroll-padding-top: 28px;
+  scroll-padding-top: 34px;
   scroll-padding-bottom: var(--chat-thread-scroll-reserve);
 }
 
@@ -7341,8 +7346,16 @@ main {
   color: rgba(91, 100, 112, 0.78);
 }
 
+/* Keep the backing audio element mounted but not display:none so mobile media
+   playback stays inline instead of briefly surfacing a native layer. */
 .message-voice-audio {
-  display: none;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 @keyframes message-voice-progress-loading {
@@ -7653,6 +7666,7 @@ main {
   font-size: 0.72rem;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .reaction-pill-selected,

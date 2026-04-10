@@ -724,6 +724,17 @@ function resolvePreferredThreadVoicePlaybackUrl(input: {
   return input.attachmentSignedUrl ?? input.cacheEntry?.playbackUrl ?? null;
 }
 
+function configureInlineAudioElement(audio: HTMLAudioElement | null) {
+  if (!audio) {
+    return;
+  }
+
+  audio.setAttribute('playsinline', '');
+  audio.setAttribute('webkit-playsinline', '');
+  audio.setAttribute('disableremoteplayback', '');
+  audio.setAttribute('x-webkit-airplay', 'deny');
+}
+
 function writeThreadVoicePlaybackCacheEntry(
   key: string | null,
   patch: Partial<ThreadVoicePlaybackCacheEntry>,
@@ -1371,6 +1382,10 @@ function ThreadVoiceMessageBubble({
   const cachedDurationMs = cachedVoicePlaybackEntry?.durationMs ?? null;
   const cachedSourceUrl = cachedVoicePlaybackEntry?.sourceUrl ?? null;
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const handleAudioRef = useCallback((audio: HTMLAudioElement | null) => {
+    audioRef.current = audio;
+    configureInlineAudioElement(audio);
+  }, []);
   const [playbackState, setPlaybackState] =
     useState<MessagingVoicePlaybackState>('idle');
   const [progressMs, setProgressMs] = useState(0);
@@ -1827,7 +1842,8 @@ function ThreadVoiceMessageBubble({
       </div>
       {effectiveSignedUrl || hasRecoverableAttachmentStorageLocator ? (
         <audio
-          ref={audioRef}
+          aria-hidden="true"
+          ref={handleAudioRef}
           className="message-voice-audio"
           onEnded={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
@@ -1921,7 +1937,9 @@ function ThreadVoiceMessageBubble({
               ? 'metadata'
               : 'none'
           }
+          playsInline
           src={effectiveSignedUrl ?? undefined}
+          tabIndex={-1}
         />
       ) : null}
     </div>
@@ -2082,7 +2100,10 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
               <audio
                 className="message-attachment-audio"
                 controls
+                controlsList="nodownload noplaybackrate noremoteplayback"
+                playsInline
                 preload="metadata"
+                ref={configureInlineAudioElement}
                 src={attachmentSignedUrl}
               />
             </div>
