@@ -470,7 +470,10 @@ export async function sendMessageMutationAction(
         attachmentPreviewKind: attachment
           ? isSupportedVoiceAttachmentType(attachment.type)
             ? null
-            : resolveInboxAttachmentPreviewKind(attachment.type)
+            : resolveInboxAttachmentPreviewKind(
+                attachment.type,
+                attachment.name,
+              )
           : null,
         body: body || null,
         contentMode: 'plaintext',

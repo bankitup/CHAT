@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { emitOptimisticThreadRetry, LOCAL_OPTIMISTIC_MESSAGE_EVENT, type OptimisticThreadMessagePayload } from '@/modules/messaging/realtime/optimistic-thread';
+import {
+  emitOptimisticThreadRetry,
+  LOCAL_OPTIMISTIC_MESSAGE_EVENT,
+  type OptimisticAttachmentPreviewKind,
+  type OptimisticThreadMessagePayload,
+} from '@/modules/messaging/realtime/optimistic-thread';
 import { MessageStatusIndicator } from './message-status-indicator';
 import {
   isThreadNearBottom,
@@ -18,6 +23,7 @@ type OptimisticThreadMessagesProps = {
     attachment: string;
     delete: string;
     failed: string;
+    photo: string;
     justNow: string;
     queued: string;
     remove: string;
@@ -54,6 +60,66 @@ function formatVoiceDuration(durationMs: number | null) {
   const seconds = totalSeconds % 60;
 
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function formatOptimisticAttachmentSize(value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isOptimisticImageAttachment(input: {
+  attachment: File | null | undefined;
+  kind: OptimisticAttachmentPreviewKind | null | undefined;
+}) {
+  return Boolean(input.attachment && input.kind === 'image');
+}
+
+function OptimisticImageAttachmentCard({
+  file,
+  fallbackLabel,
+}: {
+  fallbackLabel: string;
+  file: File;
+}) {
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+
+  useEffect(() => {
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const previewLabel = file.name.trim() || fallbackLabel;
+  const photoMeta = formatOptimisticAttachmentSize(file.size);
+
+  return (
+    <div
+      aria-label={previewLabel}
+      className="message-photo-card"
+      role="img"
+    >
+      <span
+        aria-hidden="true"
+        className="message-photo-card-visual"
+        style={{
+          backgroundImage: `url("${previewUrl}")`,
+        }}
+      />
+      <span className="message-photo-card-footer">
+        <span className="message-photo-card-badge">{fallbackLabel}</span>
+        {photoMeta ? (
+          <span className="message-photo-card-meta">{photoMeta}</span>
+        ) : null}
+      </span>
+    </div>
+  );
 }
 
 function compareOptimisticThreadMessages(
@@ -213,6 +279,7 @@ export function OptimisticThreadMessages({
     emitOptimisticThreadRetry({
       attachment: item.attachment ?? null,
       attachmentLabel: item.attachmentLabel ?? null,
+      attachmentPreviewKind: item.attachmentPreviewKind ?? null,
       attemptKind: 'retry',
       body: item.body,
       clientId: null,
@@ -242,6 +309,10 @@ export function OptimisticThreadMessages({
         const isFailed = item.status === 'failed';
         const messagePreview =
           item.body.trim() || item.attachmentLabel?.trim() || labels.attachment;
+        const isImageAttachment = isOptimisticImageAttachment({
+          attachment: item.attachment,
+          kind: item.attachmentPreviewKind ?? null,
+        });
         const isVoiceMessage = item.kind === 'voice';
         const pendingStatusLabel =
           isVoiceMessage
@@ -354,6 +425,11 @@ export function OptimisticThreadMessages({
                       </div>
                     </div>
                   </div>
+                ) : isImageAttachment && item.attachment ? (
+                  <OptimisticImageAttachmentCard
+                    fallbackLabel={labels.photo}
+                    file={item.attachment}
+                  />
                 ) : (
                   <p className="message-body">{messagePreview}</p>
                 )}

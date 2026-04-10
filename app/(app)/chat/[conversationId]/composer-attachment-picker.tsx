@@ -1,6 +1,7 @@
 'use client';
 
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type ComposerAttachmentPickerProps = {
@@ -110,7 +111,16 @@ export function ComposerAttachmentPicker({
       ),
     [accept],
   );
-  const isImage = selectedFile?.type.startsWith('image/') ?? false;
+  const isImage = useMemo(
+    () =>
+      selectedFile
+        ? resolveMessagingAssetKindFromMimeType({
+            fileName: selectedFile.name,
+            mimeType: selectedFile.type,
+          }) === 'image'
+        : false,
+    [selectedFile],
+  );
   const previewUrl = useMemo(() => {
     if (!selectedFile || !isImage) {
       return null;

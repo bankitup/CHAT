@@ -33,6 +33,8 @@ import {
 } from '@/modules/messaging/realtime/optimistic-thread';
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
+import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
@@ -732,6 +734,30 @@ function getEncryptedDmErrorMessage(
   });
 }
 
+function getEncryptedComposerQueueErrorMessage(
+  error: unknown,
+  t: ReturnType<typeof getTranslations>,
+) {
+  if (error instanceof Error && error.message === 'dm_e2ee_unsupported_browser') {
+    return t.chat.encryptionUnavailableHere;
+  }
+
+  const code =
+    error instanceof Error && 'code' in error
+      ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
+      : null;
+
+  if (code) {
+    return getEncryptedDmErrorMessage(error, t);
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return getEncryptedDmErrorMessage(error, t);
+}
+
 function clearReplyTargetFromCurrentUrl() {
   if (typeof window === 'undefined') {
     return;
@@ -758,7 +784,12 @@ function getComposerAttachmentLabel(input: {
     return null;
   }
 
-  if (input.attachment.type.startsWith('image/')) {
+  if (
+    resolveMessagingAssetKindFromMimeType({
+      fileName: input.attachment.name,
+      mimeType: input.attachment.type,
+    }) === 'image'
+  ) {
     return input.labels.image;
   }
 
@@ -884,7 +915,7 @@ export function EncryptedDmComposerForm({
     );
   const { enqueue } = useConversationOutgoingQueue({
     conversationId,
-    onItemFailed: ({ error }) => {
+    onItemFailed: ({ error, errorMessage }) => {
       const nextCode =
         error instanceof Error && 'code' in error
           ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
@@ -892,7 +923,7 @@ export function EncryptedDmComposerForm({
             ? 'dm_e2ee_unsupported_browser'
             : null;
       setErrorCode(nextCode);
-      setErrorMessage(getEncryptedDmErrorMessage(error, t));
+      setErrorMessage(errorMessage);
       setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
     },
     onItemSent: () => {
@@ -1043,7 +1074,7 @@ export function EncryptedDmComposerForm({
         }
       }
     },
-    resolveErrorMessage: (error) => getEncryptedDmErrorMessage(error, t),
+    resolveErrorMessage: (error) => getEncryptedComposerQueueErrorMessage(error, t),
   });
 
   const getActiveRecipientBundleSoftFailureError = useCallback(() => {
@@ -1192,6 +1223,7 @@ export function EncryptedDmComposerForm({
       setErrorDebugDetails(null);
       enqueue({
         attachmentLabel: detail.attachmentLabel ?? null,
+        attachmentPreviewKind: detail.attachmentPreviewKind ?? null,
         body: detail.body,
         clientId:
           detail.attemptKind === 'retry'
@@ -1302,6 +1334,10 @@ export function EncryptedDmComposerForm({
                 image: t.chat.photo,
               },
             }),
+            attachmentPreviewKind: resolveInboxAttachmentPreviewKind(
+              attachment.type,
+              attachment.name,
+            ),
             body: '',
             kind: 'attachment',
             payload: {
