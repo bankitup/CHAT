@@ -262,6 +262,7 @@ const threadShortDateWithYearFormatterByLanguage = new Map<
   AppLanguage,
   Intl.DateTimeFormat
 >();
+const loggedThreadGuardDiagnosticKeys = new Set<string>();
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
@@ -496,6 +497,50 @@ function normalizeAttachmentDisplayName(
   return trimmed || fallbackLabel;
 }
 
+function shouldLogThreadGuardDiagnostics() {
+  return (
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1'
+  );
+}
+
+function logThreadGuardDiagnostic(
+  stage: string,
+  dedupeKey: string,
+  details: Record<string, unknown>,
+) {
+  if (!shouldLogThreadGuardDiagnostics()) {
+    return;
+  }
+
+  const key = `${stage}:${dedupeKey}`;
+
+  if (loggedThreadGuardDiagnosticKeys.has(key)) {
+    return;
+  }
+
+  loggedThreadGuardDiagnosticKeys.add(key);
+  console.info('[chat-thread-guards]', stage, details);
+}
+
+function shouldLogVoiceThreadDiagnostics() {
+  return (
+    typeof window !== 'undefined' &&
+    process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1'
+  );
+}
+
+function logVoiceThreadDiagnostic(
+  stage: string,
+  details: Record<string, unknown>,
+) {
+  if (!shouldLogVoiceThreadDiagnostics()) {
+    return;
+  }
+
+  console.info('[voice-thread]', stage, details);
+}
+
 function hasRecoverableAttachmentLocator(
   attachment:
     | Pick<MessageAttachment, 'bucket' | 'id' | 'messageId' | 'objectPath'>
@@ -534,14 +579,53 @@ function filterRenderableMessageAttachments(
   messageId: string,
   attachments: MessageAttachment[],
 ) {
-  return attachments.filter((attachment) => {
+  if (!attachments.length) {
+    return attachments;
+  }
+
+  let filteredAttachments: MessageAttachment[] | null = null;
+  const droppedAttachmentIds: string[] = [];
+
+  for (const [index, attachment] of attachments.entries()) {
     const attachmentMessageId =
       typeof attachment.messageId === 'string'
         ? attachment.messageId.trim()
         : '';
 
-    return !attachmentMessageId || attachmentMessageId === messageId;
-  });
+    if (!attachmentMessageId || attachmentMessageId === messageId) {
+      if (filteredAttachments) {
+        filteredAttachments.push(attachment);
+      }
+      continue;
+    }
+
+    if (!filteredAttachments) {
+      // Preserve the original array reference when nothing is filtered out so
+      // row-level memoization can still short-circuit on unrelated updates.
+      filteredAttachments = attachments.slice(0, index);
+    }
+
+    if (droppedAttachmentIds.length < 3) {
+      droppedAttachmentIds.push(getRenderableAttachmentKey(attachment, index));
+    }
+  }
+
+  if (!filteredAttachments) {
+    return attachments;
+  }
+
+  logThreadGuardDiagnostic(
+    'attachment-mismatch-dropped',
+    `${messageId}:${droppedAttachmentIds.join(',')}`,
+    {
+      droppedAttachmentIds,
+      droppedCount: attachments.length - filteredAttachments.length,
+      messageId,
+      totalAttachmentCount: attachments.length,
+    },
+  );
+
+  return filteredAttachments;
 }
 
 function getRenderableAttachmentKey(
@@ -1212,6 +1296,11 @@ function ThreadVoiceMessageBubble({
         });
 
         if (!resolveUrl) {
+          logVoiceThreadDiagnostic('attachment-url-resolve-skipped-invalid-locator', {
+            attachmentId,
+            conversationId,
+            messageId: attachmentMessageId,
+          });
           return null;
         }
 
@@ -1242,32 +1331,22 @@ function ThreadVoiceMessageBubble({
           setResolvedSignedUrl(nextSignedUrl);
         }
 
-        if (
-          process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
-          typeof window !== 'undefined'
-        ) {
-          console.info('[voice-thread]', 'attachment-url-resolved', {
-            attachmentId,
-            conversationId,
-            messageId: attachmentMessageId,
-            resolved: Boolean(nextSignedUrl),
-          });
-        }
+        logVoiceThreadDiagnostic('attachment-url-resolved', {
+          attachmentId,
+          conversationId,
+          messageId: attachmentMessageId,
+          resolved: Boolean(nextSignedUrl),
+        });
 
         return nextSignedUrl;
       } catch (error) {
         setDidFailSignedUrlResolve(true);
-        if (
-          process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1' &&
-          typeof window !== 'undefined'
-        ) {
-          console.info('[voice-thread]', 'attachment-url-resolve-failed', {
-            attachmentId,
-            conversationId,
-            errorMessage: error instanceof Error ? error.message : String(error),
-            messageId: attachmentMessageId,
-          });
-        }
+        logVoiceThreadDiagnostic('attachment-url-resolve-failed', {
+          attachmentId,
+          conversationId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          messageId: attachmentMessageId,
+        });
 
         return null;
       } finally {
@@ -1332,14 +1411,7 @@ function ThreadVoiceMessageBubble({
   );
 
   useEffect(() => {
-    if (
-      process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE !== '1' ||
-      typeof window === 'undefined'
-    ) {
-      return;
-    }
-
-    console.info('[voice-thread]', 'render-state', {
+    logVoiceThreadDiagnostic('render-state', {
       attachmentId: attachment?.id ?? null,
       attachmentMessageId: attachment?.messageId ?? null,
       canResolveSignedUrl,
@@ -1834,6 +1906,8 @@ function buildAttachmentSignedUrlResolveUrl(input: {
     !looksLikeUuid(input.conversationId) ||
     !looksLikeUuid(input.messageId)
   ) {
+    // Skip doomed recovery fetches when a stale runtime payload no longer has
+    // a trustworthy storage locator tuple.
     return null;
   }
 
@@ -5290,16 +5364,28 @@ export function ThreadHistoryViewport({
 
   const openImagePreview = useCallback((preview: ActiveImagePreview) => {
     const signedUrl = normalizeAttachmentSignedUrl(preview.signedUrl);
+    const previewTitle = normalizeAttachmentDisplayName(
+      preview.fileName,
+      t.chat.photo,
+    );
 
     if (!signedUrl) {
+      logThreadGuardDiagnostic(
+        'image-preview-suppressed-missing-url',
+        `${conversationId}:${previewTitle}`,
+        {
+          conversationId,
+          fileName: previewTitle,
+        },
+      );
       return;
     }
 
     setActiveImagePreview({
-      fileName: normalizeAttachmentDisplayName(preview.fileName, t.chat.photo),
+      fileName: previewTitle,
       signedUrl,
     });
-  }, [t.chat.photo]);
+  }, [conversationId, t.chat.photo]);
 
   const closeImagePreview = useCallback(() => {
     setActiveImagePreview(null);
