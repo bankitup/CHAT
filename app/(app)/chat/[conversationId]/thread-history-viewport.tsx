@@ -24,7 +24,9 @@ import type { MessagingVoicePlaybackState } from '@/modules/messaging/media';
 import {
   emitThreadHistorySyncRequest,
   emitThreadHistoryVisibleMessageIds,
+  LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
   LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
+  type ThreadHistoryLiveMessagePayload,
   type ThreadHistorySyncRequestPayload,
 } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
@@ -132,7 +134,6 @@ type ThreadHistoryViewportProps = {
   activeDeleteMessageId: string | null;
   activeEditMessageId: string | null;
   activeSpaceId: string;
-  confirmedClientIds: string[];
   conversationId: string;
   conversationKind: 'dm' | 'group';
   currentReadMessageSeq: number | null;
@@ -1821,6 +1822,58 @@ function mergeThreadHistoryState(input: {
   };
 }
 
+function upsertLiveThreadMessage(input: {
+  message: ConversationMessageRow;
+  state: ThreadHistoryState;
+}) {
+  const existingIndex = input.state.messages.findIndex(
+    (message) => message.id === input.message.id,
+  );
+  const nextMessagesById = new Map(input.state.messagesById);
+  nextMessagesById.set(input.message.id, input.message);
+
+  if (existingIndex >= 0) {
+    const nextMessages = [...input.state.messages];
+    nextMessages[existingIndex] = input.message;
+
+    return {
+      ...input.state,
+      messages: nextMessages,
+      messagesById: nextMessagesById,
+      oldestLoadedSeq: resolveOldestLoadedSeq(
+        nextMessages,
+        input.state.oldestLoadedSeq,
+      ),
+    } satisfies ThreadHistoryState;
+  }
+
+  const nextMessages = [...input.state.messages];
+  const nextMessageSeq = normalizeComparableMessageSeq(input.message.seq);
+  let insertionIndex = nextMessages.length;
+
+  if (nextMessageSeq !== null) {
+    const firstLaterMessageIndex = nextMessages.findIndex((message) => {
+      const comparableSeq = normalizeComparableMessageSeq(message.seq);
+      return comparableSeq !== null && comparableSeq > nextMessageSeq;
+    });
+
+    insertionIndex =
+      firstLaterMessageIndex >= 0 ? firstLaterMessageIndex : nextMessages.length;
+  }
+
+  nextMessages.splice(insertionIndex, 0, input.message);
+
+  return {
+    ...input.state,
+    messages: nextMessages,
+    messagesById: nextMessagesById,
+    oldestLoadedSeq: resolveOldestLoadedSeq(
+      nextMessages,
+      input.state.oldestLoadedSeq,
+    ),
+  } satisfies ThreadHistoryState;
+}
+
 function getEncryptedHistoryHintForMessage(input: {
   envelope: StoredDmE2eeEnvelope | null;
   hint: EncryptedDmServerHistoryHint | null;
@@ -2814,7 +2867,6 @@ export function ThreadHistoryViewport({
   activeDeleteMessageId,
   activeEditMessageId,
   activeSpaceId,
-  confirmedClientIds,
   conversationId,
   conversationKind,
   currentReadMessageSeq,
@@ -2984,15 +3036,12 @@ export function ThreadHistoryViewport({
     () =>
       Array.from(
         new Set(
-          [
-            ...confirmedClientIds,
-            ...historyState.messages
-              .map((message) => message.client_id?.trim() || '')
-              .filter(Boolean),
-          ].filter(Boolean),
+          historyState.messages
+            .map((message) => message.client_id?.trim() || '')
+            .filter(Boolean),
         ),
       ),
-    [confirmedClientIds, historyState.messages],
+    [historyState.messages],
   );
   const historyMessageIds = useMemo(
     () => historyState.messages.map((message) => message.id),
@@ -3257,6 +3306,37 @@ export function ThreadHistoryViewport({
       messageIds: historyMessageIds,
     });
   }, [conversationId, historyMessageIds]);
+
+  useEffect(() => {
+    const handleLiveMessage = (event: Event) => {
+      const detail = (event as CustomEvent<ThreadHistoryLiveMessagePayload>).detail;
+
+      if (!detail || detail.conversationId !== conversationId) {
+        return;
+      }
+
+      setHistoryState((currentState) => {
+        const nextState = upsertLiveThreadMessage({
+          message: detail.message,
+          state: currentState,
+        });
+        historyStateRef.current = nextState;
+        return nextState;
+      });
+    };
+
+    window.addEventListener(
+      LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
+      handleLiveMessage as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
+        handleLiveMessage as EventListener,
+      );
+    };
+  }, [conversationId]);
 
   const mergeSyncRequest = useCallback(
     (nextRequest: ThreadHistorySyncRequestPayload) => {
