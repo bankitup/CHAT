@@ -6469,6 +6469,10 @@ main {
   gap: 2px;
 }
 
+.message-row-optimistic-media .message-card {
+  gap: 2px;
+}
+
 .message-card {
   display: grid;
   gap: 3px;
@@ -6527,6 +6531,19 @@ main {
   background: rgba(230, 240, 255, 0.9);
   border-color: rgba(31, 111, 235, 0.14);
   box-shadow: 0 4px 12px rgba(31, 111, 235, 0.028);
+}
+
+.message-bubble-optimistic-media {
+  padding: 6px;
+  background: rgba(246, 248, 251, 0.56);
+  border-color: rgba(221, 228, 238, 0.42);
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.02);
+}
+
+.message-bubble-own.message-bubble-optimistic-media {
+  background: rgba(232, 241, 255, 0.62);
+  border-color: rgba(31, 111, 235, 0.14);
+  box-shadow: 0 4px 12px rgba(31, 111, 235, 0.03);
 }
 
 .message-bubble-with-reply {
@@ -7394,6 +7411,21 @@ main {
     0 8px 18px rgba(17, 24, 39, 0.045);
 }
 
+.message-photo-card-optimistic {
+  width: min(100%, 15.5rem);
+  border-color: rgba(221, 228, 238, 0.4);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    0 6px 14px rgba(17, 24, 39, 0.03);
+}
+
+.message-bubble-own .message-photo-card-optimistic {
+  border-color: rgba(31, 111, 235, 0.12);
+  background: rgba(246, 249, 255, 0.72);
+}
+
 .message-photo-card-button {
   appearance: none;
   -webkit-appearance: none;
@@ -7429,42 +7461,6 @@ main {
 .message-photo-card-visual-unavailable {
   background:
     linear-gradient(180deg, rgba(228, 235, 244, 0.84), rgba(214, 223, 234, 0.92));
-}
-
-.message-photo-card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 5px 7px 6px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(247, 249, 252, 0.72));
-}
-
-.message-photo-card-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: rgba(17, 24, 39, 0.065);
-  color: rgba(36, 45, 58, 0.82);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.message-photo-card-meta {
-  min-width: 0;
-  overflow: hidden;
-  color: rgba(91, 100, 112, 0.82);
-  font-size: 0.68rem;
-  line-height: 1.18;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .message-attachment-card {

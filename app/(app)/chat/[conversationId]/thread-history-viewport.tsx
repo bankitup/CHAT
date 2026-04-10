@@ -252,6 +252,7 @@ const ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON =
   'dm-e2ee-history:current-device-resync';
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 const ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS = 2400;
+const ATTACHMENT_PENDING_COMMIT_TRANSITION_GRACE_MS = 2600;
 const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
   'local-voice-send:retry-attachment-resolution';
 const VOICE_MESSAGE_REOPEN_RECOVERY_REASON =
@@ -1989,12 +1990,6 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
             attachment.fileName,
             t.chat.photo,
           );
-          const photoMeta = [
-            formatAttachmentSize(attachment.sizeBytes),
-            !attachmentSignedUrl ? t.chat.unavailableRightNow : null,
-          ]
-            .filter((value): value is string => Boolean(value))
-            .join(' · ');
 
           if (!attachmentSignedUrl) {
             return (
@@ -2006,12 +2001,6 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
                   aria-hidden="true"
                   className="message-photo-card-visual message-photo-card-visual-unavailable"
                 />
-                <span className="message-photo-card-footer">
-                  <span className="message-photo-card-badge">{t.chat.photo}</span>
-                  {photoMeta ? (
-                    <span className="message-photo-card-meta">{photoMeta}</span>
-                  ) : null}
-                </span>
               </div>
             );
           }
@@ -2035,12 +2024,6 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
                   backgroundImage: `url("${attachmentSignedUrl}")`,
                 }}
               />
-              <span className="message-photo-card-footer">
-                <span className="message-photo-card-badge">{t.chat.photo}</span>
-                {photoMeta ? (
-                  <span className="message-photo-card-meta">{photoMeta}</span>
-                ) : null}
-              </span>
             </button>
           );
         }
@@ -2370,6 +2353,33 @@ function shouldRenderPendingOwnEncryptedCommitTransition(input: {
   return (
     Date.now() - createdAt.getTime() <=
     ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS
+  );
+}
+
+function isOwnAttachmentCommitTransitionPending(input: {
+  attachments: MessageAttachment[];
+  currentUserId: string;
+  message: ConversationMessageRow;
+  normalizedBody: string | null;
+}) {
+  // Keep a just-sent local attachment on its optimistic shell until the
+  // committed row has attachment data to render, instead of flashing
+  // through the empty-message fallback. Keep this window short so a genuinely
+  // broken committed attachment state can still surface truthfully.
+  const createdAt = parseSafeDate(input.message.created_at);
+
+  if (!createdAt) {
+    return false;
+  }
+
+  return (
+    input.message.kind === 'attachment' &&
+    input.message.sender_id === input.currentUserId &&
+    Boolean(input.message.client_id?.trim()) &&
+    !input.normalizedBody &&
+    input.attachments.length === 0 &&
+    Date.now() - createdAt.getTime() <=
+      ATTACHMENT_PENDING_COMMIT_TRANSITION_GRACE_MS
   );
 }
 
@@ -3464,6 +3474,13 @@ function ThreadMessageRowComponent({
       message.id,
       attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
     );
+  const isPendingOwnAttachmentCommitTransition =
+    isOwnAttachmentCommitTransitionPending({
+      attachments: messageAttachments,
+      currentUserId,
+      message,
+      normalizedBody: normalizedMessageBody,
+    });
   const primaryVoiceAttachment =
     message.kind === 'voice'
       ? messageAttachments.find((attachment) => attachment.isVoiceMessage) ??
@@ -3971,6 +3988,10 @@ function ThreadMessageRowComponent({
       envelopePresent: Boolean(encryptedEnvelope),
       messageId: message.id,
     });
+  }
+
+  if (isPendingOwnAttachmentCommitTransition) {
+    return null;
   }
 
   return (
@@ -4782,11 +4803,24 @@ export function ThreadHistoryViewport({
       Array.from(
         new Set(
           historyState.messages
+            .filter((message) => {
+              const normalizedBody = normalizeMessageBodyText(message.body);
+              const messageAttachments =
+                historyState.attachmentsByMessage.get(message.id) ??
+                EMPTY_MESSAGE_ATTACHMENTS;
+
+              return !isOwnAttachmentCommitTransitionPending({
+                attachments: messageAttachments,
+                currentUserId,
+                message,
+                normalizedBody,
+              });
+            })
             .map((message) => message.client_id?.trim() || '')
             .filter(Boolean),
         ),
       ),
-    [historyState.messages],
+    [currentUserId, historyState.attachmentsByMessage, historyState.messages],
   );
   const historyMessageIds = useMemo(
     () => historyState.messages.map((message) => message.id),
