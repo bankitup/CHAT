@@ -1368,6 +1368,11 @@ main {
 
 .inbox-settings-trigger,
 .inbox-compose-trigger {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  font: inherit;
+  background: transparent;
   color: rgba(37, 45, 57, 0.94);
 }
 
@@ -1608,6 +1613,15 @@ main {
   border-radius: 0;
   background: transparent;
   border: 0;
+}
+
+.inbox-create-loading-state {
+  align-items: center;
+  justify-items: center;
+  gap: 8px;
+  min-height: 132px;
+  padding: 16px 12px;
+  text-align: center;
 }
 
 .inbox-create-section-head {
