@@ -236,6 +236,7 @@ type VoiceMessageRenderState =
 type ThreadVoicePlaybackCacheEntry = {
   durationMs: number | null;
   playbackUrl: string | null;
+  sessionReady: boolean;
   sourceUrl: string | null;
   warmed: boolean;
 };
@@ -754,11 +755,20 @@ function writeThreadVoicePlaybackCacheEntry(
       requestedSourceUrl &&
       currentEntry.sourceUrl === requestedSourceUrl,
   );
+  const shouldPreserveSessionReady = Boolean(
+    currentEntry?.sessionReady &&
+      patch.sessionReady !== false &&
+      requestedSourceUrl &&
+      currentEntry.sourceUrl === requestedSourceUrl,
+  );
   const nextEntry: ThreadVoicePlaybackCacheEntry = {
     durationMs: patch.durationMs ?? currentEntry?.durationMs ?? null,
     playbackUrl: shouldPreserveWarmBlobPlaybackUrl
       ? currentEntry?.playbackUrl ?? null
       : requestedPlaybackUrl,
+    sessionReady: shouldPreserveSessionReady
+      ? true
+      : patch.sessionReady ?? currentEntry?.sessionReady ?? false,
     sourceUrl: requestedSourceUrl,
     warmed: shouldPreserveWarmBlobPlaybackUrl
       ? true
@@ -769,6 +779,7 @@ function writeThreadVoicePlaybackCacheEntry(
     nextEntry.durationMs === null &&
     nextEntry.playbackUrl === null &&
     nextEntry.sourceUrl === null &&
+    !nextEntry.sessionReady &&
     !nextEntry.warmed
   ) {
     if (
@@ -861,6 +872,7 @@ async function warmThreadVoicePlaybackSource(input: {
       const objectUrl = URL.createObjectURL(blob);
       writeThreadVoicePlaybackCacheEntry(cacheKey, {
         playbackUrl: objectUrl,
+        sessionReady: false,
         sourceUrl,
         warmed: true,
       });
@@ -1382,6 +1394,7 @@ function ThreadVoiceMessageBubble({
   });
   const cachedDurationMs = cachedVoicePlaybackEntry?.durationMs ?? null;
   const cachedSourceUrl = cachedVoicePlaybackEntry?.sourceUrl ?? null;
+  const cachedSessionReady = cachedVoicePlaybackEntry?.sessionReady ?? false;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const handleAudioRef = useCallback((audio: HTMLAudioElement | null) => {
     audioRef.current = audio;
@@ -1414,6 +1427,9 @@ function ThreadVoiceMessageBubble({
     (attachmentSignedUrl && attachmentSignedUrl !== ignoredAttachmentSignedUrl
       ? attachmentSignedUrl
       : null);
+  const shouldHydratePreparedVoicePlayback = Boolean(
+    effectiveSignedUrl && (cachedVoicePlaybackEntry?.warmed || cachedSessionReady),
+  );
   const canResolveSignedUrl =
     Boolean(conversationId && hasRecoverableAttachmentStorageLocator) &&
     !effectiveSignedUrl;
@@ -1523,6 +1539,37 @@ function ThreadVoiceMessageBubble({
     },
     [voicePlaybackCacheKey],
   );
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (!audio || !effectiveSignedUrl || !shouldHydratePreparedVoicePlayback) {
+      return;
+    }
+
+    if (audio.getAttribute('src') !== effectiveSignedUrl) {
+      audio.setAttribute('src', effectiveSignedUrl);
+    }
+
+    if (audio.readyState >= VOICE_READY_TO_REPLAY_STATE) {
+      rememberVoicePlaybackCacheEntry({
+        durationMs: resolvedDurationMs,
+        playbackUrl: effectiveSignedUrl,
+        sessionReady: true,
+        sourceUrl: cachedSourceUrl ?? effectiveSignedUrl,
+        warmed: Boolean(effectiveSignedUrl.startsWith('blob:')),
+      });
+      return;
+    }
+
+    audio.load();
+  }, [
+    cachedSourceUrl,
+    effectiveSignedUrl,
+    rememberVoicePlaybackCacheEntry,
+    resolvedDurationMs,
+    shouldHydratePreparedVoicePlayback,
+  ]);
 
   const resolveSignedUrl = useCallback(async () => {
     const attachmentId = attachment?.id ?? null;
@@ -1846,6 +1893,22 @@ function ThreadVoiceMessageBubble({
           aria-hidden="true"
           ref={handleAudioRef}
           className="message-voice-audio"
+          onCanPlay={(event) => {
+            const stablePlaybackSource = effectiveSignedUrl ?? cachedSourceUrl;
+            const nextDurationMs =
+              Number.isFinite(event.currentTarget.duration) &&
+              event.currentTarget.duration > 0
+                ? event.currentTarget.duration * 1000
+                : resolvedDurationMs;
+
+            rememberVoicePlaybackCacheEntry({
+              durationMs: nextDurationMs,
+              playbackUrl: stablePlaybackSource,
+              sessionReady: Boolean(stablePlaybackSource),
+              sourceUrl: stablePlaybackSource,
+              warmed: Boolean(stablePlaybackSource?.startsWith('blob:')),
+            });
+          }}
           onEnded={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
             event.currentTarget.currentTime = 0;
@@ -1887,6 +1950,14 @@ function ThreadVoiceMessageBubble({
             }
           }}
           onLoadStart={(event) => {
+            if (
+              !hasPendingPlaybackIntent &&
+              playbackState !== 'playing' &&
+              playbackState !== 'buffering'
+            ) {
+              return;
+            }
+
             setPlaybackState((current) =>
               current === 'playing' ||
               event.currentTarget.readyState >= VOICE_READY_TO_REPLAY_STATE
@@ -1917,6 +1988,7 @@ function ThreadVoiceMessageBubble({
                   ? event.currentTarget.duration * 1000
                   : resolvedDurationMs,
               playbackUrl: stablePlaybackSource,
+              sessionReady: Boolean(stablePlaybackSource),
               sourceUrl: stablePlaybackSource,
               warmed: Boolean(stablePlaybackSource?.startsWith('blob:')),
             });
@@ -1930,12 +2002,21 @@ function ThreadVoiceMessageBubble({
           onTimeUpdate={(event) => {
             setProgressMs(event.currentTarget.currentTime * 1000);
           }}
-          onWaiting={() => {
+          onWaiting={(event) => {
+            if (
+              !hasPendingPlaybackIntent &&
+              playbackState !== 'playing' &&
+              playbackState !== 'buffering' &&
+              event.currentTarget.paused
+            ) {
+              return;
+            }
+
             setPlaybackState('buffering');
           }}
           preload={
-            cachedVoicePlaybackEntry?.warmed && effectiveSignedUrl
-              ? 'metadata'
+            shouldHydratePreparedVoicePlayback
+              ? 'auto'
               : 'none'
           }
           playsInline
