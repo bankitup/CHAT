@@ -43,7 +43,10 @@ import {
   DmThreadClientSubtree,
   type DmThreadClientDiagnostics,
 } from './dm-thread-client-diagnostics';
-import { DmReplyTargetSnippet } from './dm-reply-target-snippet';
+import {
+  DmReplyTargetSnippet,
+  resolveReplyTargetAttachmentKind,
+} from './dm-reply-target-snippet';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
 import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailable-state';
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
@@ -2141,6 +2144,9 @@ function ThreadMessageRow({
   const t = getTranslations(language);
   const quickActionsContainerRef = useRef<HTMLDivElement | null>(null);
   const quickActionsSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const replyTargetHighlightTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressPointerRef = useRef<{
     pointerId: number;
@@ -2221,6 +2227,12 @@ function ThreadMessageRow({
   const repliedMessage = message.reply_to_message_id
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
+  const repliedMessageAttachments = repliedMessage
+    ? attachmentsByMessage.get(repliedMessage.id) ?? []
+    : [];
+  const replyTargetAttachmentKind = resolveReplyTargetAttachmentKind(
+    repliedMessageAttachments,
+  );
   const encryptedRenderBranch = normalizeEncryptedDmBranchLabel(isOwnMessage);
   const canShowQuickActions =
     !isDeletedMessage &&
@@ -2342,8 +2354,52 @@ function ThreadMessageRow({
   useEffect(() => {
     return () => {
       clearLongPress();
+      if (replyTargetHighlightTimeoutRef.current) {
+        clearTimeout(replyTargetHighlightTimeoutRef.current);
+      }
     };
   }, [clearLongPress]);
+
+  const handleReplyReferenceClick = useCallback(() => {
+    if (!message.reply_to_message_id) {
+      return;
+    }
+
+    const target = document.getElementById(
+      `message-${message.reply_to_message_id}`,
+    );
+
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    target.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    target.focus({
+      preventScroll: true,
+    });
+
+    const existingHighlight = document.querySelector(
+      '.message-card-reply-target-highlight',
+    );
+
+    if (existingHighlight instanceof HTMLElement && existingHighlight !== target) {
+      existingHighlight.classList.remove('message-card-reply-target-highlight');
+    }
+
+    target.classList.add('message-card-reply-target-highlight');
+
+    if (replyTargetHighlightTimeoutRef.current) {
+      clearTimeout(replyTargetHighlightTimeoutRef.current);
+    }
+
+    replyTargetHighlightTimeoutRef.current = setTimeout(() => {
+      target.classList.remove('message-card-reply-target-highlight');
+      replyTargetHighlightTimeoutRef.current = null;
+    }, 1300);
+  }, [message.reply_to_message_id]);
 
   const handleBubblePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -2498,6 +2554,7 @@ function ThreadMessageRow({
           .filter(Boolean)
           .join(' ')}
         id={`message-${message.id}`}
+        tabIndex={-1}
       >
         <div
           ref={quickActionsContainerRef}
@@ -2627,12 +2684,15 @@ function ThreadMessageRow({
             }
           >
           {message.reply_to_message_id && !isDeletedMessage ? (
-            <div
+            <button
               className={
                 isOwnMessage
-                  ? 'message-reply-reference message-reply-reference-own'
-                  : 'message-reply-reference'
+                  ? 'message-reply-reference message-reply-reference-own message-reply-reference-button'
+                  : 'message-reply-reference message-reply-reference-button'
               }
+              disabled={!repliedMessage}
+              onClick={handleReplyReferenceClick}
+              type="button"
             >
               <span aria-hidden="true" className="message-reply-accent" />
               <div className="message-reply-copy">
@@ -2649,14 +2709,19 @@ function ThreadMessageRow({
                   conversationId={conversationId}
                   currentUserId={currentUserId}
                   debugRequestId={threadClientDiagnostics.debugRequestId}
+                  attachmentFallbackLabel={t.chat.attachment}
+                  audioFallbackLabel={t.chat.audio}
                   deletedFallbackLabel={t.chat.messageDeleted}
                   emptyFallbackLabel={t.chat.emptyMessage}
                   encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                  fileFallbackLabel={t.chat.file}
                   historicalEncryptedFallbackLabel={t.chat.olderEncryptedMessage}
                   encryptedReferenceNote={null}
                   loadedFallbackLabel={t.chat.earlierMessage}
                   messageId={message.id}
+                  photoFallbackLabel={t.chat.photo}
                   surface="message-reply-reference"
+                  targetAttachmentKind={replyTargetAttachmentKind}
                   targetDeleted={Boolean(repliedMessage?.deleted_at)}
                   targetIsEncrypted={Boolean(
                     repliedMessage && isEncryptedDmTextMessage(repliedMessage),
@@ -2667,7 +2732,7 @@ function ThreadMessageRow({
                   voiceFallbackLabel={t.chat.voiceMessage}
                 />
               </div>
-            </div>
+            </button>
           ) : null}
           {isDeletedMessage ? (
             <p className="message-deleted-text">{t.chat.messageDeleted}</p>

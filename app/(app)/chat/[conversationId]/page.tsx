@@ -76,7 +76,10 @@ import {
 } from './dm-thread-client-diagnostics';
 import { DmChatDeleteConfirmForm } from './dm-chat-delete-confirm-form';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
-import { DmReplyTargetSnippet } from './dm-reply-target-snippet';
+import {
+  DmReplyTargetSnippet,
+  resolveReplyTargetAttachmentKind,
+} from './dm-reply-target-snippet';
 import { ThreadHistoryViewport } from './thread-history-viewport';
 import { TypingIndicator } from './typing-indicator';
 import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
@@ -864,6 +867,12 @@ export default async function ChatPage({
       entry.envelope,
     ] as const),
   );
+  const attachmentsByMessageId = new Map(
+    threadHistorySnapshot.attachmentsByMessage.map((entry) => [
+      entry.messageId,
+      entry.attachments,
+    ] as const),
+  );
   const messagesById = new Map(messages.map((message) => [message.id, message]));
   const currentUserConversationJoinedAt =
     threadHistorySnapshot.dmE2ee?.historyHintsByMessage[0]?.hint.viewerJoinedAt ??
@@ -1116,6 +1125,11 @@ export default async function ChatPage({
         ? messagesById.get(query.replyToMessageId) ?? null
         : null,
   );
+  const activeReplyTargetAttachmentKind = activeReplyTarget
+    ? resolveReplyTargetAttachmentKind(
+        attachmentsByMessageId.get(activeReplyTarget.id) ?? [],
+      )
+    : null;
   const activeEditMessageId = query.editMessageId?.trim() || null;
   const activeDeleteMessageId = query.deleteMessageId?.trim() || null;
   const currentUserGroupRole =
@@ -1521,16 +1535,21 @@ export default async function ChatPage({
                     conversationId={conversationId}
                     currentUserId={user.id}
                     debugRequestId={threadRenderRequestId}
+                    attachmentFallbackLabel={t.chat.attachment}
+                    audioFallbackLabel={t.chat.audio}
                     deletedFallbackLabel={t.chat.thisMessageWasDeleted}
                     emptyFallbackLabel={t.chat.emptyMessage}
                     encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                    fileFallbackLabel={t.chat.file}
                     historicalEncryptedFallbackLabel={
                       t.chat.olderEncryptedMessage
                     }
                     encryptedReferenceNote={t.chat.encryptedReplyInfo}
                     loadedFallbackLabel={t.chat.earlierMessage}
                     messageId={activeReplyTarget.id}
+                    photoFallbackLabel={t.chat.photo}
                     surface="composer-reply-preview"
+                    targetAttachmentKind={activeReplyTargetAttachmentKind}
                     targetDeleted={Boolean(activeReplyTarget.deleted_at)}
                     targetIsEncrypted={isEncryptedDmTextMessage(activeReplyTarget)}
                     targetIsLoaded
