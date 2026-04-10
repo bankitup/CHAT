@@ -488,7 +488,7 @@ export function PlaintextChatComposerForm({
         <label className="field composer-input-field">
           <span className="sr-only">{messagePlaceholder}</span>
           <ComposerTypingTextarea
-            key={`textarea-${composerResetKey}`}
+            key={`textarea-${composerResetKey}-${replyToMessageId ?? 'none'}`}
             className="input textarea"
             conversationId={conversationId}
             currentUserId={currentUserId}

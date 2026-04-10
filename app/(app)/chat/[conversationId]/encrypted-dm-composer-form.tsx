@@ -1464,7 +1464,7 @@ export function EncryptedDmComposerForm({
             conversationId={conversationId}
             currentUserId={currentUserId}
             currentUserLabel={currentUserLabel}
-            key={`textarea-${composerResetKey}`}
+            key={`textarea-${composerResetKey}-${replyToMessageId ?? 'none'}`}
             mentionParticipants={mentionParticipants}
             mentionSuggestionsLabel={mentionSuggestionsLabel}
             name="body"
