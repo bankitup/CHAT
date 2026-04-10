@@ -21,6 +21,7 @@ import {
   getConversationParticipants,
   getConversationReadState,
   getMessageSenderProfiles,
+  type MessageSenderProfile,
 } from '@/modules/messaging/data/server';
 import {
   canAddParticipantsToGroupConversation,
@@ -103,6 +104,12 @@ type ChatPageProps = {
 };
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
+
+function shouldHydrateChatSurfaceIdentity(
+  profile: MessageSenderProfile | undefined,
+) {
+  return !profile?.avatarPath;
+}
 
 function formatLongDate(value: string | null, language: AppLanguage, t: ReturnType<typeof getTranslations>) {
   const parsedDate = parseSafeDate(value);
@@ -789,8 +796,8 @@ export default async function ChatPage({
     .filter((message) => isEncryptedDmTextMessage(message))
     .map((message) => message.id);
   const snapshotSenderProfiles = threadHistorySnapshot.senderProfiles;
-  const snapshotSenderProfileIds = new Set(
-    snapshotSenderProfiles.map((profile) => profile.userId),
+  const snapshotSenderProfilesById = new Map(
+    snapshotSenderProfiles.map((profile) => [profile.userId, profile] as const),
   );
   const supplementalSenderProfileIds = Array.from(
     [
@@ -798,7 +805,11 @@ export default async function ChatPage({
         ...participants.map((participant) => participant.userId),
         ...availableUsers.map((availableUser) => availableUser.userId),
       ]),
-    ].filter((userId) => !snapshotSenderProfileIds.has(userId)),
+    ].filter((userId) =>
+      shouldHydrateChatSurfaceIdentity(
+        snapshotSenderProfilesById.get(userId),
+      ),
+    ),
   );
   const supplementalSenderProfiles = supplementalSenderProfileIds.length
     ? await resolveThreadRenderStage(

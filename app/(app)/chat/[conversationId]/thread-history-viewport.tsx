@@ -236,6 +236,7 @@ type VoiceMessageRenderState =
 type ThreadVoicePlaybackCacheEntry = {
   durationMs: number | null;
   playbackUrl: string | null;
+  sessionReady: boolean;
   sourceUrl: string | null;
   warmed: boolean;
 };
@@ -253,11 +254,17 @@ const ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON =
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 const ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS = 2400;
 const ATTACHMENT_PENDING_COMMIT_TRANSITION_GRACE_MS = 2600;
+const ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON =
+  'attachment-reopen:retry-attachment-resolution';
+const ATTACHMENT_MESSAGE_RECOVERY_REASON =
+  'attachment:retry-attachment-resolution';
+const ATTACHMENT_MESSAGE_RETRY_DELAYS_MS = [180, 700] as const;
 const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
   'local-voice-send:retry-attachment-resolution';
 const VOICE_MESSAGE_REOPEN_RECOVERY_REASON =
   'voice-reopen:retry-attachment-resolution';
 const VOICE_MESSAGE_ATTACHMENT_RETRY_DELAYS_MS = [180, 700] as const;
+const ATTACHMENT_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 const THREAD_VOICE_PLAYBACK_CACHE_MAX_ENTRIES = 120;
 const VOICE_READY_TO_REPLAY_STATE = 2;
@@ -754,11 +761,20 @@ function writeThreadVoicePlaybackCacheEntry(
       requestedSourceUrl &&
       currentEntry.sourceUrl === requestedSourceUrl,
   );
+  const shouldPreserveSessionReady = Boolean(
+    currentEntry?.sessionReady &&
+      patch.sessionReady !== false &&
+      requestedSourceUrl &&
+      currentEntry.sourceUrl === requestedSourceUrl,
+  );
   const nextEntry: ThreadVoicePlaybackCacheEntry = {
     durationMs: patch.durationMs ?? currentEntry?.durationMs ?? null,
     playbackUrl: shouldPreserveWarmBlobPlaybackUrl
       ? currentEntry?.playbackUrl ?? null
       : requestedPlaybackUrl,
+    sessionReady: shouldPreserveSessionReady
+      ? true
+      : patch.sessionReady ?? currentEntry?.sessionReady ?? false,
     sourceUrl: requestedSourceUrl,
     warmed: shouldPreserveWarmBlobPlaybackUrl
       ? true
@@ -769,6 +785,7 @@ function writeThreadVoicePlaybackCacheEntry(
     nextEntry.durationMs === null &&
     nextEntry.playbackUrl === null &&
     nextEntry.sourceUrl === null &&
+    !nextEntry.sessionReady &&
     !nextEntry.warmed
   ) {
     if (
@@ -861,6 +878,7 @@ async function warmThreadVoicePlaybackSource(input: {
       const objectUrl = URL.createObjectURL(blob);
       writeThreadVoicePlaybackCacheEntry(cacheKey, {
         playbackUrl: objectUrl,
+        sessionReady: false,
         sourceUrl,
         warmed: true,
       });
@@ -965,6 +983,17 @@ function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
   );
 }
 
+function shouldRetryThreadAttachmentResolution(reason: string | null) {
+  return (
+    reason === ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON ||
+    reason === ATTACHMENT_MESSAGE_RECOVERY_REASON
+  );
+}
+
+function hasRenderableCommittedAttachment(attachments: MessageAttachment[]) {
+  return attachments.length > 0;
+}
+
 function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
   return attachments.some(
     (attachment) =>
@@ -1037,6 +1066,79 @@ function resolveRecentVoiceMessageIdsNeedingRecovery(input: {
     .filter(
       (message) =>
         !hasPlaybackReadyVoiceAttachment(
+          filterRenderableMessageAttachments(
+            message.id,
+            input.attachmentsByMessage.get(message.id) ?? [],
+          ),
+        ),
+    )
+    .map((message) => message.id);
+}
+
+function resolveAttachmentMessageIdsNeedingRecovery(input: {
+  requestedMessageIds: string[];
+  snapshot: ThreadHistoryPageSnapshot;
+}) {
+  const requestedMessageIdSet = new Set(input.requestedMessageIds);
+  const attachmentsByMessageId = new Map(
+    input.snapshot.attachmentsByMessage.map((entry) => [
+      entry.messageId,
+      entry.attachments,
+    ] as const),
+  );
+  const attachmentMessageIds = input.snapshot.messages
+    .filter(
+      (message) =>
+        requestedMessageIdSet.has(message.id) &&
+        message.kind === 'attachment',
+    )
+    .map((message) => message.id);
+  const attachmentMessageIdSet = new Set(attachmentMessageIds);
+  const missingRequestedMessageIds = input.requestedMessageIds.filter(
+    (messageId) => {
+      if (!attachmentMessageIdSet.has(messageId)) {
+        return false;
+      }
+
+      return !hasRenderableCommittedAttachment(
+        filterRenderableMessageAttachments(
+          messageId,
+          attachmentsByMessageId.get(messageId) ?? [],
+        ),
+      );
+    },
+  );
+  const presentRequestedMessageIds = attachmentMessageIds.filter(
+    (messageId) => !missingRequestedMessageIds.includes(messageId),
+  );
+
+  return {
+    missingRequestedMessageIds,
+    presentRequestedMessageIds,
+  };
+}
+
+function resolveRecentAttachmentMessageIdsNeedingRecovery(input: {
+  attachmentsByMessage: Map<string, MessageAttachment[]>;
+  maxAgeMs: number;
+  messages: ConversationMessageRow[];
+}) {
+  const now = Date.now();
+
+  return input.messages
+    .filter((message) => message.kind === 'attachment')
+    .filter((message) => {
+      const createdAt = message.created_at ? new Date(message.created_at) : null;
+
+      if (!createdAt || Number.isNaN(createdAt.getTime())) {
+        return false;
+      }
+
+      return now - createdAt.getTime() <= input.maxAgeMs;
+    })
+    .filter(
+      (message) =>
+        !hasRenderableCommittedAttachment(
           filterRenderableMessageAttachments(
             message.id,
             input.attachmentsByMessage.get(message.id) ?? [],
@@ -1382,6 +1484,7 @@ function ThreadVoiceMessageBubble({
   });
   const cachedDurationMs = cachedVoicePlaybackEntry?.durationMs ?? null;
   const cachedSourceUrl = cachedVoicePlaybackEntry?.sourceUrl ?? null;
+  const cachedSessionReady = cachedVoicePlaybackEntry?.sessionReady ?? false;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const handleAudioRef = useCallback((audio: HTMLAudioElement | null) => {
     audioRef.current = audio;
@@ -1414,6 +1517,9 @@ function ThreadVoiceMessageBubble({
     (attachmentSignedUrl && attachmentSignedUrl !== ignoredAttachmentSignedUrl
       ? attachmentSignedUrl
       : null);
+  const shouldHydratePreparedVoicePlayback = Boolean(
+    effectiveSignedUrl && (cachedVoicePlaybackEntry?.warmed || cachedSessionReady),
+  );
   const canResolveSignedUrl =
     Boolean(conversationId && hasRecoverableAttachmentStorageLocator) &&
     !effectiveSignedUrl;
@@ -1523,6 +1629,37 @@ function ThreadVoiceMessageBubble({
     },
     [voicePlaybackCacheKey],
   );
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (!audio || !effectiveSignedUrl || !shouldHydratePreparedVoicePlayback) {
+      return;
+    }
+
+    if (audio.getAttribute('src') !== effectiveSignedUrl) {
+      audio.setAttribute('src', effectiveSignedUrl);
+    }
+
+    if (audio.readyState >= VOICE_READY_TO_REPLAY_STATE) {
+      rememberVoicePlaybackCacheEntry({
+        durationMs: resolvedDurationMs,
+        playbackUrl: effectiveSignedUrl,
+        sessionReady: true,
+        sourceUrl: cachedSourceUrl ?? effectiveSignedUrl,
+        warmed: Boolean(effectiveSignedUrl.startsWith('blob:')),
+      });
+      return;
+    }
+
+    audio.load();
+  }, [
+    cachedSourceUrl,
+    effectiveSignedUrl,
+    rememberVoicePlaybackCacheEntry,
+    resolvedDurationMs,
+    shouldHydratePreparedVoicePlayback,
+  ]);
 
   const resolveSignedUrl = useCallback(async () => {
     const attachmentId = attachment?.id ?? null;
@@ -1846,6 +1983,22 @@ function ThreadVoiceMessageBubble({
           aria-hidden="true"
           ref={handleAudioRef}
           className="message-voice-audio"
+          onCanPlay={(event) => {
+            const stablePlaybackSource = effectiveSignedUrl ?? cachedSourceUrl;
+            const nextDurationMs =
+              Number.isFinite(event.currentTarget.duration) &&
+              event.currentTarget.duration > 0
+                ? event.currentTarget.duration * 1000
+                : resolvedDurationMs;
+
+            rememberVoicePlaybackCacheEntry({
+              durationMs: nextDurationMs,
+              playbackUrl: stablePlaybackSource,
+              sessionReady: Boolean(stablePlaybackSource),
+              sourceUrl: stablePlaybackSource,
+              warmed: Boolean(stablePlaybackSource?.startsWith('blob:')),
+            });
+          }}
           onEnded={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
             event.currentTarget.currentTime = 0;
@@ -1887,6 +2040,14 @@ function ThreadVoiceMessageBubble({
             }
           }}
           onLoadStart={(event) => {
+            if (
+              !hasPendingPlaybackIntent &&
+              playbackState !== 'playing' &&
+              playbackState !== 'buffering'
+            ) {
+              return;
+            }
+
             setPlaybackState((current) =>
               current === 'playing' ||
               event.currentTarget.readyState >= VOICE_READY_TO_REPLAY_STATE
@@ -1917,6 +2078,7 @@ function ThreadVoiceMessageBubble({
                   ? event.currentTarget.duration * 1000
                   : resolvedDurationMs,
               playbackUrl: stablePlaybackSource,
+              sessionReady: Boolean(stablePlaybackSource),
               sourceUrl: stablePlaybackSource,
               warmed: Boolean(stablePlaybackSource?.startsWith('blob:')),
             });
@@ -1930,12 +2092,21 @@ function ThreadVoiceMessageBubble({
           onTimeUpdate={(event) => {
             setProgressMs(event.currentTarget.currentTime * 1000);
           }}
-          onWaiting={() => {
+          onWaiting={(event) => {
+            if (
+              !hasPendingPlaybackIntent &&
+              playbackState !== 'playing' &&
+              playbackState !== 'buffering' &&
+              event.currentTarget.paused
+            ) {
+              return;
+            }
+
             setPlaybackState('buffering');
           }}
           preload={
-            cachedVoicePlaybackEntry?.warmed && effectiveSignedUrl
-              ? 'metadata'
+            shouldHydratePreparedVoicePlayback
+              ? 'auto'
               : 'none'
           }
           playsInline
@@ -2464,6 +2635,21 @@ function canClusterAdjacentMessages(
 
 function getSnapshotRevisionKey(snapshot: ThreadHistoryPageSnapshot) {
   return JSON.stringify({
+    attachmentsByMessage: snapshot.attachmentsByMessage.map((entry) => ({
+      attachmentKeys: entry.attachments.map((attachment) => ({
+        createdAt: attachment.createdAt ?? null,
+        hasSignedUrl: Boolean(
+          normalizeAttachmentSignedUrl(attachment.signedUrl),
+        ),
+        id: attachment.id,
+        isAudio: attachment.isAudio,
+        isImage: attachment.isImage,
+        isVoiceMessage: attachment.isVoiceMessage ?? false,
+        messageId: attachment.messageId ?? null,
+        objectPath: attachment.objectPath ?? null,
+      })),
+      messageId: entry.messageId,
+    })),
     hasMoreOlder: snapshot.hasMoreOlder,
     messageIds: snapshot.messages.map((message) => message.id),
     oldestMessageSeq: snapshot.oldestMessageSeq,
@@ -4592,6 +4778,11 @@ export function ThreadHistoryViewport({
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
   const voiceReopenRecoveryRequestedRef = useRef(new Set<string>());
+  const attachmentRecoveryAttemptsRef = useRef(new Map<string, number>());
+  const attachmentRecoveryTimeoutsRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+  const attachmentReopenRecoveryRequestedRef = useRef(new Set<string>());
   const isSyncingRef = useRef(false);
   const historySyncDiagnosticsEnabled =
     typeof window !== 'undefined' &&
@@ -4693,6 +4884,7 @@ export function ThreadHistoryViewport({
 
   useEffect(() => {
     voiceReopenRecoveryRequestedRef.current.clear();
+    attachmentReopenRecoveryRequestedRef.current.clear();
     encryptedHistoryBootstrapRecoveryAttemptedMessageIdsRef.current.clear();
     encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef.current.clear();
     setActiveImagePreview(null);
@@ -4860,6 +5052,15 @@ export function ThreadHistoryViewport({
       }),
     [historyState.attachmentsByMessage, historyState.messages],
   );
+  const recentAttachmentMessageIdsNeedingRecovery = useMemo(
+    () =>
+      resolveRecentAttachmentMessageIdsNeedingRecovery({
+        attachmentsByMessage: historyState.attachmentsByMessage,
+        maxAgeMs: ATTACHMENT_MESSAGE_RECOVERY_MAX_AGE_MS,
+        messages: historyState.messages,
+      }),
+    [historyState.attachmentsByMessage, historyState.messages],
+  );
 
   useEffect(() => {
     const requestedRecoveries = voiceReopenRecoveryRequestedRef.current;
@@ -4896,6 +5097,43 @@ export function ThreadHistoryViewport({
     conversationId,
     historySyncDiagnosticsEnabled,
     recentVoiceMessageIdsNeedingRecovery,
+  ]);
+
+  useEffect(() => {
+    const requestedRecoveries = attachmentReopenRecoveryRequestedRef.current;
+    const activeRecoveryIds = new Set(recentAttachmentMessageIdsNeedingRecovery);
+
+    for (const messageId of Array.from(requestedRecoveries)) {
+      if (!activeRecoveryIds.has(messageId)) {
+        requestedRecoveries.delete(messageId);
+      }
+    }
+
+    for (const messageId of recentAttachmentMessageIdsNeedingRecovery) {
+      if (requestedRecoveries.has(messageId)) {
+        continue;
+      }
+
+      requestedRecoveries.add(messageId);
+
+      if (historySyncDiagnosticsEnabled) {
+        console.info('[chat-history]', 'attachment-reopen-recovery:requested', {
+          conversationId,
+          messageId,
+          reason: ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON,
+        });
+      }
+
+      emitThreadHistorySyncRequest({
+        conversationId,
+        messageIds: [messageId],
+        reason: ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON,
+      });
+    }
+  }, [
+    conversationId,
+    historySyncDiagnosticsEnabled,
+    recentAttachmentMessageIdsNeedingRecovery,
   ]);
 
   useEffect(() => {
@@ -5537,6 +5775,112 @@ export function ThreadHistoryViewport({
     [conversationId, historySyncDiagnosticsEnabled],
   );
 
+  const scheduleAttachmentRecovery = useCallback(
+    (input: {
+      reason: string | null;
+      requestedMessageIds: string[];
+      snapshot: ThreadHistoryPageSnapshot;
+    }) => {
+      if (
+        !shouldRetryThreadAttachmentResolution(input.reason) ||
+        input.requestedMessageIds.length === 0
+      ) {
+        return;
+      }
+
+      const {
+        missingRequestedMessageIds,
+        presentRequestedMessageIds,
+      } = resolveAttachmentMessageIdsNeedingRecovery({
+        requestedMessageIds: input.requestedMessageIds,
+        snapshot: input.snapshot,
+      });
+      const missingMessageIdSet = new Set(missingRequestedMessageIds);
+
+      for (const messageId of presentRequestedMessageIds) {
+        if (missingMessageIdSet.has(messageId)) {
+          continue;
+        }
+
+        const timeoutId = attachmentRecoveryTimeoutsRef.current.get(messageId);
+
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          attachmentRecoveryTimeoutsRef.current.delete(messageId);
+        }
+
+        attachmentRecoveryAttemptsRef.current.delete(messageId);
+      }
+
+      for (const messageId of missingRequestedMessageIds) {
+        if (attachmentRecoveryTimeoutsRef.current.has(messageId)) {
+          continue;
+        }
+
+        const attemptIndex =
+          attachmentRecoveryAttemptsRef.current.get(messageId) ?? 0;
+        const retryDelayMs = ATTACHMENT_MESSAGE_RETRY_DELAYS_MS[attemptIndex];
+
+        if (retryDelayMs === undefined) {
+          if (historySyncDiagnosticsEnabled) {
+            console.info(
+              '[chat-history]',
+              'topology-sync:attachment-retry-exhausted',
+              {
+                attemptCount: attemptIndex,
+                conversationId,
+                messageId,
+                reason: input.reason,
+              },
+            );
+          }
+          continue;
+        }
+
+        attachmentRecoveryAttemptsRef.current.set(messageId, attemptIndex + 1);
+
+        if (historySyncDiagnosticsEnabled) {
+          console.info(
+            '[chat-history]',
+            'topology-sync:attachment-retry-scheduled',
+            {
+              attemptNumber: attemptIndex + 1,
+              conversationId,
+              messageId,
+              reason: input.reason,
+              retryDelayMs,
+            },
+          );
+        }
+
+        const timeoutId = setTimeout(() => {
+          attachmentRecoveryTimeoutsRef.current.delete(messageId);
+
+          if (historySyncDiagnosticsEnabled) {
+            console.info(
+              '[chat-history]',
+              'topology-sync:attachment-retry-dispatched',
+              {
+                conversationId,
+                messageId,
+                reason: ATTACHMENT_MESSAGE_RECOVERY_REASON,
+              },
+            );
+          }
+
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: [messageId],
+            reason: ATTACHMENT_MESSAGE_RECOVERY_REASON,
+          });
+        }, retryDelayMs);
+
+        attachmentRecoveryTimeoutsRef.current.set(messageId, timeoutId);
+      }
+    },
+    [conversationId, historySyncDiagnosticsEnabled],
+  );
+
   useEffect(() => {
     let isDisposed = false;
     const encryptedDmRecoveryAttempts = encryptedDmRecoveryAttemptsRef.current;
@@ -5545,6 +5889,8 @@ export function ThreadHistoryViewport({
       voiceAttachmentRecoveryAttemptsRef.current;
     const voiceAttachmentRecoveryTimeouts =
       voiceAttachmentRecoveryTimeoutsRef.current;
+    const attachmentRecoveryAttempts = attachmentRecoveryAttemptsRef.current;
+    const attachmentRecoveryTimeouts = attachmentRecoveryTimeoutsRef.current;
 
     const flushPendingSyncRequest = async () => {
       if (isDisposed || isSyncingRef.current) {
@@ -5607,6 +5953,11 @@ export function ThreadHistoryViewport({
             snapshot,
           });
           scheduleVoiceAttachmentRecovery({
+            reason: request.reason,
+            requestedMessageIds: request.messageIds,
+            snapshot,
+          });
+          scheduleAttachmentRecovery({
             reason: request.reason,
             requestedMessageIds: request.messageIds,
             snapshot,
@@ -5742,12 +6093,17 @@ export function ThreadHistoryViewport({
       for (const timeoutId of voiceAttachmentRecoveryTimeouts.values()) {
         clearTimeout(timeoutId);
       }
+      for (const timeoutId of attachmentRecoveryTimeouts.values()) {
+        clearTimeout(timeoutId);
+      }
       pendingByIdSyncRequestRef.current = null;
       pendingAfterSeqSyncRequestRef.current = null;
       encryptedDmRecoveryAttempts.clear();
       encryptedDmRecoveryTimeouts.clear();
       voiceAttachmentRecoveryAttempts.clear();
       voiceAttachmentRecoveryTimeouts.clear();
+      attachmentRecoveryAttempts.clear();
+      attachmentRecoveryTimeouts.clear();
 
       window.removeEventListener(
         LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
@@ -5759,6 +6115,7 @@ export function ThreadHistoryViewport({
     historySyncDiagnosticsEnabled,
     mergeSyncRequest,
     performSyncFetch,
+    scheduleAttachmentRecovery,
     scheduleMissingEncryptedDmEnvelopeRecovery,
     scheduleVoiceAttachmentRecovery,
     updatePendingEncryptedCommitTransitionMessageIds,
