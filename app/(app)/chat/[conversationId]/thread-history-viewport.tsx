@@ -4373,6 +4373,7 @@ export function ThreadHistoryViewport({
 
   const performSyncFetch = useCallback(
     async (input: {
+      allowLatest?: boolean;
       afterSeq?: number | null;
       messageIds?: string[] | null;
       reason: string | null;
@@ -4380,10 +4381,12 @@ export function ThreadHistoryViewport({
       const normalizedMessageIds = Array.from(
         new Set((input.messageIds ?? []).map((messageId) => messageId.trim()).filter(Boolean)),
       );
-      const mode = resolveHistoryFetchMode({
+      const requestedMode = resolveHistoryFetchMode({
         afterSeq: input.afterSeq ?? null,
         messageIds: normalizedMessageIds,
       });
+      const mode =
+        requestedMode === 'noop' && input.allowLatest ? 'latest' : requestedMode;
 
       if (mode === 'noop') {
         if (historySyncDiagnosticsEnabled) {
@@ -4409,14 +4412,14 @@ export function ThreadHistoryViewport({
       const response = await fetch(
         buildHistoryPageUrl({
           activeDeviceId: historyFetchActiveDeviceIdRef.current,
-          afterSeq: input.afterSeq ?? null,
+          afterSeq: mode === 'after-seq' ? input.afterSeq ?? null : null,
           conversationId,
           debugRequestId:
             process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
               ? crypto.randomUUID()
               : null,
           limit: THREAD_HISTORY_PAGE_SIZE,
-          messageIds: input.messageIds ?? null,
+          messageIds: mode === 'by-id' ? input.messageIds ?? null : null,
         }),
         {
           cache: 'no-store',
@@ -4757,11 +4760,8 @@ export function ThreadHistoryViewport({
               null,
             );
 
-            if (latestLoadedSeq === null) {
-              break;
-            }
-
             const snapshot = await performSyncFetch({
+              allowLatest: latestLoadedSeq === null,
               afterSeq: latestLoadedSeq,
               reason: request.reason,
             });
@@ -4780,7 +4780,10 @@ export function ThreadHistoryViewport({
               return nextState;
             });
 
-            if (snapshot.messages.length < THREAD_HISTORY_PAGE_SIZE) {
+            if (
+              latestLoadedSeq === null ||
+              snapshot.messages.length < THREAD_HISTORY_PAGE_SIZE
+            ) {
               break;
             }
           }
