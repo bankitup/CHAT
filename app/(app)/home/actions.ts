@@ -23,7 +23,12 @@ import {
 import {
   removeMembersFromGovernedSpace,
   requestAdditionalAccountsForGovernedSpace,
+  updateGovernedSpaceTheme,
 } from '@/modules/spaces/write-server';
+import {
+  normalizeSpaceTheme,
+  type SpaceTheme,
+} from '@/modules/spaces/model';
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? '').trim();
@@ -63,6 +68,7 @@ function getFriendlyHomeErrorMessage(input: {
   language: AppLanguage;
   surface:
     | 'home:language-preference'
+    | 'home:space-theme'
     | 'home:zoom-preference'
     | 'home:participants-remove'
     | 'home:participants-request';
@@ -104,6 +110,55 @@ export async function saveHomeAppZoomPreferenceAction(input: {
         fallback: t.zoomSwitcher.saveFailed,
         language,
         surface: 'home:zoom-preference',
+      }),
+      ok: false,
+    };
+  }
+}
+
+export async function saveHomeSpaceThemeAction(input: {
+  language: AppLanguage;
+  spaceId: string;
+  theme: SpaceTheme;
+}): Promise<{ ok: true } | { error: string; ok: false }> {
+  const language = normalizeLanguage(input.language);
+  const t = getTranslations(language);
+  const spaceId = input.spaceId.trim();
+  const theme = normalizeSpaceTheme(input.theme) ?? 'dark';
+  const user = await getRequestViewer();
+
+  if (!spaceId) {
+    return {
+      error: t.homeDashboard.spaceThemeSaveFailed,
+      ok: false,
+    };
+  }
+
+  if (!user?.id) {
+    return {
+      error: t.login.managedAccess,
+      ok: false,
+    };
+  }
+
+  try {
+    await updateGovernedSpaceTheme({
+      spaceId,
+      theme,
+    });
+    revalidatePath('/', 'layout');
+    revalidatePath('/home');
+    revalidatePath('/inbox');
+    revalidatePath('/activity');
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback: t.homeDashboard.spaceThemeSaveFailed,
+        language,
+        surface: 'home:space-theme',
       }),
       ok: false,
     };

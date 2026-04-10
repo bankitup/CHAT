@@ -11,6 +11,7 @@ import { PushSubscriptionPresenceSync } from '@/modules/messaging/push/presence-
 import type {
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
+  SpaceTheme,
 } from '@/modules/spaces/model';
 import { withSpaceParam } from '@/modules/spaces/url';
 
@@ -19,6 +20,7 @@ type AppShellSpaceSummary = {
   id: string;
   name: string;
   profile: SpaceProfile;
+  theme: SpaceTheme;
 };
 
 type AppShellFrameProps = {
@@ -55,6 +57,7 @@ export function AppShellFrame({
     spaces[0] ??
     null;
   const activeSpaceProfile = activeSpace?.profile ?? null;
+  const activeSpaceTheme = activeSpace?.theme ?? 'dark';
   const navSpaceHref = (pathname: string) =>
     activeSpace?.id ? withSpaceParam(pathname, activeSpace.id) : pathname;
   const badgeSyncKey = `${pathname}?${searchParams.toString()}`;
@@ -95,6 +98,7 @@ export function AppShellFrame({
       ]
         .filter(Boolean)
         .join(' ')}
+      data-space-theme={activeSpaceTheme}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
       <ChatUnreadBadgeSync syncKey={badgeSyncKey} />

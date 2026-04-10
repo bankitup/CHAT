@@ -8,17 +8,24 @@ import {
 } from '@/modules/messaging/avatar-delivery';
 import type {
   ResolvedSpaceProfile,
+  ResolvedSpaceTheme,
   ResolvedSpaceGovernanceGlobalRole,
   ResolvedSpaceGovernanceRole,
   ResolvedSpaceGovernanceState,
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
   SpaceProfileSource,
+  SpaceTheme,
+  SpaceThemeSource,
   SpaceGovernanceRoleSource,
   SpaceRecord,
   SpaceRole,
 } from './model';
-import { getDefaultShellRouteForSpaceProfile, normalizeSpaceProfile } from './model';
+import {
+  getDefaultShellRouteForSpaceProfile,
+  normalizeSpaceProfile,
+  normalizeSpaceTheme,
+} from './model';
 import { withSpaceParam } from './url';
 
 export type UserSpaceRecord = SpaceRecord & {
@@ -28,6 +35,8 @@ export type UserSpaceRecord = SpaceRecord & {
   canManageMembers: boolean;
   profile: SpaceProfile;
   profileSource: SpaceProfileSource;
+  theme: SpaceTheme;
+  themeSource: SpaceThemeSource;
   defaultShellRoute: SpaceProfileDefaultShellRoute;
 };
 
@@ -78,6 +87,14 @@ function normalizeStoredSpaceProfile(profile: string | null | undefined) {
   return null;
 }
 
+function normalizeStoredSpaceTheme(theme: string | null | undefined) {
+  if (theme === 'dark' || theme === 'light') {
+    return theme;
+  }
+
+  return null;
+}
+
 /**
  * Runtime profile resolver that prefers persisted profile storage when present
  * and falls back to the earlier name-based compatibility rule otherwise.
@@ -118,6 +135,24 @@ export function resolveSpaceProfileForSpace(input: {
     profile: 'messenger_full',
     source: 'fallback_messenger_default',
     defaultShellRoute: getDefaultShellRouteForSpaceProfile('messenger_full'),
+  };
+}
+
+export function resolveSpaceThemeForSpace(input: {
+  storedTheme?: string | null;
+}): ResolvedSpaceTheme {
+  const storedTheme = normalizeStoredSpaceTheme(input.storedTheme);
+
+  if (storedTheme) {
+    return {
+      source: 'space_theme_column',
+      theme: storedTheme,
+    };
+  }
+
+  return {
+    source: 'default_dark',
+    theme: 'dark',
   };
 }
 
@@ -418,6 +453,16 @@ function isMissingSpaceProfileColumnErrorMessage(message: string) {
   );
 }
 
+function isMissingSpaceThemeColumnErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedMessage.includes('spaces.theme') &&
+    (normalizedMessage.includes('does not exist') ||
+      normalizedMessage.includes('schema cache'))
+  );
+}
+
 export function isSpaceMembersSchemaCacheErrorMessage(message: string) {
   const normalizedMessage = message.toLowerCase();
   return (
@@ -541,28 +586,47 @@ export async function getUserSpaces(
     created_by: string;
     created_at: string | null;
     profile?: string | null;
+    theme?: string | null;
   };
 
-  const spacesWithProfileResult = await supabase
+  const spacesWithOptionalColumnsResult = await supabase
     .from('spaces')
-    .select('id, name, created_by, created_at, profile')
+    .select('id, name, created_by, created_at, profile, theme')
     .in('id', spaceIds);
-  const spacesResult = (
-    spacesWithProfileResult.error &&
-    isMissingSpaceProfileColumnErrorMessage(spacesWithProfileResult.error.message)
-  )
-    ? await (async () => {
-        logSpacesDiagnostics('spaces:query-profile-fallback', {
-          source,
-          message: spacesWithProfileResult.error.message,
-        });
+  const spacesResult = await (async () => {
+    if (!spacesWithOptionalColumnsResult.error) {
+      return spacesWithOptionalColumnsResult;
+    }
 
-        return supabase
-          .from('spaces')
-          .select('id, name, created_by, created_at')
-          .in('id', spaceIds);
-      })()
-    : spacesWithProfileResult;
+    const isMissingProfileColumn = isMissingSpaceProfileColumnErrorMessage(
+      spacesWithOptionalColumnsResult.error.message,
+    );
+    const isMissingThemeColumn = isMissingSpaceThemeColumnErrorMessage(
+      spacesWithOptionalColumnsResult.error.message,
+    );
+
+    if (!isMissingProfileColumn && !isMissingThemeColumn) {
+      return spacesWithOptionalColumnsResult;
+    }
+
+    logSpacesDiagnostics('spaces:query-optional-columns-fallback', {
+      source,
+      message: spacesWithOptionalColumnsResult.error.message,
+      missingProfileColumn: isMissingProfileColumn,
+      missingThemeColumn: isMissingThemeColumn,
+    });
+
+    const selectColumns = [
+      'id',
+      'name',
+      'created_by',
+      'created_at',
+      ...(isMissingProfileColumn ? [] : ['profile']),
+      ...(isMissingThemeColumn ? [] : ['theme']),
+    ].join(', ');
+
+    return supabase.from('spaces').select(selectColumns).in('id', spaceIds);
+  })();
 
   const spaces = (spacesResult.data ?? []) as SpaceQueryRow[];
   const spacesError = spacesResult.error;
@@ -588,12 +652,15 @@ export async function getUserSpaces(
         id: space.id,
         name: space.name,
         profile: normalizeSpaceProfile(space.profile),
+        theme: normalizeSpaceTheme(space.theme),
         createdBy: space.created_by,
         createdAt: space.created_at,
         storedProfile: space.profile ?? null,
+        storedTheme: space.theme ?? null,
         updatedAt: null,
       } satisfies SpaceRecord & {
         storedProfile: string | null;
+        storedTheme: string | null;
       },
     ]),
   );
@@ -614,6 +681,9 @@ export async function getUserSpaces(
         spaceName: space.name,
         storedProfile: space.storedProfile,
       });
+      const themeResolution = resolveSpaceThemeForSpace({
+        storedTheme: space.storedTheme,
+      });
       const governanceResolution = resolveSpaceGovernanceRoleForRuntimeSpaceRole(
         membership.role,
       );
@@ -626,6 +696,8 @@ export async function getUserSpaces(
         governanceRoleSource: governanceResolution.governanceRoleSource,
         profile: profileResolution.profile,
         profileSource: profileResolution.source,
+        theme: themeResolution.theme,
+        themeSource: themeResolution.source,
         role: membership.role,
       } satisfies UserSpaceRecord;
     })

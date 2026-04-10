@@ -7,6 +7,7 @@ import {
 } from './space-plan-config';
 import { HomeAppZoomControl } from './home-app-zoom-control';
 import { HomeLanguageSwitch } from './home-language-switch';
+import { SpaceThemeCard } from './space-theme-card';
 import {
   getHomeSpaceUsageSnapshot,
   type HomeSpaceUsageSnapshot,
@@ -271,6 +272,7 @@ async function requireHomeSpaceContext(requestedSpaceId?: string) {
         id: explicitV1TestSpace.id,
         name: explicitV1TestSpace.name,
         profile: 'keepcozy_ops' as const,
+        theme: 'dark' as const,
       },
       language,
       t: getTranslations(language),
@@ -314,6 +316,7 @@ async function requireHomeSpaceContext(requestedSpaceId?: string) {
           id: fallbackSpace.id,
           name: fallbackSpace.name,
           profile: 'keepcozy_ops' as const,
+          theme: 'dark' as const,
         },
         language,
         t: getTranslations(language),
@@ -333,6 +336,8 @@ export default async function HomeDashboardPage({
     query.space,
   );
   const currentZoomMode = await getRequestAppZoomMode();
+  const canManageSpaceAppearance =
+    'canManageMembers' in activeSpace && activeSpace.canManageMembers;
 
   if (activeSpace.profile === 'messenger_full') {
     const canManageMessengerMembers =
@@ -491,6 +496,14 @@ export default async function HomeDashboardPage({
 
           {spaceUsage ? <SpaceUsageCard {...spaceUsage} /> : null}
 
+          {canManageSpaceAppearance ? (
+            <SpaceThemeCard
+              currentTheme={activeSpace.theme}
+              language={language}
+              spaceId={activeSpace.id}
+            />
+          ) : null}
+
           {canManageMessengerMembers && manageableParticipants ? (
             <SpaceParticipantsModule
               copy={{
@@ -565,6 +578,14 @@ export default async function HomeDashboardPage({
       ) : null}
 
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
+
+      {canManageSpaceAppearance ? (
+        <SpaceThemeCard
+          currentTheme={activeSpace.theme}
+          language={language}
+          spaceId={activeSpace.id}
+        />
+      ) : null}
 
       <section className="stack settings-hero keepcozy-hero">
         <p className="eyebrow">{t.homeDashboard.eyebrow}</p>

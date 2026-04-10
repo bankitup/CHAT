@@ -50,6 +50,7 @@ export default async function AppLayout({
           id: space.id,
           name: space.name,
           profile: space.profile,
+          theme: space.theme,
         }))}
         userId={user.id}
       >
