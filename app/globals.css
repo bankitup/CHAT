@@ -7332,8 +7332,16 @@ main {
   color: rgba(91, 100, 112, 0.78);
 }
 
+/* Keep the backing audio element mounted but not display:none so mobile media
+   playback stays inline instead of briefly surfacing a native layer. */
 .message-voice-audio {
-  display: none;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
 }
 
 @keyframes message-voice-progress-loading {
