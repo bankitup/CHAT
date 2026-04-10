@@ -201,9 +201,9 @@ export function InboxRealtimeSync({
       const shouldResolveAttachmentKind =
         Boolean(latestMessageId) &&
         !latestMessageDeletedAt &&
-        latestMessageKind !== 'voice' &&
         latestMessageContentMode !== 'dm_e2ee_v1' &&
-        !latestMessageBody?.trim();
+        (latestMessageKind === 'attachment' ||
+          (latestMessageKind !== 'voice' && !latestMessageBody?.trim()));
       const latestMessageAttachmentKind = shouldResolveAttachmentKind
         ? await fetchLatestMessageAttachmentKind(latestMessageId)
         : null;

@@ -740,6 +740,7 @@ type LanguageDictionary = {
     emptyMessage: string;
     newMessage: string;
     image: string;
+    photo: string;
     audio: string;
     voiceMessage: string;
     voiceMessagePlay: string;
@@ -1672,6 +1673,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyMessage: 'Empty message',
       newMessage: 'New message',
       image: 'Image',
+      photo: 'Photo',
       audio: 'Audio',
       voiceMessage: 'Voice message',
       voiceMessagePlay: 'Play voice message',
@@ -2652,6 +2654,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyMessage: 'Пустое сообщение',
       newMessage: 'Новое сообщение',
       image: 'Изображение',
+      photo: 'Фото',
       audio: 'Аудио',
       voiceMessage: 'Голосовое сообщение',
       voiceMessagePlay: 'Воспроизвести голосовое сообщение',

@@ -413,7 +413,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         newEncryptedMessage: t.chat.newEncryptedMessage,
         attachment: t.chat.attachment,
         file: t.chat.file,
-        image: t.chat.image,
+        image: t.chat.photo,
         newMessage: t.chat.newMessage,
       }, inboxPreferences.previewMode);
       const hasUnread = conversation.unreadCount > 0;

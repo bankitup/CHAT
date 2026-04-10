@@ -177,7 +177,7 @@ export function ComposerAttachmentPicker({
           <span className="attachment-selected-copy">
             <span className="attachment-selected-name">{selectedFile.name}</span>
             <span className="attachment-selected-meta">
-              {isImage ? t.chat.image : t.chat.file} · {formatFileSize(selectedFile.size)}
+              {isImage ? t.chat.photo : t.chat.file} · {formatFileSize(selectedFile.size)}
             </span>
           </span>
           <button

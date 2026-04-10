@@ -1234,7 +1234,7 @@ export function EncryptedDmComposerForm({
               labels: {
                 attachment: t.chat.attachment,
                 file: t.chat.file,
-                image: t.chat.image,
+                image: t.chat.photo,
               },
             }),
             body: '',
