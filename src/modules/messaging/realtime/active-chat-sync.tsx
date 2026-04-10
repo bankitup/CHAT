@@ -31,6 +31,7 @@ type ActiveChatRealtimeSyncProps = {
 const THREAD_REFRESH_DEBOUNCE_MS = 180;
 const THREAD_REFRESH_MIN_INTERVAL_MS = 900;
 const THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
+const THREAD_REALTIME_RESUBSCRIBE_RECOVERY_REASON = 'realtime-resubscribe';
 const CONVERSATION_SUMMARY_ONLY_KEYS = new Set([
   'last_message_at',
   'last_message_body',
@@ -231,6 +232,8 @@ export function ActiveChatRealtimeSync({
   const lastRefreshAtRef = useRef(0);
   const hiddenAtRef = useRef<number | null>(null);
   const trackedMessageIdsRef = useRef(new Set(normalizedMessageIds));
+  const hasSeenSubscribedStatusRef = useRef(false);
+  const isRealtimeChannelSubscribedRef = useRef(false);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
@@ -626,7 +629,39 @@ export function ActiveChatRealtimeSync({
             old: payload.old,
           }),
       )
-      .subscribe();
+      .subscribe((status) => {
+        logDiagnostics('channel:status', {
+          conversationId,
+          status,
+        });
+
+        if (status === 'SUBSCRIBED') {
+          const isReconnect =
+            hasSeenSubscribedStatusRef.current &&
+            !isRealtimeChannelSubscribedRef.current;
+
+          isRealtimeChannelSubscribedRef.current = true;
+          hasSeenSubscribedStatusRef.current = true;
+
+          if (!isReconnect) {
+            return;
+          }
+
+          requestTopologySync({
+            newerThanLatest: true,
+            reason: THREAD_REALTIME_RESUBSCRIBE_RECOVERY_REASON,
+          });
+          return;
+        }
+
+        if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          isRealtimeChannelSubscribedRef.current = false;
+        }
+      });
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener(

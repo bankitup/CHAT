@@ -232,6 +232,7 @@ const VOICE_MESSAGE_RECOVERY_MAX_AGE_MS = 10 * 60 * 1000;
 const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
 const MESSAGE_CLUSTER_MAX_GAP_MS = 5 * 60 * 1000;
 const THREAD_HISTORY_SESSION_CACHE_MAX_ENTRIES = 6;
+const THREAD_MOUNT_RECOVERY_REASON = 'thread-mount-recovery';
 const EMPTY_MESSAGE_ATTACHMENTS: MessageAttachment[] = [];
 const EMPTY_MESSAGE_REACTIONS: MessageReactionGroup[] = [];
 const threadHistorySessionCache = new Map<string, ThreadHistorySessionCacheEntry>();
@@ -4828,6 +4829,22 @@ export function ThreadHistoryViewport({
     scheduleMissingEncryptedDmEnvelopeRecovery,
     scheduleVoiceAttachmentRecovery,
   ]);
+
+  useEffect(() => {
+    if (historySyncDiagnosticsEnabled) {
+      console.info('[chat-history]', 'topology-sync:mount-recovery-requested', {
+        conversationId,
+        latestLoadedSeq: resolveLatestLoadedSeq(historyStateRef.current.messages, null),
+        reason: THREAD_MOUNT_RECOVERY_REASON,
+      });
+    }
+
+    emitThreadHistorySyncRequest({
+      conversationId,
+      newerThanLatest: true,
+      reason: THREAD_MOUNT_RECOVERY_REASON,
+    });
+  }, [conversationId, historySyncDiagnosticsEnabled]);
 
   useLayoutEffect(() => {
     const pendingRestore = pendingRestoreRef.current;
