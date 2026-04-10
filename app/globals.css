@@ -7166,6 +7166,15 @@ main {
     0 10px 24px rgba(17, 24, 39, 0.06);
 }
 
+.message-photo-card-button {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: zoom-in;
+}
+
 .message-bubble-own .message-photo-card {
   border-color: rgba(31, 111, 235, 0.18);
   background: rgba(245, 249, 255, 0.86);
