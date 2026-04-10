@@ -303,18 +303,43 @@ function getCalendarDayKey(value: string | null) {
   return `${year}-${month}-${day}`;
 }
 
-function formatMessageTimestamp(value: string | null, language: AppLanguage) {
+function formatMessageTimestamp(
+  value: string | null,
+  language: AppLanguage,
+  t: ReturnType<typeof getTranslations>,
+) {
   const parsedDate = parseSafeDate(value);
 
   if (!parsedDate) {
     return '';
   }
 
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const compareDate = new Date(
+    parsedDate.getFullYear(),
+    parsedDate.getMonth(),
+    parsedDate.getDate(),
+  );
+
+  if (compareDate.getTime() === today.getTime()) {
+    return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(parsedDate);
+  }
+
+  if (compareDate.getTime() === yesterday.getTime()) {
+    return t.chat.yesterday;
+  }
+
   return new Intl.DateTimeFormat(getLocaleForLanguage(language), {
     month: 'short',
     day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+    year:
+      parsedDate.getFullYear() === now.getFullYear() ? undefined : 'numeric',
   }).format(parsedDate);
 }
 
@@ -2472,6 +2497,64 @@ function ThreadMessageRow({
     [canShowQuickActions, clearLongPress],
   );
 
+  const canInlineMessageMeta =
+    Boolean(normalizedMessageBody) &&
+    !message.reply_to_message_id &&
+    !isDeletedMessage &&
+    !primaryVoiceAttachment &&
+    nonVoiceAttachments.length === 0 &&
+    !isEncryptedDmTextMessage(message);
+  const messageTimestampLabel =
+    formatMessageTimestamp(message.created_at, language, t) || t.chat.justNow;
+  const messageMetaContent = (
+    <>
+      <span>{messageTimestampLabel}</span>
+      <ThreadEditedIndicator
+        conversationId={conversationId}
+        editedAt={message.edited_at}
+        label={t.chat.edited}
+        messageId={message.id}
+      />
+      {isOwnMessage && outgoingMessageStatus ? (
+        otherParticipantUserId ? (
+          <DmThreadClientSubtree
+            conversationId={conversationId}
+            {...threadClientDiagnostics}
+            fallback={
+              <MessageStatusIndicator
+                label={t.chat.sent}
+                status="sent"
+              />
+            }
+            messageId={message.id}
+            surface="live-outgoing-message-status"
+          >
+            <LiveOutgoingMessageStatus
+              conversationId={conversationId}
+              labels={{
+                delivered: t.chat.delivered,
+                seen: t.chat.seen,
+                sent: t.chat.sent,
+              }}
+              messageSeq={message.seq}
+              otherParticipantReadSeq={otherParticipantReadSeq}
+              status={outgoingMessageStatus}
+            />
+          </DmThreadClientSubtree>
+        ) : (
+          <MessageStatusIndicator
+            label={
+              outgoingMessageStatus === 'seen'
+                ? t.chat.seen
+                : t.chat.sent
+            }
+            status={outgoingMessageStatus}
+          />
+        )
+      ) : null}
+    </>
+  );
+
   if (isEncryptedDmTextMessage(message)) {
     const encryptedInputIssues = getEncryptedDmServerRenderInputIssues({
       envelope: encryptedEnvelope,
@@ -2900,20 +2983,107 @@ function ThreadMessageRow({
               ) : null}
             </div>
           ) : normalizedMessageBody ? (
-            <p className="message-body">{normalizedMessageBody}</p>
+            canInlineMessageMeta ? (
+              <div
+                className={
+                  isOwnMessage
+                    ? 'message-inline-content message-inline-content-own'
+                    : 'message-inline-content'
+                }
+              >
+                <p className="message-body message-body-inline">
+                  {normalizedMessageBody}
+                </p>
+                <span
+                  className={
+                    isOwnMessage
+                      ? 'message-meta message-meta-own message-meta-inline'
+                      : 'message-meta message-meta-inline'
+                  }
+                >
+                  {messageMetaContent}
+                </span>
+              </div>
+            ) : (
+              <p className="message-body">{normalizedMessageBody}</p>
+            )
           ) : !messageAttachments.length ? (
             <p className="message-body">{t.chat.emptyMessage}</p>
           ) : null}
           {nonVoiceAttachments.length && !isDeletedMessage ? (
             <div className="message-attachments">
               {nonVoiceAttachments.map((attachment) => {
+                if (attachment.isImage) {
+                  const photoMeta = [
+                    formatAttachmentSize(attachment.sizeBytes),
+                    !attachment.signedUrl ? t.chat.unavailableRightNow : null,
+                  ]
+                    .filter((value): value is string => Boolean(value))
+                    .join(' · ');
+
+                  if (!attachment.signedUrl) {
+                    return (
+                      <div
+                        key={attachment.id}
+                        className="message-photo-card message-photo-card-unavailable"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="message-photo-card-visual message-photo-card-visual-unavailable"
+                        />
+                        <span className="message-photo-card-footer">
+                          <span className="message-photo-card-badge">
+                            {t.chat.photo}
+                          </span>
+                          {photoMeta ? (
+                            <span className="message-photo-card-meta">
+                              {photoMeta}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <a
+                      key={attachment.id}
+                      aria-label={
+                        attachment.fileName.trim()
+                          ? `${t.chat.photo}: ${attachment.fileName}`
+                          : t.chat.photo
+                      }
+                      className="message-photo-card"
+                      href={attachment.signedUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="message-photo-card-visual"
+                        style={{
+                          backgroundImage: `url("${attachment.signedUrl}")`,
+                        }}
+                      />
+                      <span className="message-photo-card-footer">
+                        <span className="message-photo-card-badge">
+                          {t.chat.photo}
+                        </span>
+                        {photoMeta ? (
+                          <span className="message-photo-card-meta">
+                            {photoMeta}
+                          </span>
+                        ) : null}
+                      </span>
+                    </a>
+                  );
+                }
+
                 const attachmentLabel = attachment.isVoiceMessage
                   ? t.chat.voiceMessage
                   : attachment.isAudio
                     ? t.chat.audio
-                    : attachment.isImage
-                      ? t.chat.photo
-                      : t.chat.file;
+                    : t.chat.file;
                 const attachmentMeta = [
                   formatAttachmentSize(attachment.sizeBytes),
                   !attachment.signedUrl ? t.chat.unavailableRightNow : null,
@@ -2922,22 +3092,12 @@ function ThreadMessageRow({
                   .join(' · ');
                 const attachmentContent = (
                   <>
-                    {attachment.isImage && attachment.signedUrl ? (
-                      <span
-                        aria-hidden="true"
-                        className="message-attachment-preview"
-                        style={{
-                          backgroundImage: `url("${attachment.signedUrl}")`,
-                        }}
-                      />
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="message-attachment-file"
-                      >
-                        {attachment.isAudio ? t.chat.audio : t.chat.file}
-                      </span>
-                    )}
+                    <span
+                      aria-hidden="true"
+                      className="message-attachment-file"
+                    >
+                      {attachment.isAudio ? t.chat.audio : t.chat.file}
+                    </span>
                     <span className="message-attachment-copy">
                       <span className="message-attachment-head">
                         <span className="message-attachment-name">
@@ -3023,60 +3183,17 @@ function ThreadMessageRow({
           ) : null}
         </div>
         </div>
-        <span
-          className={
-            isOwnMessage
-              ? 'message-meta message-meta-own'
-              : 'message-meta'
-          }
-        >
-          <span>
-            {formatMessageTimestamp(message.created_at, language) || t.chat.justNow}
+        {!canInlineMessageMeta ? (
+          <span
+            className={
+              isOwnMessage
+                ? 'message-meta message-meta-own'
+                : 'message-meta'
+            }
+          >
+            {messageMetaContent}
           </span>
-          <ThreadEditedIndicator
-            conversationId={conversationId}
-            editedAt={message.edited_at}
-            label={t.chat.edited}
-            messageId={message.id}
-          />
-          {isOwnMessage && outgoingMessageStatus ? (
-            otherParticipantUserId ? (
-              <DmThreadClientSubtree
-                conversationId={conversationId}
-                {...threadClientDiagnostics}
-                fallback={
-                  <MessageStatusIndicator
-                    label={t.chat.sent}
-                    status="sent"
-                  />
-                }
-                messageId={message.id}
-                surface="live-outgoing-message-status"
-              >
-                <LiveOutgoingMessageStatus
-                  conversationId={conversationId}
-                  labels={{
-                    delivered: t.chat.delivered,
-                    seen: t.chat.seen,
-                    sent: t.chat.sent,
-                  }}
-                  messageSeq={message.seq}
-                  otherParticipantReadSeq={otherParticipantReadSeq}
-                  status={outgoingMessageStatus}
-                />
-              </DmThreadClientSubtree>
-            ) : (
-              <MessageStatusIndicator
-                label={
-                  outgoingMessageStatus === 'seen'
-                    ? t.chat.seen
-                    : t.chat.sent
-                }
-                status={outgoingMessageStatus}
-              />
-            )
-          ) : null}
-        </span>
+        ) : null}
 
         {!isDeletedMessage ? (
           <ThreadReactionGroups
