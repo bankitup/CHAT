@@ -7245,6 +7245,25 @@ export async function resolveConversationAttachmentSignedUrl(input: {
   const resolvedTarget = await resolveConversationAttachmentContentTarget(input);
 
   if (!resolvedTarget) {
+  if (asset.source === 'external-url') {
+    logChatHistoryDiagnostics('attachment-signed-url:external-url-blocked', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      source: asset.source,
+      userId: input.userId,
+    }, 'warn');
+    return null;
+  }
+
+  if (!asset.storage_bucket || !asset.storage_object_path) {
+    logChatHistoryDiagnostics('attachment-signed-url:storage-locator-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      source: asset.source,
+      userId: input.userId,
+    });
     return null;
   }
 

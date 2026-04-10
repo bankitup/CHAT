@@ -19,6 +19,14 @@ Current rollout assumption:
 
 - existing messaging activity is backfilled into one default space named `TEST`
 
+## Current security posture snapshot
+
+- `public.spaces` and `public.space_members` now have live authenticated read RLS scoped to actual space membership.
+- `public.message_assets` and `public.message_asset_links` already have first-pass RLS for active conversation members.
+- chat media blobs are expected to stay in the private `message-media` bucket and are delivered through membership-checked signed URLs.
+- `public.conversations`, `public.conversation_members`, `public.messages`, and `public.message_reactions` are still pending later hardening slices.
+- the practical current posture is summarized in [docs/security/mvp-security-posture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/mvp-security-posture.md).
+
 ## Tables in active use
 
 - `public.profiles`
@@ -105,6 +113,8 @@ Operational note:
 - production group/privacy rollouts should now treat `join_policy` as part of the active runtime contract, not only as a future hardening column.
 - some helper paths still degrade safely when `join_policy` is absent, but current `/chat/[conversationId]` production rendering has already shown that missing `public.conversations.join_policy` can break route rendering before those fallbacks are enough.
 - if production is missing both newer group columns, apply [2026-04-06-conversations-group-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-conversations-group-runtime-align.sql).
+- the next RLS target for this table is authenticated `select` visibility tied to active `conversation_members`, but that hardening is not live yet because current runtime still performs conversation inserts and summary-projection updates through the normal request client.
+- the exact deferred rollout plan is recorded in [2026-04-10-conversations-metadata-rls-deferred-plan.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-10-conversations-metadata-rls-deferred-plan.sql); do not enable `public.conversations` RLS until those write paths are moved behind service-role or reviewed security-definer helpers.
 
 ## `public.conversation_members`
 
@@ -215,6 +225,7 @@ Assumptions:
 - Current file sends persist committed asset rows here with `kind = 'file'`.
 - Current non-voice audio attachment sends persist committed asset rows here with `kind = 'audio'`.
 - `storage_bucket` and `storage_object_path` must point at the real media object in Supabase Storage when `source = 'supabase-storage'`.
+- Current user-facing chat delivery supports only `source = 'supabase-storage'`. `source = 'external-url'` may remain in the broader schema contract, but chat history and signed-URL resolution now treat it as unsupported instead of returning raw direct URLs.
 - `duration_ms` is the committed voice-note duration used by thread UI; inbox/activity must not load the blob to derive it.
 - This table is the forward path for committed media work beyond legacy compatibility.
 
@@ -250,6 +261,7 @@ Assumptions:
 - The older `message-attachments` bucket name should now be treated as stale legacy naming, not an active runtime target.
 - Current voice/media debugging should verify the actual upload target against `message-media`.
 - Media objects in this bucket are expected to stay private. Current app reads them through membership-checked signed URL resolution, not permanent public URLs.
+- Chat attachment read APIs no longer fall back to raw `external_url` delivery for `message_assets`; user-facing media access is expected to flow through the signed-URL route only.
 
 ## `public.message_reactions`
 
@@ -386,7 +398,7 @@ Planned columns:
 - `space_id`
 - `user_id`
 - `role`
-- `created_at`
+- `joined_at`
 
 Current assumptions:
 
@@ -395,6 +407,7 @@ Current assumptions:
 - exactly one owner per space is the intended v1 default
 - `space_members` is broader than `conversation_members`; it is the outer access boundary, not the per-chat participant list
 - inbox, activity, and chat access rely on `space_members` to decide which spaces a user may actively enter
+- active-space ordering and Home participant rendering currently depend on `space_members.joined_at`
 - current first-step rollout backfills current conversation participants into the default `TEST` space
 
 ### `public.conversations.space_id`
@@ -462,10 +475,13 @@ Operational note:
 
 ## Recommended hardening before broader testing
 
-1. `public.conversations.dm_key`
+1. `public.spaces` / `public.space_members` outer-tenancy RLS
+   Source file: [2026-04-10-spaces-and-space-members-rls.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-10-spaces-and-space-members-rls.sql)
+
+2. `public.conversations.dm_key`
    Source file: [2026-04-04-dm-uniqueness-hardening.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-04-dm-uniqueness-hardening.sql)
 
-2. `public.conversations.avatar_path`
+3. `public.conversations.avatar_path`
    Source file: [2026-04-05-conversations-avatar-path.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-05-conversations-avatar-path.sql)
 
 ## Historical space-scoping migrations
@@ -483,6 +499,9 @@ when `public.conversations.space_id` is missing, nullable, or not backfilled.
 3. production alignment patch when `spaces`/`space_members` already exist but
    `conversations.space_id` is missing or not backfilled
    Source file: [2026-04-03-conversations-space-id-v1-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-conversations-space-id-v1-align.sql)
+
+4. `public.space_members.joined_at` runtime align for chooser and participant ordering
+   Source file: [2026-04-10-space-members-joined-at-runtime-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-10-space-members-joined-at-runtime-align.sql)
 
 ## Required migrations before enabling DM E2EE bootstrap
 

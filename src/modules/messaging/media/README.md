@@ -10,6 +10,8 @@ Current MVP contract:
 - Message-to-asset linkage lives in `public.message_asset_links`.
 - Chat history rendering resolves media through membership-controlled same-origin delivery routes.
 - The app no longer depends on exposing Supabase Storage signed object URLs directly to chat clients.
+- Chat history rendering resolves membership-controlled signed URLs for reads.
+- User-facing chat attachment delivery supports only storage-backed assets on the private `message-media` bucket. `external-url` asset rows are not treated as a public delivery shortcut.
 - Inbox/activity preview logic uses message kind plus asset metadata, not public object URLs.
 - Legacy `public.message_attachments` remains as a read fallback for historical rows only.
 
