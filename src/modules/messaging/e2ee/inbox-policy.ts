@@ -50,18 +50,8 @@ function getGenericConversationPreviewByKind(
   return labels.attachment;
 }
 
-<<<<<<< feature/chat-media-send-pass
 function shouldUseBodyPreview(latestMessageKind: string | null) {
   return latestMessageKind !== 'attachment' && latestMessageKind !== 'voice';
-=======
-function shouldUseMessageBodyPreview(conversation: {
-  latestMessageKind: string | null;
-}) {
-  return (
-    conversation.latestMessageKind === null ||
-    conversation.latestMessageKind === 'text'
-  );
->>>>>>> main
 }
 
 export function getInboxPreviewText(
@@ -92,11 +82,7 @@ export function getInboxPreviewText(
 
   const body = conversation.latestMessageBody?.trim();
 
-<<<<<<< feature/chat-media-send-pass
   if (body && shouldUseBodyPreview(conversation.latestMessageKind)) {
-=======
-  if (body && shouldUseMessageBodyPreview(conversation)) {
->>>>>>> main
     return body;
   }
 
@@ -131,11 +117,7 @@ export function getMaskedInboxPreviewText(
 
   if (
     conversation.latestMessageBody?.trim() &&
-<<<<<<< feature/chat-media-send-pass
     shouldUseBodyPreview(conversation.latestMessageKind)
-=======
-    shouldUseMessageBodyPreview(conversation)
->>>>>>> main
   ) {
     return labels.newMessage;
   }
