@@ -63,6 +63,25 @@ function clearReplyTargetFromCurrentUrl() {
   );
 }
 
+function getComposerAttachmentLabel(input: {
+  attachment: File | null;
+  labels: {
+    attachment: string;
+    file: string;
+    image: string;
+  };
+}) {
+  if (!input.attachment) {
+    return null;
+  }
+
+  if (input.attachment.type.startsWith('image/')) {
+    return input.labels.image;
+  }
+
+  return input.attachment.name.trim() || input.labels.file || input.labels.attachment;
+}
+
 export function PlaintextChatComposerForm({
   accept,
   attachmentHelpText,
@@ -312,7 +331,14 @@ export function PlaintextChatComposerForm({
         setErrorMessage(null);
         enqueue({
           attachment,
-          attachmentLabel: attachment?.name ?? (attachment ? t.chat.attachment : null),
+          attachmentLabel: getComposerAttachmentLabel({
+            attachment,
+            labels: {
+              attachment: t.chat.attachment,
+              file: t.chat.file,
+              image: t.chat.photo,
+            },
+          }),
           body,
           kind: attachment ? 'attachment' : 'text',
           payload: {

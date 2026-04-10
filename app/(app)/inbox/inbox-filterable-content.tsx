@@ -821,7 +821,7 @@ export function InboxFilterableContent({
       encryptedMessage: t.chat.encryptedMessage,
       file: t.chat.file,
       group: t.inbox.metaGroup,
-      image: t.chat.image,
+      image: t.chat.photo,
       newMessage: t.chat.newMessage,
       newEncryptedMessage: t.chat.newEncryptedMessage,
       noActivityYet: t.inbox.noActivityYet,

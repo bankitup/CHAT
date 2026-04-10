@@ -111,6 +111,27 @@ export function resolveMessagingMessageKindForAsset(
   return kind === 'voice-note' ? 'voice' : 'attachment';
 }
 
+export function resolveMessagingAssetKindFromMimeType(input: {
+  messageKind?: MessagingMessageKind | null;
+  mimeType: string | null | undefined;
+}): MessagingMediaAssetKind {
+  if (input.messageKind === 'voice') {
+    return 'voice-note';
+  }
+
+  const normalizedMimeType = input.mimeType?.trim().toLowerCase() || '';
+
+  if (normalizedMimeType.startsWith('image/')) {
+    return 'image';
+  }
+
+  if (normalizedMimeType.startsWith('audio/')) {
+    return 'audio';
+  }
+
+  return 'file';
+}
+
 export function isMessagingVoiceMessageAssetRow(
   asset: Pick<MessagingMessageAssetRow, 'kind'>,
 ) {

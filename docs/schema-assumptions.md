@@ -182,11 +182,12 @@ Required columns used by current code:
 
 Assumptions:
 
-- This table is still active, but no longer represents the full committed media runtime.
-- Historical attachment rows and the current non-voice attachment send path still read/write here.
-- Chat history loading still reads this table alongside `public.message_assets` / `public.message_asset_links`.
-- Message cleanup still deletes legacy attachment objects from here when present.
-- This table should now be treated as transitional for media evolution, not as the sole attachment source of truth.
+- This table is still active, but no longer represents the primary committed media runtime.
+- Historical attachment rows still read from here.
+- Chat history loading and signed attachment access still tolerate this table as a legacy fallback.
+- Conversation cleanup still deletes legacy attachment objects from here when present.
+- New photo/file/audio attachment sends should now be treated as `message_assets` / `message_asset_links` work, not as new `message_attachments` writes.
+- This table should now be treated as transitional compatibility storage, not as the forward media source of truth.
 
 ## `public.message_assets`
 
@@ -208,11 +209,14 @@ Required columns used by current code:
 
 Assumptions:
 
-- This is the active committed media metadata table for current voice-note runtime.
+- This is the active committed media metadata table for current voice, photo, file, and non-voice audio runtime.
 - Current voice sends upload the binary first, then persist one committed asset row here with `kind = 'voice-note'`.
+- Current photo sends persist committed asset rows here with `kind = 'image'`.
+- Current file sends persist committed asset rows here with `kind = 'file'`.
+- Current non-voice audio attachment sends persist committed asset rows here with `kind = 'audio'`.
 - `storage_bucket` and `storage_object_path` must point at the real media object in Supabase Storage when `source = 'supabase-storage'`.
 - `duration_ms` is the committed voice-note duration used by thread UI; inbox/activity must not load the blob to derive it.
-- This table is also the intended forward path for future image/file/audio media work beyond voice.
+- This table is the forward path for committed media work beyond legacy compatibility.
 
 ## `public.message_asset_links`
 
@@ -229,6 +233,7 @@ Assumptions:
 
 - This table links committed media assets to their parent message rows.
 - Current voice sends create exactly one link row from the committed `messages.kind = 'voice'` row to the committed `message_assets.kind = 'voice-note'` row.
+- Current photo/file/audio sends create exactly one link row from the committed `messages.kind = 'attachment'` row to the committed `message_assets.kind = 'image'`, `'file'`, or `'audio'` row.
 - `ordinal` and `render_as_primary` are part of the active projection contract used by current thread history mapping.
 - Missing this table or its expected columns is now a real production blocker for committed voice/media rendering.
 
@@ -244,6 +249,7 @@ Assumptions:
 - Active chat media and voice uploads use the canonical `message-media` bucket.
 - The older `message-attachments` bucket name should now be treated as stale legacy naming, not an active runtime target.
 - Current voice/media debugging should verify the actual upload target against `message-media`.
+- Media objects in this bucket are expected to stay private. Current app reads them through membership-checked signed URL resolution, not permanent public URLs.
 
 ## `public.message_reactions`
 
@@ -452,7 +458,7 @@ These schema changes must exist in Supabase for the current app to run safely:
 
 Operational note:
 
-- keep `public.message_attachments` in place for now; current runtime still reads it for legacy/non-voice attachment rows even though committed voice now depends on `message_assets` / `message_asset_links`
+- keep `public.message_attachments` in place for now; current runtime still reads it for legacy attachment rows even though committed voice/photo/file/audio media now depend on `message_assets` / `message_asset_links`
 
 ## Recommended hardening before broader testing
 

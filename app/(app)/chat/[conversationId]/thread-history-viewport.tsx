@@ -2777,6 +2777,19 @@ function ThreadMessageRow({
           {nonVoiceAttachments.length && !isDeletedMessage ? (
             <div className="message-attachments">
               {nonVoiceAttachments.map((attachment) => {
+                const attachmentLabel = attachment.isVoiceMessage
+                  ? t.chat.voiceMessage
+                  : attachment.isAudio
+                    ? t.chat.audio
+                    : attachment.isImage
+                      ? t.chat.photo
+                      : t.chat.file;
+                const attachmentMeta = [
+                  formatAttachmentSize(attachment.sizeBytes),
+                  !attachment.signedUrl ? t.chat.unavailableRightNow : null,
+                ]
+                  .filter((value): value is string => Boolean(value))
+                  .join(' · ');
                 const attachmentContent = (
                   <>
                     {attachment.isImage && attachment.signedUrl ? (
@@ -2796,24 +2809,19 @@ function ThreadMessageRow({
                       </span>
                     )}
                     <span className="message-attachment-copy">
-                      <span className="message-attachment-name">
-                        {attachment.fileName}
+                      <span className="message-attachment-head">
+                        <span className="message-attachment-name">
+                          {attachment.fileName}
+                        </span>
+                        <span className="message-attachment-kind">
+                          {attachmentLabel}
+                        </span>
                       </span>
-                      <span className="message-attachment-meta">
-                        {attachment.isVoiceMessage
-                          ? t.chat.voiceMessage
-                          : attachment.isAudio
-                            ? t.chat.audio
-                            : attachment.isImage
-                              ? t.chat.image
-                              : t.chat.attachment}
-                        {formatAttachmentSize(attachment.sizeBytes)
-                          ? ` · ${formatAttachmentSize(attachment.sizeBytes)}`
-                          : ''}
-                        {!attachment.signedUrl
-                          ? ` · ${t.chat.unavailableRightNow}`
-                          : ''}
-                      </span>
+                      {attachmentMeta ? (
+                        <span className="message-attachment-meta">
+                          {attachmentMeta}
+                        </span>
+                      ) : null}
                     </span>
                   </>
                 );

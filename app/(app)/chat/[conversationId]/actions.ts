@@ -364,7 +364,7 @@ export async function sendMessageMutationAction(
     };
   }
 
-  if (attachment && !isSupportedChatAttachmentType(attachment.type)) {
+  if (attachment && !isSupportedChatAttachmentType(attachment.type, attachment.name)) {
     return {
       error: CHAT_ATTACHMENT_HELP_TEXT,
       ok: false,
@@ -840,7 +840,7 @@ export async function sendMessageAction(formData: FormData) {
     );
   }
 
-  if (attachment && !isSupportedChatAttachmentType(attachment.type)) {
+  if (attachment && !isSupportedChatAttachmentType(attachment.type, attachment.name)) {
     redirectWithError(conversationId, CHAT_ATTACHMENT_HELP_TEXT, spaceId);
   }
 

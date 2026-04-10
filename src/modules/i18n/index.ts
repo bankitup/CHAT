@@ -742,6 +742,7 @@ type LanguageDictionary = {
     emptyMessage: string;
     newMessage: string;
     image: string;
+    photo: string;
     audio: string;
     voiceMessage: string;
     voiceMessagePlay: string;
@@ -790,6 +791,7 @@ type LanguageDictionary = {
     member: string;
     attachmentOptions: string;
     photoOrFile: string;
+    photoLibrary: string;
     camera: string;
     soon: string;
     microphone: string;
@@ -1675,6 +1677,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyMessage: 'Empty message',
       newMessage: 'New message',
       image: 'Image',
+      photo: 'Photo',
       audio: 'Audio',
       voiceMessage: 'Voice message',
       voiceMessagePlay: 'Play voice message',
@@ -1723,6 +1726,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       member: 'Member',
       attachmentOptions: 'Attachment options',
       photoOrFile: 'Photo or file',
+      photoLibrary: 'Photos',
       camera: 'Camera',
       soon: 'Soon',
       microphone: 'Voice message',
@@ -2656,6 +2660,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyMessage: 'Пустое сообщение',
       newMessage: 'Новое сообщение',
       image: 'Изображение',
+      photo: 'Фото',
       audio: 'Аудио',
       voiceMessage: 'Голосовое сообщение',
       voiceMessagePlay: 'Воспроизвести голосовое сообщение',
@@ -2705,6 +2710,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       member: 'Участник',
       attachmentOptions: 'Вложения',
       photoOrFile: 'Фото или файл',
+      photoLibrary: 'Фото',
       camera: 'Камера',
       soon: 'Скоро',
       microphone: 'Голосовое сообщение',
