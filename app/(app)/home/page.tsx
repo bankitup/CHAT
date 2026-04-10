@@ -380,17 +380,6 @@ export default async function HomeDashboardPage({
 
     return (
       <section className="stack messenger-home-screen messenger-home-shell">
-        <div className="home-utility-topbar">
-          <HomeAppZoomControl
-            initialZoomMode={currentZoomMode}
-            language={language}
-          />
-          <HomeLanguageSwitch
-            currentLanguage={language}
-            spaceId={activeSpace.id}
-          />
-        </div>
-
         {visibleMessage ? (
           <div aria-live="polite" className="notice notice-success notice-inline">
             <span aria-hidden="true" className="notice-check">
@@ -405,9 +394,27 @@ export default async function HomeDashboardPage({
         <div className="stack messenger-home-main-flow">
           <section className="messenger-home-personal-grid">
             <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-profile-editor-card">
-              <div className="stack settings-card-copy settings-section-copy">
-                <h2 className="section-title">{t.settings.profileTitle}</h2>
-                <p className="muted">{t.settings.profileSubtitle}</p>
+              <div className="messenger-home-profile-header">
+                <div className="messenger-home-profile-topline">
+                  <div className="stack settings-card-copy settings-section-copy messenger-home-profile-copy">
+                    <h2 className="section-title">{t.settings.profileTitle}</h2>
+                    <p className="muted">{t.settings.profileSubtitle}</p>
+                  </div>
+
+                  <div className="messenger-home-profile-language">
+                    <HomeLanguageSwitch
+                      currentLanguage={language}
+                      spaceId={activeSpace.id}
+                    />
+                  </div>
+                </div>
+
+                <div className="messenger-home-profile-zoom">
+                  <HomeAppZoomControl
+                    initialZoomMode={currentZoomMode}
+                    language={language}
+                  />
+                </div>
               </div>
 
               <ProfileSettingsForm
