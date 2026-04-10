@@ -6484,7 +6484,7 @@ export async function getConversationHistorySnapshot(input: {
       includeStatuses: false,
     }),
     getGroupedReactionsForMessages(messageIds, input.userId),
-    getMessageAttachments(attachmentMessageIds),
+    getMessageAttachments(input.conversationId, attachmentMessageIds),
     getCurrentUserDmE2eeEnvelopesForMessages({
       debugRequestId: input.debugRequestId ?? null,
       messageIds: encryptedMessageIds,
@@ -6751,7 +6751,7 @@ export async function getMessageSenderProfiles(
   return getProfileIdentities(userIds, options);
 }
 
-async function createSignedChatAttachmentUrl(input: {
+function buildChatAttachmentDeliveryUrl(input: {
   attachmentId: string;
   bucket: string;
   conversationId?: string | null;
@@ -6762,73 +6762,183 @@ async function createSignedChatAttachmentUrl(input: {
   serviceClient: Awaited<ReturnType<typeof createSupabaseServiceRoleClient>> | null;
   source: 'legacy-attachment' | 'message-asset';
 }) {
-  const createSignedUrl = async (
-    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  ) =>
-    client.storage.from(input.bucket).createSignedUrl(input.objectPath, 60 * 60);
+  return buildConversationAttachmentContentUrl({
+    attachmentId: input.attachmentId,
+    conversationId: input.conversationId ?? '',
+    messageId: input.messageId,
+  });
+}
 
-  const preferredResponse = await createSignedUrl(input.preferredClient);
+function buildConversationAttachmentContentUrl(input: {
+  attachmentId: string;
+  conversationId: string;
+  messageId: string;
+}) {
+  return `/api/messaging/conversations/${input.conversationId}/messages/${input.messageId}/attachments/${input.attachmentId}/content`;
+}
 
-  if (!preferredResponse.error) {
-    return preferredResponse.data.signedUrl;
-  }
+export type ResolvedConversationAttachmentContentTarget = {
+  attachmentId: string;
+  bucket: string;
+  fileName: string | null;
+  messageId: string;
+  mimeType: string | null;
+  objectPath: string;
+  source: 'legacy-attachment' | 'message-asset';
+};
 
-  if (input.serviceClient && input.serviceClient !== input.preferredClient) {
-    const serviceResponse = await createSignedUrl(
-      input.serviceClient as Awaited<ReturnType<typeof createSupabaseServerClient>>,
-    );
+export async function resolveConversationAttachmentContentTarget(input: {
+  attachmentId: string;
+  conversationId: string;
+  messageId: string;
+  userId: string;
+}): Promise<ResolvedConversationAttachmentContentTarget | null> {
+  const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const normalizedAttachmentId = input.attachmentId.trim();
+  const normalizedConversationId = input.conversationId.trim();
+  const normalizedMessageId = input.messageId.trim();
 
-    if (!serviceResponse.error) {
-      logChatHistoryDiagnostics('attachments:signed-url-service-fallback', {
-        attachmentId: input.attachmentId,
-        bucket: input.bucket,
-        conversationId: input.conversationId ?? null,
-        initialErrorMessage: preferredResponse.error.message,
-        isVoiceMessage: input.isVoiceMessage,
-        messageId: input.messageId,
-        objectPath: input.objectPath,
-        source: input.source,
-      });
-
-      return serviceResponse.data.signedUrl;
-    }
-
-    logChatHistoryDiagnostics(
-      'attachments:signed-url-failed',
-      {
-        attachmentId: input.attachmentId,
-        bucket: input.bucket,
-        conversationId: input.conversationId ?? null,
-        errorMessage: preferredResponse.error.message,
-        isVoiceMessage: input.isVoiceMessage,
-        messageId: input.messageId,
-        objectPath: input.objectPath,
-        serviceErrorMessage: serviceResponse.error.message,
-        source: input.source,
-      },
-      input.isVoiceMessage ? 'warn' : 'error',
-    );
-
+  if (
+    !normalizedAttachmentId ||
+    !normalizedConversationId ||
+    !normalizedMessageId ||
+    !input.userId.trim()
+  ) {
     return null;
   }
 
-  logChatHistoryDiagnostics(
-    'attachments:signed-url-failed',
-    {
-      attachmentId: input.attachmentId,
-      bucket: input.bucket,
-      conversationId: input.conversationId ?? null,
-      errorMessage: preferredResponse.error.message,
-      isVoiceMessage: input.isVoiceMessage,
-      messageId: input.messageId,
-      objectPath: input.objectPath,
-      serviceErrorMessage: null,
-      source: input.source,
-    },
-    input.isVoiceMessage ? 'warn' : 'error',
-  );
+  const messageLookup = await supabase
+    .from('messages')
+    .select('id')
+    .eq('id', normalizedMessageId)
+    .eq('conversation_id', normalizedConversationId)
+    .maybeSingle();
 
-  return null;
+  if (messageLookup.error) {
+    throw new Error(messageLookup.error.message);
+  }
+
+  if (!messageLookup.data) {
+    logChatHistoryDiagnostics('attachment-content:message-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      userId: input.userId,
+    });
+    return null;
+  }
+
+  const legacyAttachmentLookup = await supabase
+    .from('message_attachments')
+    .select('id, message_id, bucket, object_path, mime_type')
+    .eq('id', normalizedAttachmentId)
+    .eq('message_id', normalizedMessageId)
+    .maybeSingle();
+
+  if (legacyAttachmentLookup.error) {
+    if (
+      !isMissingRelationErrorMessage(
+        legacyAttachmentLookup.error.message,
+        'message_attachments',
+      )
+    ) {
+      throw new Error(legacyAttachmentLookup.error.message);
+    }
+  } else if (legacyAttachmentLookup.data) {
+    return {
+      attachmentId: String(legacyAttachmentLookup.data.id),
+      bucket: String(legacyAttachmentLookup.data.bucket),
+      fileName: getAttachmentFileName(String(legacyAttachmentLookup.data.object_path)),
+      messageId: normalizedMessageId,
+      mimeType:
+        typeof legacyAttachmentLookup.data.mime_type === 'string'
+          ? legacyAttachmentLookup.data.mime_type
+          : null,
+      objectPath: String(legacyAttachmentLookup.data.object_path),
+      source: 'legacy-attachment' as const,
+    };
+  }
+
+  const loadAssetLinkRow = async (client: MessageAssetsWriteClient) =>
+    client
+      .from('message_asset_links')
+      .select(
+        'message_id, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url, mime_type, file_name)',
+      )
+      .eq('message_id', normalizedMessageId)
+      .eq('asset_id', normalizedAttachmentId)
+      .maybeSingle();
+
+  let assetLookup = await loadAssetLinkRow(supabase);
+
+  if (assetLookup.error) {
+    const shouldRetryWithServiceRole =
+      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_asset_links') &&
+      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_assets');
+
+    if (shouldRetryWithServiceRole && serviceSupabase) {
+      assetLookup = await loadAssetLinkRow(
+        serviceSupabase as MessageAssetsWriteClient,
+      );
+    }
+
+    if (assetLookup.error) {
+      throw new Error(assetLookup.error.message);
+    }
+  }
+
+  const asset = normalizeJoinedRecord(assetLookup.data?.message_assets ?? null);
+
+  if (!asset) {
+    logChatHistoryDiagnostics('attachment-content:asset-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      userId: input.userId,
+    });
+    return null;
+  }
+
+  if (asset.source === 'external-url') {
+    logChatHistoryDiagnostics(
+      'attachment-content:external-url-blocked',
+      {
+        attachmentId: normalizedAttachmentId,
+        conversationId: normalizedConversationId,
+        messageId: normalizedMessageId,
+        source: asset.source,
+        userId: input.userId,
+      },
+      'warn',
+    );
+    return null;
+  }
+
+  if (!asset.storage_bucket || !asset.storage_object_path) {
+    logChatHistoryDiagnostics('attachment-content:storage-locator-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      source: asset.source,
+      userId: input.userId,
+    });
+    return null;
+  }
+
+  return {
+    attachmentId: String(asset.id),
+    bucket: String(asset.storage_bucket),
+    fileName:
+      typeof asset.file_name === 'string' && asset.file_name.trim()
+        ? asset.file_name.trim()
+        : getAttachmentFileName(String(asset.storage_object_path)),
+    messageId: normalizedMessageId,
+    mimeType:
+      typeof asset.mime_type === 'string' ? asset.mime_type : null,
+    objectPath: String(asset.storage_object_path),
+    source: 'message-asset' as const,
+  };
 }
 
 export async function getGroupedReactionsForMessages(
@@ -6888,7 +6998,10 @@ export async function getGroupedReactionsForMessages(
   );
 }
 
-export async function getMessageAttachments(messageIds: string[]) {
+export async function getMessageAttachments(
+  conversationId: string,
+  messageIds: string[],
+) {
   const uniqueMessageIds = Array.from(new Set(messageIds.filter(Boolean)));
 
   if (uniqueMessageIds.length === 0) {
@@ -7028,10 +7141,10 @@ export async function getMessageAttachments(messageIds: string[]) {
     [
       ...((data ?? []) as MessageAttachmentRow[]).map(async (row) => {
         const isVoiceMessage = row.object_path.includes('/voice/');
-        const signedUrl = await createSignedChatAttachmentUrl({
+        const signedUrl = buildChatAttachmentDeliveryUrl({
           attachmentId: row.id,
           bucket: row.bucket,
-          conversationId: null,
+          conversationId,
           isVoiceMessage,
           messageId: row.message_id,
           objectPath: row.object_path,
@@ -7065,6 +7178,7 @@ export async function getMessageAttachments(messageIds: string[]) {
             'attachments:external-url-blocked',
             {
               attachmentId: row.asset_id,
+              conversationId,
               messageId: row.message_id,
               source: row.source,
             },
@@ -7075,10 +7189,10 @@ export async function getMessageAttachments(messageIds: string[]) {
           row.storage_bucket &&
           row.storage_object_path
         ) {
-          signedUrl = await createSignedChatAttachmentUrl({
+          signedUrl = buildChatAttachmentDeliveryUrl({
             attachmentId: row.asset_id,
             bucket: row.storage_bucket,
-            conversationId: null,
+            conversationId,
             isVoiceMessage,
             messageId: row.message_id,
             objectPath: row.storage_object_path,
@@ -7128,160 +7242,32 @@ export async function resolveConversationAttachmentSignedUrl(input: {
   messageId: string;
   userId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
-  const serviceSupabase = createSupabaseServiceRoleClient();
-  const normalizedAttachmentId = input.attachmentId.trim();
-  const normalizedConversationId = input.conversationId.trim();
-  const normalizedMessageId = input.messageId.trim();
+  const resolvedTarget = await resolveConversationAttachmentContentTarget(input);
 
-  if (
-    !normalizedAttachmentId ||
-    !normalizedConversationId ||
-    !normalizedMessageId ||
-    !input.userId.trim()
-  ) {
+  if (!resolvedTarget) {
     return null;
   }
 
-  const messageLookup = await supabase
-    .from('messages')
-    .select('id, sender_id, created_at, kind')
-    .eq('id', normalizedMessageId)
-    .eq('conversation_id', normalizedConversationId)
-    .maybeSingle();
-
-  if (messageLookup.error) {
-    throw new Error(messageLookup.error.message);
-  }
-
-  if (!messageLookup.data) {
-    logChatHistoryDiagnostics('attachment-signed-url:message-missing', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      userId: input.userId,
-    });
-    return null;
-  }
-
-  const legacyAttachmentLookup = await supabase
-    .from('message_attachments')
-    .select('id, message_id, bucket, object_path')
-    .eq('id', normalizedAttachmentId)
-    .eq('message_id', normalizedMessageId)
-    .maybeSingle();
-
-  if (legacyAttachmentLookup.error) {
-    if (!isMissingRelationErrorMessage(legacyAttachmentLookup.error.message, 'message_attachments')) {
-      throw new Error(legacyAttachmentLookup.error.message);
-    }
-  } else if (legacyAttachmentLookup.data) {
-    const signedUrl = await createSignedChatAttachmentUrl({
-      attachmentId: String(legacyAttachmentLookup.data.id),
-      bucket: String(legacyAttachmentLookup.data.bucket),
-      conversationId: normalizedConversationId,
-      isVoiceMessage: String(legacyAttachmentLookup.data.object_path).includes('/voice/'),
-      messageId: normalizedMessageId,
-      objectPath: String(legacyAttachmentLookup.data.object_path),
-      preferredClient: supabase,
-      serviceClient: serviceSupabase,
-      source: 'legacy-attachment',
-    });
-
-    return {
-      signedUrl,
-      source: 'legacy-attachment' as const,
-    };
-  }
-
-  const loadAssetLinkRow = async (client: MessageAssetsWriteClient) =>
-    client
-      .from('message_asset_links')
-      .select(
-        'message_id, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url)',
-      )
-      .eq('message_id', normalizedMessageId)
-      .eq('asset_id', normalizedAttachmentId)
-      .maybeSingle();
-
-  let assetLookup = await loadAssetLinkRow(supabase);
-
-  if (assetLookup.error) {
-    const shouldRetryWithServiceRole =
-      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_asset_links') &&
-      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_assets');
-
-    if (shouldRetryWithServiceRole && serviceSupabase) {
-      assetLookup = await loadAssetLinkRow(
-        serviceSupabase as MessageAssetsWriteClient,
-      );
-    }
-
-    if (assetLookup.error) {
-      throw new Error(assetLookup.error.message);
-    }
-  }
-
-  const asset = normalizeJoinedRecord(assetLookup.data?.message_assets ?? null);
-
-  if (!asset) {
-    logChatHistoryDiagnostics('attachment-signed-url:asset-missing', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      userId: input.userId,
-    });
-    return null;
-  }
-
-  if (asset.source === 'external-url') {
-    logChatHistoryDiagnostics('attachment-signed-url:external-url-blocked', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      source: asset.source,
-      userId: input.userId,
-    }, 'warn');
-    return null;
-  }
-
-  if (!asset.storage_bucket || !asset.storage_object_path) {
-    logChatHistoryDiagnostics('attachment-signed-url:storage-locator-missing', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      source: asset.source,
-      userId: input.userId,
-    });
-    return null;
-  }
-
-  const signedUrl = await createSignedChatAttachmentUrl({
-    attachmentId: String(asset.id),
-    bucket: String(asset.storage_bucket),
-    conversationId: normalizedConversationId,
-    isVoiceMessage: asset.kind === 'voice-note',
-    messageId: normalizedMessageId,
-    objectPath: String(asset.storage_object_path),
-    preferredClient: supabase,
-    serviceClient: serviceSupabase,
-    source: 'message-asset',
+  const signedUrl = buildConversationAttachmentContentUrl({
+    attachmentId: resolvedTarget.attachmentId,
+    conversationId: input.conversationId.trim(),
+    messageId: resolvedTarget.messageId,
   });
 
-  logChatHistoryDiagnostics('attachment-signed-url:resolved', {
-    attachmentId: normalizedAttachmentId,
-    conversationId: normalizedConversationId,
-    hasSignedUrl: Boolean(signedUrl),
-    messageId: normalizedMessageId,
-    source: asset.source,
-    storageBucket: asset.storage_bucket,
-    storageObjectPath: asset.storage_object_path,
+  logChatHistoryDiagnostics('attachment-delivery-url:resolved', {
+    attachmentId: resolvedTarget.attachmentId,
+    bucket: resolvedTarget.bucket,
+    conversationId: input.conversationId.trim(),
+    hasDeliveryUrl: Boolean(signedUrl),
+    messageId: resolvedTarget.messageId,
+    objectPath: resolvedTarget.objectPath,
+    source: resolvedTarget.source,
     userId: input.userId,
   });
 
   return {
     signedUrl,
-    source: 'message-asset' as const,
+    source: resolvedTarget.source,
   };
 }
 
