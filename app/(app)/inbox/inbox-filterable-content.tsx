@@ -908,6 +908,16 @@ export function InboxFilterableContent({
   const manageMembersHref = canManageMembers
     ? `/spaces/members?space=${encodeURIComponent(activeSpaceId)}`
     : null;
+  const mainInboxHref = buildInboxHref({
+    filter: activeFilter,
+    query: queryValue,
+    spaceId: activeSpaceId,
+  });
+  const clearSearchHref = buildInboxHref({
+    filter: activeFilter,
+    spaceId: activeSpaceId,
+    view: activeView,
+  });
   const openCreateDmHref = buildInboxHref({
     create: true,
     createMode: 'dm',
@@ -1203,11 +1213,7 @@ export function InboxFilterableContent({
               <div className="inbox-search-meta-actions">
                 <Link
                   className="inbox-search-clear"
-                  href={buildInboxHref({
-                    filter: activeFilter,
-                    spaceId: activeSpaceId,
-                    view: activeView,
-                  })}
+                  href={clearSearchHref}
                 >
                   {t.inbox.clear}
                 </Link>
@@ -1219,15 +1225,22 @@ export function InboxFilterableContent({
 
       {activeView === 'archived' ? (
         <section className="card stack inbox-archived-note">
-          <p className="muted inbox-archived-note-copy">
-            {t.inbox.archivedNote}
-          </p>
+          <div className="stack inbox-archived-note-main">
+            <span className="inbox-empty-eyebrow">{t.inbox.filters.archived}</span>
+            <p className="muted inbox-archived-note-copy">
+              {t.inbox.archivedNote}
+            </p>
+          </div>
+          <Link className="pill inbox-archived-note-action" href={mainInboxHref}>
+            {t.inbox.filters.inbox}
+          </Link>
         </section>
       ) : null}
 
       {messengerFreshSpaceEmpty ? (
         <section className="card stack empty-card inbox-empty-state inbox-empty-state-messenger">
           <div className="stack inbox-empty-copy">
+            <span className="inbox-empty-eyebrow">{t.inbox.filters.inbox}</span>
             <h2 className="card-title">{t.inbox.messengerFreshTitle}</h2>
             <p className="muted">{messengerFreshBody}</p>
             {activeSpaceName ? (
@@ -1277,25 +1290,60 @@ export function InboxFilterableContent({
         </section>
       ) : activeConversationSourceCount === 0 ? (
         <section className="card stack empty-card inbox-empty-state">
-          <h2 className="card-title">
-            {activeView === 'archived'
-              ? t.inbox.emptyArchivedTitle
-              : t.inbox.emptyMainTitle}
-          </h2>
-          <p className="muted">
-            {activeView === 'archived'
-              ? t.inbox.emptyArchivedBody
-              : t.inbox.emptyMainBody}
-          </p>
+          <div className="stack inbox-empty-copy">
+            <span className="inbox-empty-eyebrow">
+              {activeView === 'archived'
+                ? t.inbox.filters.archived
+                : t.inbox.filters.inbox}
+            </span>
+            <h2 className="card-title">
+              {activeView === 'archived'
+                ? t.inbox.emptyArchivedTitle
+                : t.inbox.emptyMainTitle}
+            </h2>
+            <p className="muted">
+              {activeView === 'archived'
+                ? t.inbox.emptyArchivedBody
+                : t.inbox.emptyMainBody}
+            </p>
+          </div>
+          <div className="inbox-empty-actions">
+            {activeView === 'archived' ? (
+              <Link className="button button-secondary" href={mainInboxHref}>
+                {t.inbox.filters.inbox}
+              </Link>
+            ) : (
+              <>
+                <Link className="button" href={openCreateDmHref}>
+                  {t.inbox.create.createDm}
+                </Link>
+                <Link className="button button-secondary" href={openCreateGroupHref}>
+                  {t.inbox.create.createGroup}
+                </Link>
+              </>
+            )}
+          </div>
         </section>
       ) : filteredConversationItems.length === 0 ? (
         <section className="card stack empty-card inbox-empty-state">
-          <h2 className="card-title">
-            {activeView === 'archived'
-              ? t.inbox.emptyArchivedSearchTitle
-              : t.inbox.emptySearchTitle}
-          </h2>
-          <p className="muted">{t.inbox.emptySearchBody}</p>
+          <div className="stack inbox-empty-copy">
+            <span className="inbox-empty-eyebrow">
+              {activeView === 'archived'
+                ? t.inbox.filters.archived
+                : t.inbox.filters.inbox}
+            </span>
+            <h2 className="card-title">
+              {activeView === 'archived'
+                ? t.inbox.emptyArchivedSearchTitle
+                : t.inbox.emptySearchTitle}
+            </h2>
+            <p className="muted">{t.inbox.emptySearchBody}</p>
+          </div>
+          <div className="inbox-empty-actions">
+            <Link className="pill" href={clearSearchHref}>
+              {t.inbox.clear}
+            </Link>
+          </div>
         </section>
       ) : (
         <section

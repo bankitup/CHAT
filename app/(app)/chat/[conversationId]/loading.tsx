@@ -14,8 +14,8 @@ export default function ChatConversationLoading() {
 
       <section className="chat-main">
         <section className="message-thread route-loading-chat-thread">
-          <div className="message-day-separator">
-            <span className="message-day-label route-loading-pill" />
+          <div className="message-day-separator route-loading-chat-day">
+            <span className="message-day-label route-loading-pill route-loading-chat-day-pill" />
           </div>
           <div className="message-row">
             <div className="message-card">
@@ -26,6 +26,9 @@ export default function ChatConversationLoading() {
             <div className="message-card message-card-own">
               <div className="message-bubble message-bubble-own route-loading-bubble route-loading-bubble-own" />
             </div>
+          </div>
+          <div className="message-day-separator route-loading-chat-day route-loading-chat-day-secondary">
+            <span className="message-day-label route-loading-pill route-loading-chat-day-pill route-loading-chat-day-pill-secondary" />
           </div>
           <div className="message-row">
             <div className="message-card">
