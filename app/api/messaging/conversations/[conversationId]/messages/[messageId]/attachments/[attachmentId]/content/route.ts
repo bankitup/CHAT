@@ -5,11 +5,25 @@ import {
   resolveConversationAttachmentContentTarget,
 } from '@/modules/messaging/data/server';
 
+type ConversationAttachmentContentRouteContext = {
+  params: Promise<{
+    attachmentId: string;
+    conversationId: string;
+    messageId: string;
+  }>;
+};
+
+function buildInlineContentDisposition(fileName: string | null) {
+  if (!fileName?.trim()) {
+    return 'inline';
+  }
+
+  return `inline; filename*=UTF-8''${encodeURIComponent(fileName.trim())}`;
+}
+
 export async function GET(
   _request: Request,
-  context: {
-    params: Promise<unknown>;
-  },
+  context: ConversationAttachmentContentRouteContext,
 ) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -20,11 +34,7 @@ export async function GET(
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const { attachmentId, conversationId, messageId } = (await context.params) as {
-    attachmentId: string;
-    conversationId: string;
-    messageId: string;
-  };
+  const { attachmentId, conversationId, messageId } = await context.params;
   const isMember = await assertConversationMembership(conversationId, user.id);
 
   if (!isMember) {
@@ -62,6 +72,12 @@ export async function GET(
 
   if (contentType) {
     headers.set('Content-Type', contentType);
+    'Content-Disposition': buildInlineContentDisposition(resolvedTarget.fileName),
+    'X-Content-Type-Options': 'nosniff',
+  });
+
+  if (download.data.type || resolvedTarget.mimeType) {
+    headers.set('Content-Type', download.data.type || resolvedTarget.mimeType || 'application/octet-stream');
   }
 
   headers.set('Content-Length', String(body.byteLength));
