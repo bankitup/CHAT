@@ -8,7 +8,8 @@ Current MVP contract:
 - Binary objects upload into the private `message-media` Supabase Storage bucket.
 - Committed media metadata lives in `public.message_assets`.
 - Message-to-asset linkage lives in `public.message_asset_links`.
-- Chat history rendering resolves membership-controlled signed URLs for reads.
+- Chat history rendering resolves media through membership-controlled same-origin delivery routes.
+- The app no longer depends on exposing Supabase Storage signed object URLs directly to chat clients.
 - Inbox/activity preview logic uses message kind plus asset metadata, not public object URLs.
 - Legacy `public.message_attachments` remains as a read fallback for historical rows only.
 
