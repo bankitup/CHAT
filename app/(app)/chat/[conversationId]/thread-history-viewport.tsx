@@ -250,6 +250,7 @@ const ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON =
 const ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON =
   'dm-e2ee-history:current-device-resync';
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
+const ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS = 2400;
 const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
   'local-voice-send:retry-attachment-resolution';
 const VOICE_MESSAGE_REOPEN_RECOVERY_REASON =
@@ -2286,11 +2287,68 @@ function resolveMissingOwnEncryptedMessageIdsForRetry(input: {
       return hasReadableEnvelope ? [] : [message.id];
     },
   );
+  const missingRequestedMessageIdSet = new Set(missingRequestedMessageIds);
+
+  for (const requestedMessageId of input.requestedMessageIds) {
+    if (
+      !presentRequestedMessageIdSet.has(requestedMessageId) &&
+      !missingRequestedMessageIdSet.has(requestedMessageId)
+    ) {
+      missingRequestedMessageIdSet.add(requestedMessageId);
+    }
+  }
 
   return {
-    missingRequestedMessageIds,
+    missingRequestedMessageIds: Array.from(missingRequestedMessageIdSet),
     presentRequestedMessageIds: Array.from(presentRequestedMessageIdSet),
   };
+}
+
+function shouldRenderPendingOwnEncryptedCommitTransition(input: {
+  currentUserId: string;
+  message: ConversationMessageRow;
+  envelope: StoredDmE2eeEnvelope | null;
+  historyHint: EncryptedDmServerHistoryHint;
+  pendingMessageIds: Set<string>;
+}) {
+  if (!isEncryptedDmTextMessage(input.message)) {
+    return false;
+  }
+
+  if (input.message.sender_id !== input.currentUserId) {
+    return false;
+  }
+
+  const normalizedClientId = input.message.client_id?.trim() || '';
+
+  if (!normalizedClientId) {
+    return false;
+  }
+
+  if (
+    input.envelope ||
+    input.historyHint.code === 'envelope-present' ||
+    input.historyHint.code === 'policy-blocked-history'
+  ) {
+    return false;
+  }
+
+  if (input.pendingMessageIds.has(input.message.id)) {
+    return true;
+  }
+
+  const createdAt = parseSafeDate(input.message.created_at);
+
+  if (!createdAt) {
+    return false;
+  }
+
+  // Keep the first render after a remount calm while the targeted by-id
+  // recovery fetch repopulates the local envelope for a just-sent message.
+  return (
+    Date.now() - createdAt.getTime() <=
+    ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS
+  );
 }
 
 function buildTimelineItems(input: {
@@ -3001,6 +3059,7 @@ type ThreadMessageRowProps = {
   encryptedEnvelopesByMessage: Map<string, StoredDmE2eeEnvelope>;
   encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
   historicalUnavailableContinuationCount: number;
+  isPendingEncryptedCommitTransition: boolean;
   isClusteredWithNext: boolean;
   isClusteredWithPrevious: boolean;
   language: AppLanguage;
@@ -3220,6 +3279,8 @@ function areThreadMessageRowPropsEqual(
     previousProps.currentUserId !== nextProps.currentUserId ||
     previousProps.historicalUnavailableContinuationCount !==
       nextProps.historicalUnavailableContinuationCount ||
+    previousProps.isPendingEncryptedCommitTransition !==
+      nextProps.isPendingEncryptedCommitTransition ||
     previousProps.isClusteredWithNext !== nextProps.isClusteredWithNext ||
     previousProps.isClusteredWithPrevious !==
       nextProps.isClusteredWithPrevious ||
@@ -3325,6 +3386,7 @@ function ThreadMessageRowComponent({
   encryptedEnvelopesByMessage,
   encryptedHistoryHintsByMessage,
   historicalUnavailableContinuationCount,
+  isPendingEncryptedCommitTransition,
   isClusteredWithNext,
   isClusteredWithPrevious,
   language,
@@ -3414,6 +3476,10 @@ function ThreadMessageRowComponent({
   const canAttemptEncryptedRender = canRenderEncryptedDmBody({
     clientId: message.client_id,
   });
+  const shouldRenderPendingEncryptedCommitShell =
+    isPendingEncryptedCommitTransition &&
+    isOwnMessage &&
+    isEncryptedDmTextMessage(message);
   const messageSeq = getMessageSeq(message.seq);
   const outgoingMessageStatus = getOutgoingMessageStatus({
     isDeletedMessage,
@@ -3758,7 +3824,9 @@ function ThreadMessageRowComponent({
         label={t.chat.edited}
         messageId={message.id}
       />
-      {isOwnMessage && outgoingMessageStatus ? (
+      {shouldRenderPendingEncryptedCommitShell ? (
+        <MessageStatusIndicator label={t.chat.sending} status="pending" />
+      ) : isOwnMessage && outgoingMessageStatus ? (
         otherParticipantUserId ? (
           <DmThreadClientSubtree
             conversationId={conversationId}
@@ -4096,6 +4164,8 @@ function ThreadMessageRowComponent({
                 </Link>
               </div>
             </div>
+          ) : shouldRenderPendingEncryptedCommitShell ? (
+            <p className="message-body">{t.chat.encryptedMessage}</p>
           ) : isEncryptedDmTextMessage(message) ? (
             canAttemptEncryptedRender ? (
               <DmThreadClientSubtree
@@ -4459,6 +4529,10 @@ export function ThreadHistoryViewport({
   const encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef = useRef(
     new Set<string>(),
   );
+  const [
+    pendingEncryptedCommitTransitionMessageIds,
+    setPendingEncryptedCommitTransitionMessageIds,
+  ] = useState(() => new Set<string>());
   const voiceAttachmentRecoveryAttemptsRef = useRef(new Map<string, number>());
   const voiceAttachmentRecoveryTimeoutsRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
@@ -4469,6 +4543,66 @@ export function ThreadHistoryViewport({
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
   renderCountRef.current += 1;
+
+  const updatePendingEncryptedCommitTransitionMessageIds = useCallback(
+    (input: { add?: string[]; remove?: string[] }) => {
+      const messageIdsToAdd = Array.from(
+        new Set(
+          (input.add ?? [])
+            .map((messageId) => messageId.trim())
+            .filter((messageId) => messageId && looksLikeUuid(messageId)),
+        ),
+      );
+      const messageIdsToRemove = Array.from(
+        new Set(
+          (input.remove ?? [])
+            .map((messageId) => messageId.trim())
+            .filter((messageId) => messageId && looksLikeUuid(messageId)),
+        ),
+      );
+
+      if (messageIdsToAdd.length === 0 && messageIdsToRemove.length === 0) {
+        return;
+      }
+
+      setPendingEncryptedCommitTransitionMessageIds((currentMessageIds) => {
+        let nextMessageIds: Set<string> | null = null;
+
+        for (const messageId of messageIdsToAdd) {
+          if (currentMessageIds.has(messageId)) {
+            continue;
+          }
+
+          if (!nextMessageIds) {
+            nextMessageIds = new Set(currentMessageIds);
+          }
+
+          nextMessageIds.add(messageId);
+        }
+
+        const activeMessageIds = nextMessageIds ?? currentMessageIds;
+
+        for (const messageId of messageIdsToRemove) {
+          if (!activeMessageIds.has(messageId)) {
+            continue;
+          }
+
+          if (!nextMessageIds) {
+            nextMessageIds = new Set(currentMessageIds);
+          }
+
+          nextMessageIds.delete(messageId);
+        }
+
+        return nextMessageIds ?? currentMessageIds;
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    setPendingEncryptedCommitTransitionMessageIds(new Set());
+  }, [conversationId]);
 
   useEffect(() => {
     if (!clientRuntimeDiagnosticsEnabled) {
@@ -5128,6 +5262,13 @@ export function ThreadHistoryViewport({
       });
       const missingMessageIdSet = new Set(missingRequestedMessageIds);
 
+      updatePendingEncryptedCommitTransitionMessageIds({
+        add: missingRequestedMessageIds,
+        remove: presentRequestedMessageIds.filter(
+          (messageId) => !missingMessageIdSet.has(messageId),
+        ),
+      });
+
       for (const messageId of presentRequestedMessageIds) {
         if (missingMessageIdSet.has(messageId)) {
           continue;
@@ -5154,6 +5295,10 @@ export function ThreadHistoryViewport({
           ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS[attemptIndex];
 
         if (retryDelayMs === undefined) {
+          updatePendingEncryptedCommitTransitionMessageIds({
+            remove: [messageId],
+          });
+
           if (historySyncDiagnosticsEnabled) {
             console.info(
               '[chat-history]',
@@ -5210,7 +5355,12 @@ export function ThreadHistoryViewport({
         encryptedDmRecoveryTimeoutsRef.current.set(messageId, timeoutId);
       }
     },
-    [conversationId, currentUserId, historySyncDiagnosticsEnabled],
+    [
+      conversationId,
+      currentUserId,
+      historySyncDiagnosticsEnabled,
+      updatePendingEncryptedCommitTransitionMessageIds,
+    ],
   );
 
   const scheduleVoiceAttachmentRecovery = useCallback(
@@ -5491,6 +5641,17 @@ export function ThreadHistoryViewport({
         return;
       }
 
+      const normalizedSyncRequest = normalizeThreadHistorySyncRequestState(detail);
+
+      if (
+        shouldRetryLocalEncryptedDmMissingEnvelope(normalizedSyncRequest.reason) &&
+        normalizedSyncRequest.messageIds.length > 0
+      ) {
+        updatePendingEncryptedCommitTransitionMessageIds({
+          add: normalizedSyncRequest.messageIds,
+        });
+      }
+
       mergeSyncRequest(detail);
       schedulePendingSyncRequest();
     };
@@ -5533,6 +5694,7 @@ export function ThreadHistoryViewport({
     performSyncFetch,
     scheduleMissingEncryptedDmEnvelopeRecovery,
     scheduleVoiceAttachmentRecovery,
+    updatePendingEncryptedCommitTransitionMessageIds,
   ]);
 
   useEffect(() => {
@@ -5775,6 +5937,16 @@ export function ThreadHistoryViewport({
           }
 
           if (item.type === 'message') {
+            const encryptedEnvelope =
+              historyState.encryptedEnvelopesByMessage.get(item.message.id) ?? null;
+            const encryptedHistoryHint = getEncryptedHistoryHintForMessage({
+              envelope: encryptedEnvelope,
+              hint:
+                historyState.encryptedHistoryHintsByMessage.get(item.message.id) ??
+                null,
+              message: item.message,
+            });
+
             return (
               <ThreadMessageRow
                 key={item.message.id}
@@ -5791,6 +5963,15 @@ export function ThreadHistoryViewport({
                 historicalUnavailableContinuationCount={
                   item.historicalUnavailableContinuationCount
                 }
+                isPendingEncryptedCommitTransition={shouldRenderPendingOwnEncryptedCommitTransition(
+                  {
+                    currentUserId,
+                    envelope: encryptedEnvelope,
+                    historyHint: encryptedHistoryHint,
+                    message: item.message,
+                    pendingMessageIds: pendingEncryptedCommitTransitionMessageIds,
+                  },
+                )}
                 isClusteredWithNext={item.isClusteredWithNext}
                 isClusteredWithPrevious={item.isClusteredWithPrevious}
                 language={language}
