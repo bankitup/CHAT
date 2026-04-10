@@ -2352,6 +2352,24 @@ function shouldRenderPendingOwnEncryptedCommitTransition(input: {
   );
 }
 
+function isOwnAttachmentCommitTransitionPending(input: {
+  attachments: MessageAttachment[];
+  currentUserId: string;
+  message: ConversationMessageRow;
+  normalizedBody: string | null;
+}) {
+  // Keep a just-sent local attachment on its optimistic shell until the
+  // committed row has attachment data to render, instead of flashing
+  // through the empty-message fallback.
+  return (
+    input.message.kind === 'attachment' &&
+    input.message.sender_id === input.currentUserId &&
+    Boolean(input.message.client_id?.trim()) &&
+    !input.normalizedBody &&
+    input.attachments.length === 0
+  );
+}
+
 function buildTimelineItems(input: {
   labels: TimelineLabels;
   language: AppLanguage;
@@ -3443,6 +3461,13 @@ function ThreadMessageRowComponent({
       message.id,
       attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
     );
+  const isPendingOwnAttachmentCommitTransition =
+    isOwnAttachmentCommitTransitionPending({
+      attachments: messageAttachments,
+      currentUserId,
+      message,
+      normalizedBody: normalizedMessageBody,
+    });
   const primaryVoiceAttachment =
     message.kind === 'voice'
       ? messageAttachments.find((attachment) => attachment.isVoiceMessage) ??
@@ -3950,6 +3975,10 @@ function ThreadMessageRowComponent({
       envelopePresent: Boolean(encryptedEnvelope),
       messageId: message.id,
     });
+  }
+
+  if (isPendingOwnAttachmentCommitTransition) {
+    return null;
   }
 
   return (
@@ -4761,11 +4790,24 @@ export function ThreadHistoryViewport({
       Array.from(
         new Set(
           historyState.messages
+            .filter((message) => {
+              const normalizedBody = normalizeMessageBodyText(message.body);
+              const messageAttachments =
+                historyState.attachmentsByMessage.get(message.id) ??
+                EMPTY_MESSAGE_ATTACHMENTS;
+
+              return !isOwnAttachmentCommitTransitionPending({
+                attachments: messageAttachments,
+                currentUserId,
+                message,
+                normalizedBody,
+              });
+            })
             .map((message) => message.client_id?.trim() || '')
             .filter(Boolean),
         ),
       ),
-    [historyState.messages],
+    [currentUserId, historyState.attachmentsByMessage, historyState.messages],
   );
   const historyMessageIds = useMemo(
     () => historyState.messages.map((message) => message.id),
