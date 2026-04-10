@@ -406,7 +406,6 @@ export default async function HomeDashboardPage({
                 <div className="messenger-home-profile-topline">
                   <div className="stack settings-card-copy settings-section-copy messenger-home-profile-copy">
                     <h2 className="section-title">{t.settings.profileTitle}</h2>
-                    <p className="muted">{t.settings.profileSubtitle}</p>
                   </div>
 
                   <div className="messenger-home-profile-language">
