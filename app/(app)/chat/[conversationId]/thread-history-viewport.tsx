@@ -18,7 +18,9 @@ import {
   type AppLanguage,
 } from '@/modules/i18n';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
+import { persistCurrentDmE2eeDeviceCookie } from '@/modules/messaging/e2ee/current-device-cookie';
 import { ensureDmE2eeDeviceRegistered } from '@/modules/messaging/e2ee/device-registration';
+import { getLocalDmE2eeDeviceRecord } from '@/modules/messaging/e2ee/device-store';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import type { MessagingVoicePlaybackState } from '@/modules/messaging/media';
 import {
@@ -203,6 +205,8 @@ const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
   'local-encrypted-send:retry-missing-envelope';
 const ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON =
   'dm-e2ee-history:retry-after-bootstrap';
+const ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON =
+  'dm-e2ee-history:current-device-resync';
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 const VOICE_MESSAGE_ATTACHMENT_RECOVERY_REASON =
   'local-voice-send:retry-attachment-resolution';
@@ -3187,6 +3191,57 @@ export function ThreadHistoryViewport({
     let cancelled = false;
 
     void (async () => {
+      try {
+        const localRecord = await getLocalDmE2eeDeviceRecord(currentUserId);
+        const localServerDeviceRecordId =
+          localRecord?.serverDeviceRecordId?.trim() || null;
+        const selectedActiveDeviceRecordId =
+          historyFetchActiveDeviceIdRef.current?.trim() || null;
+
+        if (
+          localServerDeviceRecordId &&
+          localServerDeviceRecordId !== selectedActiveDeviceRecordId
+        ) {
+          historyFetchActiveDeviceIdRef.current = localServerDeviceRecordId;
+          persistCurrentDmE2eeDeviceCookie(localServerDeviceRecordId);
+          nextMessageIds.forEach((messageId) => {
+            inFlightMessageIds.delete(messageId);
+          });
+
+          if (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
+            console.info(
+              '[chat-history]',
+              'dm-e2ee-history-current-device-resync:dispatch',
+              {
+                conversationId,
+                localServerDeviceRecordId,
+                messageIds: nextMessageIds,
+                selectedActiveDeviceRecordId,
+              },
+            );
+          }
+
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: nextMessageIds,
+            reason: ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON,
+          });
+          return;
+        }
+      } catch (error) {
+        if (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
+          console.info(
+            '[chat-history]',
+            'dm-e2ee-history-current-device-resync:local-record-lookup-failed',
+            {
+              conversationId,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              messageIds: nextMessageIds,
+            },
+          );
+        }
+      }
+
       const bootstrap = await ensureDmE2eeDeviceRegistered(currentUserId, {
         forcePublish: false,
         triggerReason: 'bootstrap-component',
