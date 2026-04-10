@@ -1695,9 +1695,68 @@ function resolveLatestLoadedSeq(
   );
 }
 
+function getThreadMessageClientIdentity(
+  message: Pick<ConversationMessageRow, 'client_id' | 'sender_id'>,
+) {
+  const clientId = message.client_id?.trim() || '';
+  const senderId = message.sender_id?.trim() || '';
+
+  if (!clientId || !senderId) {
+    return null;
+  }
+
+  return `${senderId}:${clientId}`;
+}
+
+function findMatchingThreadMessageIndex(input: {
+  message: ConversationMessageRow;
+  messages: ConversationMessageRow[];
+}) {
+  const directMatchIndex = input.messages.findIndex(
+    (candidate) => candidate.id === input.message.id,
+  );
+
+  if (directMatchIndex >= 0) {
+    return directMatchIndex;
+  }
+
+  const clientIdentity = getThreadMessageClientIdentity(input.message);
+
+  if (!clientIdentity) {
+    return -1;
+  }
+
+  return input.messages.findIndex(
+    (candidate) =>
+      getThreadMessageClientIdentity(candidate) === clientIdentity,
+  );
+}
+
+function dedupeThreadMessages(messages: ConversationMessageRow[]) {
+  const dedupedMessages: ConversationMessageRow[] = [];
+
+  for (const message of messages) {
+    const existingIndex = findMatchingThreadMessageIndex({
+      message,
+      messages: dedupedMessages,
+    });
+
+    if (existingIndex >= 0) {
+      dedupedMessages[existingIndex] = message;
+      continue;
+    }
+
+    dedupedMessages.push(message);
+  }
+
+  return dedupedMessages;
+}
+
 function createThreadHistoryState(
   snapshot: ThreadHistoryPageSnapshot,
 ): ThreadHistoryState {
+  const dedupedMessages = dedupeThreadMessages(snapshot.messages);
+
   return {
     attachmentsByMessage: new Map(
       snapshot.attachmentsByMessage.map((entry) => [
@@ -1719,12 +1778,12 @@ function createThreadHistoryState(
     ),
     hasMoreOlder: snapshot.hasMoreOlder,
     loadedOlderPageCount: 0,
-    messages: [...snapshot.messages],
+    messages: dedupedMessages,
     messagesById: new Map(
-      snapshot.messages.map((message) => [message.id, message] as const),
+      dedupedMessages.map((message) => [message.id, message] as const),
     ),
     oldestLoadedSeq: resolveOldestLoadedSeq(
-      snapshot.messages,
+      dedupedMessages,
       snapshot.oldestMessageSeq,
     ),
     reactionsByMessage: new Map(
@@ -1797,9 +1856,6 @@ function mergeThreadHistoryState(input: {
 }) {
   const nextMessagesById = new Map(input.state.messagesById);
   const nextMessages = [...input.state.messages];
-  const nextMessageIndexes = new Map(
-    nextMessages.map((message, index) => [message.id, index] as const),
-  );
   const nextSenderProfilesById = new Map(input.state.senderProfilesById);
   const nextReactionsByMessage = new Map(input.state.reactionsByMessage);
   const nextAttachmentsByMessage = new Map(input.state.attachmentsByMessage);
@@ -1815,10 +1871,12 @@ function mergeThreadHistoryState(input: {
   const currentLatestSeq = resolveLatestLoadedSeq(input.state.messages, null);
 
   for (const message of input.snapshot.messages) {
-    const existingIndex = nextMessageIndexes.get(message.id);
-    nextMessagesById.set(message.id, message);
+    const existingIndex = findMatchingThreadMessageIndex({
+      message,
+      messages: nextMessages,
+    });
 
-    if (existingIndex === undefined) {
+    if (existingIndex < 0) {
       const nextMessageSeq = normalizeComparableMessageSeq(message.seq);
       const shouldInsertUnseenMessage =
         input.mode !== 'sync-topology' ||
@@ -1841,6 +1899,13 @@ function mergeThreadHistoryState(input: {
       continue;
     }
 
+    const existingMessage = nextMessages[existingIndex];
+
+    if (existingMessage && existingMessage.id !== message.id) {
+      nextMessagesById.delete(existingMessage.id);
+    }
+
+    nextMessagesById.set(message.id, message);
     nextMessages[existingIndex] = message;
   }
 
@@ -1935,13 +2000,20 @@ function upsertLiveThreadMessage(input: {
   message: ConversationMessageRow;
   state: ThreadHistoryState;
 }) {
-  const existingIndex = input.state.messages.findIndex(
-    (message) => message.id === input.message.id,
-  );
+  const existingIndex = findMatchingThreadMessageIndex({
+    message: input.message,
+    messages: input.state.messages,
+  });
   const nextMessagesById = new Map(input.state.messagesById);
-  nextMessagesById.set(input.message.id, input.message);
 
   if (existingIndex >= 0) {
+    const existingMessage = input.state.messages[existingIndex];
+
+    if (existingMessage && existingMessage.id !== input.message.id) {
+      nextMessagesById.delete(existingMessage.id);
+    }
+
+    nextMessagesById.set(input.message.id, input.message);
     const nextMessages = [...input.state.messages];
     nextMessages[existingIndex] = input.message;
 
@@ -1956,6 +2028,7 @@ function upsertLiveThreadMessage(input: {
     } satisfies ThreadHistoryState;
   }
 
+  nextMessagesById.set(input.message.id, input.message);
   const nextMessages = [...input.state.messages];
   const nextMessageSeq = normalizeComparableMessageSeq(input.message.seq);
   let insertionIndex = nextMessages.length;
