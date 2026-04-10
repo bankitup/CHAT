@@ -1138,12 +1138,6 @@ main {
   pointer-events: none;
 }
 
-.inbox-search-icon-dm {
-  left: 15px;
-  color: rgba(91, 100, 112, 0.66);
-  font-size: 0.98rem;
-}
-
 .inbox-search-input {
   display: block;
   min-height: 36px;
@@ -1158,7 +1152,7 @@ main {
 .inbox-search-input-dm {
   height: 54px;
   min-height: 54px;
-  padding-left: 42px;
+  padding-left: 16px;
   padding-right: 16px;
   padding-top: 0;
   padding-bottom: 0;
@@ -1171,8 +1165,18 @@ main {
     0 12px 28px rgba(17, 24, 39, 0.05);
   font-size: 0.96rem;
   line-height: 1.2;
+  text-align: left;
+  text-indent: 0;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.inbox-search-input-dm::-webkit-search-decoration,
+.inbox-search-input-dm::-webkit-search-results-decoration,
+.inbox-search-input-dm::-webkit-search-cancel-button,
+.inbox-search-input-dm::-webkit-search-results-button {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .inbox-search-input-dm::placeholder {
