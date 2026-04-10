@@ -214,6 +214,7 @@ type VoiceMessageRenderState =
   | 'unavailable';
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
+const IMAGE_PREVIEW_CLICK_SUPPRESSION_MS = 420;
 const PREPEND_SCROLL_RESTORE_IDLE_MS = 72;
 const PREPEND_SCROLL_RESTORE_MAX_MS = 480;
 const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
@@ -860,6 +861,10 @@ function getOutgoingMessageStatus(input: {
 
 function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.closest('[data-message-image-preview="true"]')) {
     return false;
   }
 
@@ -2449,6 +2454,7 @@ function ThreadMessageRowComponent({
     typeof setTimeout
   > | null>(null);
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imagePreviewClickSuppressedUntilRef = useRef(0);
   const longPressPointerRef = useRef<{
     pointerId: number;
     startX: number;
@@ -2747,6 +2753,8 @@ function ThreadMessageRowComponent({
         startY: event.clientY,
       };
       longPressTimeoutRef.current = setTimeout(() => {
+        imagePreviewClickSuppressedUntilRef.current =
+          Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
         setIsQuickActionsOpen(true);
         longPressTimeoutRef.current = null;
       }, 280);
@@ -2795,20 +2803,25 @@ function ThreadMessageRowComponent({
       }
 
       event.preventDefault();
+      imagePreviewClickSuppressedUntilRef.current =
+        Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
       clearLongPress();
       setIsQuickActionsOpen(true);
     },
     [canShowQuickActions, clearLongPress],
   );
-  const handleImageAttachmentPreviewPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-    },
-    [],
-  );
   const handleImageAttachmentPreview = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
+      if (Date.now() < imagePreviewClickSuppressedUntilRef.current) {
+        imagePreviewClickSuppressedUntilRef.current = 0;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      event.preventDefault();
       event.stopPropagation();
+      closeQuickActions();
       const previewTitle =
         event.currentTarget.dataset.previewTitle?.trim() || t.chat.photo;
       const signedUrl = event.currentTarget.dataset.previewUrl?.trim();
@@ -2822,7 +2835,7 @@ function ThreadMessageRowComponent({
         signedUrl,
       });
     },
-    [onOpenImagePreview, t.chat.photo],
+    [closeQuickActions, onOpenImagePreview, t.chat.photo],
   );
 
   const canInlineMessageMeta =
@@ -3002,7 +3015,10 @@ function ThreadMessageRowComponent({
                   aria-label={t.chat.reply}
                   className="message-quick-actions-action"
                   href={replyActionHref}
-                  onClick={closeQuickActions}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    closeQuickActions();
+                  }}
                   prefetch={false}
                   title={t.chat.reply}
                 >
@@ -3363,17 +3379,18 @@ function ThreadMessageRowComponent({
                   }
 
                   return (
-                    <a
+                    <button
                       key={attachment.id}
-                      aria-label={
-                        attachment.fileName.trim()
-                          ? `${t.chat.photo}: ${attachment.fileName}`
-                          : t.chat.photo
-                      }
-                      className="message-photo-card"
-                      href={attachment.signedUrl}
-                      rel="noreferrer"
-                      target="_blank"
+                      aria-haspopup="dialog"
+                      aria-label={t.chat.openPhotoPreviewAria(
+                        attachment.fileName.trim() || t.chat.photo,
+                      )}
+                      className="message-photo-card message-photo-card-button"
+                      data-message-image-preview="true"
+                      data-preview-title={attachment.fileName.trim() || t.chat.photo}
+                      data-preview-url={attachment.signedUrl}
+                      onClick={handleImageAttachmentPreview}
+                      type="button"
                     >
                       <span
                         aria-hidden="true"
@@ -3392,7 +3409,7 @@ function ThreadMessageRowComponent({
                           </span>
                         ) : null}
                       </span>
-                    </a>
+                    </button>
                   );
                 }
 
@@ -3471,10 +3488,10 @@ function ThreadMessageRowComponent({
                       aria-haspopup="dialog"
                       aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
                       className="message-attachment-card message-attachment-card-button"
+                      data-message-image-preview="true"
                       data-preview-title={previewTitle}
                       data-preview-url={attachment.signedUrl}
                       onClick={handleImageAttachmentPreview}
-                      onPointerDown={handleImageAttachmentPreviewPointerDown}
                       type="button"
                     >
                       {attachmentContent}

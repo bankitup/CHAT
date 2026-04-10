@@ -6373,21 +6373,23 @@ main {
 }
 
 .message-quick-actions {
+  --message-quick-actions-offset: 6px;
   position: absolute;
   left: 0;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + var(--message-quick-actions-offset));
   z-index: 6;
-  display: grid;
-  gap: 8px;
-  width: max-content;
-  max-width: min(calc(100vw - 28px), 320px);
-  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  max-width: min(calc(100vw - 28px), 368px);
+  padding: 4px 5px;
   border: 1px solid rgba(226, 232, 240, 0.84);
-  border-radius: 18px;
+  border-radius: 16px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(244, 247, 252, 0.72));
   box-shadow:
-    0 16px 34px rgba(15, 23, 42, 0.12),
+    0 12px 28px rgba(15, 23, 42, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.52);
   backdrop-filter: blur(18px) saturate(150%);
   animation: message-quick-actions-enter 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -6399,7 +6401,7 @@ main {
 }
 
 .message-quick-actions[data-placement='below'] {
-  top: calc(100% + 10px);
+  top: calc(100% + var(--message-quick-actions-offset));
   bottom: auto;
   animation-name: message-quick-actions-enter-below;
 }
@@ -6407,10 +6409,13 @@ main {
 .message-quick-actions-primary,
 .message-quick-actions-secondary {
   display: flex;
+  align-items: center;
   max-width: 100%;
 }
 
 .message-quick-actions-primary {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -6421,20 +6426,21 @@ main {
 
 .message-quick-actions-reactions {
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 4px;
   width: max-content;
 }
 
 .message-quick-actions-reactions .reaction-toggle {
-  min-width: 34px;
-  min-height: 34px;
-  padding: 4px 9px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 3px 7px;
   border-color: rgba(221, 228, 238, 0.82);
   background: rgba(255, 255, 255, 0.5);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46);
 }
 
 .message-quick-actions-secondary {
+  flex: 0 0 auto;
   justify-content: flex-start;
 }
 
@@ -6445,25 +6451,26 @@ main {
 .message-quick-actions-action {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 12px;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
   flex-shrink: 0;
   border: 1px solid rgba(221, 228, 238, 0.82);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.52);
   color: rgba(36, 45, 58, 0.92);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.46);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .message-quick-actions-action-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.94rem;
+  font-size: 0.88rem;
   line-height: 1;
 }
 
@@ -6475,7 +6482,7 @@ main {
 @keyframes message-quick-actions-enter {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.96);
+    transform: translateY(5px) scale(0.97);
   }
 
   to {
@@ -6487,7 +6494,7 @@ main {
 @keyframes message-quick-actions-enter-below {
   from {
     opacity: 0;
-    transform: translateY(-8px) scale(0.96);
+    transform: translateY(-5px) scale(0.97);
   }
 
   to {
@@ -7164,6 +7171,19 @@ main {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.72),
     0 10px 24px rgba(17, 24, 39, 0.06);
+}
+
+.message-photo-card-button {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: zoom-in;
+  touch-action: manipulation;
 }
 
 .message-bubble-own .message-photo-card {
