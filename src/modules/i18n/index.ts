@@ -218,6 +218,28 @@ type LanguageDictionary = {
     participantsRequestPending: string;
     participantsRequestSuccess: string;
     participantsRequestFailed: string;
+    spaceUsageTitle: string;
+    spaceUsageBody: string;
+    spaceUsagePreviewPill: string;
+    spaceUsageCurrentPlanLabel: string;
+    spaceUsageManagePlanAction: string;
+    spaceUsageMembersLabel: string;
+    spaceUsageAdminsLabel: string;
+    spaceUsageStorageLabel: string;
+    spaceUsageCallMinutesLabel: string;
+    spaceUsageFutureTrackingNote: string;
+    spaceUsagePrivatePlanLabel: string;
+    spaceUsagePrivatePlanSummary: string;
+    spaceUsageCommunityPlanLabel: string;
+    spaceUsageCommunityPlanSummary: string;
+    spaceUsageFutureLabel: string;
+    spaceUsageNearingLimitLabel: string;
+    spaceUsageOverLimitLabel: string;
+    spaceUsageUpgradeRecommendedLabel: string;
+    spaceUsageUpgradeToCommunityAction: string;
+    spaceUsageViewUsageAction: string;
+    spaceUsageStorageUnit: string;
+    spaceUsageMinutesUnit: string;
     currentUserBadge: string;
   };
   messengerActivity: {
@@ -1099,6 +1121,32 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       participantsRequestSuccess: 'Account request sent for staff review.',
       participantsRequestFailed:
         'Unable to send the account request right now.',
+      spaceUsageTitle: 'Space usage',
+      spaceUsageBody:
+        'Keep future plan limits visible for this space without turning Home into a billing surface.',
+      spaceUsagePreviewPill: 'Admin view',
+      spaceUsageCurrentPlanLabel: 'Current plan',
+      spaceUsageManagePlanAction: 'Manage plan',
+      spaceUsageMembersLabel: 'Members',
+      spaceUsageAdminsLabel: 'Admins',
+      spaceUsageStorageLabel: 'Storage',
+      spaceUsageCallMinutesLabel: 'Call minutes',
+      spaceUsageFutureTrackingNote:
+        'Call minutes stay on preview counters until live usage tracking is enabled for this space.',
+      spaceUsagePrivatePlanLabel: 'Private',
+      spaceUsagePrivatePlanSummary:
+        '1 space · DM + basic groups · fixed history',
+      spaceUsageCommunityPlanLabel: 'Community',
+      spaceUsageCommunityPlanSummary:
+        '1 space · moderation · activity logs · metadata exports',
+      spaceUsageFutureLabel: 'Later',
+      spaceUsageNearingLimitLabel: 'Nearing limit',
+      spaceUsageOverLimitLabel: 'Over limit',
+      spaceUsageUpgradeRecommendedLabel: 'Upgrade recommended',
+      spaceUsageUpgradeToCommunityAction: 'Upgrade to Community',
+      spaceUsageViewUsageAction: 'View usage',
+      spaceUsageStorageUnit: 'GB',
+      spaceUsageMinutesUnit: 'min',
       currentUserBadge: 'You',
     },
     messengerActivity: {
@@ -2059,6 +2107,32 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Запрос на дополнительные аккаунты отправлен на проверку.',
       participantsRequestFailed:
         'Сейчас не удалось отправить запрос на аккаунты.',
+      spaceUsageTitle: 'Использование пространства',
+      spaceUsageBody:
+        'Держите будущие лимиты тарифа на виду для этого пространства, не превращая Home в тяжёлый биллинговый экран.',
+      spaceUsagePreviewPill: 'Только для админов',
+      spaceUsageCurrentPlanLabel: 'Текущий план',
+      spaceUsageManagePlanAction: 'Управлять планом',
+      spaceUsageMembersLabel: 'Участники',
+      spaceUsageAdminsLabel: 'Админы',
+      spaceUsageStorageLabel: 'Хранилище',
+      spaceUsageCallMinutesLabel: 'Минуты звонков',
+      spaceUsageFutureTrackingNote:
+        'Минуты звонков пока остаются preview-счётчиками, пока для этого пространства не включён живой usage tracking.',
+      spaceUsagePrivatePlanLabel: 'Private',
+      spaceUsagePrivatePlanSummary:
+        '1 пространство · личные сообщения + базовые группы · фиксированная история',
+      spaceUsageCommunityPlanLabel: 'Community',
+      spaceUsageCommunityPlanSummary:
+        '1 пространство · модерация · логи активности · экспорт метаданных',
+      spaceUsageFutureLabel: 'Позже',
+      spaceUsageNearingLimitLabel: 'Почти лимит',
+      spaceUsageOverLimitLabel: 'Лимит превышен',
+      spaceUsageUpgradeRecommendedLabel: 'Рекомендуем апгрейд',
+      spaceUsageUpgradeToCommunityAction: 'Перейти на Community',
+      spaceUsageViewUsageAction: 'Посмотреть использование',
+      spaceUsageStorageUnit: 'ГБ',
+      spaceUsageMinutesUnit: 'мин',
       currentUserBadge: 'Вы',
     },
     messengerActivity: {

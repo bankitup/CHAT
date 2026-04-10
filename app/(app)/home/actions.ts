@@ -3,8 +3,14 @@
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
-import { getRequestLanguage } from '@/modules/i18n/server';
+import {
+  getTranslations,
+  normalizeLanguage,
+  type AppLanguage,
+} from '@/modules/i18n';
+import { getRequestLanguage, setLanguageCookie } from '@/modules/i18n/server';
+import { getRequestViewer } from '@/lib/request-context/server';
+import { updateCurrentUserLanguagePreference } from '@/modules/messaging/data/server';
 import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
@@ -50,7 +56,10 @@ function getFriendlyHomeErrorMessage(input: {
   error: unknown;
   fallback: string;
   language: AppLanguage;
-  surface: 'home:participants-remove' | 'home:participants-request';
+  surface:
+    | 'home:language-preference'
+    | 'home:participants-remove'
+    | 'home:participants-request';
 }) {
   const rawMessage =
     input.error instanceof Error ? input.error.message : input.fallback;
@@ -65,6 +74,57 @@ function getFriendlyHomeErrorMessage(input: {
     fallback: input.fallback,
     language: input.language,
     rawMessage,
+  });
+}
+
+export async function updateHomeLanguagePreferenceAction(formData: FormData) {
+  const preferredLanguage = normalizeLanguage(
+    String(formData.get('preferredLanguage') ?? '').trim(),
+  );
+  const t = getTranslations(preferredLanguage);
+  const spaceId = readText(formData, 'spaceId');
+  const user = await getRequestViewer();
+
+  if (!spaceId) {
+    redirect('/spaces');
+  }
+
+  if (!user?.id) {
+    redirectToHomeSurface({
+      error: t.login.managedAccess,
+      spaceId,
+    });
+  }
+
+  try {
+    await updateCurrentUserLanguagePreference({
+      preferredLanguage,
+      userId: user.id,
+    });
+    await setLanguageCookie(preferredLanguage);
+  } catch (error) {
+    redirectToHomeSurface({
+      error: getFriendlyHomeErrorMessage({
+        error,
+        fallback:
+          preferredLanguage === 'ru'
+            ? 'Не удалось обновить язык. Попробуйте ещё раз.'
+            : 'Unable to update language right now. Please try again.',
+        language: preferredLanguage,
+        surface: 'home:language-preference',
+      }),
+      spaceId,
+    });
+  }
+
+  revalidatePath('/home');
+  revalidatePath('/settings');
+  revalidatePath('/inbox');
+  revalidatePath('/activity');
+  revalidatePath('/', 'layout');
+
+  redirectToHomeSurface({
+    spaceId,
   });
 }
 
