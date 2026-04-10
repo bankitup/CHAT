@@ -328,7 +328,11 @@ export function OptimisticThreadMessages({
         return (
           <article
             key={item.clientId}
-            className="message-row message-row-own message-row-optimistic"
+            className={
+              isVoiceMessage
+                ? 'message-row message-row-own message-row-optimistic message-row-optimistic-voice'
+                : 'message-row message-row-own message-row-optimistic'
+            }
           >
             <div
               className={
@@ -347,7 +351,11 @@ export function OptimisticThreadMessages({
                 {isVoiceMessage ? (
                   <div className="message-voice-stack">
                     <div
-                      className="message-voice-card message-voice-card-own"
+                      className={
+                        isPending
+                          ? 'message-voice-card message-voice-card-own message-voice-card-optimistic-pending'
+                          : 'message-voice-card message-voice-card-own'
+                      }
                       data-voice-state={
                         isFailed
                           ? 'failed'
@@ -424,7 +432,13 @@ export function OptimisticThreadMessages({
                   <p className="message-body">{messagePreview}</p>
                 )}
               </div>
-              <div className="message-meta message-meta-own message-meta-optimistic">
+              <div
+                className={
+                  isVoiceMessage && isPending
+                    ? 'message-meta message-meta-own message-meta-optimistic message-meta-optimistic-voice-pending'
+                    : 'message-meta message-meta-own message-meta-optimistic'
+                }
+              >
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
                 {isPending ? (
                   <span className="message-status-pending-stack">
@@ -436,7 +450,8 @@ export function OptimisticThreadMessages({
                       {pendingStatusLabel}
                     </span>
                   </span>
-                ) : isFailed && !isVoiceMessage ? (
+                ) : isFailed && isVoiceMessage ? null : isFailed &&
+                  !isVoiceMessage ? (
                   <span className="message-status-failed-stack">
                     <span className="message-status message-status-failed">
                       {item.errorMessage ?? labels.failed}
