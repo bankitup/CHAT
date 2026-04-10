@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requestAdditionalSpaceAccountsAction, removeSpaceParticipantsAction } from './actions';
 import { SpaceParticipantsModule } from './space-participants-module';
+import { SpaceUsageCard, type SpaceUsageMetricViewModel } from './space-usage-card';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
@@ -18,6 +19,7 @@ import {
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
   resolveV1TestSpaceFallback,
+  type SpaceParticipantRecord,
 } from '@/modules/spaces/server';
 import {
   getKeepCozyPrimaryTestFlowHints,
@@ -34,6 +36,90 @@ type HomeDashboardPageProps = {
     space?: string;
   }>;
 };
+
+const HOME_SPACE_USAGE_STARTER_LIMITS = {
+  admins: 3,
+  callMinutes: 600,
+  members: 24,
+  storageGb: 25,
+} as const;
+
+function resolveUsageProgressPercent(input: { limit: number; used: number }) {
+  if (input.limit <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min((input.used / input.limit) * 100, 100));
+}
+
+function buildMessengerSpaceUsageData(input: {
+  managePlanHref: string;
+  participants: SpaceParticipantRecord[];
+  t: ReturnType<typeof getTranslations>;
+  upgradeHref: string;
+}) {
+  const memberCount = input.participants.length;
+  const adminCount = input.participants.filter(
+    (participant) =>
+      participant.role === 'owner' || participant.role === 'admin',
+  ).length;
+  const metrics: SpaceUsageMetricViewModel[] = [
+    {
+      id: 'members',
+      label: input.t.messengerHome.spaceUsageMembersLabel,
+      limitLabel: String(HOME_SPACE_USAGE_STARTER_LIMITS.members),
+      progressPercent: resolveUsageProgressPercent({
+        limit: HOME_SPACE_USAGE_STARTER_LIMITS.members,
+        used: memberCount,
+      }),
+      tone: 'live',
+      usedLabel: String(memberCount),
+    },
+    {
+      id: 'admins',
+      label: input.t.messengerHome.spaceUsageAdminsLabel,
+      limitLabel: String(HOME_SPACE_USAGE_STARTER_LIMITS.admins),
+      progressPercent: resolveUsageProgressPercent({
+        limit: HOME_SPACE_USAGE_STARTER_LIMITS.admins,
+        used: adminCount,
+      }),
+      tone: 'live',
+      usedLabel: String(adminCount),
+    },
+    {
+      id: 'storage',
+      label: input.t.messengerHome.spaceUsageStorageLabel,
+      limitLabel: `${HOME_SPACE_USAGE_STARTER_LIMITS.storageGb} ${input.t.messengerHome.spaceUsageStorageUnit}`,
+      progressPercent: 0,
+      tone: 'future',
+      usedLabel: `0 ${input.t.messengerHome.spaceUsageStorageUnit}`,
+    },
+    {
+      id: 'call-minutes',
+      label: input.t.messengerHome.spaceUsageCallMinutesLabel,
+      limitLabel: `${HOME_SPACE_USAGE_STARTER_LIMITS.callMinutes} ${input.t.messengerHome.spaceUsageMinutesUnit}`,
+      progressPercent: 0,
+      tone: 'future',
+      usedLabel: `0 ${input.t.messengerHome.spaceUsageMinutesUnit}`,
+    },
+  ];
+
+  return {
+    copy: {
+      body: input.t.messengerHome.spaceUsageBody,
+      currentPlanLabel: input.t.messengerHome.spaceUsageCurrentPlanLabel,
+      futureTrackingNote: input.t.messengerHome.spaceUsageFutureTrackingNote,
+      managePlanAction: input.t.messengerHome.spaceUsageManagePlanAction,
+      previewPill: input.t.messengerHome.spaceUsagePreviewPill,
+      title: input.t.messengerHome.spaceUsageTitle,
+      upgradeAction: input.t.messengerHome.spaceUsageUpgradeAction,
+    },
+    managePlanHref: input.managePlanHref,
+    metrics,
+    planLabel: input.t.messengerHome.spaceUsageStarterPlanLabel,
+    upgradeHref: input.upgradeHref,
+  };
+}
 
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
   const [user, language] = await Promise.all([
@@ -141,6 +227,14 @@ export default async function HomeDashboardPage({
       : null;
     const visibleMessage = query.message?.trim() || null;
     const participantsDefaultOpen = query.participants?.trim() === 'open';
+    const spaceUsage = canManageMessengerMembers && manageableParticipants
+      ? buildMessengerSpaceUsageData({
+          managePlanHref: withSpaceParam('/spaces', activeSpace.id),
+          participants: manageableParticipants.participants,
+          t,
+          upgradeHref: withSpaceParam('/spaces', activeSpace.id),
+        })
+      : null;
 
     return (
       <section className="stack messenger-home-screen messenger-home-shell">
@@ -246,6 +340,8 @@ export default async function HomeDashboardPage({
               </form>
             </section>
           </section>
+
+          {spaceUsage ? <SpaceUsageCard {...spaceUsage} /> : null}
 
           {canManageMessengerMembers && manageableParticipants ? (
             <SpaceParticipantsModule

@@ -218,6 +218,20 @@ type LanguageDictionary = {
     participantsRequestPending: string;
     participantsRequestSuccess: string;
     participantsRequestFailed: string;
+    spaceUsageTitle: string;
+    spaceUsageBody: string;
+    spaceUsagePreviewPill: string;
+    spaceUsageCurrentPlanLabel: string;
+    spaceUsageManagePlanAction: string;
+    spaceUsageUpgradeAction: string;
+    spaceUsageMembersLabel: string;
+    spaceUsageAdminsLabel: string;
+    spaceUsageStorageLabel: string;
+    spaceUsageCallMinutesLabel: string;
+    spaceUsageFutureTrackingNote: string;
+    spaceUsageStarterPlanLabel: string;
+    spaceUsageStorageUnit: string;
+    spaceUsageMinutesUnit: string;
     currentUserBadge: string;
   };
   messengerActivity: {
@@ -1099,6 +1113,22 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       participantsRequestSuccess: 'Account request sent for staff review.',
       participantsRequestFailed:
         'Unable to send the account request right now.',
+      spaceUsageTitle: 'Space usage',
+      spaceUsageBody:
+        'Keep future plan limits visible for this space without turning Home into a billing surface.',
+      spaceUsagePreviewPill: 'Admin view',
+      spaceUsageCurrentPlanLabel: 'Current plan',
+      spaceUsageManagePlanAction: 'Manage plan',
+      spaceUsageUpgradeAction: 'Upgrade',
+      spaceUsageMembersLabel: 'Members',
+      spaceUsageAdminsLabel: 'Admins',
+      spaceUsageStorageLabel: 'Storage',
+      spaceUsageCallMinutesLabel: 'Call minutes',
+      spaceUsageFutureTrackingNote:
+        'Storage and call minutes stay on preview counters until live usage tracking is enabled for this space.',
+      spaceUsageStarterPlanLabel: 'Starter',
+      spaceUsageStorageUnit: 'GB',
+      spaceUsageMinutesUnit: 'min',
       currentUserBadge: 'You',
     },
     messengerActivity: {
@@ -2059,6 +2089,22 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Запрос на дополнительные аккаунты отправлен на проверку.',
       participantsRequestFailed:
         'Сейчас не удалось отправить запрос на аккаунты.',
+      spaceUsageTitle: 'Использование пространства',
+      spaceUsageBody:
+        'Держите будущие лимиты тарифа на виду для этого пространства, не превращая Home в тяжёлый биллинговый экран.',
+      spaceUsagePreviewPill: 'Только для админов',
+      spaceUsageCurrentPlanLabel: 'Текущий план',
+      spaceUsageManagePlanAction: 'Управлять планом',
+      spaceUsageUpgradeAction: 'Обновить план',
+      spaceUsageMembersLabel: 'Участники',
+      spaceUsageAdminsLabel: 'Админы',
+      spaceUsageStorageLabel: 'Хранилище',
+      spaceUsageCallMinutesLabel: 'Минуты звонков',
+      spaceUsageFutureTrackingNote:
+        'Хранилище и минуты звонков пока остаются preview-счётчиками, пока для этого пространства не включён живой usage tracking.',
+      spaceUsageStarterPlanLabel: 'Starter',
+      spaceUsageStorageUnit: 'ГБ',
+      spaceUsageMinutesUnit: 'мин',
       currentUserBadge: 'Вы',
     },
     messengerActivity: {
