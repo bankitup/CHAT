@@ -1054,16 +1054,14 @@ export function InboxFilterableContent({
               }
             >
               <span className="sr-only">{searchAria}</span>
-              <span
-                aria-hidden="true"
-                className={
-                  isPrimaryChatsView
-                    ? 'inbox-search-icon inbox-search-icon-dm'
-                    : 'inbox-search-icon'
-                }
-              >
-                ⌕
-              </span>
+              {isPrimaryChatsView ? null : (
+                <span
+                  aria-hidden="true"
+                  className="inbox-search-icon"
+                >
+                  ⌕
+                </span>
+              )}
               <input
                 className={
                   isPrimaryChatsView

@@ -322,16 +322,17 @@ export function OptimisticThreadMessages({
             : isQueued
               ? labels.queued
               : labels.sending;
-        const footerStatusLabel = pendingStatusLabel;
-        const voicePendingNote =
-          isVoiceMessage && isSending ? labels.voicePendingHint : null;
         const voiceProgressScale = isFailed ? 0.28 : isQueued ? 0.2 : 0.58;
         const voiceIconState = isFailed ? 'error' : isPending ? 'loading' : 'play';
 
         return (
           <article
             key={item.clientId}
-            className="message-row message-row-own message-row-optimistic"
+            className={
+              isVoiceMessage
+                ? 'message-row message-row-own message-row-optimistic message-row-optimistic-voice'
+                : 'message-row message-row-own message-row-optimistic'
+            }
           >
             <div
               className={
@@ -350,7 +351,11 @@ export function OptimisticThreadMessages({
                 {isVoiceMessage ? (
                   <div className="message-voice-stack">
                     <div
-                      className="message-voice-card message-voice-card-own"
+                      className={
+                        isPending
+                          ? 'message-voice-card message-voice-card-own message-voice-card-optimistic-pending'
+                          : 'message-voice-card message-voice-card-own'
+                      }
                       data-voice-state={
                         isFailed
                           ? 'failed'
@@ -413,14 +418,7 @@ export function OptimisticThreadMessages({
                             </span>
                           </div>
                         ) : isPending ? (
-                          <div className="message-voice-meta">
-                            <span className="message-voice-state">{pendingStatusLabel}</span>
-                            {voicePendingNote ? (
-                              <span className="message-voice-note">
-                                {voicePendingNote}
-                              </span>
-                            ) : null}
-                          </div>
+                          null
                         ) : null}
                       </div>
                     </div>
@@ -434,19 +432,26 @@ export function OptimisticThreadMessages({
                   <p className="message-body">{messagePreview}</p>
                 )}
               </div>
-              <div className="message-meta message-meta-own message-meta-optimistic">
+              <div
+                className={
+                  isVoiceMessage && isPending
+                    ? 'message-meta message-meta-own message-meta-optimistic message-meta-optimistic-voice-pending'
+                    : 'message-meta message-meta-own message-meta-optimistic'
+                }
+              >
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
                 {isPending ? (
                   <span className="message-status-pending-stack">
                     <MessageStatusIndicator
-                      label={footerStatusLabel}
+                      label={pendingStatusLabel}
                       status="pending"
                     />
                     <span className="message-status message-status-pending">
-                      {footerStatusLabel}
+                      {pendingStatusLabel}
                     </span>
                   </span>
-                ) : isFailed && !isVoiceMessage ? (
+                ) : isFailed && isVoiceMessage ? null : isFailed &&
+                  !isVoiceMessage ? (
                   <span className="message-status-failed-stack">
                     <span className="message-status message-status-failed">
                       {item.errorMessage ?? labels.failed}

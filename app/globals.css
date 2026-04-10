@@ -408,8 +408,7 @@ main {
 }
 
 .route-loading-hero,
-.route-loading-row,
-.route-loading-chat-header {
+.route-loading-row {
   position: relative;
   overflow: hidden;
 }
@@ -432,8 +431,7 @@ main {
   padding: 14px;
 }
 
-.route-loading-copy,
-.route-loading-chat-copy {
+.route-loading-copy {
   gap: 8px;
   min-width: 0;
 }
@@ -446,16 +444,9 @@ main {
   background: linear-gradient(180deg, rgba(233, 239, 247, 0.96), rgba(223, 231, 241, 0.92));
 }
 
-.route-loading-avatar-lg {
-  width: 42px;
-  height: 42px;
-}
-
 .route-loading-line,
 .route-loading-pill,
-.route-loading-bubble,
-.route-loading-button,
-.route-loading-button-sm {
+.route-loading-button {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(233, 239, 247, 0.96), rgba(223, 231, 241, 0.92));
@@ -463,9 +454,7 @@ main {
 
 .route-loading-line::after,
 .route-loading-pill::after,
-.route-loading-bubble::after,
 .route-loading-button::after,
-.route-loading-button-sm::after,
 .route-loading-avatar::after {
   content: '';
   position: absolute;
@@ -509,33 +498,9 @@ main {
   border: 0;
 }
 
-.route-loading-bubble {
-  min-height: 48px;
-  border: 0;
-}
-
-.route-loading-bubble-wide {
-  width: min(248px, 82vw);
-}
-
-.route-loading-bubble-mid {
-  width: min(186px, 66vw);
-}
-
-.route-loading-bubble-own {
-  width: min(168px, 58vw);
-}
-
 .route-loading-button {
   width: 42px;
   height: 42px;
-  border-radius: 999px;
-  border: 0;
-}
-
-.route-loading-button-sm {
-  width: 38px;
-  height: 38px;
   border-radius: 999px;
   border: 0;
 }
@@ -1173,12 +1138,6 @@ main {
   pointer-events: none;
 }
 
-.inbox-search-icon-dm {
-  left: 15px;
-  color: rgba(91, 100, 112, 0.66);
-  font-size: 0.98rem;
-}
-
 .inbox-search-input {
   display: block;
   min-height: 36px;
@@ -1193,7 +1152,7 @@ main {
 .inbox-search-input-dm {
   height: 54px;
   min-height: 54px;
-  padding-left: 42px;
+  padding-left: 16px;
   padding-right: 16px;
   padding-top: 0;
   padding-bottom: 0;
@@ -1206,8 +1165,18 @@ main {
     0 12px 28px rgba(17, 24, 39, 0.05);
   font-size: 0.96rem;
   line-height: 1.2;
+  text-align: left;
+  text-indent: 0;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.inbox-search-input-dm::-webkit-search-decoration,
+.inbox-search-input-dm::-webkit-search-results-decoration,
+.inbox-search-input-dm::-webkit-search-cancel-button,
+.inbox-search-input-dm::-webkit-search-results-button {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .inbox-search-input-dm::placeholder {
@@ -2556,25 +2525,95 @@ main {
   min-height: 0;
 }
 
-.route-loading-chat {
-  height: 100%;
+.chat-entry-loading-screen {
+  position: relative;
+  min-height: calc(100dvh - var(--app-bottom-nav-reserve) - env(safe-area-inset-top) - 10px);
+  background:
+    radial-gradient(circle at top, rgba(241, 248, 255, 0.96), rgba(241, 248, 255, 0) 44%),
+    linear-gradient(180deg, rgba(252, 253, 255, 0.98), rgba(247, 250, 253, 0.96));
+  overflow: hidden;
 }
 
-.route-loading-chat-header {
+.chat-entry-loading-header-stack {
+  position: relative;
+  z-index: 1;
+}
+
+.chat-entry-loading-header-shell {
+  opacity: 0.9;
+}
+
+.chat-entry-loading-header-button,
+.chat-entry-loading-header-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
+  border: 1px solid rgba(225, 232, 241, 0.76);
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.chat-entry-loading-header-avatar {
+  justify-self: end;
+  border-radius: 16px;
+}
+
+.chat-entry-loading-header-main {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-height: 68px;
+  place-items: center;
+  min-width: 0;
 }
 
-.route-loading-chat-thread {
-  gap: 12px;
-  padding-top: 4px;
+.chat-entry-loading-header-pill {
+  width: min(44vw, 168px);
+  height: 14px;
+  max-width: 100%;
+  border-radius: 999px;
+  background: rgba(209, 220, 233, 0.66);
 }
 
-.route-loading-composer {
-  min-height: 54px;
+.chat-entry-loading-main {
+  position: relative;
+}
+
+.chat-entry-loading-main::before {
+  content: '';
+  position: absolute;
+  inset: auto auto 22% 50%;
+  width: min(72vw, 280px);
+  height: min(72vw, 280px);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(186, 206, 228, 0.15), rgba(186, 206, 228, 0) 68%);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.chat-entry-loading-center {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 100%;
+  padding: 18px 18px 12px;
+}
+
+.chat-entry-loading-composer-card {
+  z-index: 1;
+}
+
+.chat-entry-loading-composer-shell {
+  justify-items: center;
+  padding-left: 16px;
+  padding-right: 16px;
+  opacity: 0.9;
+}
+
+.chat-entry-loading-composer-pill {
+  width: min(34vw, 132px);
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(209, 220, 233, 0.6);
 }
 
 .route-loading-inbox {
@@ -2644,24 +2683,6 @@ main {
   width: 34px;
   min-height: 12px;
   border-radius: 999px;
-}
-
-.route-loading-chat-day {
-  padding: 2px 0;
-}
-
-.route-loading-chat-day-secondary {
-  justify-content: flex-start;
-  padding-top: 4px;
-}
-
-.route-loading-chat-day-pill {
-  width: 54px;
-  min-height: 22px;
-}
-
-.route-loading-chat-day-pill-secondary {
-  width: 46px;
 }
 
 .settings-screen {
@@ -6381,6 +6402,10 @@ main {
   animation: optimistic-message-enter 180ms ease-out;
 }
 
+.message-row-optimistic-voice .message-card {
+  gap: 2px;
+}
+
 .message-card {
   display: grid;
   gap: 3px;
@@ -6816,6 +6841,15 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+.message-meta-optimistic-voice-pending {
+  gap: 5px;
+}
+
+.message-meta-optimistic-voice-pending .message-status-pending-stack {
+  gap: 3px;
 }
 
 .message-status-failed {
@@ -7002,6 +7036,12 @@ main {
   border-color: rgba(31, 111, 235, 0.16);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(225, 237, 255, 0.86));
+}
+
+.message-voice-card-optimistic-pending {
+  min-height: 58px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .message-voice-card[data-voice-state='uploading'],
