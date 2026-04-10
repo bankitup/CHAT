@@ -1756,6 +1756,7 @@ main {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  contain: paint;
   border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: 999px;
   color: #1f2937;
@@ -6989,6 +6990,7 @@ main {
   align-items: center;
   gap: 10px;
   min-height: 62px;
+  contain: paint;
   padding: 9px 10px;
   border: 1px solid rgba(221, 228, 238, 0.82);
   border-radius: 16px;
@@ -7269,6 +7271,7 @@ main {
   gap: 0;
   overflow: hidden;
   width: min(100%, 18rem);
+  contain: paint;
   border: 1px solid rgba(221, 228, 238, 0.82);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.74);
@@ -7354,6 +7357,7 @@ main {
   align-items: center;
   gap: 8px;
   min-height: 52px;
+  contain: paint;
   padding: 8px;
   border: 1px solid rgba(221, 228, 238, 0.82);
   border-radius: 15px;

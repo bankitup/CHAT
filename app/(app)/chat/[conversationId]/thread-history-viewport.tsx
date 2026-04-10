@@ -1419,6 +1419,179 @@ function ThreadVoiceMessageBubble({
   );
 }
 
+const MemoizedThreadVoiceMessageBubble = memo(
+  ThreadVoiceMessageBubble,
+  (previous, next) =>
+    previous.conversationId === next.conversationId &&
+    previous.isOwnMessage === next.isOwnMessage &&
+    previous.language === next.language &&
+    previous.messageId === next.messageId &&
+    previous.stageHint === next.stageHint &&
+    areMessageAttachmentValuesEqual(previous.attachment, next.attachment),
+);
+
+MemoizedThreadVoiceMessageBubble.displayName = 'MemoizedThreadVoiceMessageBubble';
+
+type ThreadMessageAttachmentsProps = {
+  attachments: MessageAttachment[];
+  language: AppLanguage;
+  onImagePreviewClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+};
+
+const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
+  attachments,
+  language,
+  onImagePreviewClick,
+}: ThreadMessageAttachmentsProps) {
+  const t = getTranslations(language);
+
+  if (!attachments.length) {
+    return null;
+  }
+
+  return (
+    <div className="message-attachments">
+      {attachments.map((attachment) => {
+        if (attachment.isImage) {
+          const previewTitle = attachment.fileName.trim() || t.chat.photo;
+          const photoMeta = [
+            formatAttachmentSize(attachment.sizeBytes),
+            !attachment.signedUrl ? t.chat.unavailableRightNow : null,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join(' · ');
+
+          if (!attachment.signedUrl) {
+            return (
+              <div
+                key={attachment.id}
+                className="message-photo-card message-photo-card-unavailable"
+              >
+                <span
+                  aria-hidden="true"
+                  className="message-photo-card-visual message-photo-card-visual-unavailable"
+                />
+                <span className="message-photo-card-footer">
+                  <span className="message-photo-card-badge">{t.chat.photo}</span>
+                  {photoMeta ? (
+                    <span className="message-photo-card-meta">{photoMeta}</span>
+                  ) : null}
+                </span>
+              </div>
+            );
+          }
+
+          return (
+            <button
+              key={attachment.id}
+              aria-haspopup="dialog"
+              aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
+              className="message-photo-card message-photo-card-button"
+              data-message-image-preview="true"
+              data-preview-title={previewTitle}
+              data-preview-url={attachment.signedUrl}
+              onClick={onImagePreviewClick}
+              type="button"
+            >
+              <span
+                aria-hidden="true"
+                className="message-photo-card-visual"
+                style={{
+                  backgroundImage: `url("${attachment.signedUrl}")`,
+                }}
+              />
+              <span className="message-photo-card-footer">
+                <span className="message-photo-card-badge">{t.chat.photo}</span>
+                {photoMeta ? (
+                  <span className="message-photo-card-meta">{photoMeta}</span>
+                ) : null}
+              </span>
+            </button>
+          );
+        }
+
+        const attachmentLabel = attachment.isVoiceMessage
+          ? t.chat.voiceMessage
+          : attachment.isAudio
+            ? t.chat.audio
+            : t.chat.file;
+        const attachmentMeta = [
+          formatAttachmentSize(attachment.sizeBytes),
+          !attachment.signedUrl ? t.chat.unavailableRightNow : null,
+        ]
+          .filter((value): value is string => Boolean(value))
+          .join(' · ');
+        const attachmentContent = (
+          <>
+            <span aria-hidden="true" className="message-attachment-file">
+              {attachment.isAudio ? t.chat.audio : t.chat.file}
+            </span>
+            <span className="message-attachment-copy">
+              <span className="message-attachment-head">
+                <span className="message-attachment-name">
+                  {attachment.fileName}
+                </span>
+                <span className="message-attachment-kind">{attachmentLabel}</span>
+              </span>
+              {attachmentMeta ? (
+                <span className="message-attachment-meta">{attachmentMeta}</span>
+              ) : null}
+            </span>
+          </>
+        );
+
+        if (!attachment.signedUrl) {
+          return (
+            <div
+              key={attachment.id}
+              className="message-attachment-card message-attachment-card-unavailable"
+            >
+              {attachmentContent}
+            </div>
+          );
+        }
+
+        if (attachment.isAudio) {
+          return (
+            <div
+              key={attachment.id}
+              className="message-attachment-card message-attachment-card-audio"
+            >
+              {attachmentContent}
+              <audio
+                className="message-attachment-audio"
+                controls
+                preload="metadata"
+                src={attachment.signedUrl}
+              />
+            </div>
+          );
+        }
+
+        return (
+          <a
+            key={attachment.id}
+            className="message-attachment-card"
+            href={attachment.signedUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {attachmentContent}
+          </a>
+        );
+      })}
+    </div>
+  );
+}, (previous, next) => {
+  return (
+    previous.language === next.language &&
+    previous.onImagePreviewClick === next.onImagePreviewClick &&
+    areMessageAttachmentsEqual(previous.attachments, next.attachments)
+  );
+});
+
+ThreadMessageAttachments.displayName = 'ThreadMessageAttachments';
+
 function looksLikeUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
@@ -2334,6 +2507,34 @@ function areMessageAttachmentsEqual(
       attachment.createdAt === nextAttachment.createdAt
     );
   });
+}
+
+function areMessageAttachmentValuesEqual(
+  left: MessageAttachment | null,
+  right: MessageAttachment | null,
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.id === right.id &&
+    left.fileName === right.fileName &&
+    left.signedUrl === right.signedUrl &&
+    left.sizeBytes === right.sizeBytes &&
+    left.durationMs === right.durationMs &&
+    left.isAudio === right.isAudio &&
+    left.isImage === right.isImage &&
+    left.isVoiceMessage === right.isVoiceMessage &&
+    left.bucket === right.bucket &&
+    left.objectPath === right.objectPath &&
+    left.messageId === right.messageId &&
+    left.createdAt === right.createdAt
+  );
 }
 
 function areMessageReactionGroupsEqual(
@@ -3426,11 +3627,10 @@ function ThreadMessageRowComponent({
             )
           ) : message.kind === 'voice' ? (
             <div className="message-voice-stack">
-              <ThreadVoiceMessageBubble
+              <MemoizedThreadVoiceMessageBubble
                 attachment={primaryVoiceAttachment}
                 conversationId={conversationId}
                 isOwnMessage={isOwnMessage}
-                key={`${primaryVoiceAttachment?.id ?? message.id}:${primaryVoiceAttachment?.signedUrl ?? 'none'}`}
                 language={language}
                 messageId={message.id}
               />
@@ -3467,174 +3667,11 @@ function ThreadMessageRowComponent({
             <p className="message-body">{t.chat.emptyMessage}</p>
           ) : null}
           {nonVoiceAttachments.length && !isDeletedMessage ? (
-            <div className="message-attachments">
-              {nonVoiceAttachments.map((attachment) => {
-                if (attachment.isImage) {
-                  const photoMeta = [
-                    formatAttachmentSize(attachment.sizeBytes),
-                    !attachment.signedUrl ? t.chat.unavailableRightNow : null,
-                  ]
-                    .filter((value): value is string => Boolean(value))
-                    .join(' · ');
-
-                  if (!attachment.signedUrl) {
-                    return (
-                      <div
-                        key={attachment.id}
-                        className="message-photo-card message-photo-card-unavailable"
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="message-photo-card-visual message-photo-card-visual-unavailable"
-                        />
-                        <span className="message-photo-card-footer">
-                          <span className="message-photo-card-badge">
-                            {t.chat.photo}
-                          </span>
-                          {photoMeta ? (
-                            <span className="message-photo-card-meta">
-                              {photoMeta}
-                            </span>
-                          ) : null}
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <button
-                      key={attachment.id}
-                      aria-haspopup="dialog"
-                      aria-label={t.chat.openPhotoPreviewAria(
-                        attachment.fileName.trim() || t.chat.photo,
-                      )}
-                      className="message-photo-card message-photo-card-button"
-                      data-message-image-preview="true"
-                      data-preview-title={attachment.fileName.trim() || t.chat.photo}
-                      data-preview-url={attachment.signedUrl}
-                      onClick={handleImageAttachmentPreview}
-                      type="button"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="message-photo-card-visual"
-                        style={{
-                          backgroundImage: `url("${attachment.signedUrl}")`,
-                        }}
-                      />
-                      <span className="message-photo-card-footer">
-                        <span className="message-photo-card-badge">
-                          {t.chat.photo}
-                        </span>
-                        {photoMeta ? (
-                          <span className="message-photo-card-meta">
-                            {photoMeta}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                }
-
-                const attachmentLabel = attachment.isVoiceMessage
-                  ? t.chat.voiceMessage
-                  : attachment.isAudio
-                    ? t.chat.audio
-                    : t.chat.file;
-                const attachmentMeta = [
-                  formatAttachmentSize(attachment.sizeBytes),
-                  !attachment.signedUrl ? t.chat.unavailableRightNow : null,
-                ]
-                  .filter((value): value is string => Boolean(value))
-                  .join(' · ');
-                const attachmentContent = (
-                  <>
-                    <span
-                      aria-hidden="true"
-                      className="message-attachment-file"
-                    >
-                      {attachment.isAudio ? t.chat.audio : t.chat.file}
-                    </span>
-                    <span className="message-attachment-copy">
-                      <span className="message-attachment-head">
-                        <span className="message-attachment-name">
-                          {attachment.fileName}
-                        </span>
-                        <span className="message-attachment-kind">
-                          {attachmentLabel}
-                        </span>
-                      </span>
-                      {attachmentMeta ? (
-                        <span className="message-attachment-meta">
-                          {attachmentMeta}
-                        </span>
-                      ) : null}
-                    </span>
-                  </>
-                );
-
-                if (!attachment.signedUrl) {
-                  return (
-                    <div
-                      key={attachment.id}
-                      className="message-attachment-card message-attachment-card-unavailable"
-                    >
-                      {attachmentContent}
-                    </div>
-                  );
-                }
-
-                if (attachment.isAudio) {
-                  return (
-                    <div
-                      key={attachment.id}
-                      className="message-attachment-card message-attachment-card-audio"
-                    >
-                      {attachmentContent}
-                      <audio
-                        className="message-attachment-audio"
-                        controls
-                        preload="metadata"
-                        src={attachment.signedUrl}
-                      />
-                    </div>
-                  );
-                }
-
-                if (attachment.isImage) {
-                  const previewTitle =
-                    attachment.fileName.trim() || t.chat.photo;
-
-                  return (
-                    <button
-                      key={attachment.id}
-                      aria-haspopup="dialog"
-                      aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
-                      className="message-attachment-card message-attachment-card-button"
-                      data-message-image-preview="true"
-                      data-preview-title={previewTitle}
-                      data-preview-url={attachment.signedUrl}
-                      onClick={handleImageAttachmentPreview}
-                      type="button"
-                    >
-                      {attachmentContent}
-                    </button>
-                  );
-                }
-
-                return (
-                  <a
-                    key={attachment.id}
-                    className="message-attachment-card"
-                    href={attachment.signedUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    {attachmentContent}
-                  </a>
-                );
-              })}
-            </div>
+            <ThreadMessageAttachments
+              attachments={nonVoiceAttachments}
+              language={language}
+              onImagePreviewClick={handleImageAttachmentPreview}
+            />
           ) : null}
         </div>
         </div>
