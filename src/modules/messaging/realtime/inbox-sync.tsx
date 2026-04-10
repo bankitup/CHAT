@@ -130,6 +130,47 @@ export function InboxRealtimeSync({
       return null;
     };
 
+    const fetchLatestConversationMessageSummary = async (conversationId: string) => {
+      const loadLatestRow = async (includeContentMode: boolean) =>
+        supabase
+          .from('messages')
+          .select(
+            includeContentMode
+              ? 'id, seq, sender_id, body, kind, content_mode, deleted_at, created_at'
+              : 'id, seq, sender_id, body, kind, deleted_at, created_at',
+          )
+          .eq('conversation_id', conversationId)
+          .order('seq', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+      let response = await loadLatestRow(true);
+
+      if (
+        response.error &&
+        response.error.message.includes('content_mode')
+      ) {
+        response = await loadLatestRow(false);
+      }
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      return (response.data ?? null) as
+        | {
+            id?: string | null;
+            seq?: number | string | null;
+            sender_id?: string | null;
+            body?: string | null;
+            kind?: string | null;
+            content_mode?: string | null;
+            deleted_at?: string | null;
+            created_at?: string | null;
+          }
+        | null;
+    };
+
     const fetchLatestMessageAttachmentKind = async (messageId: string | null) => {
       if (!messageId) {
         return null;
@@ -206,7 +247,7 @@ export function InboxRealtimeSync({
       const response = await supabase
         .from('conversation_members')
         .select(
-          'conversation_id, hidden_at, last_read_message_seq, last_read_at, conversations(id, created_at, last_message_at, last_message_id, last_message_seq, last_message_sender_id, last_message_kind, last_message_content_mode, last_message_deleted_at, last_message_body)',
+          'conversation_id, hidden_at, last_read_message_seq, last_read_at, conversations(id, created_at)',
         )
         .eq('conversation_id', conversationId)
         .eq('user_id', userId)
@@ -224,20 +265,23 @@ export function InboxRealtimeSync({
       const conversationValue = Array.isArray(response.data.conversations)
         ? response.data.conversations[0] ?? null
         : response.data.conversations;
+      const latestMessageRow = await fetchLatestConversationMessageSummary(
+        conversationId,
+      );
       const latestMessageSeq = normalizeLatestMessageSeq(
-        conversationValue?.last_message_seq ?? null,
+        latestMessageRow?.seq ?? null,
       );
       const lastReadMessageSeq =
         typeof response.data.last_read_message_seq === 'number'
           ? response.data.last_read_message_seq
           : null;
-      const latestMessageId = conversationValue?.last_message_id ?? null;
-      const latestMessageBody = conversationValue?.last_message_body ?? null;
+      const latestMessageId = latestMessageRow?.id ?? null;
+      const latestMessageBody = latestMessageRow?.body ?? null;
       const latestMessageContentMode =
-        conversationValue?.last_message_content_mode ?? null;
+        latestMessageRow?.content_mode ?? null;
       const latestMessageDeletedAt =
-        conversationValue?.last_message_deleted_at ?? null;
-      const latestMessageKind = conversationValue?.last_message_kind ?? null;
+        latestMessageRow?.deleted_at ?? null;
+      const latestMessageKind = latestMessageRow?.kind ?? null;
       const unreadCount =
         latestMessageSeq === null
           ? 0
@@ -258,7 +302,7 @@ export function InboxRealtimeSync({
         conversationId,
         createdAt: conversationValue?.created_at ?? null,
         hiddenAt: response.data.hidden_at ?? null,
-        lastMessageAt: conversationValue?.last_message_at ?? null,
+        lastMessageAt: latestMessageRow?.created_at ?? null,
         lastReadAt: response.data.last_read_at ?? null,
         lastReadMessageSeq,
         latestMessageAttachmentKind,
@@ -267,8 +311,7 @@ export function InboxRealtimeSync({
         latestMessageDeletedAt,
         latestMessageId,
         latestMessageKind,
-        latestMessageSenderId:
-          conversationValue?.last_message_sender_id ?? null,
+        latestMessageSenderId: latestMessageRow?.sender_id ?? null,
         latestMessageSeq,
         removed: false,
         unreadCount,

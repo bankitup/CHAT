@@ -809,16 +809,6 @@ function markConversationSummaryProjectionAvailability(
   );
 }
 
-function hasConversationSummaryProjectionFields(record: ConversationRecord | null) {
-  if (!record) {
-    return false;
-  }
-
-  return CONVERSATION_SUMMARY_PROJECTION_COLUMNS.some((columnName) =>
-    Object.prototype.hasOwnProperty.call(record, columnName),
-  );
-}
-
 function normalizeConversationLatestMessageSeq(value: number | string | null | undefined) {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
@@ -1674,21 +1664,12 @@ async function mapInboxConversations(
   rows: ConversationMemberRow[],
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
 ) {
-  type LatestMessageRow = {
-    conversation_id: string;
-    id: string;
-    seq: number | string;
-    body: string | null;
-    kind: string | null;
-    content_mode?: string | null;
-    deleted_at: string | null;
-  };
-
   const conversationIds = rows.map((row) => row.conversation_id);
   const latestMessageSeqByConversation = new Map<string, number>();
   const latestMessageByConversation = new Map<
     string,
     {
+      createdAt: string | null;
       id: string | null;
       senderId: string | null;
       body: string | null;
@@ -1698,130 +1679,49 @@ async function mapInboxConversations(
     }
   >();
   const unreadCountByConversation = new Map<string, number>();
-  const summaryProjectionAvailable =
-    rows.length > 0 &&
-    rows.every((row) =>
-      hasConversationSummaryProjectionFields(
-        normalizeConversation(row.conversations),
-      ),
+  const latestMessageRowsByConversationId =
+    await loadLatestConversationSummaryMessageRowsByConversationId(
+      supabase,
+      conversationIds,
     );
 
-  if (summaryProjectionAvailable) {
-    for (const membershipRow of rows) {
-      const conversation = normalizeConversation(membershipRow.conversations);
-      const latestSeq = normalizeConversationLatestMessageSeq(
-        conversation?.last_message_seq ?? null,
-      );
+  for (const membershipRow of rows) {
+    const latestRow =
+      latestMessageRowsByConversationId.get(membershipRow.conversation_id) ?? null;
+    const latestSeq = normalizeConversationLatestMessageSeq(latestRow?.seq ?? null);
 
-      if (conversation && conversation.last_message_id !== undefined) {
-        latestMessageByConversation.set(membershipRow.conversation_id, {
-          id: conversation.last_message_id ?? null,
-          senderId: conversation.last_message_sender_id ?? null,
-          body: conversation.last_message_body ?? null,
-          kind: conversation.last_message_kind ?? null,
-          contentMode: conversation.last_message_content_mode ?? null,
-          deletedAt: conversation.last_message_deleted_at ?? null,
-        });
-      }
-
-      if (latestSeq !== null) {
-        latestMessageSeqByConversation.set(membershipRow.conversation_id, latestSeq);
-      }
-
-      const lastReadSeq =
-        typeof membershipRow.last_read_message_seq === 'number'
-          ? membershipRow.last_read_message_seq
-          : null;
-      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
-        membershipRow.visible_from_seq,
-      );
-
-      unreadCountByConversation.set(
-        membershipRow.conversation_id,
-        resolveConversationUnreadCount({
-          lastReadMessageSeq: lastReadSeq,
-          latestMessageSeq: latestSeq,
-          visibleFromSeq,
-        }),
-      );
-    }
-  } else if (conversationIds.length > 0) {
-    const latestMessagesWithContentMode = await supabase
-      .from('messages')
-      .select('id, conversation_id, seq, body, kind, content_mode, deleted_at')
-      .in('conversation_id', conversationIds)
-      .order('conversation_id', { ascending: true })
-      .order('seq', { ascending: false });
-
-    let messageRows = (latestMessagesWithContentMode.data ?? null) as
-      | LatestMessageRow[]
-      | null;
-
-    if (latestMessagesWithContentMode.error) {
-      if (
-        isMissingColumnErrorMessage(
-          latestMessagesWithContentMode.error.message,
-          'content_mode',
-        )
-      ) {
-        const fallbackLatestMessages = await supabase
-          .from('messages')
-          .select('id, conversation_id, seq, body, kind, deleted_at')
-          .in('conversation_id', conversationIds)
-          .order('conversation_id', { ascending: true })
-          .order('seq', { ascending: false });
-
-        if (fallbackLatestMessages.error) {
-          throw new Error(fallbackLatestMessages.error.message);
-        }
-
-        messageRows = (fallbackLatestMessages.data ?? null) as LatestMessageRow[] | null;
-      } else {
-        throw new Error(latestMessagesWithContentMode.error.message);
-      }
+    if (latestRow) {
+      latestMessageByConversation.set(membershipRow.conversation_id, {
+        createdAt: latestRow.created_at ?? null,
+        id: latestRow.id ?? null,
+        senderId: latestRow.sender_id ?? null,
+        body: latestRow.body ?? null,
+        kind: latestRow.kind ?? null,
+        contentMode: latestRow.content_mode ?? null,
+        deletedAt: latestRow.deleted_at ?? null,
+      });
     }
 
-    for (const row of messageRows ?? []) {
-      const messageSeq =
-        typeof row.seq === 'number' ? row.seq : Number(row.seq);
-
-      if (!Number.isFinite(messageSeq)) {
-        continue;
-      }
-
-      if (!latestMessageSeqByConversation.has(row.conversation_id)) {
-        latestMessageSeqByConversation.set(row.conversation_id, messageSeq);
-        latestMessageByConversation.set(row.conversation_id, {
-          id: row.id ?? null,
-          senderId: null,
-          body: row.body ?? null,
-          kind: row.kind ?? null,
-          contentMode: row.content_mode ?? null,
-          deletedAt: row.deleted_at ?? null,
-        });
-      }
+    if (latestSeq !== null) {
+      latestMessageSeqByConversation.set(membershipRow.conversation_id, latestSeq);
     }
 
-    for (const membershipRow of rows) {
-      const lastReadSeq =
-        typeof membershipRow.last_read_message_seq === 'number'
-          ? membershipRow.last_read_message_seq
-          : null;
-      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
-        membershipRow.visible_from_seq,
-      );
-      const latestSeq =
-        latestMessageSeqByConversation.get(membershipRow.conversation_id) ?? null;
+    const lastReadSeq =
+      typeof membershipRow.last_read_message_seq === 'number'
+        ? membershipRow.last_read_message_seq
+        : null;
+    const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+      membershipRow.visible_from_seq,
+    );
 
-      unreadCountByConversation.set(
-        membershipRow.conversation_id,
-        resolveConversationUnreadCount({
-          lastReadMessageSeq: lastReadSeq,
-          latestMessageSeq: latestSeq,
-          visibleFromSeq,
-        }),
-      );
-    }
+    unreadCountByConversation.set(
+      membershipRow.conversation_id,
+      resolveConversationUnreadCount({
+        lastReadMessageSeq: lastReadSeq,
+        latestMessageSeq: latestSeq,
+        visibleFromSeq,
+      }),
+    );
   }
 
   const latestMessageAttachmentKindByMessageId =
@@ -1864,7 +1764,7 @@ async function mapInboxConversations(
         conversation?.avatar_path ?? null,
       ),
       createdBy: conversation?.created_by ?? null,
-      lastMessageAt: latestMessageVisible ? conversation?.last_message_at ?? null : null,
+      lastMessageAt: latestMessageVisible ? latestMessage?.createdAt ?? null : null,
       createdAt: conversation?.created_at ?? null,
       hiddenAt: row.hidden_at ?? null,
       lastReadMessageSeq,
@@ -2146,36 +2046,22 @@ export async function getConversationSummaryForUser(
     return null;
   }
 
-  let latestMessageSeq =
-    normalizeConversationLatestMessageSeq(conversation.last_message_seq ?? null);
-  let latestMessage = hasConversationSummaryProjectionFields(conversation)
+  const latestRow = await loadLatestConversationSummaryMessageRow(
+    supabase,
+    conversationId,
+  );
+  const latestMessageSeq = normalizeConversationLatestMessageSeq(latestRow?.seq ?? null);
+  const latestMessage = latestRow
     ? {
-        body: conversation.last_message_body ?? null,
-        contentMode: conversation.last_message_content_mode ?? null,
-        deletedAt: conversation.last_message_deleted_at ?? null,
-        id: conversation.last_message_id ?? null,
-        kind: conversation.last_message_kind ?? null,
-        senderId: conversation.last_message_sender_id ?? null,
+        body: latestRow.body ?? null,
+        contentMode: latestRow.content_mode ?? null,
+        createdAt: latestRow.created_at ?? null,
+        deletedAt: latestRow.deleted_at ?? null,
+        id: latestRow.id ?? null,
+        kind: latestRow.kind ?? null,
+        senderId: latestRow.sender_id ?? null,
       }
     : null;
-
-  if (!hasConversationSummaryProjectionFields(conversation)) {
-    const latestRow = await loadLatestConversationSummaryMessageRow(
-      supabase,
-      conversationId,
-    );
-    latestMessageSeq = normalizeConversationLatestMessageSeq(latestRow?.seq ?? null);
-    latestMessage = latestRow
-      ? {
-          body: latestRow.body ?? null,
-          contentMode: latestRow.content_mode ?? null,
-          deletedAt: latestRow.deleted_at ?? null,
-          id: latestRow.id ?? null,
-          kind: latestRow.kind ?? null,
-          senderId: latestRow.sender_id ?? null,
-        }
-      : null;
-  }
 
   const lastReadMessageSeq =
     typeof scopedRow.last_read_message_seq === 'number'
@@ -2201,7 +2087,7 @@ export async function getConversationSummaryForUser(
     conversationId: scopedRow.conversation_id,
     createdAt: conversation.created_at ?? null,
     hiddenAt: scopedRow.hidden_at ?? null,
-    lastMessageAt: latestMessageVisible ? conversation.last_message_at ?? null : null,
+    lastMessageAt: latestMessageVisible ? latestMessage?.createdAt ?? null : null,
     lastReadAt: scopedRow.last_read_at ?? null,
     lastReadMessageSeq,
     latestMessageAttachmentKind:
@@ -8146,6 +8032,11 @@ type ConversationSummaryMessageRow = {
   created_at: string | null;
 };
 
+type ConversationSummaryMessageRowWithConversationId =
+  ConversationSummaryMessageRow & {
+    conversation_id: string;
+  };
+
 async function loadConversationSummaryMessageRowById(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   messageId: string,
@@ -8175,6 +8066,81 @@ async function loadConversationSummaryMessageRowById(
   }
 
   return (response.data ?? null) as ConversationSummaryMessageRow | null;
+}
+
+async function loadLatestConversationSummaryMessageRowsByConversationId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  conversationIds: string[],
+) {
+  const uniqueConversationIds = Array.from(new Set(conversationIds.filter(Boolean)));
+
+  if (uniqueConversationIds.length === 0) {
+    return new Map<string, ConversationSummaryMessageRowWithConversationId>();
+  }
+
+  const loadLatestRowsWithContentMode = async () =>
+    supabase
+      .from('messages')
+      .select(
+        'id, conversation_id, seq, sender_id, body, kind, content_mode, deleted_at, created_at',
+      )
+      .in('conversation_id', uniqueConversationIds)
+      .order('conversation_id', { ascending: true })
+      .order('seq', { ascending: false });
+
+  const loadLatestRowsWithoutContentMode = async () =>
+    supabase
+      .from('messages')
+      .select(
+        'id, conversation_id, seq, sender_id, body, kind, deleted_at, created_at',
+      )
+      .in('conversation_id', uniqueConversationIds)
+      .order('conversation_id', { ascending: true })
+      .order('seq', { ascending: false });
+
+  const responseWithContentMode = await loadLatestRowsWithContentMode();
+  let rows: ConversationSummaryMessageRowWithConversationId[] = [];
+
+  if (responseWithContentMode.error) {
+    if (isMissingColumnErrorMessage(responseWithContentMode.error.message, 'content_mode')) {
+      const fallbackResponse = await loadLatestRowsWithoutContentMode();
+
+      if (fallbackResponse.error) {
+        throw new Error(fallbackResponse.error.message);
+      }
+
+      rows =
+        (fallbackResponse.data ?? []) as ConversationSummaryMessageRowWithConversationId[];
+    } else {
+      throw new Error(responseWithContentMode.error.message);
+    }
+  } else {
+    rows =
+      (responseWithContentMode.data ?? []) as ConversationSummaryMessageRowWithConversationId[];
+  }
+
+  const latestRowsByConversationId = new Map<
+    string,
+    ConversationSummaryMessageRowWithConversationId
+  >();
+
+  for (const row of rows) {
+    const conversationId = row.conversation_id?.trim();
+
+    if (!conversationId || latestRowsByConversationId.has(conversationId)) {
+      continue;
+    }
+
+    const normalizedSeq = normalizeConversationLatestMessageSeq(row.seq ?? null);
+
+    if (normalizedSeq === null) {
+      continue;
+    }
+
+    latestRowsByConversationId.set(conversationId, row);
+  }
+
+  return latestRowsByConversationId;
 }
 
 async function loadLatestConversationSummaryMessageRow(

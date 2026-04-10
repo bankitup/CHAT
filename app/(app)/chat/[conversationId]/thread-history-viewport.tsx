@@ -11,6 +11,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   formatPersonFallbackLabel,
   getLocaleForLanguage,
@@ -42,7 +43,10 @@ import {
   DmThreadClientSubtree,
   type DmThreadClientDiagnostics,
 } from './dm-thread-client-diagnostics';
-import { DmReplyTargetSnippet } from './dm-reply-target-snippet';
+import {
+  DmReplyTargetSnippet,
+  resolveReplyTargetAttachmentKind,
+} from './dm-reply-target-snippet';
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
 import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailable-state';
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
@@ -184,6 +188,11 @@ type ThreadHistoryState = {
 type ThreadHistorySessionCacheEntry = {
   cachedAt: number;
   state: ThreadHistoryState;
+};
+
+type ActiveImagePreview = {
+  fileName: string;
+  signedUrl: string;
 };
 
 type TimelineItem =
@@ -2099,6 +2108,7 @@ type ThreadMessageRowProps = {
   latestVisibleMessageSeq: number | null;
   message: ConversationMessageRow;
   messagesById: Map<string, ConversationMessageRow>;
+  onOpenImagePreview: (preview: ActiveImagePreview) => void;
   otherParticipantReadSeq: number | null;
   otherParticipantUserId: string | null;
   reactionsByMessage: Map<string, MessageReactionGroup[]>;
@@ -2124,6 +2134,7 @@ function ThreadMessageRow({
   latestVisibleMessageSeq,
   message,
   messagesById,
+  onOpenImagePreview,
   otherParticipantReadSeq,
   otherParticipantUserId,
   reactionsByMessage,
@@ -2132,6 +2143,10 @@ function ThreadMessageRow({
 }: ThreadMessageRowProps) {
   const t = getTranslations(language);
   const quickActionsContainerRef = useRef<HTMLDivElement | null>(null);
+  const quickActionsSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const replyTargetHighlightTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressPointerRef = useRef<{
     pointerId: number;
@@ -2139,6 +2154,9 @@ function ThreadMessageRow({
     startY: number;
   } | null>(null);
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
+  const [quickActionsPlacement, setQuickActionsPlacement] = useState<
+    'above' | 'below'
+  >('above');
   const isOwnMessage = message.sender_id === currentUserId;
   const patchedBody = useThreadMessagePatchedBody(
     conversationId,
@@ -2209,6 +2227,12 @@ function ThreadMessageRow({
   const repliedMessage = message.reply_to_message_id
     ? messagesById.get(message.reply_to_message_id) ?? null
     : null;
+  const repliedMessageAttachments = repliedMessage
+    ? attachmentsByMessage.get(repliedMessage.id) ?? []
+    : [];
+  const replyTargetAttachmentKind = resolveReplyTargetAttachmentKind(
+    repliedMessageAttachments,
+  );
   const encryptedRenderBranch = normalizeEncryptedDmBranchLabel(isOwnMessage);
   const canShowQuickActions =
     !isDeletedMessage &&
@@ -2283,11 +2307,99 @@ function ThreadMessageRow({
     };
   }, [isQuickActionsOpen]);
 
+  useLayoutEffect(() => {
+    if (!isQuickActionsOpen) {
+      return;
+    }
+
+    const updatePlacement = () => {
+      const containerRect =
+        quickActionsContainerRef.current?.getBoundingClientRect() ?? null;
+      const surfaceRect =
+        quickActionsSurfaceRef.current?.getBoundingClientRect() ?? null;
+
+      if (!containerRect || !surfaceRect) {
+        return;
+      }
+
+      const viewportHeight = window.innerHeight;
+      const safeGap = 14;
+      const availableAbove = containerRect.top - safeGap;
+      const availableBelow = viewportHeight - containerRect.bottom - safeGap;
+      const preferredHeight = surfaceRect.height;
+
+      const nextPlacement =
+        availableAbove >= preferredHeight
+          ? 'above'
+          : availableBelow >= preferredHeight
+            ? 'below'
+            : availableAbove >= availableBelow
+              ? 'above'
+              : 'below';
+
+      setQuickActionsPlacement((currentPlacement) =>
+        currentPlacement === nextPlacement ? currentPlacement : nextPlacement,
+      );
+    };
+
+    updatePlacement();
+
+    window.addEventListener('resize', updatePlacement);
+
+    return () => {
+      window.removeEventListener('resize', updatePlacement);
+    };
+  }, [isQuickActionsOpen]);
+
   useEffect(() => {
     return () => {
       clearLongPress();
+      if (replyTargetHighlightTimeoutRef.current) {
+        clearTimeout(replyTargetHighlightTimeoutRef.current);
+      }
     };
   }, [clearLongPress]);
+
+  const handleReplyReferenceClick = useCallback(() => {
+    if (!message.reply_to_message_id) {
+      return;
+    }
+
+    const target = document.getElementById(
+      `message-${message.reply_to_message_id}`,
+    );
+
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    target.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    target.focus({
+      preventScroll: true,
+    });
+
+    const existingHighlight = document.querySelector(
+      '.message-card-reply-target-highlight',
+    );
+
+    if (existingHighlight instanceof HTMLElement && existingHighlight !== target) {
+      existingHighlight.classList.remove('message-card-reply-target-highlight');
+    }
+
+    target.classList.add('message-card-reply-target-highlight');
+
+    if (replyTargetHighlightTimeoutRef.current) {
+      clearTimeout(replyTargetHighlightTimeoutRef.current);
+    }
+
+    replyTargetHighlightTimeoutRef.current = setTimeout(() => {
+      target.classList.remove('message-card-reply-target-highlight');
+      replyTargetHighlightTimeoutRef.current = null;
+    }, 1300);
+  }, [message.reply_to_message_id]);
 
   const handleBubblePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -2442,6 +2554,7 @@ function ThreadMessageRow({
           .filter(Boolean)
           .join(' ')}
         id={`message-${message.id}`}
+        tabIndex={-1}
       >
         <div
           ref={quickActionsContainerRef}
@@ -2459,39 +2572,48 @@ function ThreadMessageRow({
         >
           {isQuickActionsOpen ? (
             <div
+              ref={quickActionsSurfaceRef}
               className={
                 isOwnMessage
                   ? 'message-quick-actions message-quick-actions-own'
                   : 'message-quick-actions'
               }
+              data-placement={quickActionsPlacement}
               data-message-quick-actions-surface="true"
             >
-              <ThreadReactionPicker
-                className="message-quick-actions-reactions"
-                conversationId={conversationId}
-                currentUserId={currentUserId}
-                emojis={MESSAGE_QUICK_REACTIONS}
-                initialReactions={reactionsByMessage.get(message.id) ?? []}
-                isOwnMessage={isOwnMessage}
-                messageId={message.id}
-                onReactionSelected={closeQuickActions}
-                showCounts={false}
-              />
-              <Link
-                aria-label={t.chat.reply}
-                className="message-quick-actions-reply"
-                href={replyActionHref}
-                onClick={closeQuickActions}
-                prefetch={false}
-                title={t.chat.reply}
-              >
-                <span
-                  aria-hidden="true"
-                  className="message-quick-actions-reply-icon"
+              <div className="message-quick-actions-primary">
+                <ThreadReactionPicker
+                  className="message-quick-actions-reactions"
+                  conversationId={conversationId}
+                  currentUserId={currentUserId}
+                  emojis={MESSAGE_QUICK_REACTIONS}
+                  initialReactions={reactionsByMessage.get(message.id) ?? []}
+                  isOwnMessage={isOwnMessage}
+                  messageId={message.id}
+                  onReactionSelected={closeQuickActions}
+                  showCounts={false}
+                />
+              </div>
+              <div className="message-quick-actions-secondary">
+                <Link
+                  aria-label={t.chat.reply}
+                  className="message-quick-actions-action"
+                  href={replyActionHref}
+                  onClick={closeQuickActions}
+                  prefetch={false}
+                  title={t.chat.reply}
                 >
-                  ↩
-                </span>
-              </Link>
+                  <span
+                    aria-hidden="true"
+                    className="message-quick-actions-action-icon"
+                  >
+                    ↩
+                  </span>
+                  <span className="message-quick-actions-action-label">
+                    {t.chat.reply}
+                  </span>
+                </Link>
+              </div>
             </div>
           ) : null}
           <div
@@ -2562,12 +2684,15 @@ function ThreadMessageRow({
             }
           >
           {message.reply_to_message_id && !isDeletedMessage ? (
-            <div
+            <button
               className={
                 isOwnMessage
-                  ? 'message-reply-reference message-reply-reference-own'
-                  : 'message-reply-reference'
+                  ? 'message-reply-reference message-reply-reference-own message-reply-reference-button'
+                  : 'message-reply-reference message-reply-reference-button'
               }
+              disabled={!repliedMessage}
+              onClick={handleReplyReferenceClick}
+              type="button"
             >
               <span aria-hidden="true" className="message-reply-accent" />
               <div className="message-reply-copy">
@@ -2584,14 +2709,19 @@ function ThreadMessageRow({
                   conversationId={conversationId}
                   currentUserId={currentUserId}
                   debugRequestId={threadClientDiagnostics.debugRequestId}
+                  attachmentFallbackLabel={t.chat.attachment}
+                  audioFallbackLabel={t.chat.audio}
                   deletedFallbackLabel={t.chat.messageDeleted}
                   emptyFallbackLabel={t.chat.emptyMessage}
                   encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+                  fileFallbackLabel={t.chat.file}
                   historicalEncryptedFallbackLabel={t.chat.olderEncryptedMessage}
                   encryptedReferenceNote={null}
                   loadedFallbackLabel={t.chat.earlierMessage}
                   messageId={message.id}
+                  photoFallbackLabel={t.chat.photo}
                   surface="message-reply-reference"
+                  targetAttachmentKind={replyTargetAttachmentKind}
                   targetDeleted={Boolean(repliedMessage?.deleted_at)}
                   targetIsEncrypted={Boolean(
                     repliedMessage && isEncryptedDmTextMessage(repliedMessage),
@@ -2602,7 +2732,7 @@ function ThreadMessageRow({
                   voiceFallbackLabel={t.chat.voiceMessage}
                 />
               </div>
-            </div>
+            </button>
           ) : null}
           {isDeletedMessage ? (
             <p className="message-deleted-text">{t.chat.messageDeleted}</p>
@@ -2854,6 +2984,29 @@ function ThreadMessageRow({
                   );
                 }
 
+                if (attachment.isImage) {
+                  const previewTitle =
+                    attachment.fileName.trim() || t.chat.photo;
+
+                  return (
+                    <button
+                      key={attachment.id}
+                      aria-haspopup="dialog"
+                      aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
+                      className="message-attachment-card message-attachment-card-button"
+                      onClick={() => {
+                        onOpenImagePreview({
+                          fileName: previewTitle,
+                          signedUrl: attachment.signedUrl!,
+                        });
+                      }}
+                      type="button"
+                    >
+                      {attachmentContent}
+                    </button>
+                  );
+                }
+
                 return (
                   <a
                     key={attachment.id}
@@ -2956,6 +3109,93 @@ function ThreadMessageRow({
   );
 }
 
+type ThreadImagePreviewOverlayProps = {
+  closeLabel: string;
+  fallbackTitle: string;
+  onClose: () => void;
+  preview: ActiveImagePreview | null;
+};
+
+function ThreadImagePreviewOverlay({
+  closeLabel,
+  fallbackTitle,
+  onClose,
+  preview,
+}: ThreadImagePreviewOverlayProps) {
+  const portalRoot = typeof document !== 'undefined' ? document.body : null;
+
+  useEffect(() => {
+    if (!preview) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose, preview]);
+
+  if (!preview || !portalRoot) {
+    return null;
+  }
+
+  const previewTitle = preview.fileName.trim() || fallbackTitle;
+
+  return createPortal(
+    <div
+      aria-label={previewTitle}
+      aria-modal="true"
+      className="chat-image-preview-overlay"
+      data-state="open"
+      onClick={onClose}
+      role="dialog"
+    >
+      <div
+        className="chat-image-preview-shell"
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        <button
+          aria-label={closeLabel}
+          className="chat-image-preview-close"
+          onClick={onClose}
+          type="button"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+
+        <div className="chat-image-preview-stage">
+          <figure className="chat-image-preview-frame">
+            {/* Keep a plain img here so the authenticated attachment route stays cookie-backed. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt={previewTitle}
+              className="chat-image-preview-image"
+              src={preview.signedUrl}
+            />
+            <figcaption className="chat-image-preview-caption">
+              {previewTitle}
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>,
+    portalRoot,
+  );
+}
+
 export function ThreadHistoryViewport({
   activeDeleteMessageId,
   activeEditMessageId,
@@ -2995,6 +3235,8 @@ export function ThreadHistoryViewport({
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
     initialResolvedStateRef.current?.state ?? createThreadHistoryState(initialSnapshot),
   );
+  const [activeImagePreview, setActiveImagePreview] =
+    useState<ActiveImagePreview | null>(null);
   const historyFetchActiveDeviceIdRef = useRef<string | null>(
     initialSnapshot.dmE2ee?.activeDeviceRecordId ?? null,
   );
@@ -3069,6 +3311,7 @@ export function ThreadHistoryViewport({
     voiceReopenRecoveryRequestedRef.current.clear();
     encryptedHistoryBootstrapRecoveryAttemptedMessageIdsRef.current.clear();
     encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef.current.clear();
+    setActiveImagePreview(null);
   }, [conversationId]);
 
   useEffect(() => {
@@ -4108,6 +4351,14 @@ export function ThreadHistoryViewport({
     };
   }, [historyState.messages]);
 
+  const openImagePreview = useCallback((preview: ActiveImagePreview) => {
+    setActiveImagePreview(preview);
+  }, []);
+
+  const closeImagePreview = useCallback(() => {
+    setActiveImagePreview(null);
+  }, []);
+
   return (
     <>
       {conversationKind === 'dm' ? (
@@ -4236,6 +4487,7 @@ export function ThreadHistoryViewport({
                 latestVisibleMessageSeq={latestCommittedMessageSeq}
                 message={item.message}
                 messagesById={historyState.messagesById}
+                onOpenImagePreview={openImagePreview}
                 otherParticipantReadSeq={otherParticipantReadSeq}
                 otherParticipantUserId={otherParticipantUserId}
                 reactionsByMessage={historyState.reactionsByMessage}
@@ -4248,6 +4500,12 @@ export function ThreadHistoryViewport({
           return null;
         })
       )}
+      <ThreadImagePreviewOverlay
+        closeLabel={t.chat.closePhotoPreview}
+        fallbackTitle={t.chat.photo}
+        onClose={closeImagePreview}
+        preview={activeImagePreview}
+      />
       {conversationKind === 'dm' ? (
         <DmThreadClientSubtree
           conversationId={conversationId}
