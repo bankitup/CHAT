@@ -322,9 +322,6 @@ export function OptimisticThreadMessages({
             : isQueued
               ? labels.queued
               : labels.sending;
-        const footerStatusLabel = pendingStatusLabel;
-        const voicePendingNote =
-          isVoiceMessage && isSending ? labels.voicePendingHint : null;
         const voiceProgressScale = isFailed ? 0.28 : isQueued ? 0.2 : 0.58;
         const voiceIconState = isFailed ? 'error' : isPending ? 'loading' : 'play';
 
@@ -413,14 +410,7 @@ export function OptimisticThreadMessages({
                             </span>
                           </div>
                         ) : isPending ? (
-                          <div className="message-voice-meta">
-                            <span className="message-voice-state">{pendingStatusLabel}</span>
-                            {voicePendingNote ? (
-                              <span className="message-voice-note">
-                                {voicePendingNote}
-                              </span>
-                            ) : null}
-                          </div>
+                          null
                         ) : null}
                       </div>
                     </div>
@@ -439,11 +429,11 @@ export function OptimisticThreadMessages({
                 {isPending ? (
                   <span className="message-status-pending-stack">
                     <MessageStatusIndicator
-                      label={footerStatusLabel}
+                      label={pendingStatusLabel}
                       status="pending"
                     />
                     <span className="message-status message-status-pending">
-                      {footerStatusLabel}
+                      {pendingStatusLabel}
                     </span>
                   </span>
                 ) : isFailed && !isVoiceMessage ? (
