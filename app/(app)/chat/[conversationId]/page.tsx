@@ -1082,7 +1082,7 @@ export default async function ChatPage({
     Boolean(directParticipantStatus.emoji) && !hasDirectParticipantStatusText;
   const attachmentHelpText =
     language === 'ru'
-      ? 'Поддерживаются JPG, PNG, WEBP, GIF, HEIC, HEIF, PDF и TXT до 10 МБ.'
+      ? 'Поддерживаются фото, документы, ZIP-архивы и обычные аудиофайлы до 10 МБ.'
       : CHAT_ATTACHMENT_HELP_TEXT;
   const attachmentMaxSizeLabel = language === 'ru' ? 'До 10 МБ' : 'Up to 10 MB';
   const replyMessageIds = messages.flatMap((message) =>

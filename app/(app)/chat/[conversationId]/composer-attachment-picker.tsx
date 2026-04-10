@@ -21,19 +21,48 @@ function formatFileSize(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getFileExtension(fileName: string) {
+  const normalizedFileName = fileName.trim();
+
+  if (!normalizedFileName) {
+    return null;
+  }
+
+  const extensionIndex = normalizedFileName.lastIndexOf('.');
+
+  if (extensionIndex < 0 || extensionIndex === normalizedFileName.length - 1) {
+    return null;
+  }
+
+  return normalizedFileName.slice(extensionIndex).toLowerCase();
+}
+
 function matchesAcceptedFileType(input: {
   acceptedTypes: Set<string>;
+  fileName: string;
   fileType: string;
   mode: AttachmentPickerMode;
 }) {
   const normalizedFileType = input.fileType.trim().toLowerCase();
+  const normalizedFileExtension = getFileExtension(input.fileName);
 
   if (!normalizedFileType) {
-    return false;
+    return Boolean(
+      normalizedFileExtension && input.acceptedTypes.has(normalizedFileExtension),
+    );
   }
 
   if (input.mode === 'camera' || input.mode === 'gallery') {
-    return normalizedFileType.startsWith('image/');
+    return (
+      normalizedFileType.startsWith('image/') ||
+      normalizedFileExtension === '.jpg' ||
+      normalizedFileExtension === '.jpeg' ||
+      normalizedFileExtension === '.png' ||
+      normalizedFileExtension === '.webp' ||
+      normalizedFileExtension === '.gif' ||
+      normalizedFileExtension === '.heic' ||
+      normalizedFileExtension === '.heif'
+    );
   }
 
   return Array.from(input.acceptedTypes).some((acceptedType) => {
@@ -41,6 +70,10 @@ function matchesAcceptedFileType(input: {
 
     if (!normalizedAcceptedType) {
       return false;
+    }
+
+    if (normalizedAcceptedType.startsWith('.')) {
+      return normalizedFileExtension === normalizedAcceptedType;
     }
 
     if (normalizedAcceptedType.endsWith('/*')) {
@@ -224,6 +257,7 @@ export function ComposerAttachmentPicker({
           if (
             !matchesAcceptedFileType({
               acceptedTypes,
+              fileName: nextFile.name,
               fileType: nextFile.type,
               mode: pickerMode,
             })

@@ -2790,7 +2790,7 @@ function ThreadMessageRow({
                             ? t.chat.audio
                             : attachment.isImage
                               ? t.chat.image
-                              : t.chat.attachment}
+                              : t.chat.file}
                         {formatAttachmentSize(attachment.sizeBytes)
                           ? ` · ${formatAttachmentSize(attachment.sizeBytes)}`
                           : ''}

@@ -535,10 +535,66 @@ type MessageE2eeEnvelopeRow = {
 
 export const STARTER_REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🎉'] as const;
 export const CHAT_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
-export const CHAT_ATTACHMENT_ACCEPT =
-  'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf,text/plain,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/aac,audio/mp3,audio/m4a';
+const SUPPORTED_ATTACHMENT_EXTENSIONS = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.gif',
+  '.heic',
+  '.heif',
+  '.pdf',
+  '.txt',
+  '.csv',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.rtf',
+  '.json',
+  '.md',
+  '.markdown',
+  '.zip',
+] as const;
+const SUPPORTED_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/rtf',
+  'application/json',
+  'text/markdown',
+  'application/zip',
+  'application/x-zip-compressed',
+  'audio/webm',
+  'audio/mp4',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/aac',
+  'audio/mp3',
+  'audio/m4a',
+] as const;
+export const CHAT_ATTACHMENT_ACCEPT = [
+  ...SUPPORTED_ATTACHMENT_MIME_TYPES,
+  ...SUPPORTED_ATTACHMENT_EXTENSIONS,
+].join(',');
 export const CHAT_ATTACHMENT_HELP_TEXT =
-  'Supported files: JPG, PNG, WEBP, GIF, HEIC, HEIF, PDF, TXT, and common audio files up to 10 MB.';
+  'Supported photos, documents, ZIP files, and common audio files up to 10 MB.';
 export const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 
@@ -609,25 +665,10 @@ const CHAT_ATTACHMENT_BUCKET_CONFIG = resolveChatAttachmentBucketConfig();
 const CHAT_ATTACHMENT_BUCKET = CHAT_ATTACHMENT_BUCKET_CONFIG.actualBucket;
 const PROFILE_AVATAR_BUCKET =
   process.env.SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
-const SUPPORTED_ATTACHMENT_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/heic',
-  'image/heif',
-  'application/pdf',
-  'text/plain',
-  'audio/webm',
-  'audio/mp4',
-  'audio/mpeg',
-  'audio/ogg',
-  'audio/wav',
-  'audio/x-wav',
-  'audio/aac',
-  'audio/mp3',
-  'audio/m4a',
-]);
+const SUPPORTED_ATTACHMENT_TYPES = new Set<string>(SUPPORTED_ATTACHMENT_MIME_TYPES);
+const SUPPORTED_ATTACHMENT_EXTENSION_SET = new Set<string>(
+  SUPPORTED_ATTACHMENT_EXTENSIONS,
+);
 const SUPPORTED_VOICE_ATTACHMENT_TYPES = new Set([
   'audio/webm',
   'audio/mp4',
@@ -639,8 +680,50 @@ const SUPPORTED_VOICE_ATTACHMENT_TYPES = new Set([
   'audio/wav',
   'audio/x-wav',
 ]);
-export function isSupportedChatAttachmentType(mimeType: string) {
-  return SUPPORTED_ATTACHMENT_TYPES.has(mimeType);
+function getAttachmentFileExtension(fileName: string | null | undefined) {
+  const normalizedFileName = fileName?.trim() || '';
+
+  if (!normalizedFileName) {
+    return null;
+  }
+
+  const lastSegment = normalizedFileName.split(/[\\/]/).pop()?.trim() || '';
+  const extensionIndex = lastSegment.lastIndexOf('.');
+
+  if (extensionIndex < 0 || extensionIndex === lastSegment.length - 1) {
+    return null;
+  }
+
+  return lastSegment.slice(extensionIndex).toLowerCase();
+}
+
+function isBinaryAttachmentMimeType(mimeType: string | null | undefined) {
+  const normalizedMimeType = mimeType?.trim().toLowerCase() || '';
+
+  return (
+    !normalizedMimeType ||
+    normalizedMimeType === 'application/octet-stream' ||
+    normalizedMimeType === 'binary/octet-stream' ||
+    normalizedMimeType === 'application/x-download'
+  );
+}
+
+export function isSupportedChatAttachmentType(
+  mimeType: string,
+  fileName?: string | null,
+) {
+  const normalizedMimeType = mimeType.trim().toLowerCase();
+
+  if (SUPPORTED_ATTACHMENT_TYPES.has(normalizedMimeType)) {
+    return true;
+  }
+
+  if (!isBinaryAttachmentMimeType(normalizedMimeType)) {
+    return false;
+  }
+
+  const extension = getAttachmentFileExtension(fileName);
+  return Boolean(extension && SUPPORTED_ATTACHMENT_EXTENSION_SET.has(extension));
 }
 
 function normalizeConversation(
@@ -9386,7 +9469,7 @@ export async function sendMessageWithAttachment(input: {
     throw new Error('Attachments can be up to 10 MB in this first version.');
   }
 
-  if (!isSupportedChatAttachmentType(input.file.type)) {
+  if (!isSupportedChatAttachmentType(input.file.type, input.file.name)) {
     throw new Error(CHAT_ATTACHMENT_HELP_TEXT);
   }
 
