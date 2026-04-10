@@ -705,6 +705,23 @@ function readThreadVoicePlaybackCacheEntry(key: string | null) {
   return threadVoicePlaybackCache.get(key) ?? null;
 }
 
+function resolvePreferredThreadVoicePlaybackUrl(input: {
+  attachmentSignedUrl: string | null;
+  cacheEntry: ThreadVoicePlaybackCacheEntry | null;
+}) {
+  if (
+    input.cacheEntry?.warmed &&
+    input.cacheEntry.playbackUrl?.startsWith('blob:') &&
+    (!input.attachmentSignedUrl ||
+      !input.cacheEntry.sourceUrl ||
+      input.cacheEntry.sourceUrl === input.attachmentSignedUrl)
+  ) {
+    return input.cacheEntry.playbackUrl;
+  }
+
+  return input.attachmentSignedUrl ?? input.cacheEntry?.playbackUrl ?? null;
+}
+
 function writeThreadVoicePlaybackCacheEntry(
   key: string | null,
   patch: Partial<ThreadVoicePlaybackCacheEntry>,
@@ -729,7 +746,9 @@ function writeThreadVoicePlaybackCacheEntry(
       ? currentEntry?.playbackUrl ?? null
       : requestedPlaybackUrl,
     sourceUrl: requestedSourceUrl,
-    warmed: patch.warmed ?? currentEntry?.warmed ?? false,
+    warmed: shouldPreserveWarmBlobPlaybackUrl
+      ? true
+      : patch.warmed ?? currentEntry?.warmed ?? false,
   };
 
   if (
@@ -1342,7 +1361,11 @@ function ThreadVoiceMessageBubble({
   const cachedVoicePlaybackEntry = readThreadVoicePlaybackCacheEntry(
     voicePlaybackCacheKey,
   );
-  const cachedPlaybackUrl = cachedVoicePlaybackEntry?.playbackUrl ?? null;
+  const attachmentSignedUrl = normalizeAttachmentSignedUrl(attachment?.signedUrl);
+  const cachedPlaybackUrl = resolvePreferredThreadVoicePlaybackUrl({
+    attachmentSignedUrl,
+    cacheEntry: cachedVoicePlaybackEntry,
+  });
   const cachedDurationMs = cachedVoicePlaybackEntry?.durationMs ?? null;
   const cachedSourceUrl = cachedVoicePlaybackEntry?.sourceUrl ?? null;
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -1354,7 +1377,7 @@ function ThreadVoiceMessageBubble({
   );
   const [playbackFailed, setPlaybackFailed] = useState(false);
   const [resolvedSignedUrl, setResolvedSignedUrl] = useState<string | null>(
-    normalizeAttachmentSignedUrl(attachment?.signedUrl) ?? cachedPlaybackUrl,
+    cachedPlaybackUrl,
   );
   const [didFailSignedUrlResolve, setDidFailSignedUrlResolve] = useState(false);
   const [ignoredAttachmentSignedUrl, setIgnoredAttachmentSignedUrl] = useState<
@@ -1363,7 +1386,6 @@ function ThreadVoiceMessageBubble({
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
-  const attachmentSignedUrl = normalizeAttachmentSignedUrl(attachment?.signedUrl);
   const hasRecoverableAttachmentStorageLocator = hasRecoverableAttachmentLocator(
     attachment,
     messageId,
@@ -1464,9 +1486,7 @@ function ThreadVoiceMessageBubble({
 
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? cachedDurationMs ?? null);
-    setResolvedSignedUrl(
-      normalizeAttachmentSignedUrl(attachment?.signedUrl) ?? cachedPlaybackUrl,
-    );
+    setResolvedSignedUrl(cachedPlaybackUrl);
     setDidFailSignedUrlResolve(false);
     setIgnoredAttachmentSignedUrl(null);
     setHasPendingPlaybackIntent(false);
