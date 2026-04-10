@@ -7589,7 +7589,7 @@ main {
 .composer-input-shell {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: end;
   gap: 11px;
   min-width: 0;
   min-height: 68px;
@@ -7611,7 +7611,7 @@ main {
 
 .composer-input-field {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   min-width: 0;
   align-self: stretch;
   position: relative;
@@ -7619,11 +7619,11 @@ main {
 
 .composer-typing-shell {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   position: relative;
   min-width: 0;
   width: 100%;
-  min-height: 50px;
+  min-height: 48px;
 }
 
 .composer-mention-menu {
@@ -7682,7 +7682,7 @@ main {
 
 .attachment-entry-details {
   position: relative;
-  align-self: center;
+  align-self: end;
 }
 
 .attachment-trigger {
@@ -7734,10 +7734,18 @@ main {
   line-height: 1;
 }
 
+.composer-button-icon:disabled {
+  border-color: rgba(219, 227, 238, 0.96);
+  background: rgba(231, 237, 246, 0.8);
+  color: rgba(91, 100, 112, 0.58);
+  box-shadow: none;
+  cursor: default;
+}
+
 .composer-action-cluster {
   display: inline-flex;
   align-items: center;
-  align-self: center;
+  align-self: end;
   gap: 9px;
   position: relative;
   z-index: 2;
@@ -8380,9 +8388,9 @@ main {
 .composer-form .textarea {
   display: block;
   min-height: 48px;
-  max-height: 164px;
+  max-height: 136px;
   border-radius: 20px;
-  padding: 12px 10px 12px 4px;
+  padding: 11px 10px 11px 4px;
   border-color: transparent;
   background: transparent;
   font-size: 0.98rem;

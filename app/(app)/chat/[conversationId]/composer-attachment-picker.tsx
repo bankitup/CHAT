@@ -9,6 +9,7 @@ type ComposerAttachmentPickerProps = {
   maxSizeBytes: number;
   maxSizeLabel: string;
   language: AppLanguage;
+  onSelectionChange?: () => void;
 };
 
 type AttachmentPickerMode = 'camera' | 'file' | 'gallery';
@@ -90,6 +91,7 @@ export function ComposerAttachmentPicker({
   maxSizeBytes,
   maxSizeLabel,
   language,
+  onSelectionChange,
 }: ComposerAttachmentPickerProps) {
   const t = getTranslations(language);
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
@@ -135,6 +137,7 @@ export function ComposerAttachmentPicker({
     pickerModeRef.current = 'file';
     setSelectedFile(null);
     setErrorMessage(null);
+    onSelectionChange?.();
   };
 
   const openPicker = (mode: AttachmentPickerMode) => {
@@ -251,6 +254,7 @@ export function ComposerAttachmentPicker({
             setSelectedFile(null);
             setErrorMessage(t.chat.attachmentSizeError(maxSizeLabel));
             detailsRef.current?.removeAttribute('open');
+            onSelectionChange?.();
             return;
           }
 
@@ -269,6 +273,7 @@ export function ComposerAttachmentPicker({
             setSelectedFile(null);
             setErrorMessage(helperText);
             detailsRef.current?.removeAttribute('open');
+            onSelectionChange?.();
             return;
           }
 
@@ -280,6 +285,7 @@ export function ComposerAttachmentPicker({
           }
           pickerModeRef.current = 'file';
           detailsRef.current?.removeAttribute('open');
+          onSelectionChange?.();
         }}
       />
 
