@@ -4069,7 +4069,9 @@ main {
 .settings-language-compact {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: calc(4px * var(--app-zoom-space-scale));
+  max-width: 100%;
   padding: calc(4px * var(--app-zoom-space-scale));
   border: 1px solid rgba(221, 228, 238, 0.84);
   border-radius: 999px;
@@ -4167,12 +4169,14 @@ main {
 
 .home-language-switch {
   flex: 0 0 auto;
+  max-width: 100%;
 }
 
 .home-zoom-control {
   position: relative;
   z-index: 5;
   flex: 0 0 auto;
+  min-width: 0;
 }
 
 .home-zoom-trigger {
@@ -4246,6 +4250,61 @@ main {
   box-shadow:
     0 18px 42px rgba(17, 24, 39, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.messenger-home-profile-header {
+  display: grid;
+  gap: 10px;
+}
+
+.messenger-home-profile-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.messenger-home-profile-copy {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.messenger-home-profile-language {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.messenger-home-profile-language .settings-language-compact {
+  max-width: 100%;
+}
+
+.messenger-home-profile-zoom {
+  min-width: 0;
+}
+
+.messenger-home-profile-zoom .home-zoom-control {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.messenger-home-profile-zoom .home-zoom-trigger {
+  width: 100%;
+  max-width: 100%;
+  justify-content: space-between;
+}
+
+.messenger-home-profile-zoom .home-zoom-panel {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 100%;
+  max-width: 100%;
 }
 
 .home-zoom-panel-copy {
