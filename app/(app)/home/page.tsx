@@ -7,6 +7,7 @@ import {
 } from './space-plan-config';
 import { HomeAppZoomControl } from './home-app-zoom-control';
 import { HomeLanguageSwitch } from './home-language-switch';
+import { PrivateSpaceCtaCard } from './private-space-cta-card';
 import { SpaceThemeCard } from './space-theme-card';
 import {
   getHomeSpaceUsageSnapshot,
@@ -140,6 +141,10 @@ function resolveHomeSpaceUpgradeActionLabel(input: {
   }
 
   return input.t.messengerHome.spaceUsageViewUsageAction;
+}
+
+function buildPrivateSpaceCreateHref(spaceId: string) {
+  return withSpaceParam('/spaces/new?profile=messenger_full', spaceId);
 }
 
 function buildMessengerSpaceUsageData(input: {
@@ -338,6 +343,9 @@ export default async function HomeDashboardPage({
   const currentZoomMode = await getRequestAppZoomMode();
   const canManageSpaceAppearance =
     'canManageMembers' in activeSpace && activeSpace.canManageMembers;
+  const shouldShowPrivateSpaceCta =
+    'canManageMembers' in activeSpace && !activeSpace.canManageMembers;
+  const privateSpaceCreateHref = buildPrivateSpaceCreateHref(activeSpace.id);
 
   if (activeSpace.profile === 'messenger_full') {
     const canManageMessengerMembers =
@@ -494,6 +502,19 @@ export default async function HomeDashboardPage({
             </section>
           </section>
 
+          {shouldShowPrivateSpaceCta ? (
+            <PrivateSpaceCtaCard
+              actionHref={privateSpaceCreateHref}
+              copy={{
+                action: t.homeDashboard.privateSpaceCtaAction,
+                badge: t.homeDashboard.privateSpaceCtaBadge,
+                body: t.homeDashboard.privateSpaceCtaBody,
+                note: t.homeDashboard.privateSpaceCtaNote,
+                title: t.homeDashboard.privateSpaceCtaTitle,
+              }}
+            />
+          ) : null}
+
           {spaceUsage ? <SpaceUsageCard {...spaceUsage} /> : null}
 
           {canManageSpaceAppearance ? (
@@ -584,6 +605,19 @@ export default async function HomeDashboardPage({
           currentTheme={activeSpace.theme}
           language={language}
           spaceId={activeSpace.id}
+        />
+      ) : null}
+
+      {shouldShowPrivateSpaceCta ? (
+        <PrivateSpaceCtaCard
+          actionHref={privateSpaceCreateHref}
+          copy={{
+            action: t.homeDashboard.privateSpaceCtaAction,
+            badge: t.homeDashboard.privateSpaceCtaBadge,
+            body: t.homeDashboard.privateSpaceCtaBody,
+            note: t.homeDashboard.privateSpaceCtaNote,
+            title: t.homeDashboard.privateSpaceCtaTitle,
+          }}
         />
       ) : null}
 
