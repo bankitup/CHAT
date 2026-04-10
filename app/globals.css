@@ -4881,7 +4881,6 @@ main {
 }
 
 .messenger-home-session-card {
-  grid-area: session;
   justify-content: space-between;
 }
 

@@ -26,6 +26,7 @@ import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import { getCurrentUserProfile } from '@/modules/messaging/data/server';
+import type { ReactNode } from 'react';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
@@ -283,6 +284,29 @@ function HomeLogoutSection({
   );
 }
 
+function HomeDashboardSectionFlow({
+  children,
+  className,
+  logoutSection,
+}: {
+  children: ReactNode;
+  className?: string;
+  logoutSection: ReactNode;
+}) {
+  return (
+    <div
+      className={
+        className
+          ? `stack home-dashboard-main-flow ${className}`
+          : 'stack home-dashboard-main-flow'
+      }
+    >
+      {children}
+      {logoutSection}
+    </div>
+  );
+}
+
 async function requireHomeSpaceContext(requestedSpaceId?: string) {
   const [user, language] = await Promise.all([
     getRequestViewer(),
@@ -412,6 +436,7 @@ export default async function HomeDashboardPage({
           upgradeHref: withSpaceParam('/spaces', activeSpace.id),
         })
       : null;
+    const logoutSection = <HomeLogoutSection t={t} />;
 
     return (
       <section className="stack messenger-home-screen messenger-home-shell">
@@ -426,7 +451,10 @@ export default async function HomeDashboardPage({
 
         {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
 
-        <div className="stack home-dashboard-main-flow messenger-home-main-flow">
+        <HomeDashboardSectionFlow
+          className="messenger-home-main-flow"
+          logoutSection={logoutSection}
+        >
           <section className="messenger-home-personal-grid">
             <section className="card stack settings-surface settings-home-card messenger-home-personal-card messenger-home-profile-editor-card">
               <div className="messenger-home-profile-header">
@@ -586,8 +614,7 @@ export default async function HomeDashboardPage({
             />
           ) : null}
 
-          <HomeLogoutSection t={t} />
-        </div>
+        </HomeDashboardSectionFlow>
       </section>
     );
   }
@@ -607,6 +634,7 @@ export default async function HomeDashboardPage({
       })
     : null;
   const visibleMessage = query.message?.trim() || null;
+  const logoutSection = <HomeLogoutSection t={t} />;
 
   return (
     <section className="stack settings-screen settings-shell keepcozy-page">
@@ -629,7 +657,7 @@ export default async function HomeDashboardPage({
 
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
 
-      <div className="stack home-dashboard-main-flow">
+      <HomeDashboardSectionFlow logoutSection={logoutSection}>
         <section className="stack settings-hero keepcozy-hero">
           <p className="eyebrow">{t.homeDashboard.eyebrow}</p>
           <div className="keepcozy-hero-header">
@@ -940,8 +968,7 @@ export default async function HomeDashboardPage({
           </section>
         </section>
 
-        <HomeLogoutSection t={t} />
-      </div>
+      </HomeDashboardSectionFlow>
     </section>
   );
 }
