@@ -126,6 +126,18 @@ function formatRecency(value: string | null, language: 'en' | 'ru', yesterdayLab
   }).format(target);
 }
 
+function formatUnreadBadgeCount(value: number) {
+  if (value <= 0) {
+    return null;
+  }
+
+  if (value > 99) {
+    return '99+';
+  }
+
+  return String(value);
+}
+
 type InboxConversationAvatarVisualProps = {
   groupAvatarPath: string | null;
   isGroupConversation: boolean;
@@ -353,6 +365,7 @@ function InboxConversationLiveRowComponent({
     language,
     labels.noActivityYet,
   );
+  const unreadBadgeCount = formatUnreadBadgeCount(liveSummary.unreadCount);
   const chatHref =
     activeSpaceId?.trim()
       ? `/chat/${item.conversationId}?space=${encodeURIComponent(activeSpaceId)}`
@@ -474,14 +487,17 @@ function InboxConversationLiveRowComponent({
                         ? 'conversation-recency conversation-recency-unread'
                         : 'conversation-recency'
                     }
+                    title={timestampLabel}
                   >
                     {recencyLabel}
                   </span>
-                  {hasUnread ? (
+                  {hasUnread && unreadBadgeCount ? (
                     <span
-                      className="conversation-unread-dot"
+                      className="conversation-unread-badge"
                       aria-label={labels.unreadAria}
-                    />
+                    >
+                      {unreadBadgeCount}
+                    </span>
                   ) : null}
                 </div>
               </div>
@@ -506,29 +522,30 @@ function InboxConversationLiveRowComponent({
               ) : null}
             </div>
 
-            <div
-              className={
-                isPrimaryChatsView
-                  ? 'conversation-footer conversation-footer-dm'
-                  : 'conversation-footer'
-              }
-            >
-              <div className="conversation-footer-meta">
-                {item.metaLabels.map((metaLabel) => (
-                  <span
-                    key={metaLabel.label}
-                    className={
-                      metaLabel.tone === 'archived'
-                        ? 'conversation-kind-label conversation-kind-label-archived'
-                        : 'conversation-kind-label'
-                    }
-                  >
-                    {metaLabel.tone === 'archived' ? metaLabel.label : labels.group}
-                  </span>
-                ))}
+            {item.metaLabels.length > 0 ? (
+              <div
+                className={
+                  isPrimaryChatsView
+                    ? 'conversation-footer conversation-footer-dm'
+                    : 'conversation-footer'
+                }
+              >
+                <div className="conversation-footer-meta">
+                  {item.metaLabels.map((metaLabel) => (
+                    <span
+                      key={metaLabel.label}
+                      className={
+                        metaLabel.tone === 'archived'
+                          ? 'conversation-kind-label conversation-kind-label-archived'
+                          : 'conversation-kind-label'
+                      }
+                    >
+                      {metaLabel.label}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <p className="muted conversation-timestamp">{timestampLabel}</p>
-            </div>
+            ) : null}
           </div>
         </Link>
         {isArchivedView && restoreAction && restoreLabel ? (

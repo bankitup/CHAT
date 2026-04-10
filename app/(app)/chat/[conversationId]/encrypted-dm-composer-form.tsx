@@ -41,6 +41,7 @@ import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
 const DM_E2EE_RECIPIENT_BUNDLE_SOFT_FAILURE_COOLDOWN_MS = 10_000;
+const COMPOSER_SEND_GUARD_MS = 320;
 
 type DmE2eeRecipientSoftFailureCode = Extract<
   DmE2eeApiErrorCode,
@@ -764,6 +765,30 @@ function getComposerAttachmentLabel(input: {
   return input.attachment.name.trim() || input.labels.file || input.labels.attachment;
 }
 
+function readComposerDraftState(form: HTMLFormElement | null) {
+  if (!form) {
+    return {
+      attachment: null,
+      body: '',
+      hasSendableContent: false,
+    };
+  }
+
+  const formData = new FormData(form);
+  const body = String(formData.get('body') ?? '').trim();
+  const attachmentEntry = formData.get('attachment');
+  const attachment =
+    attachmentEntry instanceof File && attachmentEntry.size > 0
+      ? attachmentEntry
+      : null;
+
+  return {
+    attachment,
+    body,
+    hasSendableContent: Boolean(body || attachment),
+  };
+}
+
 export function EncryptedDmComposerForm({
   accept,
   attachmentHelpText,
@@ -785,8 +810,12 @@ export function EncryptedDmComposerForm({
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
   const lastVoiceEntryAttemptAtRef = useRef(0);
+  const sendGuardTimeoutRef = useRef<number | null>(null);
+  const isSendGuardActiveRef = useRef(false);
   const [composerResetKey, setComposerResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSendLocked, setIsSendLocked] = useState(false);
+  const [isSendReady, setIsSendReady] = useState(false);
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
   const [errorDebugDetails, setErrorDebugDetails] =
     useState<EncryptedDmDebugFailureDetails | null>(null);
@@ -1036,6 +1065,29 @@ export function EncryptedDmComposerForm({
     });
   }, [conversationId, recipientUserId]);
 
+  const syncSendReadiness = useCallback(() => {
+    setIsSendReady(readComposerDraftState(formRef.current).hasSendableContent);
+  }, []);
+
+  const releaseSendGuard = useCallback(() => {
+    if (sendGuardTimeoutRef.current !== null) {
+      window.clearTimeout(sendGuardTimeoutRef.current);
+      sendGuardTimeoutRef.current = null;
+    }
+
+    isSendGuardActiveRef.current = false;
+    setIsSendLocked(false);
+  }, []);
+
+  const armSendGuard = useCallback(() => {
+    releaseSendGuard();
+    isSendGuardActiveRef.current = true;
+    setIsSendLocked(true);
+    sendGuardTimeoutRef.current = window.setTimeout(() => {
+      releaseSendGuard();
+    }, COMPOSER_SEND_GUARD_MS);
+  }, [releaseSendGuard]);
+
   function attemptVoiceEntry(source: 'click' | 'pointer') {
     const now = Date.now();
 
@@ -1189,21 +1241,32 @@ export function EncryptedDmComposerForm({
     };
   }, [conversationId, enqueue, getActiveRecipientBundleSoftFailureError, t]);
 
+  useEffect(() => {
+    syncSendReadiness();
+  }, [composerResetKey, syncSendReadiness]);
+
+  useEffect(() => {
+    return () => {
+      releaseSendGuard();
+    };
+  }, [releaseSendGuard]);
+
   return (
     <form
       ref={formRef}
       className="stack composer-form"
+      onChange={syncSendReadiness}
+      onInput={syncSendReadiness}
       onSubmit={async (event) => {
         event.preventDefault();
 
         const form = event.currentTarget;
-        const formData = new FormData(form);
-        const body = String(formData.get('body') ?? '').trim();
-        const attachmentEntry = formData.get('attachment');
-        const attachment =
-          attachmentEntry instanceof File && attachmentEntry.size > 0
-            ? attachmentEntry
-            : null;
+        const draftState = readComposerDraftState(form);
+        const { attachment, body } = draftState;
+
+        if (isSendGuardActiveRef.current) {
+          return;
+        }
 
         if (body && !encryptedDmEnabled) {
           setErrorMessage(t.chat.encryptionRolloutUnavailable);
@@ -1220,10 +1283,12 @@ export function EncryptedDmComposerForm({
         }
 
         if (!body && !attachment) {
+          syncSendReadiness();
           return;
         }
 
         if (attachment) {
+          armSendGuard();
           setErrorMessage(null);
           setErrorCode(null);
           setErrorDebugDetails(null);
@@ -1248,6 +1313,7 @@ export function EncryptedDmComposerForm({
           });
 
           form.reset();
+          setIsSendReady(false);
           setComposerResetKey((current) => current + 1);
           clearReplyTargetFromCurrentUrl();
 
@@ -1283,8 +1349,10 @@ export function EncryptedDmComposerForm({
         setErrorMessage(null);
         setErrorCode(null);
         setErrorDebugDetails(null);
+        armSendGuard();
 
         form.reset();
+        setIsSendReady(false);
         setComposerResetKey((current) => current + 1);
         window.requestAnimationFrame(() => {
           const textarea =
@@ -1358,6 +1426,7 @@ export function EncryptedDmComposerForm({
           maxSizeBytes={attachmentMaxSizeBytes}
           maxSizeLabel={attachmentMaxSizeLabel}
           language={language}
+          onSelectionChange={syncSendReadiness}
         />
 
         <label className="field composer-input-field">
@@ -1421,6 +1490,7 @@ export function EncryptedDmComposerForm({
           <button
             aria-label={t.chat.sendMessage}
             className="button composer-button composer-button-icon"
+            disabled={!isSendReady || isSendLocked}
             type="submit"
           >
             <span aria-hidden="true">➤</span>

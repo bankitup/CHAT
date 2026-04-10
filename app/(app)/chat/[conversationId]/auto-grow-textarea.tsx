@@ -5,7 +5,7 @@ import {
   type ForwardedRef,
   forwardRef,
   useCallback,
-  useEffect,
+  useLayoutEffect,
   useRef,
 } from 'react';
 
@@ -47,15 +47,22 @@ export const AutoGrowTextarea = forwardRef<HTMLTextAreaElement, AutoGrowTextarea
         return;
       }
 
-      textarea.style.height = 'auto';
-      const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+      const computedStyle = window.getComputedStyle(textarea);
+      const minHeight =
+        Number.parseFloat(computedStyle.minHeight) || textarea.clientHeight || 0;
+
+      textarea.style.height = '0px';
+      const nextHeight = Math.min(
+        Math.max(textarea.scrollHeight, minHeight),
+        maxHeight,
+      );
       textarea.style.height = `${nextHeight}px`;
       textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
     }, [maxHeight]);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
       resizeTextarea();
-    }, [resizeTextarea]);
+    }, [props.defaultValue, props.value, resizeTextarea]);
 
     return (
       <textarea
