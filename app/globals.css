@@ -2523,7 +2523,6 @@ main {
 
 .chat-entry-loading-screen {
   position: relative;
-  gap: 0;
   min-height: calc(100dvh - var(--app-bottom-nav-reserve) - env(safe-area-inset-top) - 10px);
   background:
     radial-gradient(circle at top, rgba(241, 248, 255, 0.96), rgba(241, 248, 255, 0) 44%),
@@ -2531,10 +2530,45 @@ main {
   overflow: hidden;
 }
 
+.chat-entry-loading-header-stack {
+  position: relative;
+  z-index: 1;
+}
+
+.chat-entry-loading-header-shell {
+  opacity: 0.9;
+}
+
+.chat-entry-loading-header-button,
+.chat-entry-loading-header-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
+  border: 1px solid rgba(225, 232, 241, 0.76);
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.chat-entry-loading-header-avatar {
+  justify-self: end;
+  border-radius: 16px;
+}
+
+.chat-entry-loading-header-main {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+}
+
+.chat-entry-loading-header-pill {
+  width: min(44vw, 168px);
+  height: 14px;
+  max-width: 100%;
+  border-radius: 999px;
+  background: rgba(209, 220, 233, 0.66);
+}
+
 .chat-entry-loading-main {
   position: relative;
-  justify-content: center;
-  align-items: center;
 }
 
 .chat-entry-loading-main::before {
@@ -2557,11 +2591,25 @@ main {
   flex: 1 1 auto;
   width: 100%;
   min-height: 100%;
-  padding:
-    calc(18px + env(safe-area-inset-top))
-    18px
-    calc(24px + env(safe-area-inset-bottom))
-    18px;
+  padding: 18px 18px 12px;
+}
+
+.chat-entry-loading-composer-card {
+  z-index: 1;
+}
+
+.chat-entry-loading-composer-shell {
+  justify-items: center;
+  padding-left: 16px;
+  padding-right: 16px;
+  opacity: 0.9;
+}
+
+.chat-entry-loading-composer-pill {
+  width: min(34vw, 132px);
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(209, 220, 233, 0.6);
 }
 
 .route-loading-inbox {
