@@ -8,20 +8,12 @@ import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-stat
 import { WarmNavRouteObserver } from '@/modules/messaging/performance/warm-nav-client';
 import { ChatUnreadBadgeSync } from '@/modules/messaging/push/chat-unread-badge-sync';
 import { PushSubscriptionPresenceSync } from '@/modules/messaging/push/presence-sync';
-import type {
-  SpaceProfile,
-  SpaceProfileDefaultShellRoute,
-  SpaceTheme,
-} from '@/modules/spaces/model';
+import {
+  resolveActiveAppShellSpace,
+  resolveAppShellState,
+  type AppShellSpaceSummary,
+} from '@/modules/spaces/shell';
 import { withSpaceParam } from '@/modules/spaces/url';
-
-type AppShellSpaceSummary = {
-  defaultShellRoute: SpaceProfileDefaultShellRoute;
-  id: string;
-  name: string;
-  profile: SpaceProfile;
-  theme: SpaceTheme;
-};
 
 type AppShellFrameProps = {
   children: ReactNode;
@@ -44,47 +36,18 @@ export function AppShellFrame({
   const isChatRoute = pathname.startsWith('/chat/');
   const isChatSettingsRoute =
     pathname.startsWith('/chat/') && pathname.endsWith('/settings');
-  const isSpacesRoute = pathname.startsWith('/spaces');
-  const isActivityRoute = pathname.startsWith('/activity');
-  const isSettingsRoute = pathname.startsWith('/settings');
-  const isHomeRoute = pathname.startsWith('/home');
-  const isRoomsRoute = pathname.startsWith('/rooms');
-  const isIssuesRoute = pathname.startsWith('/issues');
-  const isTasksRoute = pathname.startsWith('/tasks');
   const activeSpaceId = searchParams.get('space');
-  const activeSpace =
-    (activeSpaceId ? spaces.find((space) => space.id === activeSpaceId) : null) ??
-    spaces[0] ??
-    null;
-  const activeSpaceProfile = activeSpace?.profile ?? null;
-  const activeSpaceTheme = activeSpace?.theme ?? 'dark';
+  const activeSpace = resolveActiveAppShellSpace({
+    activeSpaceId,
+    spaces,
+  });
+  const shellState = resolveAppShellState({
+    activeSpace,
+    pathname,
+  });
   const navSpaceHref = (pathname: string) =>
     activeSpace?.id ? withSpaceParam(pathname, activeSpace.id) : pathname;
   const badgeSyncKey = `${pathname}?${searchParams.toString()}`;
-  const showBottomNav =
-    !isChatRoute && !(isSpacesRoute && activeSpaceProfile !== 'messenger_full');
-  let activeTab: 'activity' | 'tasks' | 'issues' | 'rooms' | 'home' | null = null;
-  let messengerActiveTab: 'activity' | 'chats' | 'home' | null = null;
-
-  if (isActivityRoute) {
-    activeTab = 'activity';
-  } else if (isTasksRoute) {
-    activeTab = 'tasks';
-  } else if (isIssuesRoute) {
-    activeTab = 'issues';
-  } else if (isRoomsRoute) {
-    activeTab = 'rooms';
-  } else if (isHomeRoute || isSettingsRoute) {
-    activeTab = 'home';
-  }
-
-  if (isHomeRoute) {
-    messengerActiveTab = 'home';
-  } else if (pathname.startsWith('/inbox')) {
-    messengerActiveTab = 'chats';
-  } else if (isActivityRoute) {
-    messengerActiveTab = 'activity';
-  }
 
   return (
     <main
@@ -92,13 +55,13 @@ export function AppShellFrame({
         'page',
         'page-mobile',
         'app-shell',
-        showBottomNav ? 'app-shell-with-nav' : null,
+        shellState.showBottomNav ? 'app-shell-with-nav' : null,
         isChatRoute ? 'app-shell-chat-route' : null,
         isChatSettingsRoute ? 'app-shell-chat-settings-route' : null,
       ]
         .filter(Boolean)
         .join(' ')}
-      data-space-theme={activeSpaceTheme}
+      data-space-theme={shellState.activeSpaceTheme}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
       <ChatUnreadBadgeSync syncKey={badgeSyncKey} />
@@ -106,10 +69,10 @@ export function AppShellFrame({
       <WarmNavRouteObserver />
       <div className="stack app-shell-content">{children}</div>
 
-      {showBottomNav ? (
+      {shellState.showBottomNav ? (
         <nav
           className={
-            activeSpaceProfile === 'messenger_full'
+            shellState.activeSpaceProfile === 'messenger_full'
               ? 'app-bottom-nav app-bottom-nav-messenger'
               : 'app-bottom-nav'
           }
@@ -117,17 +80,17 @@ export function AppShellFrame({
         >
           <div
             className={
-              activeSpaceProfile === 'messenger_full'
+              shellState.activeSpaceProfile === 'messenger_full'
                 ? 'app-bottom-nav-shell app-bottom-nav-shell-messenger'
                 : 'app-bottom-nav-shell'
             }
           >
-            {activeSpaceProfile === 'messenger_full' ? (
+            {shellState.activeSpaceProfile === 'messenger_full' ? (
               <>
                 <Link
                   aria-label={t.shell.openHome}
                   className={
-                    messengerActiveTab === 'home'
+                    shellState.messengerActiveTab === 'home'
                       ? 'app-bottom-nav-link app-bottom-nav-link-messenger app-bottom-nav-link-active'
                       : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
@@ -140,7 +103,7 @@ export function AppShellFrame({
                 <Link
                   aria-label={t.shell.openChats}
                   className={
-                    messengerActiveTab === 'chats'
+                    shellState.messengerActiveTab === 'chats'
                       ? 'app-bottom-nav-link app-bottom-nav-link-messenger app-bottom-nav-link-active'
                       : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
@@ -153,7 +116,7 @@ export function AppShellFrame({
                 <Link
                   aria-label={t.shell.openMessengerActivity}
                   className={
-                    messengerActiveTab === 'activity'
+                    shellState.messengerActiveTab === 'activity'
                       ? 'app-bottom-nav-link app-bottom-nav-link-messenger app-bottom-nav-link-active'
                       : 'app-bottom-nav-link app-bottom-nav-link-messenger'
                   }
@@ -170,7 +133,7 @@ export function AppShellFrame({
                 <Link
                   aria-label={t.shell.openHome}
                   className={
-                    activeTab === 'home'
+                    shellState.productActiveTab === 'home'
                       ? 'app-bottom-nav-link app-bottom-nav-link-active'
                       : 'app-bottom-nav-link'
                   }
@@ -183,7 +146,7 @@ export function AppShellFrame({
                 <Link
                   aria-label={t.shell.openRooms}
                   className={
-                    activeTab === 'rooms'
+                    shellState.productActiveTab === 'rooms'
                       ? 'app-bottom-nav-link app-bottom-nav-link-active'
                       : 'app-bottom-nav-link'
                   }
@@ -196,7 +159,7 @@ export function AppShellFrame({
                 <Link
                   aria-label={t.shell.openIssues}
                   className={
-                    activeTab === 'issues'
+                    shellState.productActiveTab === 'issues'
                       ? 'app-bottom-nav-link app-bottom-nav-link-active'
                       : 'app-bottom-nav-link'
                   }
@@ -209,7 +172,7 @@ export function AppShellFrame({
                 <Link
                   aria-label={t.shell.openTasks}
                   className={
-                    activeTab === 'tasks'
+                    shellState.productActiveTab === 'tasks'
                       ? 'app-bottom-nav-link app-bottom-nav-link-active'
                       : 'app-bottom-nav-link'
                   }
@@ -222,7 +185,7 @@ export function AppShellFrame({
                 <Link
                   aria-label={t.shell.openActivity}
                   className={
-                    activeTab === 'activity'
+                    shellState.productActiveTab === 'activity'
                       ? 'app-bottom-nav-link app-bottom-nav-link-active'
                       : 'app-bottom-nav-link'
                   }

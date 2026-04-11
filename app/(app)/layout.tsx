@@ -6,6 +6,7 @@ import {
   getUserSpaces,
   isSpaceMembersSchemaCacheErrorMessage,
 } from '@/modules/spaces/server';
+import type { AppShellSpaceSummary } from '@/modules/spaces/shell';
 import { AppShellFrame } from './app-shell-frame';
 
 export default async function AppLayout({
@@ -40,18 +41,20 @@ export default async function AppLayout({
     source: 'app-layout',
   });
 
+  const appShellSpaces: AppShellSpaceSummary[] = spaces.map((space) => ({
+    defaultShellRoute: space.defaultShellRoute,
+    id: space.id,
+    name: space.name,
+    profile: space.profile,
+    theme: space.theme,
+  }));
+
   return (
     <div className="app-route-shell-root">
       <AppShellFrame
         dmE2eeEnabled={dmE2eeEnabled}
         language={language}
-        spaces={spaces.map((space) => ({
-          defaultShellRoute: space.defaultShellRoute,
-          id: space.id,
-          name: space.name,
-          profile: space.profile,
-          theme: space.theme,
-        }))}
+        spaces={appShellSpaces}
         userId={user.id}
       >
         {children}

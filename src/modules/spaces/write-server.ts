@@ -3,6 +3,7 @@ import 'server-only';
 import type { User } from '@supabase/supabase-js';
 import { requireRequestViewer } from '@/lib/request-context/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
+import { resolveSuperAdminGovernanceForUser } from './governance';
 import {
   getDefaultShellRouteForSpaceProfile,
   normalizeSpaceProfile,
@@ -12,12 +13,15 @@ import {
   type SpaceTheme,
 } from './model';
 import {
+  DEFAULT_NEW_SPACE_PROFILE,
+  isLegacyKeepCozyTestSpaceName,
+} from './posture';
+import {
   getHomeSpacePlanDefinition,
   resolveCurrentHomeSpacePlanCode,
 } from './plan-config';
 import {
   requireSpaceMemberManagementForUser,
-  resolveSuperAdminGovernanceForUser,
 } from './server';
 
 const UUID_PATTERN =
@@ -41,7 +45,7 @@ function trimToNullable(value: string | null | undefined) {
 }
 
 function isReservedTestSpaceName(value: string | null | undefined) {
-  return value?.trim().toUpperCase() === 'TEST';
+  return isLegacyKeepCozyTestSpaceName(value);
 }
 
 function isMissingColumnErrorMessage(message: string, columnName: string) {
@@ -458,7 +462,8 @@ export async function createGovernedSpace(input: {
   const viewer = await assertSuperAdminViewer('spaces:create-space');
   const serviceClient = await requireServiceRoleClient();
   const spaceName = trimToNullable(input.spaceName);
-  const profile = normalizeSpaceProfile(input.profile) ?? 'messenger_full';
+  const profile =
+    normalizeSpaceProfile(input.profile) ?? DEFAULT_NEW_SPACE_PROFILE;
   const participantIdentifiers = parseSpaceUserIdentifiers(input.participantIdentifiers);
   const adminIdentifiers = parseSpaceUserIdentifiers(input.adminIdentifiers);
 
@@ -468,7 +473,7 @@ export async function createGovernedSpace(input: {
 
   if (isReservedTestSpaceName(spaceName)) {
     throw new Error(
-      'TEST is reserved for the existing KeepCozy sandbox. Use a different name for a new messenger space.',
+      'TEST is reserved for the current platform compatibility sandbox. Use a different space name.',
     );
   }
 

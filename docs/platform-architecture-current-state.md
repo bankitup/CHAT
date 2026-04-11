@@ -29,7 +29,7 @@ These areas already behave like platform-level foundation:
 | --- | --- | --- |
 | Auth and request viewer resolution | Shared runtime auth/session seam | `src/lib/request-context/server.ts`, `src/lib/supabase/server.ts`, `src/lib/supabase/service.ts` |
 | Shared authenticated shell | One app shell hosting both product surfaces | `app/(app)/layout.tsx`, `app/(app)/app-shell-frame.tsx`, `app/(app)/actions.ts` |
-| Shared space boundary | Outer tenancy and membership boundary for both messaging and KeepCozy data | `src/modules/spaces/server.ts`, `src/modules/spaces/write-server.ts`, `src/modules/spaces/model.ts`, `src/modules/spaces/url.ts`, `app/(app)/spaces/**` |
+| Shared space boundary | Outer tenancy and membership boundary for both messaging and KeepCozy data | `src/modules/spaces/server.ts`, `src/modules/spaces/write-server.ts`, `src/modules/spaces/model.ts`, `src/modules/spaces/governance.ts`, `src/modules/spaces/posture.ts`, `src/modules/spaces/shell.ts`, `src/modules/spaces/url.ts`, `app/(app)/spaces/**` |
 | Shared i18n and copy system | Used across both products | `src/modules/i18n/**` |
 | Shared profile/settings shell | Shared current-user profile/status entry surface | `app/(app)/settings/**` |
 
@@ -82,6 +82,7 @@ current naming is still Messenger-heavy:
 | --- | --- | --- |
 | Spaces and membership | `src/modules/spaces/**` | Outer access boundary for both products |
 | Messaging capability | `src/modules/messaging/**`, `app/api/messaging/**` | Messenger uses it directly now; KeepCozy may later compose parts of it |
+| KeepCozy future contract drafts | `src/modules/keepcozy/contract-types.ts` | Product-specific future contract language no longer needs to live inside shared `spaces` runtime modules |
 | Avatar/media delivery | `src/modules/messaging/avatar-delivery.ts`, `app/api/messaging/avatar/[...objectPath]/route.ts` | Shared delivery concern even if currently named under messaging |
 | Push and unread | `src/modules/messaging/push/**`, `src/modules/messaging/sdk/notifications.ts` | Shared messaging capability with platform-level operational value |
 | Shared error sanitation | `src/modules/messaging/ui/user-facing-errors.ts` | Already used outside Messenger routes |
@@ -107,9 +108,10 @@ Concrete examples:
 
 ### B. Product posture is still encoded inside shared space resolution
 
-Concrete example:
+Concrete examples:
 
 - `src/modules/spaces/server.ts`
+- `src/modules/spaces/posture.ts`
 
 Current coupling:
 
@@ -154,12 +156,15 @@ Concrete examples:
 - `app/(app)/issues/actions.ts`
 - `app/(app)/tasks/actions.ts`
 - `src/modules/messaging/ui/user-facing-errors.ts`
+- `src/modules/spaces/types.ts` before this pass
 
 Current coupling:
 
 - KeepCozy actions reuse a generic error-sanitizing helper that lives under a
   `messaging/ui` namespace
 - the behavior is shared, but the ownership label is misleading
+- KeepCozy future contract drafts used to live directly in `src/modules/spaces`
+  even though they are product-specific, not platform-runtime types
 
 ## 6. Current Docs That No Longer Match The Intended Shape
 

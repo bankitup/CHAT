@@ -7,7 +7,7 @@ import { getConversationForUser } from '@/modules/messaging/data/server';
 import type {
   KeepCozyOperationalObjectRef,
   KeepCozyThreadCompanionMetadata,
-} from '@/modules/spaces/types';
+} from '@/modules/keepcozy/contract-types';
 
 export type ConversationThreadContextConversation = NonNullable<
   Awaited<ReturnType<typeof getConversationForUser>>

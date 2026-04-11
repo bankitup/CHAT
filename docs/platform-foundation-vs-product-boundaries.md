@@ -35,6 +35,15 @@ Primary files today:
 - `src/modules/spaces/**`
 - `src/modules/i18n/**`
 
+Important current split inside `src/modules/spaces`:
+
+- `model.ts` for shared platform types
+- `governance.ts` for shared governance resolution
+- `posture.ts` for shared profile/theme posture resolution
+- `shell.ts` for shared shell decision helpers
+- `server.ts` for access-loading and runtime resolution
+- `write-server.ts` for governed space writes
+
 ### Messenger product owns
 
 - inbox
@@ -216,6 +225,9 @@ These are the safest future cleanup targets:
 - profile defaults in `src/modules/spaces/server.ts` that still encode product
   posture in a shared platform module
 - documentation that still frames one product as layered on the other
+- compatibility re-exports such as `src/modules/spaces/types.ts`, which should
+  shrink over time now that the real KeepCozy draft contracts live in
+  `src/modules/keepcozy/contract-types.ts`
 
 ## Non-Goals
 

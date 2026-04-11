@@ -6,11 +6,11 @@ import type {
   KeepCozyOperationalObjectRef,
   KeepCozyThreadCompanionMetadata,
   KeepCozyThreadCompanionMetadataRowDraft,
-} from '@/modules/spaces/types';
+} from '@/modules/keepcozy/contract-types';
 import {
   KEEP_COZY_THREAD_COMPANION_METADATA_DEFAULTS_DRAFT,
   KEEP_COZY_THREAD_COMPANION_METADATA_TABLE_NAME_DRAFT,
-} from '@/modules/spaces/types';
+} from '@/modules/keepcozy/contract-types';
 
 type ConversationCompanionMetadataClient = Awaited<
   ReturnType<typeof createSupabaseServerClient>

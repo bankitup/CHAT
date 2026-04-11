@@ -23,7 +23,8 @@ Related documents:
 - [keepcozy-mvp-boundary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-boundary.md)
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
-- [types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/types.ts)
+- [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
+- [contract-types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/contract-types.ts)
 
 ## Scope of This Matrix
 

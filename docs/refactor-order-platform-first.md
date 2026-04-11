@@ -45,6 +45,9 @@ Why second:
 
 - these files currently encode mixed product posture and are the biggest source
   of architectural ambiguity
+- after this pass, the first safe landing spots for that work are
+  `src/modules/spaces/governance.ts`, `src/modules/spaces/posture.ts`, and
+  `src/modules/spaces/shell.ts`
 
 ### 3. `platform/03-shared-foundation-extraction-by-name`
 
