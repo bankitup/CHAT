@@ -288,10 +288,14 @@ const threadVoicePlaybackWarmPromises = new Map<string, Promise<string | null>>(
 
 const activeThreadVoicePlayback: {
   audio: HTMLAudioElement | null;
+  intendedMessageId: string | null;
   messageId: string | null;
+  ownerVersion: number;
 } = {
   audio: null,
+  intendedMessageId: null,
   messageId: null,
+  ownerVersion: 0,
 };
 
 function claimActiveThreadVoicePlayback(
@@ -304,13 +308,42 @@ function claimActiveThreadVoicePlayback(
     previousAudio.pause();
   }
 
+  const nextOwnerVersion = activeThreadVoicePlayback.ownerVersion + 1;
+
   activeThreadVoicePlayback.audio = audio;
+  activeThreadVoicePlayback.intendedMessageId = messageId;
   activeThreadVoicePlayback.messageId = messageId;
+  activeThreadVoicePlayback.ownerVersion = nextOwnerVersion;
+
+  return nextOwnerVersion;
+}
+
+function setActiveThreadVoicePlaybackIntent(messageId: string | null) {
+  activeThreadVoicePlayback.intendedMessageId = messageId;
+}
+
+function hasActiveThreadVoicePlaybackIntent(messageId: string) {
+  return activeThreadVoicePlayback.intendedMessageId === messageId;
+}
+
+function isActiveThreadVoicePlaybackOwner(input: {
+  audio: HTMLAudioElement | null;
+  messageId: string;
+  ownerVersion?: number | null;
+}) {
+  return (
+    Boolean(input.audio) &&
+    activeThreadVoicePlayback.audio === input.audio &&
+    activeThreadVoicePlayback.messageId === input.messageId &&
+    (input.ownerVersion == null ||
+      activeThreadVoicePlayback.ownerVersion === input.ownerVersion)
+  );
 }
 
 function releaseActiveThreadVoicePlayback(
   messageId: string,
   audio: HTMLAudioElement | null,
+  ownerVersion?: number | null,
 ) {
   if (!audio) {
     return;
@@ -318,10 +351,15 @@ function releaseActiveThreadVoicePlayback(
 
   if (
     activeThreadVoicePlayback.audio === audio &&
-    activeThreadVoicePlayback.messageId === messageId
+    activeThreadVoicePlayback.messageId === messageId &&
+    (ownerVersion == null ||
+      activeThreadVoicePlayback.ownerVersion === ownerVersion)
   ) {
     activeThreadVoicePlayback.audio = null;
     activeThreadVoicePlayback.messageId = null;
+    if (activeThreadVoicePlayback.intendedMessageId === messageId) {
+      activeThreadVoicePlayback.intendedMessageId = null;
+    }
   }
 }
 
@@ -1579,6 +1617,7 @@ function ThreadVoiceMessageBubble({
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
   const lastVoicePointerActivationAtRef = useRef(0);
   const playbackTogglePromiseRef = useRef<Promise<void> | null>(null);
+  const claimedPlaybackOwnerVersionRef = useRef<number | null>(null);
   const voiceTapGestureRef = useRef<{
     didMove: boolean;
     pointerId: number;
@@ -1666,12 +1705,21 @@ function ThreadVoiceMessageBubble({
     const audio = audioRef.current;
 
     return () => {
+      if (hasActiveThreadVoicePlaybackIntent(messageId)) {
+        setActiveThreadVoicePlaybackIntent(null);
+      }
+
       if (!audio) {
         return;
       }
 
       audio.pause();
-      releaseActiveThreadVoicePlayback(messageId, audio);
+      releaseActiveThreadVoicePlayback(
+        messageId,
+        audio,
+        claimedPlaybackOwnerVersionRef.current,
+      );
+      claimedPlaybackOwnerVersionRef.current = null;
       audio.src = '';
     };
   }, [messageId]);
@@ -1854,6 +1902,9 @@ function ThreadVoiceMessageBubble({
         return false;
       }
 
+      const ownerVersion = claimActiveThreadVoicePlayback(messageId, audio);
+      claimedPlaybackOwnerVersionRef.current = ownerVersion;
+
       if (audio.getAttribute('src') !== nextSignedUrl) {
         audio.setAttribute('src', nextSignedUrl);
         audio.load();
@@ -1865,14 +1916,26 @@ function ThreadVoiceMessageBubble({
       if (audio.readyState < VOICE_READY_TO_REPLAY_STATE) {
         setPlaybackState('buffering');
       }
-      claimActiveThreadVoicePlayback(messageId, audio);
 
       try {
         await audio.play();
+        if (
+          !isActiveThreadVoicePlaybackOwner({
+            audio,
+            messageId,
+            ownerVersion,
+          })
+        ) {
+          audio.pause();
+          return false;
+        }
         setHasPendingPlaybackIntent(false);
         return true;
       } catch {
-        releaseActiveThreadVoicePlayback(messageId, audio);
+        releaseActiveThreadVoicePlayback(messageId, audio, ownerVersion);
+        if (claimedPlaybackOwnerVersionRef.current === ownerVersion) {
+          claimedPlaybackOwnerVersionRef.current = null;
+        }
         setHasPendingPlaybackIntent(false);
         setPlaybackFailed(true);
         setPlaybackState('failed');
@@ -1915,10 +1978,21 @@ function ThreadVoiceMessageBubble({
     if (!effectiveSignedUrl) {
       const audio = audioRef.current;
 
+      if (hasActiveThreadVoicePlaybackIntent(messageId)) {
+        setActiveThreadVoicePlaybackIntent(null);
+      }
+
       if (audio) {
         audio.pause();
-        releaseActiveThreadVoicePlayback(messageId, audio);
+        releaseActiveThreadVoicePlayback(
+          messageId,
+          audio,
+          claimedPlaybackOwnerVersionRef.current,
+        );
+        claimedPlaybackOwnerVersionRef.current = null;
         audio.src = '';
+      } else {
+        claimedPlaybackOwnerVersionRef.current = null;
       }
 
       setProgressMs(0);
@@ -1933,6 +2007,11 @@ function ThreadVoiceMessageBubble({
 
   useEffect(() => {
     if (!hasPendingPlaybackIntent) {
+      return;
+    }
+
+    if (!hasActiveThreadVoicePlaybackIntent(messageId)) {
+      setHasPendingPlaybackIntent(false);
       return;
     }
 
@@ -1959,6 +2038,7 @@ function ThreadVoiceMessageBubble({
     effectiveSignedUrl,
     hasPendingPlaybackIntent,
     isResolvingSignedUrl,
+    messageId,
     playbackState,
     resolveSignedUrl,
     startPlayback,
@@ -1968,6 +2048,7 @@ function ThreadVoiceMessageBubble({
   const togglePlaybackUnsafe = useCallback(async () => {
     if (voiceState !== 'ready') {
       if (canResolveSignedUrl) {
+        setActiveThreadVoicePlaybackIntent(messageId);
         setHasPendingPlaybackIntent(true);
         if (!isResolvingSignedUrl) {
           void resolveSignedUrl();
@@ -1986,16 +2067,21 @@ function ThreadVoiceMessageBubble({
       if (hasPendingPlaybackIntent) {
         return;
       }
+      setActiveThreadVoicePlaybackIntent(messageId);
       setHasPendingPlaybackIntent(true);
       return;
     }
 
+    if (hasActiveThreadVoicePlaybackIntent(messageId)) {
+      setActiveThreadVoicePlaybackIntent(null);
+    }
     setHasPendingPlaybackIntent(false);
     audio.pause();
   }, [
     canResolveSignedUrl,
     hasPendingPlaybackIntent,
     isResolvingSignedUrl,
+    messageId,
     resolveSignedUrl,
     voiceState,
   ]);
@@ -2232,14 +2318,24 @@ function ThreadVoiceMessageBubble({
             }
           }}
           onEnded={(event) => {
-            releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            releaseActiveThreadVoicePlayback(
+              messageId,
+              event.currentTarget,
+              claimedPlaybackOwnerVersionRef.current,
+            );
+            claimedPlaybackOwnerVersionRef.current = null;
             event.currentTarget.currentTime = 0;
             setProgressMs(0);
             setHasPendingPlaybackIntent(false);
             setPlaybackState('ended');
           }}
           onError={(event) => {
-            releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            releaseActiveThreadVoicePlayback(
+              messageId,
+              event.currentTarget,
+              claimedPlaybackOwnerVersionRef.current,
+            );
+            claimedPlaybackOwnerVersionRef.current = null;
             event.currentTarget.pause();
             event.currentTarget.currentTime = 0;
             setProgressMs(0);
@@ -2288,7 +2384,12 @@ function ThreadVoiceMessageBubble({
             );
           }}
           onPause={(event) => {
-            releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
+            releaseActiveThreadVoicePlayback(
+              messageId,
+              event.currentTarget,
+              claimedPlaybackOwnerVersionRef.current,
+            );
+            claimedPlaybackOwnerVersionRef.current = null;
             setHasPendingPlaybackIntent(false);
 
             if (event.currentTarget.ended) {
@@ -2298,7 +2399,16 @@ function ThreadVoiceMessageBubble({
             setPlaybackState(event.currentTarget.currentTime > 0 ? 'paused' : 'idle');
           }}
           onPlaying={(event) => {
-            claimActiveThreadVoicePlayback(messageId, event.currentTarget);
+            if (
+              !isActiveThreadVoicePlaybackOwner({
+                audio: event.currentTarget,
+                messageId,
+                ownerVersion: claimedPlaybackOwnerVersionRef.current,
+              })
+            ) {
+              event.currentTarget.pause();
+              return;
+            }
             setHasPendingPlaybackIntent(false);
             setPlaybackFailed(false);
             setPlaybackState('playing');
