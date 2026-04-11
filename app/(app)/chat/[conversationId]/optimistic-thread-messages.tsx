@@ -89,7 +89,7 @@ function OptimisticImageAttachmentCard({
   return (
     <div
       aria-label={previewLabel}
-      className="message-photo-card message-photo-card-optimistic"
+      className="message-photo-card message-photo-card-committed message-photo-card-optimistic"
       role="img"
     >
       <span
