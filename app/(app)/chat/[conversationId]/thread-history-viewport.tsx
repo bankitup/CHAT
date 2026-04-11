@@ -3685,6 +3685,11 @@ function ThreadMessageRowComponent({
       : messageAttachments.filter(
           (attachment) => attachment.id !== primaryVoiceAttachment.id,
         );
+  const shouldRenderCompactImageBubble =
+    !isDeletedMessage &&
+    !normalizedMessageBody &&
+    nonVoiceAttachments.length > 0 &&
+    nonVoiceAttachments.every((attachment) => attachment.isImage);
   const encryptedEnvelope =
     encryptedEnvelopesByMessage.get(message.id) ?? null;
   const encryptedHistoryHint = getEncryptedHistoryHintForMessage({
@@ -4285,6 +4290,9 @@ function ThreadMessageRowComponent({
                       'message-bubble',
                       'message-bubble-own',
                       'message-bubble-with-reply',
+                      shouldRenderCompactImageBubble
+                        ? 'message-bubble-compact-media'
+                        : null,
                       shouldRenderCompactHistoricalUnavailableBubble
                         ? 'message-bubble-encrypted-history-continuation'
                         : null,
@@ -4300,6 +4308,9 @@ function ThreadMessageRowComponent({
                   : [
                       'message-bubble',
                       'message-bubble-with-reply',
+                      shouldRenderCompactImageBubble
+                        ? 'message-bubble-compact-media'
+                        : null,
                       shouldRenderCompactHistoricalUnavailableBubble
                         ? 'message-bubble-encrypted-history-continuation'
                         : null,
@@ -4316,6 +4327,9 @@ function ThreadMessageRowComponent({
                   ? [
                       'message-bubble',
                       'message-bubble-own',
+                      shouldRenderCompactImageBubble
+                        ? 'message-bubble-compact-media'
+                        : null,
                       shouldRenderCompactHistoricalUnavailableBubble
                         ? 'message-bubble-encrypted-history-continuation'
                         : null,
@@ -4330,6 +4344,9 @@ function ThreadMessageRowComponent({
                       .join(' ')
                   : [
                       'message-bubble',
+                      shouldRenderCompactImageBubble
+                        ? 'message-bubble-compact-media'
+                        : null,
                       shouldRenderCompactHistoricalUnavailableBubble
                         ? 'message-bubble-encrypted-history-continuation'
                         : null,

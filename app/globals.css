@@ -7784,16 +7784,29 @@ main {
 }
 
 .message-bubble-optimistic-media {
-  padding: 6px;
+  padding: 4px;
   background: rgba(246, 248, 251, 0.56);
   border-color: rgba(221, 228, 238, 0.42);
-  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.02);
+  box-shadow: 0 3px 10px rgba(17, 24, 39, 0.018);
 }
 
 .message-bubble-own.message-bubble-optimistic-media {
   background: rgba(232, 241, 255, 0.62);
   border-color: rgba(31, 111, 235, 0.14);
-  box-shadow: 0 4px 12px rgba(31, 111, 235, 0.03);
+  box-shadow: 0 3px 10px rgba(31, 111, 235, 0.026);
+}
+
+.message-bubble-compact-media {
+  padding: 4px;
+}
+
+.message-bubble-with-reply.message-bubble-compact-media {
+  padding-top: 6px;
+}
+
+.message-bubble-compact-media .message-attachments {
+  gap: 6px;
+  margin-top: 0;
 }
 
 .message-bubble-with-reply {
@@ -8651,14 +8664,14 @@ main {
   overflow: hidden;
   width: min(100%, 14.75rem);
   contain: paint;
-  border: 1px solid rgba(221, 228, 238, 0.56);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(221, 228, 238, 0.48);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.64);
   color: inherit;
   text-decoration: none;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.52),
-    0 8px 18px rgba(17, 24, 39, 0.045);
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    0 4px 10px rgba(17, 24, 39, 0.028);
 }
 
 .message-photo-card-committed {
@@ -8673,11 +8686,11 @@ main {
   width: fit-content;
   max-width: var(--message-photo-card-committed-max-width, min(100%, 7.25rem));
   border-color: rgba(221, 228, 238, 0.4);
-  border-radius: 15px;
+  border-radius: 13px;
   background: rgba(255, 255, 255, 0.58);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.46),
-    0 6px 14px rgba(17, 24, 39, 0.03);
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 3px 8px rgba(17, 24, 39, 0.02);
 }
 
 .message-bubble-own .message-photo-card-optimistic {
