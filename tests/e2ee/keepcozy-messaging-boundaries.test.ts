@@ -38,15 +38,22 @@ test('keepcozy activity route consumes the bounded messaging adapter instead of 
   );
 });
 
-test('messenger inbox route consumes the shared messaging route-context seam', () => {
+test('messenger inbox route consumes the shared messaging route-context seam through its page loader', () => {
   const inboxPageSource = readWorkspaceFile('app/(app)/inbox/page.tsx');
+  const inboxLoaderSource = readWorkspaceFile(
+    'src/modules/messaging/server/inbox-page.ts',
+  );
 
   assert.match(
     inboxPageSource,
+    /loadMessengerInboxPageData/,
+  );
+  assert.match(
+    inboxLoaderSource,
     /resolveMessagingRouteSpaceContextForUser/,
   );
   assert.doesNotMatch(
-    inboxPageSource,
+    inboxLoaderSource,
     /from ['"]@\/modules\/spaces\/server['"]/,
   );
 });

@@ -1,29 +1,10 @@
-import { createSupabaseServerClient } from '@/lib/supabase/server';
 import {
   formatMemberCount,
-  formatPersonFallbackLabel,
   getLocaleForLanguage,
   getTranslations,
   type AppLanguage,
 } from '@/modules/i18n';
-import { getRequestLanguage } from '@/modules/i18n/server';
-import {
-  getAvailableUsers,
-  getConversationDisplayName,
-  getConversationMessageStats,
-  getConversationParticipantIdentities,
-  getConversationParticipants,
-  getDirectMessageDisplayName,
-} from '@/modules/messaging/data/server';
-import {
-  canAddParticipantsToGroupConversation,
-  canEditGroupConversationIdentity,
-  canRemoveParticipantFromGroupConversation,
-  normalizeGroupConversationJoinPolicy,
-} from '@/modules/messaging/group-policy';
-import {
-  resolveMessagingConversationRouteContextForUser,
-} from '@/modules/messaging/server/route-context';
+import { loadMessengerThreadSettingsPageData } from '@/modules/messaging/server/thread-settings-page';
 import {
   GroupIdentityAvatar,
   IdentityAvatar,
@@ -32,14 +13,8 @@ import {
   IdentityStatusInline,
   hasIdentityStatus,
 } from '@/modules/messaging/ui/identity-status';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
-import {
-  getUserFacingErrorFallback,
-  sanitizeUserFacingErrorMessage,
-} from '@/modules/messaging/ui/user-facing-errors';
 import { withSpaceParam } from '@/modules/spaces/url';
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
 import {
   addGroupParticipantsAction,
   hideConversationAction,
@@ -90,247 +65,25 @@ function formatLongDate(
   }).format(parsedDate);
 }
 
-function formatParticipantRoleLabel(
-  role: string | null,
-  t: ReturnType<typeof getTranslations>,
-) {
-  if (role === 'owner') {
-    return t.chat.owner;
-  }
-
-  if (role === 'admin') {
-    return t.chat.admin;
-  }
-
-  return t.chat.member;
-}
-
-function formatGroupMemberSummary(
-  participantIds: string[],
-  currentUserId: string,
-  displayNames: Map<string, string | null>,
-  language: AppLanguage,
-  t: ReturnType<typeof getTranslations>,
-) {
-  const fallbackNames = new Map<string, string>();
-
-  const labels = participantIds.map((participantId) => {
-    if (participantId === currentUserId) {
-      return t.chat.you;
-    }
-
-    const displayName = displayNames.get(participantId)?.trim();
-
-    if (displayName) {
-      return displayName;
-    }
-
-    const existing = fallbackNames.get(participantId);
-
-    if (existing) {
-      return existing;
-    }
-
-    const nextLabel = formatPersonFallbackLabel(language, fallbackNames.size + 1);
-    fallbackNames.set(participantId, nextLabel);
-
-    return nextLabel;
-  });
-
-  const otherLabels = labels.filter((label) => label !== t.chat.you);
-  const previewNames = otherLabels.slice(0, 2);
-  const remainingCount = Math.max(0, otherLabels.length - previewNames.length);
-  const memberLabel = formatMemberCount(language, participantIds.length);
-
-  if (previewNames.length === 0) {
-    return memberLabel;
-  }
-
-  return `${memberLabel} · ${previewNames.join(', ')}${
-    remainingCount > 0 ? ` +${remainingCount}` : ''
-  }`;
-}
-
 export default async function ChatSettingsPage({
   params,
   searchParams,
 }: ChatSettingsPageProps) {
   const { conversationId } = await params;
   const query = await searchParams;
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user?.id) {
-    redirect('/login');
-  }
-
-  const routeContext = await resolveMessagingConversationRouteContextForUser({
+  const data = await loadMessengerThreadSettingsPageData({
     conversationId,
-    requestedSpaceId: query.space,
-    source: 'chat-settings-page',
-    userEmail: user.email ?? null,
-    userId: user.id,
+    query,
   });
-
-  if (routeContext.kind === 'conversation_not_found') {
-    notFound();
-  }
-
-  if (routeContext.kind === 'requested_space_invalid') {
-    notFound();
-  }
-
-  if (routeContext.kind === 'space_unavailable') {
-    redirect('/spaces');
-  }
-
-  const {
-    activeSpaceId,
-    conversation,
-    isV1TestBypass,
-  } = routeContext.context;
-
-  const language = await getRequestLanguage();
-  const t = getTranslations(language);
-  const visibleSettingsError = query.error
-    ? sanitizeUserFacingErrorMessage({
-        fallback: getUserFacingErrorFallback(language, 'chat-settings'),
-        language,
-        rawMessage: query.error,
-      })
-    : null;
-  const hasSettingsSavedState = query.saved === '1';
-  const [participants, participantIdentities, availableUsers, messageStats] =
-    await Promise.all([
-      getConversationParticipants(conversationId),
-      getConversationParticipantIdentities([conversationId]),
-      conversation.kind === 'group' && !isV1TestBypass
-        ? getAvailableUsers(user.id, { spaceId: activeSpaceId })
-        : Promise.resolve([]),
-      conversation.kind === 'dm'
-        ? getConversationMessageStats(conversationId)
-        : Promise.resolve(null),
-    ]);
-
-  const identitiesByUserId = new Map(
-    participantIdentities.map((identity) => [identity.userId, identity] as const),
-  );
-  const senderNames = new Map<string, string>(
-    participantIdentities.map((identity) => [
-      identity.userId,
-      resolvePublicIdentityLabel(identity, t.chat.unknownUser),
-    ]),
-  );
-  const otherParticipants = participants.filter(
-    (participant) => participant.userId !== user.id,
-  );
-  const otherParticipantLabels = otherParticipants.map((participant) =>
-    resolvePublicIdentityLabel(
-      identitiesByUserId.get(participant.userId),
-      t.chat.unknownUser,
-    ),
-  );
-  const directParticipantIdentity = otherParticipants[0]
-    ? identitiesByUserId.get(otherParticipants[0].userId)
-    : null;
-  const conversationDisplayTitle = getConversationDisplayName({
-    kind: conversation.kind === 'group' ? conversation.kind : null,
-    title: conversation.title,
-    participantLabels:
-      conversation.kind === 'group' ? otherParticipantLabels : [],
-    fallbackTitles: {
-      group: language === 'ru' ? 'Новая группа' : 'New group',
-    },
-  });
-  const directConversationDisplayTitle =
-    conversation.kind === 'dm'
-      ? getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser)
-      : conversationDisplayTitle;
-  const groupMemberSummary =
-    conversation.kind === 'group'
-      ? formatGroupMemberSummary(
-          participants.map((participant) => participant.userId),
-          user.id,
-          senderNames,
-          language,
-          t,
-        )
-      : null;
-  const currentUserGroupRole =
-    conversation.kind === 'group'
-      ? participants.find((participant) => participant.userId === user.id)?.role ?? 'member'
-      : null;
-  const groupJoinPolicy =
-    conversation.kind === 'group'
-      ? normalizeGroupConversationJoinPolicy(conversation.joinPolicy)
-      : null;
-  const canEditGroupIdentity =
-    conversation.kind === 'group' &&
-    canEditGroupConversationIdentity(currentUserGroupRole);
-  const canManageGroupParticipants =
-    conversation.kind === 'group' &&
-    groupJoinPolicy !== null &&
-    canAddParticipantsToGroupConversation(
-      groupJoinPolicy,
-      currentUserGroupRole,
-    );
-  const canDeleteDirectConversation =
-    conversation.kind === 'dm' &&
-    participants.some((participant) => participant.userId === user.id);
-  const historyBaselineStartsAfterLatest =
-    conversation.visibleFromSeq !== null &&
-    conversation.latestMessageSeq !== null &&
-    conversation.visibleFromSeq > conversation.latestMessageSeq;
-  const canResetVisibleHistoryBaseline = conversation.latestMessageSeq !== null;
-  const participantItems = participants.map((participant) => {
-    const identity = identitiesByUserId.get(participant.userId);
-    const label = resolvePublicIdentityLabel(identity, t.chat.unknownUser);
-
-    return {
-      userId: participant.userId,
-      identity,
-      isCurrentUser: participant.userId === user.id,
-      label,
-      role: participant.role ?? 'member',
-      roleLabel: formatParticipantRoleLabel(participant.role ?? 'member', t),
-    };
-  });
-  const activeParticipantUserIds = new Set(participants.map((participant) => participant.userId));
-  const availableParticipantsToAdd = availableUsers
-    .filter((availableUser) => !activeParticipantUserIds.has(availableUser.userId))
-    .map((availableUser) => ({
-      ...availableUser,
-      label: resolvePublicIdentityLabel(availableUser, t.chat.unknownUser),
-    }));
-  const totalMessages = messageStats?.totalMessages ?? 0;
-  const dmPrimaryParticipant = participantItems.find((participant) => !participant.isCurrentUser) ?? null;
-  const currentUserMessageCount = messageStats?.perSenderCount.get(user.id) ?? 0;
-  const otherParticipantMessageCount =
-    dmPrimaryParticipant && messageStats
-      ? messageStats.perSenderCount.get(dmPrimaryParticipant.userId) ?? 0
-      : 0;
-  const currentUserShare =
-    totalMessages > 0 ? Math.round((currentUserMessageCount / totalMessages) * 100) : 0;
-  const otherParticipantShare =
-    totalMessages > 0 ? Math.round((otherParticipantMessageCount / totalMessages) * 100) : 0;
-  const shareDelta = Math.abs(currentUserMessageCount - otherParticipantMessageCount);
-  const leadingParticipantLabel =
-    currentUserMessageCount === otherParticipantMessageCount
-      ? null
-      : currentUserMessageCount > otherParticipantMessageCount
-        ? t.chat.you
-        : dmPrimaryParticipant?.label ?? t.chat.unknownUser;
 
   return (
     <section className="stack settings-screen settings-shell conversation-settings-route-screen">
       <section className="stack settings-hero conversation-settings-route-hero">
         <div className="conversation-settings-header conversation-settings-route-header">
           <Link
-            aria-label={t.chat.backToChats}
+            aria-label={data.t.chat.backToChats}
             className="back-arrow-link conversation-settings-back-link"
-            href={withSpaceParam(`/chat/${conversationId}`, activeSpaceId)}
+            href={withSpaceParam(`/chat/${conversationId}`, data.activeSpaceId)}
             prefetch={false}
           >
             <span aria-hidden="true">←</span>
@@ -339,52 +92,52 @@ export default async function ChatSettingsPage({
       </section>
 
       <section className="card stack settings-surface conversation-settings-route-surface">
-        {visibleSettingsError ? (
-          <p className="notice notice-error">{visibleSettingsError}</p>
+        {data.visibleSettingsError ? (
+          <p className="notice notice-error">{data.visibleSettingsError}</p>
         ) : null}
 
-        {hasSettingsSavedState ? (
+        {data.hasSettingsSavedState ? (
           <div className="notice notice-success notice-inline conversation-settings-success">
             <span aria-hidden="true" className="notice-check conversation-settings-success-check">
               ✓
             </span>
             <span className="notice-copy conversation-settings-success-copy">
-              {t.chat.changesSaved}
+              {data.t.chat.changesSaved}
             </span>
           </div>
         ) : null}
 
         <section className="conversation-info-summary">
           <div className="conversation-info-identity">
-            {conversation.kind === 'group' ? (
+            {data.conversation.kind === 'group' ? (
               <GroupIdentityAvatar
-                avatarPath={conversation.avatarPath}
-                label={directConversationDisplayTitle}
+                avatarPath={data.conversation.avatarPath}
+                label={data.directConversationDisplayTitle}
                 size="lg"
               />
             ) : (
               <IdentityAvatar
                 diagnosticsSurface="chat-settings:summary"
-                identity={directParticipantIdentity}
-                label={directConversationDisplayTitle}
+                identity={data.directParticipantIdentity}
+                label={data.directConversationDisplayTitle}
                 size="lg"
               />
             )}
 
             <div className="stack conversation-info-copy">
-              <h1 className="conversation-info-title">{directConversationDisplayTitle}</h1>
-              {conversation.kind === 'group' ? (
+              <h1 className="conversation-info-title">{data.directConversationDisplayTitle}</h1>
+              {data.conversation.kind === 'group' ? (
                 <p className="muted conversation-info-subtitle">
-                  {groupMemberSummary}
+                  {data.groupMemberSummary}
                 </p>
-              ) : hasIdentityStatus(directParticipantIdentity) ? (
+              ) : hasIdentityStatus(data.directParticipantIdentity) ? (
                 <IdentityStatusInline
                   className="conversation-info-status"
-                  identity={directParticipantIdentity}
+                  identity={data.directParticipantIdentity}
                 />
               ) : (
                 <p className="muted conversation-info-subtitle">
-                  {t.chat.directChat}
+                  {data.t.chat.directChat}
                 </p>
               )}
             </div>
@@ -392,14 +145,14 @@ export default async function ChatSettingsPage({
 
           <div className="conversation-info-meta">
             <span className="conversation-info-meta-item">
-              {conversation.kind === 'group' ? t.chat.group : t.chat.person}
+              {data.conversation.kind === 'group' ? data.t.chat.group : data.t.chat.person}
             </span>
             <span className="conversation-info-meta-item">
-              {t.chat.startedAt(formatLongDate(conversation.createdAt ?? null, language, t))}
+              {data.t.chat.startedAt(formatLongDate(data.conversation.createdAt ?? null, data.language, data.t))}
             </span>
-            {conversation.kind === 'group' ? (
+            {data.conversation.kind === 'group' ? (
               <span className="conversation-info-meta-item">
-                {formatMemberCount(language, participants.length)}
+                {formatMemberCount(data.language, data.participants.length)}
               </span>
             ) : null}
           </div>
@@ -407,49 +160,49 @@ export default async function ChatSettingsPage({
 
         <dl className="conversation-info-list">
           <div className="conversation-info-row">
-            <dt className="conversation-info-label">{t.chat.type}</dt>
+            <dt className="conversation-info-label">{data.t.chat.type}</dt>
             <dd className="conversation-info-value">
-              {conversation.kind === 'group' ? t.inbox.create.group : t.chat.directChat}
+              {data.conversation.kind === 'group' ? data.t.inbox.create.group : data.t.chat.directChat}
             </dd>
           </div>
-          {conversation.kind === 'group' ? (
+          {data.conversation.kind === 'group' ? (
             <div className="conversation-info-row">
-              <dt className="conversation-info-label">{t.chat.members}</dt>
+              <dt className="conversation-info-label">{data.t.chat.members}</dt>
               <dd className="conversation-info-value">
-                {formatMemberCount(language, participants.length)}
+                {formatMemberCount(data.language, data.participants.length)}
               </dd>
             </div>
           ) : null}
-          {conversation.kind === 'group' ? (
+          {data.conversation.kind === 'group' ? (
             <div className="conversation-info-row">
-              <dt className="conversation-info-label">{t.chat.groupPrivacy}</dt>
+              <dt className="conversation-info-label">{data.t.chat.groupPrivacy}</dt>
               <dd className="conversation-info-value">
-                {groupJoinPolicy === 'open'
-                  ? t.chat.groupPrivacyOpen
-                  : t.chat.groupPrivacyClosed}
+                {data.groupJoinPolicy === 'open'
+                  ? data.t.chat.groupPrivacyOpen
+                  : data.t.chat.groupPrivacyClosed}
               </dd>
             </div>
           ) : null}
           <div className="conversation-info-row">
-            <dt className="conversation-info-label">{t.chat.started}</dt>
+            <dt className="conversation-info-label">{data.t.chat.started}</dt>
             <dd className="conversation-info-value">
-              {formatLongDate(conversation.createdAt ?? null, language, t)}
+              {formatLongDate(data.conversation.createdAt ?? null, data.language, data.t)}
             </dd>
           </div>
         </dl>
 
         <section className="conversation-settings-panel stack">
           <div className="stack conversation-settings-panel-copy">
-            <h3 className="card-title">{t.chat.people}</h3>
+            <h3 className="card-title">{data.t.chat.people}</h3>
             <p className="muted conversation-settings-note">
-              {conversation.kind === 'group'
-                ? formatMemberCount(language, participants.length)
-                : t.chat.inThisChat}
+              {data.conversation.kind === 'group'
+                ? formatMemberCount(data.language, data.participants.length)
+                : data.t.chat.inThisChat}
             </p>
           </div>
 
           <div className="conversation-member-list">
-            {participantItems.map((participant) => (
+            {data.participantItems.map((participant) => (
               <div
                 key={participant.userId}
                 className="conversation-member-row"
@@ -470,34 +223,28 @@ export default async function ChatSettingsPage({
                       />
                     </div>
                     <div className="conversation-member-meta">
-                      {conversation.kind === 'group' ? (
+                      {data.conversation.kind === 'group' ? (
                         <span className="conversation-role-chip">
                           {participant.roleLabel}
                         </span>
                       ) : null}
                       {participant.isCurrentUser ? (
-                        <span className="conversation-member-self-chip">{t.chat.you}</span>
+                        <span className="conversation-member-self-chip">{data.t.chat.you}</span>
                       ) : null}
                     </div>
                   </div>
                 </div>
-                {conversation.kind === 'group' &&
-                canManageGroupParticipants &&
-                !participant.isCurrentUser &&
-                canRemoveParticipantFromGroupConversation(
-                  currentUserGroupRole,
-                  participant.role,
-                ) ? (
+                {data.conversation.kind === 'group' && participant.canRemove ? (
                   <GuardedServerActionForm action={removeGroupParticipantAction}>
                     <input name="conversationId" type="hidden" value={conversationId} />
                     <input name="returnTo" type="hidden" value="settings-screen" />
-                    <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
+                    <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
                     <input name="targetUserId" type="hidden" value={participant.userId} />
                     <PendingSubmitButton
                       className="button button-compact button-danger-subtle"
                       type="submit"
                     >
-                      {t.chat.remove}
+                      {data.t.chat.remove}
                     </PendingSubmitButton>
                   </GuardedServerActionForm>
                 ) : null}
@@ -506,76 +253,76 @@ export default async function ChatSettingsPage({
           </div>
         </section>
 
-        {conversation.kind === 'group' ? (
+        {data.conversation.kind === 'group' ? (
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">{t.chat.groupSection}</h3>
+              <h3 className="card-title">{data.t.chat.groupSection}</h3>
               <p className="muted conversation-settings-note">
-                {t.chat.nameAndPeople}
+                {data.t.chat.nameAndPeople}
               </p>
             </div>
 
             <div className="conversation-group-actions">
-              {canEditGroupIdentity ? (
+              {data.canEditGroupIdentity ? (
                 <GroupChatSettingsForm
-                  key={`group-settings-${conversation.title ?? ''}-${conversation.avatarPath ?? ''}-${groupJoinPolicy ?? 'closed'}-${hasSettingsSavedState ? 'saved' : 'idle'}`}
+                  key={`group-settings-${data.conversation.title ?? ''}-${data.conversation.avatarPath ?? ''}-${data.groupJoinPolicy ?? 'closed'}-${data.hasSettingsSavedState ? 'saved' : 'idle'}`}
                   conversationId={conversationId}
-                  currentUserId={user.id}
-                  defaultAvatarPath={conversation.avatarPath}
-                  defaultJoinPolicy={groupJoinPolicy ?? 'closed'}
-                  defaultTitle={conversation.title?.trim() || ''}
+                  currentUserId={data.currentUserId}
+                  defaultAvatarPath={data.conversation.avatarPath}
+                  defaultJoinPolicy={data.groupJoinPolicy ?? 'closed'}
+                  defaultTitle={data.conversation.title?.trim() || ''}
                   labels={{
-                    title: t.chat.chatIdentity,
-                    subtitle: t.chat.chatIdentityNote,
-                    name: t.chat.name,
-                    namePlaceholder: t.chat.groupNamePlaceholder,
-                    nameRequired: t.chat.groupNameRequired,
-                    changePhoto: t.chat.changePhoto,
-                    removePhoto: t.chat.removePhoto,
-                    saveChanges: t.chat.saveChanges,
-                    cancelEdit: t.chat.cancel,
-                    avatarDraftReady: t.chat.chatAvatarDraftReady,
-                    avatarRemovedDraft: t.chat.chatAvatarRemovedDraft,
-                    avatarUploading: t.chat.avatarUploading,
-                    avatarTooLarge: t.chat.avatarTooLarge,
-                    avatarInvalidType: t.chat.avatarInvalidType,
-                    avatarUploadFailed: t.chat.avatarUploadFailed,
-                    avatarSchemaRequired: t.chat.avatarSchemaRequired,
-                    avatarStorageUnavailable: t.chat.avatarStorageUnavailable,
-                    tapPhotoToChange: t.settings.tapPhotoToChange,
-                    avatarEditorHint: t.settings.avatarEditorHint,
-                    avatarEditorZoom: t.settings.avatarEditorZoom,
-                    avatarEditorApply: t.settings.avatarEditorApply,
-                    avatarEditorPreparing: t.settings.avatarEditorPreparing,
-                    avatarEditorLoadFailed: t.settings.avatarEditorLoadFailed,
+                    title: data.t.chat.chatIdentity,
+                    subtitle: data.t.chat.chatIdentityNote,
+                    name: data.t.chat.name,
+                    namePlaceholder: data.t.chat.groupNamePlaceholder,
+                    nameRequired: data.t.chat.groupNameRequired,
+                    changePhoto: data.t.chat.changePhoto,
+                    removePhoto: data.t.chat.removePhoto,
+                    saveChanges: data.t.chat.saveChanges,
+                    cancelEdit: data.t.chat.cancel,
+                    avatarDraftReady: data.t.chat.chatAvatarDraftReady,
+                    avatarRemovedDraft: data.t.chat.chatAvatarRemovedDraft,
+                    avatarUploading: data.t.chat.avatarUploading,
+                    avatarTooLarge: data.t.chat.avatarTooLarge,
+                    avatarInvalidType: data.t.chat.avatarInvalidType,
+                    avatarUploadFailed: data.t.chat.avatarUploadFailed,
+                    avatarSchemaRequired: data.t.chat.avatarSchemaRequired,
+                    avatarStorageUnavailable: data.t.chat.avatarStorageUnavailable,
+                    tapPhotoToChange: data.t.settings.tapPhotoToChange,
+                    avatarEditorHint: data.t.settings.avatarEditorHint,
+                    avatarEditorZoom: data.t.settings.avatarEditorZoom,
+                    avatarEditorApply: data.t.settings.avatarEditorApply,
+                    avatarEditorPreparing: data.t.settings.avatarEditorPreparing,
+                    avatarEditorLoadFailed: data.t.settings.avatarEditorLoadFailed,
                     avatarEditorApplyBeforeSave:
-                      t.settings.avatarEditorApplyBeforeSave,
-                    privacyTitle: t.chat.groupPrivacy,
-                    privacyNote: t.chat.groupPrivacyNote,
-                    privacyOpen: t.chat.groupPrivacyOpen,
-                    privacyOpenNote: t.chat.groupPrivacyOpenNote,
-                    privacyClosed: t.chat.groupPrivacyClosed,
-                    privacyClosedNote: t.chat.groupPrivacyClosedNote,
+                      data.t.settings.avatarEditorApplyBeforeSave,
+                    privacyTitle: data.t.chat.groupPrivacy,
+                    privacyNote: data.t.chat.groupPrivacyNote,
+                    privacyOpen: data.t.chat.groupPrivacyOpen,
+                    privacyOpenNote: data.t.chat.groupPrivacyOpenNote,
+                    privacyClosed: data.t.chat.groupPrivacyClosed,
+                    privacyClosedNote: data.t.chat.groupPrivacyClosedNote,
                   }}
                   returnTo="settings-screen"
-                  spaceId={activeSpaceId}
+                  spaceId={data.activeSpaceId}
                 />
               ) : (
                 <section className="stack conversation-settings-subsection">
                   <div className="stack conversation-settings-panel-copy">
-                    <h4 className="conversation-settings-subtitle">{t.chat.chatIdentity}</h4>
+                    <h4 className="conversation-settings-subtitle">{data.t.chat.chatIdentity}</h4>
                     <div className="conversation-settings-static conversation-settings-group-identity-preview">
                       <GroupIdentityAvatar
-                        avatarPath={conversation.avatarPath}
-                        label={directConversationDisplayTitle}
+                        avatarPath={data.conversation.avatarPath}
+                        label={data.directConversationDisplayTitle}
                         size="md"
                       />
                       <div className="stack conversation-settings-group-identity-copy">
                         <p className="conversation-settings-title-preview">
-                          {directConversationDisplayTitle}
+                          {data.directConversationDisplayTitle}
                         </p>
                         <p className="muted conversation-settings-note">
-                          {t.chat.adminOnly}
+                          {data.t.chat.adminOnly}
                         </p>
                       </div>
                     </div>
@@ -585,18 +332,18 @@ export default async function ChatSettingsPage({
 
               <section className="stack conversation-settings-subsection conversation-participant-manager">
                 <div className="stack conversation-settings-panel-copy">
-                  <h4 className="conversation-settings-subtitle">{t.chat.addPeople}</h4>
+                  <h4 className="conversation-settings-subtitle">{data.t.chat.addPeople}</h4>
                   <p className="muted conversation-settings-note">
-                    {groupJoinPolicy === 'open'
-                      ? t.chat.groupOpenMembersCanAdd
-                      : t.chat.groupClosedAdminsOnly}
+                    {data.groupJoinPolicy === 'open'
+                      ? data.t.chat.groupOpenMembersCanAdd
+                      : data.t.chat.groupClosedAdminsOnly}
                   </p>
                 </div>
 
-                {canManageGroupParticipants ? (
-                  availableParticipantsToAdd.length === 0 ? (
+                {data.canManageGroupParticipants ? (
+                  data.availableParticipantsToAdd.length === 0 ? (
                     <p className="muted conversation-settings-note">
-                      {t.chat.everyoneIsHere}
+                      {data.t.chat.everyoneIsHere}
                     </p>
                   ) : (
                     <GuardedServerActionForm
@@ -605,9 +352,9 @@ export default async function ChatSettingsPage({
                     >
                       <input name="conversationId" type="hidden" value={conversationId} />
                       <input name="returnTo" type="hidden" value="settings-screen" />
-                      <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
+                      <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
                       <div className="checkbox-list conversation-checkbox-list">
-                        {availableParticipantsToAdd.map((participant) => (
+                        {data.availableParticipantsToAdd.map((participant) => (
                           <label
                             key={`add-${participant.userId}`}
                             className="checkbox-row"
@@ -638,7 +385,7 @@ export default async function ChatSettingsPage({
                         ))}
                       </div>
                       <PendingSubmitButton className="button button-compact" type="submit">
-                        {t.chat.addPeople}
+                        {data.t.chat.addPeople}
                       </PendingSubmitButton>
                     </GuardedServerActionForm>
                   )
@@ -647,17 +394,17 @@ export default async function ChatSettingsPage({
 
               <section className="stack conversation-settings-subsection conversation-leave-panel">
                 <div className="stack conversation-settings-panel-copy">
-                  <h4 className="conversation-settings-subtitle">{t.chat.leaveGroup}</h4>
+                  <h4 className="conversation-settings-subtitle">{data.t.chat.leaveGroup}</h4>
                 </div>
                 <GuardedServerActionForm action={leaveGroupAction}>
                   <input name="conversationId" type="hidden" value={conversationId} />
                   <input name="returnTo" type="hidden" value="settings-screen" />
-                  <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
+                  <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
                   <PendingSubmitButton
                     className="button button-compact button-danger-subtle"
                     type="submit"
                   >
-                    {t.chat.leaveGroupButton}
+                    {data.t.chat.leaveGroupButton}
                   </PendingSubmitButton>
                 </GuardedServerActionForm>
               </section>
@@ -666,21 +413,21 @@ export default async function ChatSettingsPage({
         ) : (
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">{t.chat.messageStatsTitle}</h3>
+              <h3 className="card-title">{data.t.chat.messageStatsTitle}</h3>
               <p className="muted conversation-settings-note">
-                {t.chat.messageStatsNote}
+                {data.t.chat.messageStatsNote}
               </p>
             </div>
 
             <div className="conversation-stats-grid">
               <div className="conversation-stats-card">
-                <span className="conversation-stats-label">{t.chat.totalMessagesStat}</span>
-                <strong className="conversation-stats-value">{totalMessages}</strong>
+                <span className="conversation-stats-label">{data.t.chat.totalMessagesStat}</span>
+                <strong className="conversation-stats-value">{data.totalMessages}</strong>
               </div>
               <div className="conversation-stats-card">
-                <span className="conversation-stats-label">{t.chat.messageSplitStat}</span>
+                <span className="conversation-stats-label">{data.t.chat.messageSplitStat}</span>
                 <strong className="conversation-stats-value">
-                  {currentUserShare}% / {otherParticipantShare}%
+                  {data.currentUserShare}% / {data.otherParticipantShare}%
                 </strong>
               </div>
             </div>
@@ -690,31 +437,31 @@ export default async function ChatSettingsPage({
                 <div className="conversation-member-identity">
                   <IdentityAvatar
                     diagnosticsSurface="chat-settings:stats-self"
-                    identity={identitiesByUserId.get(user.id)}
-                    label={participantItems.find((participant) => participant.isCurrentUser)?.label ?? t.chat.you}
+                    identity={data.identitiesByUserId.get(data.currentUserId)}
+                    label={data.participantItems.find((participant) => participant.isCurrentUser)?.label ?? data.t.chat.you}
                     size="sm"
                   />
                   <div className="stack conversation-member-copy">
-                    <span className="user-label">{t.chat.you}</span>
+                    <span className="user-label">{data.t.chat.you}</span>
                     <span className="muted conversation-settings-note">
-                      {currentUserMessageCount} · {currentUserShare}%
+                      {data.currentUserMessageCount} · {data.currentUserShare}%
                     </span>
                   </div>
                 </div>
               </div>
-              {dmPrimaryParticipant ? (
+              {data.dmPrimaryParticipant ? (
                 <div className="conversation-member-row conversation-stats-row">
                   <div className="conversation-member-identity">
                     <IdentityAvatar
                       diagnosticsSurface="chat-settings:stats-other"
-                      identity={dmPrimaryParticipant.identity}
-                      label={dmPrimaryParticipant.label}
+                      identity={data.dmPrimaryParticipant.identity}
+                      label={data.dmPrimaryParticipant.label}
                       size="sm"
                     />
                     <div className="stack conversation-member-copy">
-                      <span className="user-label">{dmPrimaryParticipant.label}</span>
+                      <span className="user-label">{data.dmPrimaryParticipant.label}</span>
                       <span className="muted conversation-settings-note">
-                        {otherParticipantMessageCount} · {otherParticipantShare}%
+                        {data.otherParticipantMessageCount} · {data.otherParticipantShare}%
                       </span>
                     </div>
                   </div>
@@ -723,20 +470,20 @@ export default async function ChatSettingsPage({
             </div>
 
             <p className="muted conversation-settings-note">
-              {leadingParticipantLabel
-                ? t.chat.messageLeadSummary(leadingParticipantLabel, shareDelta)
-                : t.chat.messageLeadTie}
+              {data.leadingParticipantLabel
+                ? data.t.chat.messageLeadSummary(data.leadingParticipantLabel, data.shareDelta)
+                : data.t.chat.messageLeadTie}
             </p>
           </section>
         )}
 
         <section className="conversation-settings-panel stack">
           <div className="stack conversation-settings-panel-copy">
-            <h3 className="card-title">{t.chat.historySection}</h3>
+            <h3 className="card-title">{data.t.chat.historySection}</h3>
             <p className="muted conversation-settings-note">
-              {historyBaselineStartsAfterLatest
-                ? t.chat.historyBaselineActiveNote
-                : t.chat.historyBaselineNote}
+              {data.historyBaselineStartsAfterLatest
+                ? data.t.chat.historyBaselineActiveNote
+                : data.t.chat.historyBaselineNote}
             </p>
           </div>
 
@@ -744,13 +491,13 @@ export default async function ChatSettingsPage({
             <GuardedServerActionForm action={resetConversationHistoryBaselineAction}>
               <input name="conversationId" type="hidden" value={conversationId} />
               <input name="returnTo" type="hidden" value="settings-screen" />
-              <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
+              <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
               <PendingSubmitButton
                 className="button button-compact button-secondary"
-                disabled={!canResetVisibleHistoryBaseline}
+                disabled={!data.canResetVisibleHistoryBaseline}
                 type="submit"
               >
-                {t.chat.historyBaselineAction}
+                {data.t.chat.historyBaselineAction}
               </PendingSubmitButton>
             </GuardedServerActionForm>
           </div>
@@ -758,9 +505,9 @@ export default async function ChatSettingsPage({
 
         <section className="conversation-settings-panel stack">
           <div className="stack conversation-settings-panel-copy">
-            <h3 className="card-title">{t.chat.notifications}</h3>
+            <h3 className="card-title">{data.t.chat.notifications}</h3>
             <p className="muted conversation-settings-note">
-              {t.chat.notificationsNote}
+              {data.t.chat.notificationsNote}
             </p>
           </div>
 
@@ -770,11 +517,11 @@ export default async function ChatSettingsPage({
           >
             <input name="conversationId" type="hidden" value={conversationId} />
             <input name="returnTo" type="hidden" value="settings-screen" />
-            <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
+            <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
 
             <PendingSubmitButton
               className={
-                conversation.notificationLevel === 'default'
+                data.conversation.notificationLevel === 'default'
                   ? 'conversation-choice-button conversation-choice-button-active'
                   : 'conversation-choice-button'
               }
@@ -783,16 +530,16 @@ export default async function ChatSettingsPage({
               value="default"
             >
               <span className="conversation-choice-copy">
-                <span className="conversation-choice-title">{t.chat.notificationsDefault}</span>
+                <span className="conversation-choice-title">{data.t.chat.notificationsDefault}</span>
                 <span className="conversation-choice-note">
-                  {t.chat.notificationsDefaultNote}
+                  {data.t.chat.notificationsDefaultNote}
                 </span>
               </span>
             </PendingSubmitButton>
 
             <PendingSubmitButton
               className={
-                conversation.notificationLevel === 'muted'
+                data.conversation.notificationLevel === 'muted'
                   ? 'conversation-choice-button conversation-choice-button-active'
                   : 'conversation-choice-button'
               }
@@ -801,57 +548,57 @@ export default async function ChatSettingsPage({
               value="muted"
             >
               <span className="conversation-choice-copy">
-                <span className="conversation-choice-title">{t.chat.notificationsMuted}</span>
+                <span className="conversation-choice-title">{data.t.chat.notificationsMuted}</span>
                 <span className="conversation-choice-note">
-                  {t.chat.notificationsMutedNote}
+                  {data.t.chat.notificationsMutedNote}
                 </span>
               </span>
             </PendingSubmitButton>
           </GuardedServerActionForm>
         </section>
 
-        {canDeleteDirectConversation ? (
+        {data.canDeleteDirectConversation ? (
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">{t.chat.deleteChat}</h3>
+              <h3 className="card-title">{data.t.chat.deleteChat}</h3>
               <p className="muted conversation-settings-note">
-                {t.chat.deleteChatCurrentUserOnlyNote}
+                {data.t.chat.deleteChatCurrentUserOnlyNote}
               </p>
             </div>
 
             <div className="conversation-manage-actions">
               <DmChatDeleteConfirmForm
-                cancelLabel={t.chat.cancel}
-                confirmBody={t.chat.deleteChatConfirmBody}
-                confirmButtonLabel={t.chat.deleteChatConfirmButton}
-                confirmHint={t.chat.deleteChatConfirmHint}
-                confirmPlaceholder={t.chat.deleteChatConfirmPlaceholder}
-                confirmTitle={t.chat.deleteChatConfirmTitle}
+                cancelLabel={data.t.chat.cancel}
+                confirmBody={data.t.chat.deleteChatConfirmBody}
+                confirmButtonLabel={data.t.chat.deleteChatConfirmButton}
+                confirmHint={data.t.chat.deleteChatConfirmHint}
+                confirmPlaceholder={data.t.chat.deleteChatConfirmPlaceholder}
+                confirmTitle={data.t.chat.deleteChatConfirmTitle}
                 conversationId={conversationId}
-                deleteButtonLabel={t.chat.deleteChatButton}
+                deleteButtonLabel={data.t.chat.deleteChatButton}
                 returnTo="settings-screen"
-                spaceId={activeSpaceId}
+                spaceId={data.activeSpaceId}
               />
             </div>
           </section>
-        ) : conversation.kind === 'group' ? (
+        ) : data.conversation.kind === 'group' ? (
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">{t.chat.inbox}</h3>
+              <h3 className="card-title">{data.t.chat.inbox}</h3>
               <p className="muted conversation-settings-note">
-                {t.chat.inboxNote}
+                {data.t.chat.inboxNote}
               </p>
             </div>
 
             <div className="conversation-manage-actions">
               <GuardedServerActionForm action={hideConversationAction}>
                 <input name="conversationId" type="hidden" value={conversationId} />
-                <input name="spaceId" type="hidden" value={activeSpaceId ?? ''} />
+                <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
                 <PendingSubmitButton
                   className="button button-compact button-secondary"
                   type="submit"
                 >
-                  {t.chat.hideFromInbox}
+                  {data.t.chat.hideFromInbox}
                 </PendingSubmitButton>
               </GuardedServerActionForm>
                 </div>
