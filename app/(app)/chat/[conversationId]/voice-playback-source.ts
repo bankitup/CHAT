@@ -465,6 +465,12 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
     !input.cacheKey ||
     !input.transportSourceUrl
   ) {
+    input.onDiagnostic?.('proof-source-prepared', {
+      cacheKey: input.cacheKey,
+      mode: 'passthrough',
+      playbackSourceKind: input.transportSourceUrl ? 'transport' : 'missing',
+      transportSourceUrl: input.transportSourceUrl,
+    });
     return input.transportSourceUrl;
   }
 
@@ -477,6 +483,14 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
     currentEntry.sourceUrl === transportSourceUrl &&
     currentEntry.playbackUrl
   ) {
+    input.onDiagnostic?.('proof-source-prepared', {
+      cacheKey,
+      mode: 'cache-hit',
+      playbackSourceKind: currentEntry.playbackUrl.startsWith('blob:')
+        ? 'blob'
+        : 'transport',
+      transportSourceUrl,
+    });
     input.onDiagnostic?.('local-playable-source-cache-hit', {
       cacheKey,
       transportSourceUrl,
@@ -531,9 +545,22 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
         transportSourceUrl,
         warmed,
       });
+      input.onDiagnostic?.('proof-source-prepared', {
+        cacheKey,
+        mode: warmed ? 'warmed' : 'resolved',
+        playbackSourceKind: localPlaybackUrl.startsWith('blob:')
+          ? 'blob'
+          : 'transport',
+        transportSourceUrl,
+      });
       return localPlaybackUrl;
     } catch (error) {
       input.onDiagnostic?.('local-playable-source-failed', {
+        cacheKey,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        transportSourceUrl,
+      });
+      input.onDiagnostic?.('proof-source-prepare-failed', {
         cacheKey,
         errorMessage: error instanceof Error ? error.message : String(error),
         transportSourceUrl,

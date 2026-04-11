@@ -724,6 +724,17 @@ function logVoiceThreadDiagnostic(
   console.info('[voice-thread]', stage, details);
 }
 
+function logVoiceThreadProof(
+  stage: string,
+  details: Record<string, unknown>,
+) {
+  if (!shouldLogVoiceThreadDiagnostics()) {
+    return;
+  }
+
+  console.info('[voice-proof]', stage, details);
+}
+
 function filterRenderableMessageAttachments(
   messageId: string,
   attachments: MessageAttachment[],
@@ -1498,6 +1509,7 @@ function ThreadVoiceMessageBubble({
     useRef<Promise<string | null> | null>(null);
   const lastVoicePointerActivationAtRef = useRef(0);
   const claimedPlaybackOwnerVersionRef = useRef<number | null>(null);
+  const lastVoiceProofSnapshotRef = useRef<string | null>(null);
   const voiceTapGestureRef = useRef<{
     didMove: boolean;
     pointerId: number;
@@ -1583,6 +1595,41 @@ function ThreadVoiceMessageBubble({
   const playIconState = voiceRendererModel.playIconState;
   const isVoicePlayable = voiceRendererModel.isPlayable;
   const canRetryVoicePlayback = voiceRendererModel.canRetry;
+
+  useEffect(() => {
+    const proofSnapshotKey = [
+      messageId,
+      voicePlaybackCacheKey ?? '',
+      effectiveVoicePlaybackSourceUrl ? 'playback' : 'no-playback',
+      effectiveVoiceTransportSourceUrl ? 'transport' : 'no-transport',
+      shouldHydratePreparedVoicePlayback ? 'hydrate' : 'cold',
+      voiceState,
+      voiceRenderReason,
+    ].join('|');
+
+    if (lastVoiceProofSnapshotRef.current === proofSnapshotKey) {
+      return;
+    }
+
+    lastVoiceProofSnapshotRef.current = proofSnapshotKey;
+    logVoiceThreadProof('source-snapshot-resolved', {
+      cacheKey: voicePlaybackCacheKey,
+      hasPlaybackSource: Boolean(effectiveVoicePlaybackSourceUrl),
+      hasTransportSource: Boolean(effectiveVoiceTransportSourceUrl),
+      messageId,
+      renderReason: voiceRenderReason,
+      shouldHydratePreparedPlayback: shouldHydratePreparedVoicePlayback,
+      voiceState,
+    });
+  }, [
+    effectiveVoicePlaybackSourceUrl,
+    effectiveVoiceTransportSourceUrl,
+    messageId,
+    shouldHydratePreparedVoicePlayback,
+    voicePlaybackCacheKey,
+    voiceRenderReason,
+    voiceState,
+  ]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -1815,9 +1862,20 @@ function ThreadVoiceMessageBubble({
         playbackSource: nextPlaybackSource,
         readyState: audio.readyState,
       });
+      logVoiceThreadProof('audio-play-requested', {
+        hasPlaybackSource: Boolean(nextPlaybackSource),
+        messageId,
+        ownerVersion,
+        playbackReadyState: audio.readyState,
+      });
 
       try {
         await audio.play();
+        logVoiceThreadProof('audio-play-fulfilled', {
+          messageId,
+          ownerVersion,
+          playbackReadyState: audio.readyState,
+        });
         if (
           !isActiveThreadVoicePlaybackOwner({
             audio,
@@ -1839,6 +1897,12 @@ function ThreadVoiceMessageBubble({
         setHasPendingPlaybackIntent(false);
         return true;
       } catch (error) {
+        logVoiceThreadProof('audio-play-rejected', {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          messageId,
+          ownerVersion,
+          playbackReadyState: audio.readyState,
+        });
         logVoiceThreadDiagnostic('audio-play-trigger-failed', {
           errorMessage: error instanceof Error ? error.message : String(error),
           messageId,
@@ -2215,6 +2279,11 @@ function ThreadVoiceMessageBubble({
         messageId,
         pointerType: event.pointerType,
       });
+      logVoiceThreadProof('tap-received', {
+        input: 'pointer',
+        messageId,
+        pointerType: event.pointerType,
+      });
       lastVoicePointerActivationAtRef.current = Date.now();
       void togglePlayback();
     },
@@ -2231,6 +2300,10 @@ function ThreadVoiceMessageBubble({
       }
 
       logVoiceThreadDiagnostic('voice-tap-received', {
+        input: 'click',
+        messageId,
+      });
+      logVoiceThreadProof('tap-received', {
         input: 'click',
         messageId,
       });
@@ -2344,6 +2417,12 @@ function ThreadVoiceMessageBubble({
               messageId,
               readyState: event.currentTarget.readyState,
               src: event.currentTarget.currentSrc || event.currentTarget.src || null,
+            });
+            logVoiceThreadProof('audio-element-ready', {
+              currentSrc:
+                event.currentTarget.currentSrc || event.currentTarget.src || null,
+              messageId,
+              readyState: event.currentTarget.readyState,
             });
             const stablePlaybackSource =
               effectiveVoicePlaybackSourceUrl ?? effectiveVoiceTransportSourceUrl;
