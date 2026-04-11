@@ -817,6 +817,7 @@ type LanguageDictionary = {
     voiceMessagePlay: string;
     voiceMessagePause: string;
     voiceMessageLoading: string;
+    voiceMessagePending: string;
     voiceMessageUploading: string;
     voiceMessageProcessing: string;
     voiceMessageRecovering: string;
@@ -1837,6 +1838,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessagePlay: 'Play voice message',
       voiceMessagePause: 'Pause voice message',
       voiceMessageLoading: 'Loading voice message',
+      voiceMessagePending: 'Voice message pending',
       voiceMessageUploading: 'Uploading voice message',
       voiceMessageProcessing: 'Preparing voice message',
       voiceMessageRecovering: 'Recovering voice message',
@@ -2907,6 +2909,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessagePlay: 'Воспроизвести голосовое сообщение',
       voiceMessagePause: 'Поставить голосовое сообщение на паузу',
       voiceMessageLoading: 'Голосовое сообщение загружается',
+      voiceMessagePending: 'Голосовое сообщение ожидает',
       voiceMessageUploading: 'Голосовое сообщение загружается',
       voiceMessageProcessing: 'Голосовое сообщение подготавливается',
       voiceMessageRecovering: 'Голосовое сообщение восстанавливается',
