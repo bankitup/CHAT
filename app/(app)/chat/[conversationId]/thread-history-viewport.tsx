@@ -91,6 +91,7 @@ type MessageAttachment = {
   isImage: boolean;
   isVoiceMessage?: boolean;
   messageId?: string;
+  mimeType?: string | null;
   objectPath?: string;
   signedUrl: string | null;
   sizeBytes: number | null;
@@ -1552,6 +1553,7 @@ function getSnapshotRevisionKey(snapshot: ThreadHistoryPageSnapshot) {
     attachmentsByMessage: snapshot.attachmentsByMessage.map((entry) => ({
       attachmentKeys: entry.attachments.map((attachment) => ({
         createdAt: attachment.createdAt ?? null,
+        fileName: attachment.fileName,
         hasSignedUrl: Boolean(
           normalizeAttachmentSignedUrl(attachment.signedUrl),
         ),
@@ -1560,6 +1562,7 @@ function getSnapshotRevisionKey(snapshot: ThreadHistoryPageSnapshot) {
         isImage: attachment.isImage,
         isVoiceMessage: attachment.isVoiceMessage ?? false,
         messageId: attachment.messageId ?? null,
+        mimeType: attachment.mimeType ?? null,
         objectPath: attachment.objectPath ?? null,
       })),
       messageId: entry.messageId,
@@ -2253,6 +2256,7 @@ function areMessageAttachmentsEqual(
     return (
       attachment.id === nextAttachment?.id &&
       attachment.fileName === nextAttachment.fileName &&
+      attachment.mimeType === nextAttachment.mimeType &&
       attachment.signedUrl === nextAttachment.signedUrl &&
       attachment.sizeBytes === nextAttachment.sizeBytes &&
       attachment.durationMs === nextAttachment.durationMs &&

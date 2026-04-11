@@ -7894,6 +7894,7 @@ async function insertCommittedMessageAssetAndLink(input: {
     logVoiceSendDiagnostics('message-assets-insert:started', {
       conversationId: input.conversationId,
       durationMs: normalizedDurationMs,
+      fileExtension: getAttachmentFileExtension(input.file.name),
       fileName: sanitizeAttachmentFileName(input.file.name),
       messageId: input.messageId,
       mimeType: input.mimeType,
@@ -8076,6 +8077,7 @@ export async function sendMessageWithAttachment(input: {
 
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('send:start', {
+      assetKind: committedAssetKind,
       bucket: CHAT_ATTACHMENT_BUCKET,
       bucketUsedForUpload: CHAT_ATTACHMENT_BUCKET,
       bucketConfiguredNormalized:
@@ -8084,13 +8086,17 @@ export async function sendMessageWithAttachment(input: {
       bucketRaw: CHAT_ATTACHMENT_BUCKET_CONFIG.rawBucket,
       bucketSource: CHAT_ATTACHMENT_BUCKET_CONFIG.source,
       conversationId: input.conversationId,
+      fileExtension: getAttachmentFileExtension(input.file.name),
       fileName: sanitizeAttachmentFileName(input.file.name),
+      messageKind: attachmentMessageKind,
       mimeType: input.file.type,
       requestedClientId: input.clientId?.trim() || null,
       replyToMessageId: input.replyToMessageId ?? null,
       senderId: input.senderId,
       sizeBytes: input.file.size,
       storageClientType: serviceSupabase ? 'service-role' : 'request-auth',
+      storedMimeType: effectiveAttachmentMimeType,
+      storageFolder,
       voiceDurationMs: normalizeVoiceDurationMs(input.voiceDurationMs ?? null),
     });
   }

@@ -46,6 +46,15 @@ export type ThreadVoicePreparedPlaybackSource = {
   transportSourceUrl: string | null;
 };
 
+export type ThreadVoiceDevicePlaybackSupport = {
+  canPlayType: 'maybe' | 'no' | 'probably' | null;
+  mediaCapabilitiesPowerEfficient: boolean | null;
+  mediaCapabilitiesSmooth: boolean | null;
+  mediaCapabilitiesSupported: boolean | null;
+  mimeType: string | null;
+  status: 'supported' | 'unknown' | 'unsupported';
+};
+
 type ThreadVoiceTransportSourceResolver = (input: {
   transportSourceUrl: string;
 }) => Promise<Blob | string | null>;
@@ -73,6 +82,79 @@ export function configureInlineAudioElement(audio: HTMLAudioElement | null) {
   audio.setAttribute('webkit-playsinline', '');
   audio.setAttribute('disableremoteplayback', '');
   audio.setAttribute('x-webkit-airplay', 'deny');
+}
+
+export async function resolveThreadVoiceDevicePlaybackSupport(input: {
+  audio: HTMLAudioElement | null;
+  mimeType: string | null;
+}): Promise<ThreadVoiceDevicePlaybackSupport> {
+  const normalizedMimeType = input.mimeType?.trim().toLowerCase() || null;
+
+  if (
+    !input.audio ||
+    !normalizedMimeType ||
+    typeof input.audio.canPlayType !== 'function'
+  ) {
+    return {
+      canPlayType: null,
+      mediaCapabilitiesPowerEfficient: null,
+      mediaCapabilitiesSmooth: null,
+      mediaCapabilitiesSupported: null,
+      mimeType: normalizedMimeType,
+      status: 'unknown',
+    };
+  }
+
+  const canPlayTypeResult = input.audio.canPlayType(normalizedMimeType);
+  const canPlayType = canPlayTypeResult
+    ? (canPlayTypeResult as 'maybe' | 'probably')
+    : 'no';
+  let mediaCapabilitiesSupported: boolean | null = null;
+  let mediaCapabilitiesSmooth: boolean | null = null;
+  let mediaCapabilitiesPowerEfficient: boolean | null = null;
+
+  if (
+    typeof navigator !== 'undefined' &&
+    'mediaCapabilities' in navigator &&
+    navigator.mediaCapabilities &&
+    typeof navigator.mediaCapabilities.decodingInfo === 'function'
+  ) {
+    try {
+      const decodingInfo = await navigator.mediaCapabilities.decodingInfo({
+        audio: {
+          contentType: normalizedMimeType,
+        },
+        type: 'file',
+      });
+
+      mediaCapabilitiesSupported = decodingInfo.supported;
+      mediaCapabilitiesSmooth = decodingInfo.smooth;
+      mediaCapabilitiesPowerEfficient = decodingInfo.powerEfficient;
+    } catch {
+      mediaCapabilitiesSupported = null;
+      mediaCapabilitiesSmooth = null;
+      mediaCapabilitiesPowerEfficient = null;
+    }
+  }
+
+  const status =
+    mediaCapabilitiesSupported === false ||
+    (mediaCapabilitiesSupported !== true && canPlayType === 'no')
+      ? 'unsupported'
+      : mediaCapabilitiesSupported === true ||
+          canPlayType === 'probably' ||
+          canPlayType === 'maybe'
+        ? 'supported'
+        : 'unknown';
+
+  return {
+    canPlayType,
+    mediaCapabilitiesPowerEfficient,
+    mediaCapabilitiesSmooth,
+    mediaCapabilitiesSupported,
+    mimeType: normalizedMimeType,
+    status,
+  };
 }
 
 export function getThreadVoicePlaybackCacheKey(input: {
@@ -469,6 +551,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       cacheKey: input.cacheKey,
       mode: 'passthrough',
       playbackSourceKind: input.transportSourceUrl ? 'transport' : 'missing',
+      resolvedMimeType: null,
       transportSourceUrl: input.transportSourceUrl,
     });
     return input.transportSourceUrl;
@@ -489,6 +572,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       playbackSourceKind: currentEntry.playbackUrl.startsWith('blob:')
         ? 'blob'
         : 'transport',
+      resolvedMimeType: null,
       transportSourceUrl,
     });
     input.onDiagnostic?.('local-playable-source-cache-hit', {
@@ -532,6 +616,10 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       const warmed =
         resolvedTransportSource instanceof Blob ||
         localPlaybackUrl.startsWith('blob:');
+      const resolvedMimeType =
+        resolvedTransportSource instanceof Blob
+          ? resolvedTransportSource.type || null
+          : null;
 
       writeThreadVoicePlaybackCacheEntry(cacheKey, {
         playbackUrl: localPlaybackUrl,
@@ -542,6 +630,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       });
       input.onDiagnostic?.('local-playable-source-ready', {
         cacheKey,
+        resolvedMimeType,
         transportSourceUrl,
         warmed,
       });
@@ -551,6 +640,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
         playbackSourceKind: localPlaybackUrl.startsWith('blob:')
           ? 'blob'
           : 'transport',
+        resolvedMimeType,
         transportSourceUrl,
       });
       return localPlaybackUrl;
