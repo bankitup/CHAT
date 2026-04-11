@@ -1,8 +1,10 @@
 const THREAD_VOICE_PLAYBACK_CACHE_MAX_ENTRIES = 120;
 
 export type ThreadVoicePlaybackAttachmentDescriptor = {
+  bucket?: string | null;
   durationMs?: number | null;
   id?: string | null;
+  messageId?: string | null;
   objectPath?: string | null;
 };
 
@@ -22,6 +24,22 @@ export type ThreadVoicePlaybackSourceSnapshot = {
   transportSourceUrl: string | null;
 };
 
+export type ThreadVoiceTransportSourceLocator = {
+  attachmentId: string | null;
+  conversationId: string | null;
+  messageId: string | null;
+};
+
+export type ThreadVoiceTransportSourceResolution =
+  | {
+      status: 'failed' | 'skipped';
+      transportSourceUrl: null;
+    }
+  | {
+      status: 'resolved';
+      transportSourceUrl: string | null;
+    };
+
 type ThreadVoiceTransportSourceResolver = (input: {
   transportSourceUrl: string;
 }) => Promise<Blob | string | null>;
@@ -33,6 +51,12 @@ type ThreadVoiceSourceDiagnosticLogger = (
 
 const threadVoicePlaybackCache = new Map<string, ThreadVoicePlaybackCacheEntry>();
 const threadVoicePlaybackWarmPromises = new Map<string, Promise<string | null>>();
+
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
 
 export function configureInlineAudioElement(audio: HTMLAudioElement | null) {
   if (!audio) {
@@ -69,6 +93,59 @@ export function getThreadVoicePlaybackCacheKey(input: {
   }
 
   return input.messageId;
+}
+
+export function hasRecoverableThreadVoicePlaybackLocator(input: {
+  attachment: ThreadVoicePlaybackAttachmentDescriptor | null;
+  expectedMessageId?: string | null;
+}) {
+  const attachmentId =
+    typeof input.attachment?.id === 'string' ? input.attachment.id.trim() : '';
+  const attachmentMessageId =
+    typeof input.attachment?.messageId === 'string'
+      ? input.attachment.messageId.trim()
+      : '';
+  const bucket =
+    typeof input.attachment?.bucket === 'string'
+      ? input.attachment.bucket.trim()
+      : '';
+  const objectPath =
+    typeof input.attachment?.objectPath === 'string'
+      ? input.attachment.objectPath.trim()
+      : '';
+  const normalizedExpectedMessageId =
+    typeof input.expectedMessageId === 'string' ? input.expectedMessageId.trim() : '';
+
+  if (!attachmentId || !attachmentMessageId || !bucket || !objectPath) {
+    return false;
+  }
+
+  if (
+    normalizedExpectedMessageId &&
+    attachmentMessageId !== normalizedExpectedMessageId
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+export function buildThreadVoiceTransportResolveUrl(
+  input: ThreadVoiceTransportSourceLocator,
+) {
+  if (!input.attachmentId || !input.conversationId || !input.messageId) {
+    return null;
+  }
+
+  if (
+    !looksLikeUuid(input.attachmentId) ||
+    !looksLikeUuid(input.conversationId) ||
+    !looksLikeUuid(input.messageId)
+  ) {
+    return null;
+  }
+
+  return `/api/messaging/conversations/${input.conversationId}/messages/${input.messageId}/attachments/${input.attachmentId}/signed-url`;
 }
 
 function readThreadVoicePlaybackCacheEntry(key: string | null) {
@@ -247,12 +324,85 @@ async function defaultResolveThreadVoiceTransportSource(input: {
   return response.blob();
 }
 
+export async function resolveThreadVoiceTransportSourceUrl(input: {
+  locator: ThreadVoiceTransportSourceLocator;
+  onDiagnostic?: ThreadVoiceSourceDiagnosticLogger;
+}): Promise<ThreadVoiceTransportSourceResolution> {
+  // Current plaintext voice resolves a short-lived transport URL here. Future
+  // encrypted voice can keep the same outer contract and swap this step for a
+  // private-media locator/envelope resolver before handing the player a local
+  // playable source.
+  const resolveUrl = buildThreadVoiceTransportResolveUrl(input.locator);
+
+  if (!resolveUrl) {
+    input.onDiagnostic?.('attachment-url-resolve-skipped-invalid-locator', {
+      attachmentId: input.locator.attachmentId,
+      conversationId: input.locator.conversationId,
+      messageId: input.locator.messageId,
+    });
+    return {
+      status: 'skipped',
+      transportSourceUrl: null,
+    };
+  }
+
+  try {
+    const response = await fetch(resolveUrl, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Voice attachment URL resolve failed with status ${response.status}`,
+      );
+    }
+
+    const payload = (await response.json()) as { signedUrl?: string | null };
+    const nextSignedUrl =
+      typeof payload.signedUrl === 'string' && payload.signedUrl.trim()
+        ? payload.signedUrl.trim()
+        : null;
+
+    input.onDiagnostic?.('attachment-url-resolved', {
+      attachmentId: input.locator.attachmentId,
+      conversationId: input.locator.conversationId,
+      messageId: input.locator.messageId,
+      resolved: Boolean(nextSignedUrl),
+    });
+
+    return {
+      status: 'resolved',
+      transportSourceUrl: nextSignedUrl,
+    };
+  } catch (error) {
+    input.onDiagnostic?.('attachment-url-resolve-failed', {
+      attachmentId: input.locator.attachmentId,
+      conversationId: input.locator.conversationId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      messageId: input.locator.messageId,
+    });
+    return {
+      status: 'failed',
+      transportSourceUrl: null,
+    };
+  }
+}
+
 export async function resolveLocalThreadVoicePlaybackSource(input: {
   cacheKey: string | null;
   onDiagnostic?: ThreadVoiceSourceDiagnosticLogger;
   resolveTransportSource?: ThreadVoiceTransportSourceResolver;
   transportSourceUrl: string | null;
 }) {
+  // The player only consumes a local playable source URL. Today this warms a
+  // plaintext transport URL into a blob URL; later encrypted voice can fetch
+  // ciphertext and return a decrypted object URL through the same boundary.
+  input.onDiagnostic?.('local-playable-source-requested', {
+    cacheKey: input.cacheKey,
+    hasTransportSourceUrl: Boolean(input.transportSourceUrl),
+  });
+
   if (
     typeof window === 'undefined' ||
     !input.cacheKey ||
@@ -270,12 +420,20 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
     currentEntry.sourceUrl === transportSourceUrl &&
     currentEntry.playbackUrl
   ) {
+    input.onDiagnostic?.('local-playable-source-cache-hit', {
+      cacheKey,
+      transportSourceUrl,
+    });
     return currentEntry.playbackUrl;
   }
 
   const existingPromise = threadVoicePlaybackWarmPromises.get(cacheKey);
 
   if (existingPromise) {
+    input.onDiagnostic?.('local-playable-source-promise-reuse', {
+      cacheKey,
+      transportSourceUrl,
+    });
     return existingPromise;
   }
 
@@ -284,6 +442,10 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
 
   const promise = (async () => {
     try {
+      input.onDiagnostic?.('local-playable-source-fetch-start', {
+        cacheKey,
+        transportSourceUrl,
+      });
       const resolvedTransportSource = await resolveTransportSource({
         transportSourceUrl,
       });
