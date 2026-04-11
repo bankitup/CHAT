@@ -1422,6 +1422,18 @@ function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
   );
 }
 
+function isVoiceInteractiveMessageTarget(target: EventTarget | null) {
+  const targetElement = getMessageInteractiveTargetElement(target);
+
+  if (!targetElement) {
+    return false;
+  }
+
+  return Boolean(
+    targetElement.closest('[data-message-voice-interactive="true"]'),
+  );
+}
+
 function ThreadVoiceMessageBubble({
   attachment,
   conversationId,
@@ -2254,6 +2266,11 @@ function ThreadVoiceMessageBubble({
         messageId,
         pointerType: event.pointerType,
       });
+      logVoiceThreadProof('gesture-local-playback-entered', {
+        input: 'pointer',
+        messageId,
+        pointerType: event.pointerType,
+      });
       lastVoicePointerActivationAtRef.current = Date.now();
       void togglePlayback();
     },
@@ -2274,6 +2291,10 @@ function ThreadVoiceMessageBubble({
         messageId,
       });
       logVoiceThreadProof('tap-received', {
+        input: 'click',
+        messageId,
+      });
+      logVoiceThreadProof('gesture-local-playback-entered', {
         input: 'click',
         messageId,
       });
@@ -2309,9 +2330,14 @@ function ThreadVoiceMessageBubble({
         return;
       }
 
+      logVoiceThreadProof('gesture-short-tap-recognized', {
+        input: 'pointer',
+        messageId,
+        pointerType: event.pointerType,
+      });
       activateVoiceFromPointer(event);
     },
-    [activateVoiceFromPointer],
+    [activateVoiceFromPointer, messageId],
   );
 
   return (
@@ -4072,6 +4098,7 @@ function ThreadMessageRowComponent({
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imagePreviewClickSuppressedUntilRef = useRef(0);
   const longPressPointerRef = useRef<{
+    isVoiceTarget: boolean;
     pointerId: number;
     startX: number;
     startY: number;
@@ -4375,28 +4402,55 @@ function ThreadMessageRowComponent({
 
   const handleBubblePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
+      const isVoiceTarget = isVoiceInteractiveMessageTarget(event.target);
+      const isInteractiveTarget =
+        isMessageQuickActionInteractiveTarget(event.target);
+
       if (
         !canShowQuickActions ||
         event.button !== 0 ||
-        isMessageQuickActionInteractiveTarget(event.target)
+        isInteractiveTarget
       ) {
+        if (isVoiceTarget) {
+          logVoiceThreadProof('gesture-shell-ignored-voice-target', {
+            interactiveTarget: isInteractiveTarget,
+            messageId: message.id,
+          });
+        }
         return;
       }
 
       clearLongPress();
       longPressPointerRef.current = {
+        isVoiceTarget,
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
       };
+      if (isVoiceTarget) {
+        logVoiceThreadProof('gesture-long-press-armed', {
+          messageId: message.id,
+          pointerId: event.pointerId,
+        });
+      }
       longPressTimeoutRef.current = setTimeout(() => {
+        if (isVoiceTarget) {
+          logVoiceThreadProof('gesture-long-press-recognized', {
+            messageId: message.id,
+            pointerId: event.pointerId,
+          });
+          logVoiceThreadProof('gesture-popup-open-entered', {
+            messageId: message.id,
+            trigger: 'long-press',
+          });
+        }
         imagePreviewClickSuppressedUntilRef.current =
           Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
         setIsQuickActionsOpen(true);
         longPressTimeoutRef.current = null;
       }, 280);
     },
-    [canShowQuickActions, clearLongPress],
+    [canShowQuickActions, clearLongPress, message.id],
   );
 
   const handleBubblePointerMove = useCallback(
@@ -4432,6 +4486,8 @@ function ThreadMessageRowComponent({
 
   const handleBubbleContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
+      const isVoiceTarget = isVoiceInteractiveMessageTarget(event.target);
+
       if (
         !canShowQuickActions ||
         isMessageQuickActionInteractiveTarget(event.target)
@@ -4440,12 +4496,18 @@ function ThreadMessageRowComponent({
       }
 
       event.preventDefault();
+      if (isVoiceTarget) {
+        logVoiceThreadProof('gesture-popup-open-entered', {
+          messageId: message.id,
+          trigger: 'contextmenu',
+        });
+      }
       imagePreviewClickSuppressedUntilRef.current =
         Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
       clearLongPress();
       setIsQuickActionsOpen(true);
     },
-    [canShowQuickActions, clearLongPress],
+    [canShowQuickActions, clearLongPress, message.id],
   );
   const handleImageAttachmentPreview = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
