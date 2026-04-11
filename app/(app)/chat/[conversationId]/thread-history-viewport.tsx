@@ -1583,9 +1583,8 @@ function ThreadVoiceMessageBubble({
       : 0;
   const isPlaying = playbackState === 'playing';
   const isBuffering = playbackState === 'buffering';
-  const isPreparingPlayback = hasPendingPlaybackIntent && !isPlaying;
   const readyStateLabel =
-    playbackState === 'buffering' || isPreparingPlayback
+    playbackState === 'buffering'
       ? t.chat.voiceMessageLoading
       : t.chat.voiceMessage;
   const stateLabel =
@@ -1620,7 +1619,7 @@ function ThreadVoiceMessageBubble({
       ? voiceState === 'failed'
         ? 'error'
         : 'loading'
-      : isPreparingPlayback || isBuffering
+      : isBuffering
         ? 'loading'
         : isPlaying
           ? 'pause'
@@ -1826,6 +1825,7 @@ function ThreadVoiceMessageBubble({
 
       try {
         await audio.play();
+        setHasPendingPlaybackIntent(false);
         return true;
       } catch {
         releaseActiveThreadVoicePlayback(messageId, audio);
@@ -1957,7 +1957,7 @@ function ThreadVoiceMessageBubble({
   const playButtonLabel =
     voiceState !== 'ready'
       ? stateLabel
-      : isPreparingPlayback || isBuffering
+      : isBuffering
         ? t.chat.voiceMessageLoading
         : isPlaying
         ? t.chat.voiceMessagePause
