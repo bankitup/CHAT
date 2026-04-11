@@ -3,6 +3,7 @@ import type {
   SpaceProfileDefaultShellRoute,
   SpaceTheme,
 } from './model';
+import { withSpaceParam } from './url';
 
 /**
  * Shared app-shell posture helpers.
@@ -16,26 +17,54 @@ export type AppShellSpaceSummary = {
   id: string;
   name: string;
   profile: SpaceProfile;
+  productPosture: AppProductPosture;
   theme: SpaceTheme;
 };
 
-export type AppShellMessengerActiveTab = 'activity' | 'chats' | 'home' | null;
-export type AppShellProductActiveTab =
+export type AppProductPosture = 'messenger' | 'keepcozy';
+export type AppRouteProductSurface = 'keepcozy' | 'messenger' | 'platform';
+export type AppShellNavItemKey =
   | 'activity'
-  | 'tasks'
+  | 'chats'
+  | 'home'
   | 'issues'
   | 'rooms'
-  | 'home'
-  | null;
+  | 'tasks';
+
+export type AppShellNavItem = {
+  href: string;
+  isActive: boolean;
+  key: AppShellNavItemKey;
+  prefetch: boolean;
+};
 
 export type ResolvedAppShellState = {
   activeSpace: AppShellSpaceSummary | null;
-  activeSpaceProfile: SpaceProfile | null;
+  activeProductPosture: AppProductPosture | null;
   activeSpaceTheme: SpaceTheme;
-  messengerActiveTab: AppShellMessengerActiveTab;
-  productActiveTab: AppShellProductActiveTab;
+  bottomNavProductPosture: AppProductPosture | null;
+  navItems: AppShellNavItem[];
+  routeProductSurface: AppRouteProductSurface;
   showBottomNav: boolean;
 };
+
+export function resolveSpaceProductPosture(
+  profile: SpaceProfile,
+): AppProductPosture {
+  return profile === 'keepcozy_ops' ? 'keepcozy' : 'messenger';
+}
+
+export function isMessengerProductPosture(
+  posture: AppProductPosture | null | undefined,
+): posture is 'messenger' {
+  return posture === 'messenger';
+}
+
+export function isKeepCozyProductPosture(
+  posture: AppProductPosture | null | undefined,
+): posture is 'keepcozy' {
+  return posture === 'keepcozy';
+}
 
 export function resolveActiveAppShellSpace(input: {
   activeSpaceId: string | null;
@@ -62,40 +91,109 @@ export function resolveAppShellState(input: {
   const isRoomsRoute = input.pathname.startsWith('/rooms');
   const isIssuesRoute = input.pathname.startsWith('/issues');
   const isTasksRoute = input.pathname.startsWith('/tasks');
-  const activeSpaceProfile = input.activeSpace?.profile ?? null;
+  const activeProductPosture = input.activeSpace?.productPosture ?? null;
   const activeSpaceTheme = input.activeSpace?.theme ?? 'dark';
+  let routeProductSurface: AppRouteProductSurface = 'platform';
 
-  let productActiveTab: AppShellProductActiveTab = null;
-  let messengerActiveTab: AppShellMessengerActiveTab = null;
-
-  if (isActivityRoute) {
-    productActiveTab = 'activity';
-  } else if (isTasksRoute) {
-    productActiveTab = 'tasks';
-  } else if (isIssuesRoute) {
-    productActiveTab = 'issues';
-  } else if (isRoomsRoute) {
-    productActiveTab = 'rooms';
-  } else if (isHomeRoute || isSettingsRoute) {
-    productActiveTab = 'home';
+  if (isChatRoute || input.pathname.startsWith('/inbox')) {
+    routeProductSurface = 'messenger';
+  } else if (isRoomsRoute || isIssuesRoute || isTasksRoute) {
+    routeProductSurface = 'keepcozy';
+  } else if (isHomeRoute || isActivityRoute || isSettingsRoute) {
+    routeProductSurface = activeProductPosture ?? 'platform';
   }
 
-  if (isHomeRoute) {
-    messengerActiveTab = 'home';
-  } else if (input.pathname.startsWith('/inbox')) {
-    messengerActiveTab = 'chats';
-  } else if (isActivityRoute) {
-    messengerActiveTab = 'activity';
-  }
+  const showBottomNav =
+    !isChatRoute &&
+    !(isSpacesRoute && !isMessengerProductPosture(activeProductPosture));
+  const bottomNavProductPosture = showBottomNav ? activeProductPosture : null;
+  const navItems = buildAppShellNavItems({
+    activeSpace: input.activeSpace,
+    pathname: input.pathname,
+  });
 
   return {
     activeSpace: input.activeSpace,
-    activeSpaceProfile,
+    activeProductPosture,
     activeSpaceTheme,
-    messengerActiveTab,
-    productActiveTab,
-    showBottomNav:
-      !isChatRoute &&
-      !(isSpacesRoute && activeSpaceProfile !== 'messenger_full'),
+    bottomNavProductPosture,
+    navItems,
+    routeProductSurface,
+    showBottomNav,
   };
+}
+
+function buildAppShellNavItems(input: {
+  activeSpace: AppShellSpaceSummary | null;
+  pathname: string;
+}): AppShellNavItem[] {
+  if (!input.activeSpace) {
+    return [];
+  }
+
+  const buildHref = (pathname: string) =>
+    withSpaceParam(pathname, input.activeSpace?.id);
+  const isActivityRoute = input.pathname.startsWith('/activity');
+  const isSettingsRoute = input.pathname.startsWith('/settings');
+  const isHomeRoute = input.pathname.startsWith('/home');
+  const isRoomsRoute = input.pathname.startsWith('/rooms');
+  const isIssuesRoute = input.pathname.startsWith('/issues');
+  const isTasksRoute = input.pathname.startsWith('/tasks');
+  const isInboxRoute = input.pathname.startsWith('/inbox');
+
+  if (isMessengerProductPosture(input.activeSpace.productPosture)) {
+    return [
+      {
+        href: buildHref('/home'),
+        isActive: isHomeRoute,
+        key: 'home',
+        prefetch: true,
+      },
+      {
+        href: buildHref('/inbox'),
+        isActive: isInboxRoute,
+        key: 'chats',
+        prefetch: true,
+      },
+      {
+        href: buildHref('/activity'),
+        isActive: isActivityRoute,
+        key: 'activity',
+        prefetch: true,
+      },
+    ];
+  }
+
+  return [
+    {
+      href: buildHref('/home'),
+      isActive: isHomeRoute || isSettingsRoute,
+      key: 'home',
+      prefetch: false,
+    },
+    {
+      href: buildHref('/rooms'),
+      isActive: isRoomsRoute,
+      key: 'rooms',
+      prefetch: false,
+    },
+    {
+      href: buildHref('/issues'),
+      isActive: isIssuesRoute,
+      key: 'issues',
+      prefetch: false,
+    },
+    {
+      href: buildHref('/tasks'),
+      isActive: isTasksRoute,
+      key: 'tasks',
+      prefetch: false,
+    },
+    {
+      href: buildHref('/activity'),
+      isActive: isActivityRoute,
+      key: 'activity',
+      prefetch: false,
+    },
+  ];
 }

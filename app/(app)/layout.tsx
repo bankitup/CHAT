@@ -6,7 +6,10 @@ import {
   getUserSpaces,
   isSpaceMembersSchemaCacheErrorMessage,
 } from '@/modules/spaces/server';
-import type { AppShellSpaceSummary } from '@/modules/spaces/shell';
+import {
+  resolveSpaceProductPosture,
+  type AppShellSpaceSummary,
+} from '@/modules/spaces/shell';
 import { AppShellFrame } from './app-shell-frame';
 
 export default async function AppLayout({
@@ -46,6 +49,7 @@ export default async function AppLayout({
     id: space.id,
     name: space.name,
     profile: space.profile,
+    productPosture: resolveSpaceProductPosture(space.profile),
     theme: space.theme,
   }));
 

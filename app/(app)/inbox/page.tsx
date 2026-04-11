@@ -43,6 +43,7 @@ import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 import { resolveV1TestSpaceFallback } from '@/modules/spaces/server';
+import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import { InboxFilterableContent } from './inbox-filterable-content';
 import { redirect } from 'next/navigation';
 import {
@@ -135,7 +136,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   let activeSpaceId: string;
   let activeSpaceName: string | null = null;
   let canManageMembers = false;
-  let isMessengerSpace = false;
+  let isMessengerProductSpace = false;
   const explicitV1TestSpace = await resolveV1TestSpaceFallback({
     requestedSpaceId: query.space,
     source: 'inbox-page-explicit-v1-test-bypass',
@@ -171,7 +172,9 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       activeSpaceId = activeSpaceState.activeSpace.id;
       activeSpaceName = activeSpaceState.activeSpace.name;
       canManageMembers = activeSpaceState.activeSpace.canManageMembers;
-      isMessengerSpace = activeSpaceState.activeSpace.profile === 'messenger_full';
+      isMessengerProductSpace =
+        resolveSpaceProductPosture(activeSpaceState.activeSpace.profile) ===
+        'messenger';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -207,7 +210,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   recordWarmNavServerRender({
     details: {
       canManageMembers,
-      isMessengerSpace,
+      isMessengerSpace: isMessengerProductSpace,
     },
     routeKey: warmNavRouteKey,
     surface: 'inbox',
@@ -491,7 +494,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         initialCreateMode={initialCreateMode}
         initialFilter={activeFilter}
         initialView={activeView}
-        isMessengerSpace={isMessengerSpace}
+        isMessengerSpace={isMessengerProductSpace}
         language={language}
         mainConversationItems={mainConversationItems}
         mainSummaries={mainSummaries}

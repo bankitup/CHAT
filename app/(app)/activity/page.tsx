@@ -26,6 +26,7 @@ import {
   resolveActiveSpaceForUser,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
+import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
 
@@ -189,6 +190,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const { activeSpace, language, t, user } = await requireActivitySpaceContext(
     query.space,
   );
+  const activeProductPosture = resolveSpaceProductPosture(activeSpace.profile);
   const allowNotificationTestSend = isPushTestSendEnabledForUser({
     userEmail: user.email ?? null,
   });
@@ -336,7 +338,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const messengerHasVisibleNotifications =
     filteredMessengerAttentionItems.length > 0 || filteredMessengerRecentItems.length > 0;
   const { counts, primaryFlow } =
-    activeSpace.profile === 'keepcozy_ops'
+    activeProductPosture === 'keepcozy'
       ? await getKeepCozyActivityData({
           language,
           spaceId: activeSpace.id,
@@ -361,7 +363,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const hasOperationalHistory =
     counts.issueUpdates > 0 || counts.taskUpdates > 0 || counts.resolutionNotes > 0;
 
-  if (activeSpace.profile === 'messenger_full') {
+  if (activeProductPosture === 'messenger') {
     return (
       <section className="stack settings-screen settings-shell activity-screen messenger-activity-screen">
         <InboxRealtimeSync

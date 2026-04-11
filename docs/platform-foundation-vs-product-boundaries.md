@@ -40,7 +40,7 @@ Important current split inside `src/modules/spaces`:
 - `model.ts` for shared platform types
 - `governance.ts` for shared governance resolution
 - `posture.ts` for shared profile/theme posture resolution
-- `shell.ts` for shared shell decision helpers
+- `shell.ts` for shared product posture, route-surface, and shell decision helpers
 - `server.ts` for access-loading and runtime resolution
 - `write-server.ts` for governed space writes
 
@@ -192,6 +192,7 @@ Architecture source of truth now lives in:
 - `docs/platform-architecture-current-state.md`
 - `docs/platform-architecture-target-shape.md`
 - `docs/platform-foundation-vs-product-boundaries.md`
+- `docs/product-shell-boundaries.md`
 - `docs/refactor-order-platform-first.md`
 
 ### Ops

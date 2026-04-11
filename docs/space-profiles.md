@@ -261,9 +261,23 @@ Current runtime note:
   work and is now used by the authenticated public/auth entry paths
 - the shared space selector now opens each space into its profile-default
   shell instead of forcing every space through `/home`
-- the shared app shell can now render a messenger-centered navigation set for
-  `messenger_full` spaces and a KeepCozy-centered navigation set for
-  `keepcozy_ops` spaces without splitting the app into two products
+- the shared app shell now resolves:
+  - product posture from the active space
+  - route surface from the current pathname
+  - product-specific bottom-nav posture from one shared shell helper
+- Messenger and KeepCozy routes still share one shell, but they now consume a
+  clearer product-posture contract instead of scattering raw profile checks
+
+Current implementation seam:
+
+- [shell.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/shell.ts)
+  now resolves `resolveSpaceProductPosture(...)` and
+  `resolveAppShellState(...)`
+- [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
+  now renders from that resolved posture instead of embedding two ad hoc nav
+  models
+- [product-shell-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/product-shell-boundaries.md)
+  documents the shared shell vs product shell split
 
 Important boundaries:
 
