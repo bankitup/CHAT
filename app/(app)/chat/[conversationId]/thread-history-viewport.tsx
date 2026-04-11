@@ -1680,10 +1680,16 @@ function ThreadVoiceMessageBubble({
 
   const armPendingPlaybackIntent = useCallback(() => {
     const nextIntentVersion = invalidatePlaybackStartRequests();
+    logVoiceThreadProof('voice-playback-owner-requested', {
+      intentVersion: nextIntentVersion,
+      messageId,
+      playbackState,
+      voiceState,
+    });
     requestActiveThreadVoicePlaybackIntent(messageId);
     setHasPendingPlaybackIntent(true);
     return nextIntentVersion;
-  }, [invalidatePlaybackStartRequests, messageId]);
+  }, [invalidatePlaybackStartRequests, messageId, playbackState, voiceState]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -1819,6 +1825,12 @@ function ThreadVoiceMessageBubble({
       setDidFailPlaybackSourcePrepare(false);
 
       try {
+        logVoiceThreadProof('voice-source-resolver-entered', {
+          hasExistingPlaybackSource: Boolean(effectiveVoicePlaybackSourceUrl),
+          hasTransportSource: Boolean(effectiveVoiceTransportSourceUrl),
+          messageId,
+          voiceState,
+        });
         const resolution = await prepareThreadVoicePlaybackSource({
           cacheKey: voicePlaybackCacheKey,
           locator: {
@@ -1846,6 +1858,13 @@ function ThreadVoiceMessageBubble({
           });
         }
 
+        logVoiceThreadProof('voice-source-prepared', {
+          hasPlaybackSource: Boolean(resolution.playbackSourceUrl),
+          hasTransportSource: Boolean(nextTransportSourceUrl),
+          messageId,
+          status: resolution.status,
+          voiceState,
+        });
         return resolution.playbackSourceUrl;
       } finally {
         setIsPreparingPlaybackSource(false);
@@ -1862,7 +1881,9 @@ function ThreadVoiceMessageBubble({
     conversationId,
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
+    messageId,
     rememberVoicePlaybackCacheEntry,
+    voiceState,
     voicePlaybackCacheKey,
   ]);
 
@@ -1926,6 +1947,12 @@ function ThreadVoiceMessageBubble({
         ownerVersion,
         playbackReadyState: audio.readyState,
       });
+      logVoiceThreadProof('voice-audio-play-requested', {
+        hasPlaybackSource: Boolean(nextPlaybackSource),
+        messageId,
+        ownerVersion,
+        voiceState,
+      });
 
       try {
         await audio.play();
@@ -1933,6 +1960,11 @@ function ThreadVoiceMessageBubble({
           messageId,
           ownerVersion,
           playbackReadyState: audio.readyState,
+        });
+        logVoiceThreadProof('voice-audio-play-fulfilled', {
+          messageId,
+          ownerVersion,
+          voiceState,
         });
         if (
           !isActiveThreadVoicePlaybackOwner({
@@ -1961,6 +1993,12 @@ function ThreadVoiceMessageBubble({
           ownerVersion,
           playbackReadyState: audio.readyState,
         });
+        logVoiceThreadProof('voice-audio-play-rejected', {
+          errorMessage: error instanceof Error ? error.message : String(error),
+          messageId,
+          ownerVersion,
+          voiceState,
+        });
         logVoiceThreadDiagnostic('audio-play-trigger-failed', {
           errorMessage: error instanceof Error ? error.message : String(error),
           messageId,
@@ -1976,7 +2014,12 @@ function ThreadVoiceMessageBubble({
         return false;
       }
     },
-    [clearPendingPlaybackIntent, effectiveVoicePlaybackSourceUrl, messageId],
+    [
+      clearPendingPlaybackIntent,
+      effectiveVoicePlaybackSourceUrl,
+      messageId,
+      voiceState,
+    ],
   );
 
   const startPlayback = useCallback(
@@ -2329,6 +2372,11 @@ function ThreadVoiceMessageBubble({
             messageId,
             pointerType,
           });
+          logVoiceThreadProof('voice-long-press-entered', {
+            messageId,
+            pointerType,
+            voiceState,
+          });
           logVoiceThreadProof('gesture-popup-open-entered', {
             messageId,
             trigger: 'voice-long-press',
@@ -2342,7 +2390,7 @@ function ThreadVoiceMessageBubble({
       }
       event.stopPropagation();
     },
-    [clearVoiceLongPress, messageId, onRequestQuickActions],
+    [clearVoiceLongPress, messageId, onRequestQuickActions, voiceState],
   );
 
   const handleVoiceSurfacePointerMove = useCallback(
@@ -2385,13 +2433,18 @@ function ThreadVoiceMessageBubble({
       event.stopPropagation();
       clearVoiceLongPress();
       lastVoiceLongPressAtRef.current = Date.now();
+      logVoiceThreadProof('voice-long-press-entered', {
+        messageId,
+        trigger: 'contextmenu',
+        voiceState,
+      });
       logVoiceThreadProof('gesture-popup-open-entered', {
         messageId,
         trigger: 'voice-contextmenu',
       });
       onRequestQuickActions?.('contextmenu');
     },
-    [clearVoiceLongPress, messageId, onRequestQuickActions],
+    [clearVoiceLongPress, messageId, onRequestQuickActions, voiceState],
   );
 
   const activateVoiceFromPointer = useCallback(
@@ -2407,6 +2460,11 @@ function ThreadVoiceMessageBubble({
         messageId,
         pointerType: event.pointerType,
       });
+      logVoiceThreadProof('voice-tap-received', {
+        input: 'pointer',
+        messageId,
+        voiceState,
+      });
       logVoiceThreadProof('tap-received', {
         input: 'pointer',
         messageId,
@@ -2420,7 +2478,7 @@ function ThreadVoiceMessageBubble({
       lastVoicePointerActivationAtRef.current = Date.now();
       void togglePlayback();
     },
-    [messageId, togglePlayback],
+    [messageId, togglePlayback, voiceState],
   );
 
   const handleVoiceSurfaceClick = useCallback(
@@ -2440,6 +2498,11 @@ function ThreadVoiceMessageBubble({
         input: 'click',
         messageId,
       });
+      logVoiceThreadProof('voice-tap-received', {
+        input: 'click',
+        messageId,
+        voiceState,
+      });
       logVoiceThreadProof('tap-received', {
         input: 'click',
         messageId,
@@ -2450,7 +2513,7 @@ function ThreadVoiceMessageBubble({
       });
       void togglePlayback();
     },
-    [messageId, togglePlayback],
+    [messageId, togglePlayback, voiceState],
   );
 
   const handleVoiceCardClick = useCallback(
@@ -2491,9 +2554,14 @@ function ThreadVoiceMessageBubble({
         messageId,
         pointerType: event.pointerType,
       });
+      logVoiceThreadProof('voice-short-tap-confirmed', {
+        input: 'pointer',
+        messageId,
+        voiceState,
+      });
       activateVoiceFromPointer(event);
     },
-    [activateVoiceFromPointer, clearVoiceLongPress, messageId],
+    [activateVoiceFromPointer, clearVoiceLongPress, messageId, voiceState],
   );
 
   return (
