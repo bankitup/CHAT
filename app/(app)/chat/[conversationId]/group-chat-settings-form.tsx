@@ -5,14 +5,14 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import type { GroupConversationJoinPolicy } from '@/modules/messaging/group-policy';
-import { GroupIdentityAvatar } from '@/modules/messaging/ui/identity';
+import { GroupIdentityAvatar } from '@/modules/profile/ui/identity';
 import {
   PROFILE_AVATAR_ACCEPT,
   PROFILE_AVATAR_BUCKET,
   PROFILE_AVATAR_MAX_SIZE_BYTES,
   isSupportedProfileAvatarType,
   sanitizeProfileFileName,
-} from '@/modules/messaging/profile-avatar';
+} from '@/modules/profile/avatar';
 import { updateConversationIdentityAction } from './actions';
 
 const AVATAR_EDITOR_PREVIEW_SIZE = 236;

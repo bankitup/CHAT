@@ -147,9 +147,17 @@ Current product-consumption rule:
   - [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts)
 - the KeepCozy adapter may depend on:
   - `src/modules/messaging/contract/**`
-  - `src/modules/messaging/data/**`
   - `src/modules/messaging/server/**`
   - `app/api/messaging/**`
+- the KeepCozy adapter should prefer:
+  - [route-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/route-context.ts)
+  - [operational-activity.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-activity.ts)
+  - [operational-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-thread-context.ts)
+- the KeepCozy adapter should avoid direct dependency on:
+  - `src/modules/messaging/data/server.ts`
+  - `src/modules/messaging/data/conversation-thread-context.ts`
+  - `src/modules/messaging/ui/**`
+  - `src/modules/spaces/server.ts`
 - KeepCozy should not depend on:
   - `app/(app)/inbox/**`
   - `app/(app)/chat/**`
@@ -157,14 +165,16 @@ Current product-consumption rule:
 Current adapter ownership:
 
 - `requireKeepCozyMessagingSpaceContext(...)`
-  resolves the active space for KeepCozy messaging-related surfaces without
-  routing those pages through Messenger space-selection code
+  resolves the active space for KeepCozy messaging-related surfaces through
+  messaging route-context seams without routing those pages through Messenger
+  space-selection code
 - `getKeepCozyMessagingActivityFeed(...)`
-  builds KeepCozy-facing conversation activity data from messaging capability
-  seams without making KeepCozy routes own the inbox query/title/preview logic
+  delegates KeepCozy-facing conversation activity shaping to the bounded
+  messaging operational-activity seam without making KeepCozy routes own the
+  inbox query/title/preview logic
 - `getKeepCozyLinkedThreadContextForUser(...)`
-  is the first KeepCozy-owned read seam for optional operational thread
-  context
+  delegates optional operational thread reads to the bounded messaging
+  operational-thread seam
 - `mapKeepCozyActorToMessagingParticipant(...)`
   keeps role translation at the integration seam instead of scattering it
   through product routes

@@ -69,9 +69,30 @@ resolution flow inline.
 KeepCozy and future products may depend on:
 
 - `src/modules/messaging/contract/**`
-- `src/modules/messaging/data/**`
 - `src/modules/messaging/server/**`
 - `app/api/messaging/**`
+
+Preferred non-Messenger server seams:
+
+- [route-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/route-context.ts)
+- [operational-activity.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-activity.ts)
+- [operational-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-thread-context.ts)
+
+Avoid for cross-product integrations unless there is no bounded seam yet:
+
+- `src/modules/messaging/data/server.ts`
+- `src/modules/messaging/data/conversation-thread-context.ts`
+- generic identity/profile helpers under `src/modules/messaging/ui/**`
+
+Shared profile identity, avatar, and status helpers now belong under:
+
+- `src/modules/profile/server.ts`
+- `src/modules/profile/types.ts`
+- `src/modules/profile/avatar.ts`
+- `src/modules/profile/ui/**`
+
+Messaging should only keep compatibility facades or message-specific identity
+rendering in its own module tree.
 
 Preferred KeepCozy consumption layer:
 

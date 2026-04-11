@@ -1,7 +1,7 @@
 import {
   normalizeInboxPreviewDisplayMode,
   type InboxPreviewDisplayMode,
-} from '@/modules/messaging/inbox/preferences';
+} from '../inbox/preferences.ts';
 
 export type PreviewPrivacyDecision = {
   inbox: 'content' | 'generic';

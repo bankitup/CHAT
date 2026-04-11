@@ -10,7 +10,7 @@ import {
 } from '@/modules/i18n';
 import { getRequestLanguage, setLanguageCookie } from '@/modules/i18n/server';
 import { getRequestViewer } from '@/lib/request-context/server';
-import { updateCurrentUserLanguagePreference } from '@/modules/messaging/data/server';
+import { updateCurrentUserLanguagePreference } from '@/modules/profile/server';
 import {
   normalizeAppZoomMode,
   type AppZoomMode,

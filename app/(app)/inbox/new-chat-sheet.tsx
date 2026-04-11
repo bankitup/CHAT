@@ -6,8 +6,8 @@ import {
   getTranslations,
   type AppLanguage,
 } from '@/modules/i18n';
-import { IdentityAvatar } from '@/modules/messaging/ui/identity';
-import { IdentityStatusInline } from '@/modules/messaging/ui/identity-status';
+import { IdentityAvatar } from '@/modules/profile/ui/identity';
+import { IdentityStatusInline } from '@/modules/profile/ui/identity-status';
 import { GuardedServerActionForm } from '../guarded-server-action-form';
 import { PendingSubmitButton } from '../pending-submit-button';
 import { createDmAction, createGroupAction } from './actions';

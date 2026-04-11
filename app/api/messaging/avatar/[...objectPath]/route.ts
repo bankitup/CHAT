@@ -3,7 +3,7 @@ import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import {
   decodeAvatarDeliveryPathSegments,
 } from '@/modules/messaging/avatar-delivery';
-import { PROFILE_AVATAR_BUCKET } from '@/modules/messaging/profile-avatar';
+import { PROFILE_AVATAR_BUCKET } from '@/modules/profile/avatar';
 
 const avatarDiagnosticsEnabled = process.env.CHAT_DEBUG_AVATARS === '1';
 const AVATAR_CACHE_CONTROL = 'private, max-age=31536000, immutable';

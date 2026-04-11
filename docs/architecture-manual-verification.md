@@ -56,7 +56,18 @@ This is a manual sanity checklist, not a feature-expansion script.
   - open an existing conversation or create one through the normal flow
   - send a basic message
   - verify the thread loads and the inbox preview updates
+- open thread settings and confirm the route loads without breaking the chat
+  shell
 - Confirm no KeepCozy route is required for this flow.
+
+### 4a. Thread Runtime Sanity
+
+- In an active Messenger thread:
+  - scroll older history and confirm the viewport still loads older messages
+  - if reactions are already present, confirm reaction groups and picker still
+    render normally
+  - if a voice message is already present in the environment, confirm the voice
+    row still renders and local playback controls still appear where expected
 
 ### 5. KeepCozy Flow Still Working
 

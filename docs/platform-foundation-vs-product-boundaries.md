@@ -33,6 +33,7 @@ Primary files today:
 - `src/lib/request-context/server.ts`
 - `src/lib/supabase/**`
 - `src/modules/spaces/**`
+- `src/modules/profile/**`
 - `src/modules/i18n/**`
 
 Important current split inside `src/modules/spaces`:
@@ -106,6 +107,7 @@ Platform frontend:
 - `app/(app)/app-shell-frame.tsx`
 - `app/(app)/spaces/**`
 - `app/(app)/settings/**` where the concern is shared identity/settings
+- shared identity/avatar/status UI in `src/modules/profile/ui/**`
 
 Messenger frontend:
 
@@ -127,6 +129,7 @@ Platform backend:
 - `src/lib/request-context/server.ts`
 - `src/modules/spaces/server.ts`
 - `src/modules/spaces/write-server.ts`
+- `src/modules/profile/server.ts`
 
 Messenger/shared messaging backend:
 
@@ -137,8 +140,17 @@ KeepCozy backend:
 
 - `src/modules/keepcozy/server.ts`
 - `src/modules/keepcozy/write-server.ts`
+- `src/modules/keepcozy/messaging-adapter.ts`
 - `app/(app)/issues/actions.ts`
 - `app/(app)/tasks/actions.ts`
+
+When KeepCozy needs messaging capability, it should enter through:
+
+- `src/modules/keepcozy/messaging-adapter.ts`
+- bounded messaging server seams under `src/modules/messaging/server/**`
+
+It should avoid pulling broad messaging persistence or UI helpers directly into
+KeepCozy product code.
 
 ### Database
 
@@ -183,7 +195,8 @@ Storage is shared platform infrastructure with capability-specific semantics.
 
 Messaging/shared capability storage:
 
-- avatars and message assets currently delivered through messaging-owned helpers
+- shared avatar storage helpers in `src/modules/profile/avatar.ts`
+- message assets and attachment delivery in messaging-owned helpers
 - `app/api/messaging/avatar/[...objectPath]/route.ts`
 - attachment content and signed-url routes under `app/api/messaging/**`
 

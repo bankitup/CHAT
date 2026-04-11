@@ -12,7 +12,7 @@ import {
 import {
   GroupIdentityAvatar,
   IdentityAvatar,
-} from '@/modules/messaging/ui/identity';
+} from '@/modules/profile/ui/identity';
 import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
 
 type InboxConversationLiveRowProps = {

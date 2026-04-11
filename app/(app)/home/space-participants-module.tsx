@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { PendingSubmitButton } from '../pending-submit-button';
-import { IdentityAvatar } from '@/modules/messaging/ui/identity';
+import { IdentityAvatar } from '@/modules/profile/ui/identity';
 import type { SpaceParticipantRecord } from '@/modules/spaces/server';
 
 type SpaceParticipantsModuleCopy = {

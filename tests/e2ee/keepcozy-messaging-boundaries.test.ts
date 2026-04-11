@@ -16,13 +16,33 @@ test('keepcozy messaging adapter stays independent from Messenger route files', 
 
   assert.match(
     adapterSource,
-    /from ['"]@\/modules\/messaging\//,
+    /from ['"]@\/modules\/messaging\/server\//,
   );
   assert.doesNotMatch(
     adapterSource,
     /from ['"].*app\/\(app\)\/(inbox|chat)\//,
   );
   assert.doesNotMatch(adapterSource, /from ['"]\.\.\/\.\.\/app\//);
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/data\/server['"]/,
+  );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/data\/conversation-thread-context['"]/,
+  );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/ui\//,
+  );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/spaces\/server['"]/,
+  );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/(thread-page|thread-settings-page|inbox-page|settings-page)['"]/,
+  );
 });
 
 test('keepcozy activity route consumes the bounded messaging adapter instead of raw Messenger data wiring', () => {
@@ -38,15 +58,41 @@ test('keepcozy activity route consumes the bounded messaging adapter instead of 
   );
 });
 
-test('messenger inbox route consumes the shared messaging route-context seam', () => {
+test('messenger inbox route consumes the shared messaging route-context seam through its page loader', () => {
   const inboxPageSource = readWorkspaceFile('app/(app)/inbox/page.tsx');
+  const inboxLoaderSource = readWorkspaceFile(
+    'src/modules/messaging/server/inbox-page.ts',
+  );
 
   assert.match(
     inboxPageSource,
+    /loadMessengerInboxPageData/,
+  );
+  assert.match(
+    inboxLoaderSource,
     /resolveMessagingRouteSpaceContextForUser/,
   );
   assert.doesNotMatch(
-    inboxPageSource,
+    inboxLoaderSource,
     /from ['"]@\/modules\/spaces\/server['"]/,
+  );
+});
+
+test('keepcozy adapter only consumes the bounded messaging server seams it is allowed to compose', () => {
+  const adapterSource = readWorkspaceFile(
+    'src/modules/keepcozy/messaging-adapter.ts',
+  );
+
+  assert.match(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/operational-activity['"]/,
+  );
+  assert.match(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/operational-thread-context['"]/,
+  );
+  assert.match(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/route-context['"]/,
   );
 });

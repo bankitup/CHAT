@@ -31,7 +31,7 @@ These areas already behave like platform-level foundation:
 | Shared authenticated shell | One app shell hosting both product surfaces | `app/(app)/layout.tsx`, `app/(app)/app-shell-frame.tsx`, `app/(app)/actions.ts` |
 | Shared space boundary | Outer tenancy and membership boundary for both messaging and KeepCozy data | `src/modules/spaces/server.ts`, `src/modules/spaces/write-server.ts`, `src/modules/spaces/model.ts`, `src/modules/spaces/governance.ts`, `src/modules/spaces/posture.ts`, `src/modules/spaces/shell.ts`, `src/modules/spaces/url.ts`, `app/(app)/spaces/**` |
 | Shared i18n and copy system | Used across both products | `src/modules/i18n/**` |
-| Shared profile/settings shell | Shared current-user profile/status entry surface | `app/(app)/settings/**` |
+| Shared profile/settings shell | Shared current-user profile/status entry surface | `app/(app)/settings/**`, `src/modules/profile/**` |
 
 Why this already reads as platform:
 
@@ -83,7 +83,7 @@ current naming is still Messenger-heavy:
 | Spaces and membership | `src/modules/spaces/**` | Outer access boundary for both products |
 | Messaging capability | `src/modules/messaging/**`, `app/api/messaging/**` | Messenger uses it directly now; KeepCozy may later compose parts of it |
 | KeepCozy future contract drafts | `src/modules/keepcozy/contract-types.ts` | Product-specific future contract language no longer needs to live inside shared `spaces` runtime modules |
-| Avatar/media delivery | `src/modules/messaging/avatar-delivery.ts`, `app/api/messaging/avatar/[...objectPath]/route.ts` | Shared delivery concern even if currently named under messaging |
+| Avatar/media delivery | `src/modules/profile/avatar.ts`, `src/modules/messaging/avatar-delivery.ts`, `app/api/messaging/avatar/[...objectPath]/route.ts` | Shared delivery concern with platform-owned profile/avatar helpers and messaging-owned delivery/runtime |
 | Push and unread | `src/modules/messaging/push/**`, `src/modules/messaging/sdk/notifications.ts` | Shared messaging capability with platform-level operational value |
 | Shared error sanitation | `src/modules/messaging/ui/user-facing-errors.ts` | Already used outside Messenger routes |
 

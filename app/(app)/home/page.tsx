@@ -25,7 +25,7 @@ import { SpaceUsageCard, type SpaceUsageMetricViewModel } from './space-usage-ca
 import { getRequestViewer } from '@/lib/request-context/server';
 import { formatMemberCount, getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
-import { getCurrentUserProfile } from '@/modules/messaging/data/server';
+import { getCurrentUserProfile } from '@/modules/profile/server';
 import type { ReactNode } from 'react';
 import {
   getUserFacingErrorFallback,

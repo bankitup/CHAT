@@ -4,7 +4,7 @@ import { memo } from 'react';
 import {
   GroupIdentityAvatar,
   IdentityAvatar,
-} from '@/modules/messaging/ui/identity';
+} from '@/modules/profile/ui/identity';
 
 export type ChatHeaderParticipantIdentity = {
   avatarPath?: string | null;

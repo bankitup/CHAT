@@ -10,7 +10,7 @@ import {
   updateCurrentUserLanguagePreference,
   updateCurrentUserProfile,
   updateCurrentUserStatus,
-} from '@/modules/messaging/data/server';
+} from '@/modules/profile/server';
 import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,

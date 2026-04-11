@@ -32,15 +32,22 @@ test('shell posture resolver keeps Messenger and KeepCozy nav contracts distinct
 
 test('route groups resolve product posture from shared shell helpers instead of raw profile branching', () => {
   const inboxPageSource = readWorkspaceFile('app/(app)/inbox/page.tsx');
+  const inboxLoaderSource = readWorkspaceFile(
+    'src/modules/messaging/server/inbox-page.ts',
+  );
   const homePageSource = readWorkspaceFile('app/(app)/home/page.tsx');
 
   assert.match(
     inboxPageSource,
+    /loadMessengerInboxPageData/,
+  );
+  assert.match(
+    inboxLoaderSource,
     /productAccess\.messenger\.isPrimaryProfile/,
   );
   assert.match(homePageSource, /resolveSpaceProductPosture\(activeSpace\.profile\)/);
   assert.doesNotMatch(
-    inboxPageSource,
+    inboxLoaderSource,
     /profile === 'messenger_full'|profile === 'keepcozy_ops'/,
   );
 });
