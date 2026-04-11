@@ -294,11 +294,13 @@ const activeThreadVoicePlayback: {
   intendedMessageId: string | null;
   messageId: string | null;
   ownerVersion: number;
+  transitionPromise: Promise<void> | null;
 } = {
   audio: null,
   intendedMessageId: null,
   messageId: null,
   ownerVersion: 0,
+  transitionPromise: null,
 };
 
 function getActiveThreadVoicePlaybackSnapshot() {
@@ -307,7 +309,23 @@ function getActiveThreadVoicePlaybackSnapshot() {
     intendedMessageId: activeThreadVoicePlayback.intendedMessageId,
     messageId: activeThreadVoicePlayback.messageId,
     ownerVersion: activeThreadVoicePlayback.ownerVersion,
+    transitionPromise: activeThreadVoicePlayback.transitionPromise,
   };
+}
+
+function runActiveThreadVoicePlaybackTransition(task: () => Promise<void> | void) {
+  const previousTransition = activeThreadVoicePlayback.transitionPromise;
+  const nextTransition = (previousTransition ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(task)
+    .finally(() => {
+      if (activeThreadVoicePlayback.transitionPromise === nextTransition) {
+        activeThreadVoicePlayback.transitionPromise = null;
+      }
+    });
+
+  activeThreadVoicePlayback.transitionPromise = nextTransition;
+  return nextTransition;
 }
 
 function claimActiveThreadVoicePlayback(
@@ -1375,7 +1393,6 @@ function ThreadVoiceMessageBubble({
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
   const lastVoicePointerActivationAtRef = useRef(0);
-  const playbackTogglePromiseRef = useRef<Promise<void> | null>(null);
   const claimedPlaybackOwnerVersionRef = useRef<number | null>(null);
   const voiceTapGestureRef = useRef<{
     didMove: boolean;
@@ -2007,18 +2024,9 @@ function ThreadVoiceMessageBubble({
   ]);
 
   const togglePlayback = useCallback(() => {
-    if (playbackTogglePromiseRef.current) {
-      return playbackTogglePromiseRef.current;
-    }
-
-    const nextPromise = (async () => {
+    return runActiveThreadVoicePlaybackTransition(async () => {
       await togglePlaybackUnsafe();
-    })().finally(() => {
-      playbackTogglePromiseRef.current = null;
     });
-
-    playbackTogglePromiseRef.current = nextPromise;
-    return nextPromise;
   }, [togglePlaybackUnsafe]);
 
   const playButtonLabel =
@@ -2039,6 +2047,10 @@ function ThreadVoiceMessageBubble({
           startX: event.clientX,
           startY: event.clientY,
         };
+
+        if (event.pointerType !== 'mouse') {
+          event.preventDefault();
+        }
       }
       event.stopPropagation();
     },
