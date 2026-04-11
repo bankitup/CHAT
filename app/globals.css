@@ -8666,8 +8666,6 @@ main {
 }
 
 .message-photo-card-optimistic {
-  --message-photo-card-max-width: min(100%, 7.75rem);
-  --message-photo-card-max-height: 9rem;
   width: fit-content;
   border-color: rgba(221, 228, 238, 0.4);
   border-radius: 15px;
