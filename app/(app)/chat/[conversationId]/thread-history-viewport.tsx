@@ -725,11 +725,10 @@ function resolvePreferredThreadVoicePlaybackUrl(input: {
 }) {
   if (
     input.cacheEntry?.warmed &&
-    input.cacheEntry.playbackUrl?.startsWith('blob:') &&
-    (!input.attachmentSignedUrl ||
-      !input.cacheEntry.sourceUrl ||
-      input.cacheEntry.sourceUrl === input.attachmentSignedUrl)
+    input.cacheEntry.playbackUrl?.startsWith('blob:')
   ) {
+    // Once we have a warmed in-session blob for this stable voice cache key,
+    // prefer it over a freshly rotated signed URL so replay/re-entry stay hot.
     return input.cacheEntry.playbackUrl;
   }
 
@@ -882,7 +881,8 @@ async function warmThreadVoicePlaybackSource(input: {
       const objectUrl = URL.createObjectURL(blob);
       writeThreadVoicePlaybackCacheEntry(cacheKey, {
         playbackUrl: objectUrl,
-        sessionReady: false,
+        sessionReady:
+          threadVoicePlaybackCache.get(cacheKey)?.sessionReady ?? false,
         sourceUrl,
         warmed: true,
       });
@@ -1710,6 +1710,13 @@ function ThreadVoiceMessageBubble({
         sourceUrl: cachedSourceUrl ?? effectiveSignedUrl,
         warmed: Boolean(effectiveSignedUrl.startsWith('blob:')),
       });
+      setPlaybackState((current) =>
+        current === 'buffering'
+          ? audio.currentTime > 0
+            ? 'paused'
+            : 'idle'
+          : current,
+      );
       return;
     }
 
@@ -2154,6 +2161,15 @@ function ThreadVoiceMessageBubble({
               sourceUrl: stablePlaybackSource,
               warmed: Boolean(stablePlaybackSource?.startsWith('blob:')),
             });
+            if (
+              !hasPendingPlaybackIntent &&
+              playbackState === 'buffering' &&
+              event.currentTarget.paused
+            ) {
+              setPlaybackState(
+                event.currentTarget.currentTime > 0 ? 'paused' : 'idle',
+              );
+            }
           }}
           onEnded={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
