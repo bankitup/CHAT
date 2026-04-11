@@ -1450,6 +1450,10 @@ function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
     return false;
   }
 
+  if (target.closest('[data-message-voice-interactive="true"]')) {
+    return true;
+  }
+
   if (target.closest('[data-message-quick-actions-surface="true"]')) {
     return true;
   }
@@ -1900,7 +1904,7 @@ function ThreadVoiceMessageBubble({
     voiceState,
   ]);
 
-  const togglePlayback = async () => {
+  const togglePlayback = useCallback(async () => {
     if (voiceState !== 'ready') {
       if (canResolveSignedUrl) {
         setHasPendingPlaybackIntent(true);
@@ -1925,7 +1929,13 @@ function ThreadVoiceMessageBubble({
 
     setHasPendingPlaybackIntent(false);
     audio.pause();
-  };
+  }, [
+    canResolveSignedUrl,
+    isResolvingSignedUrl,
+    resolveSignedUrl,
+    startPlayback,
+    voiceState,
+  ]);
 
   const playButtonLabel =
     voiceState !== 'ready'
@@ -1936,6 +1946,36 @@ function ThreadVoiceMessageBubble({
         ? t.chat.voiceMessagePause
         : t.chat.voiceMessagePlay;
 
+  const handleVoiceSurfacePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const handleVoiceSurfaceClick = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void togglePlayback();
+    },
+    [togglePlayback],
+  );
+
+  const handleVoiceCardClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('.message-voice-play')
+      ) {
+        return;
+      }
+
+      handleVoiceSurfaceClick(event);
+    },
+    [handleVoiceSurfaceClick],
+  );
+
   return (
     <div
       className={
@@ -1943,17 +1983,19 @@ function ThreadVoiceMessageBubble({
           ? 'message-voice-card message-voice-card-own'
           : 'message-voice-card'
       }
+      data-message-voice-interactive="true"
       data-playback-state={voiceState === 'ready' ? playbackState : voiceState}
       data-play-intent={hasPendingPlaybackIntent ? 'pending' : 'idle'}
       data-voice-state={voiceState}
+      onClick={handleVoiceCardClick}
+      onPointerDown={handleVoiceSurfacePointerDown}
     >
       <button
         aria-label={playButtonLabel}
         className="message-voice-play"
         disabled={voiceState !== 'ready' && !canResolveSignedUrl}
-        onClick={() => {
-          void togglePlayback();
-        }}
+        onClick={handleVoiceSurfaceClick}
+        onPointerDown={handleVoiceSurfacePointerDown}
         type="button"
       >
         <span
