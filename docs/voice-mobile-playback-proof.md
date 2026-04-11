@@ -14,6 +14,10 @@ Relevant code paths:
 - `src/modules/messaging/data/server.ts`
 - `src/modules/messaging/media/message-assets.ts`
 
+Follow-up architecture contract:
+
+- [voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md)
+
 ## Current Capture Order
 
 The current recorder MIME preference order in `use-composer-voice-draft.ts` is:
@@ -111,3 +115,17 @@ The voice bubble now resolves a device-aware playability verdict before treating
 - If the browser reports the MIME/container as unsupported, the bubble moves to an explicit unavailable state.
 - Unsupported voice formats no longer masquerade as generic loading or buffering.
 - This is still a proof-friendly guard, not transcoding and not a capture-policy change.
+
+## Architecture Outcome
+
+This proof does not point at a cache-reset solution.
+
+It points at a committed-media architecture solution:
+
+- preserve the original capture asset
+- allow a normalized derived playback asset when needed
+- let the playback resolver choose the best playable committed source for the
+  current device
+
+That target contract is defined in
+[voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md).

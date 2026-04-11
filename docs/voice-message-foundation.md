@@ -14,6 +14,7 @@ Related boundary documents:
 
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
 - [encrypted-voice-asset-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/encrypted-voice-asset-contract.md)
+- [voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md)
 - [docs/sql/2026-04-06-message-assets-foundation.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-06-message-assets-foundation.sql)
 - [src/modules/messaging/media/README.md](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/README.md)
 - [src/modules/messaging/media/message-assets.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/message-assets.ts)
@@ -166,6 +167,12 @@ Minimal committed asset fields for voice are:
 - `size_bytes`
 - `duration_ms`
 - `created_at`
+
+For reliable cross-device playback, that original committed asset should remain
+the preserved capture truth, while any future normalized playback output should
+be modeled as an additive committed variant adjacent to `message_assets`, not as
+a replacement for the original asset. The detailed contract for that lives in
+[voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md).
 
 Minimal message linkage fields are:
 

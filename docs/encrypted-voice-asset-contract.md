@@ -13,6 +13,7 @@ It is intentionally architectural:
 Related documents:
 
 - [voice-message-foundation.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-message-foundation.md)
+- [voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md)
 - [media-rtc-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/media-rtc-architecture.md)
 - [dm-e2ee-architecture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/dm-e2ee-architecture.md)
 - [src/modules/messaging/media/message-assets.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/media/message-assets.ts)
@@ -242,6 +243,16 @@ with `prepareThreadVoicePlaybackSource(...)` as the player-facing preparation bo
 - local playable-source preparation
 
 without rewriting the player UI again.
+
+For cross-device compatibility, encrypted voice should follow the same
+original-vs-derived playback contract as plaintext voice:
+
+- preserve the original committed encrypted asset
+- allow additive derived playback variants
+- keep source selection behind the playback resolver seam
+
+The plaintext architecture for that is defined in
+[voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md).
 
 ## Inbox and activity behavior
 
