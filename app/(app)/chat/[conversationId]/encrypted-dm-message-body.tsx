@@ -18,19 +18,24 @@ import {
   type EncryptedDmFailureKind,
   type EncryptedDmServerHistoryHint,
 } from '@/modules/messaging/e2ee/ui-policy';
+import { patchThreadMessageContent } from '@/modules/messaging/realtime/thread-message-patch-store';
 import { setDmThreadVisibleMessageState } from './dm-thread-visible-message-store';
+import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailable-state';
 
 type EncryptedDmMessageBodyProps = {
   clientId: string | null;
+  compactHistoricalUnavailable?: boolean;
   conversationId: string;
   currentUserId: string;
   envelope: StoredDmE2eeEnvelope | null;
   fallbackLabel: string;
   historyDiagnosticHint: EncryptedDmServerHistoryHint;
+  historicalUnavailableContinuationCount?: number;
   olderHistoryLabel: string;
   historyUnavailableNoteLabel: string;
   messageSenderId: string | null;
   policyUnavailableNoteLabel: string;
+  preferTemporaryResolvingState?: boolean;
   retryLabel: string;
   setupUnavailableLabel: string;
   unavailableLabel: string;
@@ -73,15 +78,18 @@ function shouldClassifySelfHistoryGap(input: {
 
 export function EncryptedDmMessageBody({
   clientId,
+  compactHistoricalUnavailable = false,
   conversationId,
   currentUserId,
   envelope,
   fallbackLabel,
   historyDiagnosticHint,
+  historicalUnavailableContinuationCount = 0,
   olderHistoryLabel,
   historyUnavailableNoteLabel,
   messageSenderId,
   policyUnavailableNoteLabel,
+  preferTemporaryResolvingState = false,
   retryLabel,
   setupUnavailableLabel,
   unavailableLabel,
@@ -131,6 +139,11 @@ export function EncryptedDmMessageBody({
         messageId,
         plaintext: null,
       });
+      patchThreadMessageContent({
+        body: null,
+        conversationId,
+        messageId,
+      });
 
       if (!normalizedClientId) {
         if (diagnosticsEnabled) {
@@ -153,6 +166,11 @@ export function EncryptedDmMessageBody({
           diagnosticCode: 'malformed-envelope',
           messageId,
           plaintext: null,
+        });
+        patchThreadMessageContent({
+          body: null,
+          conversationId,
+          messageId,
         });
         return;
       }
@@ -195,6 +213,11 @@ export function EncryptedDmMessageBody({
           diagnosticCode: nextDiagnosticCode,
           messageId,
           plaintext: null,
+        });
+        patchThreadMessageContent({
+          body: null,
+          conversationId,
+          messageId,
         });
       };
 
@@ -351,6 +374,11 @@ export function EncryptedDmMessageBody({
           messageId,
           plaintext: nextPlaintext,
         });
+        patchThreadMessageContent({
+          body: nextPlaintext,
+          conversationId,
+          messageId,
+        });
 
         if (shouldCachePreview) {
           writeLocalEncryptedDmPreview({
@@ -428,6 +456,7 @@ export function EncryptedDmMessageBody({
     failureKind,
     diagnosticCode,
     fallbackLabel,
+    preferTemporaryResolvingState,
     setupUnavailableLabel,
     unavailableLabel,
   });
@@ -440,42 +469,39 @@ export function EncryptedDmMessageBody({
     const isHistoricalUnavailable =
       renderState.currentDeviceAccessState === 'history-unavailable-on-this-device' ||
       renderState.currentDeviceAccessState === 'policy-blocked';
+    const shouldRenderCompactHistoricalUnavailable =
+      compactHistoricalUnavailable && isHistoricalUnavailable;
     const unavailableNote =
       renderState.unavailableNoteKind === 'history-unavailable'
         ? historyUnavailableNoteLabel
         : renderState.unavailableNoteKind === 'policy-blocked'
           ? policyUnavailableNoteLabel
           : null;
+    const historicalUnavailableTitle = shouldRenderCompactHistoricalUnavailable
+      ? fallbackLabel
+      : olderHistoryLabel;
 
     return (
-      <div
-        className="message-encryption-state"
-        data-dm-e2ee-debug-bucket={
-          diagnosticsEnabled ? renderState.debugBucket ?? undefined : undefined
-        }
-        data-dm-e2ee-history-state={renderState.committedHistoryState}
-        data-dm-e2ee-access-state={renderState.currentDeviceAccessState}
-        data-dm-e2ee-diagnostic={
-          diagnosticsEnabled ? renderState.diagnosticCode ?? undefined : undefined
-        }
-      >
-        <p
-          className={
-            isHistoricalUnavailable
-              ? 'message-encryption-title'
-              : 'message-body'
+      <>
+        <EncryptedHistoryUnavailableState
+          accessState={renderState.currentDeviceAccessState}
+          compact={shouldRenderCompactHistoricalUnavailable}
+          continuationCount={
+            isHistoricalUnavailable ? historicalUnavailableContinuationCount : 0
           }
-        >
-          {isHistoricalUnavailable ? olderHistoryLabel : renderState.text}
-        </p>
-        {unavailableNote ? (
-          <p className="message-encryption-note">{unavailableNote}</p>
-        ) : null}
-        {diagnosticsEnabled && renderState.diagnosticCode ? (
-          <p className="message-encryption-debug-label">
-            {renderState.diagnosticCode}
-          </p>
-        ) : null}
+          debugBucket={diagnosticsEnabled ? renderState.debugBucket ?? null : null}
+          diagnostic={
+            diagnosticsEnabled ? renderState.diagnosticCode ?? null : null
+          }
+          debugLabel={
+            diagnosticsEnabled ? renderState.diagnosticCode ?? null : null
+          }
+          historyState={renderState.committedHistoryState}
+          note={unavailableNote}
+          title={
+            isHistoricalUnavailable ? historicalUnavailableTitle : renderState.text
+          }
+        />
         {renderState.showRetryAction ? (
           <div className="message-encryption-actions">
             <button
@@ -487,7 +513,7 @@ export function EncryptedDmMessageBody({
             </button>
           </div>
         ) : null}
-      </div>
+      </>
     );
   }
 

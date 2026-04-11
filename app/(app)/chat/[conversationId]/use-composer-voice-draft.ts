@@ -16,6 +16,8 @@ type VoiceDraftErrorCode =
   | 'capture-failed'
   | null;
 
+type MicrophonePermissionState = PermissionState | 'unknown';
+
 type UseComposerVoiceDraftOptions = {
   contentMode: MessagingMessageContentMode;
   conversationId: string;
@@ -102,6 +104,27 @@ function buildVoiceDraftFileName(createdAtIso: string, mimeType: string | null) 
   return `voice-${safeStamp}.webm`;
 }
 
+async function readMicrophonePermissionState(): Promise<MicrophonePermissionState> {
+  if (
+    typeof navigator === 'undefined' ||
+    !('permissions' in navigator) ||
+    !navigator.permissions ||
+    typeof navigator.permissions.query !== 'function'
+  ) {
+    return 'unknown';
+  }
+
+  try {
+    const status = await navigator.permissions.query({
+      name: 'microphone' as PermissionName,
+    });
+
+    return status.state;
+  } catch {
+    return 'unknown';
+  }
+}
+
 export function useComposerVoiceDraft({
   contentMode,
   conversationId,
@@ -123,6 +146,9 @@ export function useComposerVoiceDraft({
   const draftUrlRef = useRef<string | null>(null);
   const draftBlobRef = useRef<Blob | null>(null);
   const restoredDraftKeyRef = useRef<string | null>(null);
+  const isStartingRecordingRef = useRef(false);
+  const microphonePermissionStateRef =
+    useRef<MicrophonePermissionState>('unknown');
   const isSupported = useMemo(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -302,6 +328,15 @@ export function useComposerVoiceDraft({
   }, [draft]);
 
   const startRecording = useCallback(async () => {
+    if (isStartingRecordingRef.current) {
+      logVoiceComposerDiagnostics('entry:ignored-inflight', {
+        captureState,
+        conversationId,
+      });
+      return;
+    }
+
+    isStartingRecordingRef.current = true;
     logVoiceComposerDiagnostics('entry:attempt', {
       captureState,
       conversationId,
@@ -330,23 +365,56 @@ export function useComposerVoiceDraft({
       });
       setErrorCode('unsupported');
       setCaptureState('failed');
+      isStartingRecordingRef.current = false;
       return;
     }
 
-    clearDraft();
-    setErrorCode(null);
-    setCaptureState('requesting-permission');
-    shouldDiscardOnStopRef.current = false;
-
     try {
-      logVoiceComposerDiagnostics('permission:request:start', {
+      const queriedPermissionState = await readMicrophonePermissionState();
+      const effectivePermissionState =
+        queriedPermissionState === 'unknown'
+          ? microphonePermissionStateRef.current
+          : queriedPermissionState;
+
+      if (queriedPermissionState !== 'unknown') {
+        microphonePermissionStateRef.current = queriedPermissionState;
+      }
+
+      logVoiceComposerDiagnostics('permission:state:resolved', {
         conversationId,
+        effectivePermissionState,
+        queriedPermissionState,
       });
+
+      if (effectivePermissionState === 'denied') {
+        setErrorCode('permission-denied');
+        setCaptureState('failed');
+        return;
+      }
+
+      clearDraft();
+      setErrorCode(null);
+      shouldDiscardOnStopRef.current = false;
+
+      if (effectivePermissionState !== 'granted') {
+        setCaptureState('requesting-permission');
+        logVoiceComposerDiagnostics('permission:request:start', {
+          conversationId,
+          effectivePermissionState,
+        });
+      } else {
+        logVoiceComposerDiagnostics('permission:reuse-granted', {
+          conversationId,
+        });
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
+      microphonePermissionStateRef.current = 'granted';
       logVoiceComposerDiagnostics('permission:request:granted', {
         conversationId,
+        reusedExistingPermission: effectivePermissionState === 'granted',
       });
       const mimeType = resolveSupportedMimeType();
       const mediaRecorder = mimeType
@@ -385,6 +453,17 @@ export function useComposerVoiceDraft({
       stopActiveTimer();
       stopActiveStream();
 
+      const refreshedPermissionState =
+        error instanceof DOMException && error.name === 'NotAllowedError'
+          ? await readMicrophonePermissionState()
+          : 'unknown';
+
+      if (refreshedPermissionState !== 'unknown') {
+        microphonePermissionStateRef.current = refreshedPermissionState;
+      } else if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        microphonePermissionStateRef.current = 'denied';
+      }
+
       const nextErrorCode =
         error instanceof DOMException && error.name === 'NotAllowedError'
           ? 'permission-denied'
@@ -395,9 +474,12 @@ export function useComposerVoiceDraft({
         errorCode: nextErrorCode,
         errorName: error instanceof DOMException ? error.name : null,
         errorMessage: error instanceof Error ? error.message : String(error),
+        refreshedPermissionState,
       });
       setErrorCode(nextErrorCode);
       setCaptureState('failed');
+    } finally {
+      isStartingRecordingRef.current = false;
     }
   }, [
     captureState,

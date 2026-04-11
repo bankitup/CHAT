@@ -9,6 +9,7 @@ import type {
   DmE2eeBootstrapDebugState,
   DmE2eeBootstrap400ReasonCode,
   DmE2eeBootstrapFailedValidationBranch,
+  DmE2eeEnvelopeInsert,
   DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendDebugState,
@@ -33,14 +34,18 @@ import {
 } from '@/modules/messaging/realtime/optimistic-thread';
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
+import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
 import { sendMessageMutationAction } from './actions';
+import { clearReplyTargetFromCurrentUrl } from './thread-local-reply-target';
 import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
 const DM_E2EE_RECIPIENT_BUNDLE_SOFT_FAILURE_COOLDOWN_MS = 10_000;
+const COMPOSER_SEND_GUARD_MS = 320;
 
 type DmE2eeRecipientSoftFailureCode = Extract<
   DmE2eeApiErrorCode,
@@ -72,6 +77,11 @@ type EncryptedComposerOutgoingPayload =
     }
   | {
       attachment: File;
+      kind: 'attachment';
+      voiceDurationMs: null;
+    }
+  | {
+      attachment: File;
       kind: 'voice';
       voiceDurationMs: number | null;
     };
@@ -97,6 +107,7 @@ type EncryptedDmComposerFormProps = {
   mentionParticipants?: MentionParticipant[];
   mentionSuggestionsLabel: string;
   messagePlaceholder: string;
+  onReplyTargetConsumed?: () => void;
   recipientUserId?: string | null;
   replyToMessageId?: string | null;
 };
@@ -434,6 +445,18 @@ async function postEncryptedDmMessage(input: DmE2eeSendRequest) {
     },
     body: JSON.stringify(input),
   });
+  return readEncryptedDmSendResponse(response);
+}
+
+async function postEncryptedDmAttachmentMessage(formData: FormData) {
+  const response = await fetch('/api/messaging/dm-e2ee/send', {
+    method: 'POST',
+    body: formData,
+  });
+  return readEncryptedDmSendResponse(response);
+}
+
+async function readEncryptedDmSendResponse(response: Response) {
   const payload = (await response.json()) as DmE2eeApiErrorResponse;
 
   if (!response.ok) {
@@ -726,18 +749,76 @@ function getEncryptedDmErrorMessage(
   });
 }
 
-function clearReplyTargetFromCurrentUrl() {
-  if (typeof window === 'undefined') {
-    return;
+function getEncryptedComposerQueueErrorMessage(
+  error: unknown,
+  t: ReturnType<typeof getTranslations>,
+) {
+  if (error instanceof Error && error.message === 'dm_e2ee_unsupported_browser') {
+    return t.chat.encryptionUnavailableHere;
   }
 
-  const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.delete('replyToMessageId');
-  window.history.replaceState(
-    window.history.state,
-    '',
-    `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
-  );
+  const code =
+    error instanceof Error && 'code' in error
+      ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
+      : null;
+
+  if (code) {
+    return getEncryptedDmErrorMessage(error, t);
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return getEncryptedDmErrorMessage(error, t);
+}
+
+function getComposerAttachmentLabel(input: {
+  attachment: File | null;
+  labels: {
+    attachment: string;
+    file: string;
+    image: string;
+  };
+}) {
+  if (!input.attachment) {
+    return null;
+  }
+
+  if (
+    resolveMessagingAssetKindFromMimeType({
+      fileName: input.attachment.name,
+      mimeType: input.attachment.type,
+    }) === 'image'
+  ) {
+    return input.labels.image;
+  }
+
+  return input.attachment.name.trim() || input.labels.file || input.labels.attachment;
+}
+
+function readComposerDraftState(form: HTMLFormElement | null) {
+  if (!form) {
+    return {
+      attachment: null,
+      body: '',
+      hasSendableContent: false,
+    };
+  }
+
+  const formData = new FormData(form);
+  const body = String(formData.get('body') ?? '').trim();
+  const attachmentEntry = formData.get('attachment');
+  const attachment =
+    attachmentEntry instanceof File && attachmentEntry.size > 0
+      ? attachmentEntry
+      : null;
+
+  return {
+    attachment,
+    body,
+    hasSendableContent: Boolean(body || attachment),
+  };
 }
 
 export function EncryptedDmComposerForm({
@@ -753,6 +834,7 @@ export function EncryptedDmComposerForm({
   mentionParticipants,
   mentionSuggestionsLabel,
   messagePlaceholder,
+  onReplyTargetConsumed,
   recipientUserId,
   replyToMessageId,
 }: EncryptedDmComposerFormProps) {
@@ -761,7 +843,12 @@ export function EncryptedDmComposerForm({
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
   const lastVoiceEntryAttemptAtRef = useRef(0);
+  const sendGuardTimeoutRef = useRef<number | null>(null);
+  const isSendGuardActiveRef = useRef(false);
+  const [composerResetKey, setComposerResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSendLocked, setIsSendLocked] = useState(false);
+  const [isSendReady, setIsSendReady] = useState(false);
   const [errorCode, setErrorCode] = useState<DmE2eeApiErrorCode | 'dm_e2ee_unsupported_browser' | null>(null);
   const [errorDebugDetails, setErrorDebugDetails] =
     useState<EncryptedDmDebugFailureDetails | null>(null);
@@ -828,9 +915,71 @@ export function EncryptedDmComposerForm({
         errorDebugDetails?.recipientMismatchLeft ||
         errorDebugDetails?.recipientMismatchRight,
     );
+  const sendEncryptedDmBody = useCallback(
+    async (input: {
+      body: string;
+      clientId: string;
+      replyToMessageId: string | null;
+      submit: (payload: {
+        envelopes: DmE2eeEnvelopeInsert[];
+        senderDeviceRecordId: string;
+      }) => Promise<{
+        clientId?: string | null;
+        messageId?: string | null;
+        timestamp?: string | null;
+      }>;
+    }) => {
+      let retriedAfterRepublish = false;
+      let retriedAfterBundleRefresh = false;
+
+      while (true) {
+        try {
+          const localRecord = await resolveLocalRecordForEncryptedDm(
+            currentUserId,
+            retriedAfterRepublish,
+          );
+          const recipientBundle = await fetchRecipientBundle(
+            conversationId,
+            recipientUserId,
+          );
+          const encryptedPayload = await encryptDmTextForRecipient({
+            conversationId,
+            clientId: input.clientId,
+            plaintext: input.body,
+            localRecord,
+            recipientBundle,
+          });
+
+          return await input.submit({
+            envelopes: encryptedPayload.envelopes,
+            senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
+          });
+        } catch (error) {
+          const code =
+            error instanceof Error && 'code' in error
+              ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
+              : null;
+
+          if (code === 'dm_e2ee_sender_device_stale' && !retriedAfterRepublish) {
+            retriedAfterRepublish = true;
+            await markLocalDmE2eeDeviceRegistrationStale(currentUserId);
+            continue;
+          }
+
+          if (code === 'dm_e2ee_prekey_conflict' && !retriedAfterBundleRefresh) {
+            retriedAfterBundleRefresh = true;
+            continue;
+          }
+
+          throw error;
+        }
+      }
+    },
+    [conversationId, currentUserId, recipientUserId],
+  );
   const { enqueue } = useConversationOutgoingQueue({
     conversationId,
-    onItemFailed: ({ error }) => {
+    onItemFailed: ({ error, errorMessage }) => {
       const nextCode =
         error instanceof Error && 'code' in error
           ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
@@ -838,7 +987,7 @@ export function EncryptedDmComposerForm({
             ? 'dm_e2ee_unsupported_browser'
             : null;
       setErrorCode(nextCode);
-      setErrorMessage(getEncryptedDmErrorMessage(error, t));
+      setErrorMessage(errorMessage);
       setErrorDebugDetails(getEncryptedDmDebugFailureDetails(error));
     },
     onItemSent: () => {
@@ -861,9 +1010,7 @@ export function EncryptedDmComposerForm({
 
         nextFormData.set(
           'voiceDurationMs',
-          payload.voiceDurationMs !== null
-            ? String(payload.voiceDurationMs)
-            : '',
+          payload.voiceDurationMs !== null ? String(payload.voiceDurationMs) : '',
         );
 
         const result = await sendMessageMutationAction(nextFormData);
@@ -898,92 +1045,121 @@ export function EncryptedDmComposerForm({
         return;
       }
 
-      let retriedAfterRepublish = false;
-      let retriedAfterBundleRefresh = false;
+      if (payload.kind === 'attachment') {
+        const normalizedBody = item.body.trim();
 
-      while (true) {
-        try {
-          const localRecord = await resolveLocalRecordForEncryptedDm(
-            currentUserId,
-            retriedAfterRepublish,
-          );
-          const recipientBundle = await fetchRecipientBundle(
+        if (!normalizedBody) {
+          const nextFormData = new FormData();
+          nextFormData.set('conversationId', conversationId);
+          nextFormData.set('clientId', item.clientId);
+          nextFormData.set('attachment', payload.attachment);
+
+          if (item.replyToMessageId) {
+            nextFormData.set('replyToMessageId', item.replyToMessageId);
+          }
+
+          const result = await sendMessageMutationAction(nextFormData);
+
+          if (!result.ok) {
+            throw new Error(result.error);
+          }
+
+          if (result.data.summary) {
+            patchInboxConversationSummary(result.data.summary);
+          }
+
+          patchThreadConversationReadState({
             conversationId,
-            recipientUserId,
-          );
-          const encryptedPayload = await encryptDmTextForRecipient({
-            conversationId,
-            clientId: item.clientId,
-            plaintext: item.body,
-            localRecord,
-            recipientBundle,
+            isCurrentUser: true,
+            lastReadMessageSeq: result.data.lastReadMessageSeq,
           });
 
-          const sendResult = await postEncryptedDmMessage({
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: [result.data.messageId],
+            reason: 'local-send-mutation',
+          });
+
+          await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+            clientId: result.data.clientId,
+            conversationId,
+            messageId: result.data.messageId,
+            source: 'encrypted-dm-attachment-send',
+          });
+
+          return;
+        }
+
+        const sendResult = await sendEncryptedDmBody({
+          body: normalizedBody,
+          clientId: item.clientId,
+          replyToMessageId: item.replyToMessageId ?? null,
+          submit: async ({ envelopes, senderDeviceRecordId }) => {
+            const nextFormData = new FormData();
+            nextFormData.set('attachment', payload.attachment);
+            nextFormData.set('clientId', item.clientId);
+            nextFormData.set('conversationId', conversationId);
+            nextFormData.set('envelopes', JSON.stringify(envelopes));
+            nextFormData.set('senderDeviceRecordId', senderDeviceRecordId);
+
+            if (item.replyToMessageId) {
+              nextFormData.set('replyToMessageId', item.replyToMessageId);
+            }
+
+            return postEncryptedDmAttachmentMessage(nextFormData);
+          },
+        });
+
+        await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+          clientId: item.clientId,
+          conversationId,
+          messageId: sendResult.messageId ?? null,
+          source: 'encrypted-dm-attachment-send',
+        });
+
+        if (sendResult.messageId) {
+          emitThreadHistorySyncRequest({
+            conversationId,
+            messageIds: [sendResult.messageId],
+            reason: 'local-encrypted-send',
+          });
+        }
+
+        return;
+      }
+
+      const sendResult = await sendEncryptedDmBody({
+        body: item.body,
+        clientId: item.clientId,
+        replyToMessageId: item.replyToMessageId ?? null,
+        submit: async ({ envelopes, senderDeviceRecordId }) =>
+          postEncryptedDmMessage({
             conversationId,
             clientId: item.clientId,
             replyToMessageId: item.replyToMessageId ?? null,
-            senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
+            senderDeviceRecordId,
             kind: 'text',
             contentMode: 'dm_e2ee_v1',
-            envelopes: encryptedPayload.envelopes,
-          });
+            envelopes,
+          }),
+      });
 
-          if (
-            process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' &&
-            typeof window !== 'undefined'
-          ) {
-            console.info('[dm-e2ee-send-client]', 'send:committed', {
-              clientId: item.clientId,
-              committedMessageId: sendResult.messageId ?? null,
-              conversationId,
-              envelopeCount: encryptedPayload.envelopes.length,
-              envelopeRecipientDeviceIds: encryptedPayload.envelopes.map(
-                (envelope) => envelope.recipientDeviceRecordId,
-              ),
-              replyToMessageId: item.replyToMessageId ?? null,
-              senderDeviceRecordId: encryptedPayload.senderDeviceRecordId,
-            });
-          }
+      await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
+        clientId: item.clientId,
+        conversationId,
+        messageId: sendResult.messageId ?? null,
+        source: 'encrypted-dm-send',
+      });
 
-          await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
-            clientId: item.clientId,
-            conversationId,
-            messageId: sendResult.messageId ?? null,
-            source: 'encrypted-dm-send',
-          });
-
-          if (sendResult.messageId) {
-            emitThreadHistorySyncRequest({
-              conversationId,
-              messageIds: [sendResult.messageId],
-              reason: 'local-encrypted-send',
-            });
-          }
-
-          return;
-        } catch (error) {
-          const code =
-            error instanceof Error && 'code' in error
-              ? ((error as { code?: DmE2eeApiErrorCode | null }).code ?? null)
-              : null;
-
-          if (code === 'dm_e2ee_sender_device_stale' && !retriedAfterRepublish) {
-            retriedAfterRepublish = true;
-            await markLocalDmE2eeDeviceRegistrationStale(currentUserId);
-            continue;
-          }
-
-          if (code === 'dm_e2ee_prekey_conflict' && !retriedAfterBundleRefresh) {
-            retriedAfterBundleRefresh = true;
-            continue;
-          }
-
-          throw error;
-        }
+      if (sendResult.messageId) {
+        emitThreadHistorySyncRequest({
+          conversationId,
+          messageIds: [sendResult.messageId],
+          reason: 'local-encrypted-send',
+        });
       }
     },
-    resolveErrorMessage: (error) => getEncryptedDmErrorMessage(error, t),
+    resolveErrorMessage: (error) => getEncryptedComposerQueueErrorMessage(error, t),
   });
 
   const getActiveRecipientBundleSoftFailureError = useCallback(() => {
@@ -1004,6 +1180,29 @@ export function EncryptedDmComposerForm({
       stage: 'bundle:client-soft-failure-cooldown',
     });
   }, [conversationId, recipientUserId]);
+
+  const syncSendReadiness = useCallback(() => {
+    setIsSendReady(readComposerDraftState(formRef.current).hasSendableContent);
+  }, []);
+
+  const releaseSendGuard = useCallback(() => {
+    if (sendGuardTimeoutRef.current !== null) {
+      window.clearTimeout(sendGuardTimeoutRef.current);
+      sendGuardTimeoutRef.current = null;
+    }
+
+    isSendGuardActiveRef.current = false;
+    setIsSendLocked(false);
+  }, []);
+
+  const armSendGuard = useCallback(() => {
+    releaseSendGuard();
+    isSendGuardActiveRef.current = true;
+    setIsSendLocked(true);
+    sendGuardTimeoutRef.current = window.setTimeout(() => {
+      releaseSendGuard();
+    }, COMPOSER_SEND_GUARD_MS);
+  }, [releaseSendGuard]);
 
   function attemptVoiceEntry(source: 'click' | 'pointer') {
     const now = Date.now();
@@ -1109,13 +1308,19 @@ export function EncryptedDmComposerForm({
       setErrorDebugDetails(null);
       enqueue({
         attachmentLabel: detail.attachmentLabel ?? null,
+        attachmentPreviewKind: detail.attachmentPreviewKind ?? null,
         body: detail.body,
         clientId:
           detail.attemptKind === 'retry'
             ? nextRetryClientId
             : detail.clientId ?? null,
         createdAt: detail.createdAt,
-        kind: detail.kind === 'voice' ? 'voice' : 'text',
+        kind:
+          detail.kind === 'voice'
+            ? 'voice'
+            : detail.kind === 'attachment' && detail.attachment
+              ? 'attachment'
+              : 'text',
         payload:
           detail.kind === 'voice' && detail.attachment
             ? {
@@ -1123,6 +1328,12 @@ export function EncryptedDmComposerForm({
                 kind: 'voice',
                 voiceDurationMs: detail.voiceDurationMs ?? null,
               }
+            : detail.kind === 'attachment' && detail.attachment
+              ? {
+                  attachment: detail.attachment,
+                  kind: 'attachment',
+                  voiceDurationMs: null,
+                }
             : {
                 attachment: null,
                 kind: 'text',
@@ -1147,21 +1358,32 @@ export function EncryptedDmComposerForm({
     };
   }, [conversationId, enqueue, getActiveRecipientBundleSoftFailureError, t]);
 
+  useEffect(() => {
+    syncSendReadiness();
+  }, [composerResetKey, syncSendReadiness]);
+
+  useEffect(() => {
+    return () => {
+      releaseSendGuard();
+    };
+  }, [releaseSendGuard]);
+
   return (
     <form
       ref={formRef}
       className="stack composer-form"
+      onChange={syncSendReadiness}
+      onInput={syncSendReadiness}
       onSubmit={async (event) => {
         event.preventDefault();
 
         const form = event.currentTarget;
-        const formData = new FormData(form);
-        const body = String(formData.get('body') ?? '').trim();
-        const attachmentEntry = formData.get('attachment');
-        const attachment =
-          attachmentEntry instanceof File && attachmentEntry.size > 0
-            ? attachmentEntry
-            : null;
+        const draftState = readComposerDraftState(form);
+        const { attachment, body } = draftState;
+
+        if (isSendGuardActiveRef.current) {
+          return;
+        }
 
         if (body && !encryptedDmEnabled) {
           setErrorMessage(t.chat.encryptionRolloutUnavailable);
@@ -1170,17 +1392,58 @@ export function EncryptedDmComposerForm({
           return;
         }
 
-        if (!body || attachment) {
-          if (body && attachment) {
-            setErrorMessage(t.chat.encryptedAttachmentsUnsupported);
-            setErrorCode(null);
-            setErrorDebugDetails(null);
-          } else {
-            setErrorMessage(null);
-            setErrorCode(null);
-            setErrorDebugDetails(null);
-          }
+        if (!body && !attachment) {
+          syncSendReadiness();
+          return;
+        }
 
+        if (attachment) {
+          armSendGuard();
+          setErrorMessage(null);
+          setErrorCode(null);
+          setErrorDebugDetails(null);
+          enqueue({
+            attachment,
+            attachmentLabel: getComposerAttachmentLabel({
+              attachment,
+              labels: {
+                attachment: t.chat.attachment,
+                file: t.chat.file,
+                image: t.chat.photo,
+              },
+            }),
+            attachmentPreviewKind: resolveInboxAttachmentPreviewKind(
+              attachment.type,
+              attachment.name,
+            ),
+            body,
+            kind: 'attachment',
+            payload: {
+              attachment,
+              kind: 'attachment',
+              voiceDurationMs: null,
+            },
+            replyToMessageId: replyToMessageId ?? null,
+          });
+
+          form.reset();
+          setIsSendReady(false);
+          setComposerResetKey((current) => current + 1);
+          onReplyTargetConsumed?.();
+          clearReplyTargetFromCurrentUrl();
+
+          window.requestAnimationFrame(() => {
+            const textarea =
+              formRef.current?.querySelector<HTMLTextAreaElement>(
+                'textarea[name="body"]',
+              );
+
+            if (!textarea) {
+              return;
+            }
+
+            textarea.focus();
+          });
           return;
         }
 
@@ -1201,16 +1464,20 @@ export function EncryptedDmComposerForm({
         setErrorMessage(null);
         setErrorCode(null);
         setErrorDebugDetails(null);
+        armSendGuard();
 
         form.reset();
+        setIsSendReady(false);
+        setComposerResetKey((current) => current + 1);
         window.requestAnimationFrame(() => {
-          const textarea = form.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
+          const textarea =
+            formRef.current?.querySelector<HTMLTextAreaElement>('textarea[name="body"]');
 
           if (!textarea) {
             return;
           }
 
-          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.focus();
         });
         enqueue({
           body,
@@ -1222,6 +1489,7 @@ export function EncryptedDmComposerForm({
           },
           replyToMessageId: replyToMessageId ?? null,
         });
+        onReplyTargetConsumed?.();
         clearReplyTargetFromCurrentUrl();
       }}
     >
@@ -1262,17 +1530,20 @@ export function EncryptedDmComposerForm({
             voiceDurationMs: voiceDraft.draft.durationMs ?? null,
           });
           voiceDraft.clearDraft();
+          onReplyTargetConsumed?.();
           clearReplyTargetFromCurrentUrl();
         }}
         onStop={voiceDraft.stopRecording}
       />
       <div className="composer-input-shell">
         <ComposerAttachmentPicker
+          key={`attachment-${composerResetKey}`}
           accept={accept}
           helperText={attachmentHelpText}
           maxSizeBytes={attachmentMaxSizeBytes}
           maxSizeLabel={attachmentMaxSizeLabel}
           language={language}
+          onSelectionChange={syncSendReadiness}
         />
 
         <label className="field composer-input-field">
@@ -1282,6 +1553,7 @@ export function EncryptedDmComposerForm({
             conversationId={conversationId}
             currentUserId={currentUserId}
             currentUserLabel={currentUserLabel}
+            key={`textarea-${composerResetKey}-${replyToMessageId ?? 'none'}`}
             mentionParticipants={mentionParticipants}
             mentionSuggestionsLabel={mentionSuggestionsLabel}
             name="body"
@@ -1335,6 +1607,7 @@ export function EncryptedDmComposerForm({
           <button
             aria-label={t.chat.sendMessage}
             className="button composer-button composer-button-icon"
+            disabled={!isSendReady || isSendLocked}
             type="submit"
           >
             <span aria-hidden="true">➤</span>

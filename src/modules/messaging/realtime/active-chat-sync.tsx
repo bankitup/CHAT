@@ -8,8 +8,10 @@ import {
 import { patchThreadMessageContent } from '@/modules/messaging/realtime/thread-message-patch-store';
 import { noteWarmNavRouterRefresh } from '@/modules/messaging/performance/warm-nav-client';
 import {
+  emitThreadHistoryLiveMessage,
   emitThreadHistorySyncRequest,
   LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
+  type ThreadHistoryLiveMessagePayload,
   type ThreadHistoryVisibleMessageIdsPayload,
 } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { useRouter } from 'next/navigation';
@@ -29,6 +31,13 @@ type ActiveChatRealtimeSyncProps = {
 const THREAD_REFRESH_DEBOUNCE_MS = 180;
 const THREAD_REFRESH_MIN_INTERVAL_MS = 900;
 const THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
+const THREAD_REALTIME_RESUBSCRIBE_RECOVERY_REASON = 'realtime-resubscribe';
+const SUPPRESSED_COMMITTED_TOPOLOGY_SYNC_SOURCES = new Set([
+  'plaintext-chat-send',
+  'voice-message-send',
+  'encrypted-dm-attachment-send',
+  'encrypted-dm-send',
+]);
 const CONVERSATION_SUMMARY_ONLY_KEYS = new Set([
   'last_message_at',
   'last_message_body',
@@ -148,6 +157,68 @@ function didRealtimeFieldActuallyChange(
   return nextRow[key] !== previousRow[key];
 }
 
+function normalizeRealtimeConversationMessageRow(input: {
+  conversationId: string;
+  row: Record<string, unknown> | null;
+}): ThreadHistoryLiveMessagePayload['message'] | null {
+  const messageId =
+    typeof input.row?.id === 'string' ? input.row.id.trim() : '';
+  const conversationId =
+    typeof input.row?.conversation_id === 'string' &&
+    input.row.conversation_id.trim().length > 0
+      ? input.row.conversation_id.trim()
+      : input.conversationId;
+  const kind =
+    typeof input.row?.kind === 'string' ? input.row.kind.trim() : '';
+  const seq = input.row?.seq;
+
+  if (
+    !messageId ||
+    !conversationId ||
+    !kind ||
+    !(
+      (typeof seq === 'number' && Number.isFinite(seq)) ||
+      (typeof seq === 'string' && seq.trim().length > 0)
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    body: typeof input.row?.body === 'string' ? input.row.body : null,
+    client_id:
+      typeof input.row?.client_id === 'string' ? input.row.client_id : null,
+    content_mode:
+      typeof input.row?.content_mode === 'string'
+        ? input.row.content_mode
+        : input.row?.content_mode === null
+          ? null
+          : undefined,
+    conversation_id: conversationId,
+    created_at:
+      typeof input.row?.created_at === 'string' ? input.row.created_at : null,
+    deleted_at:
+      typeof input.row?.deleted_at === 'string' ? input.row.deleted_at : null,
+    edited_at:
+      typeof input.row?.edited_at === 'string' ? input.row.edited_at : null,
+    id: messageId,
+    kind,
+    reply_to_message_id:
+      typeof input.row?.reply_to_message_id === 'string'
+        ? input.row.reply_to_message_id
+        : null,
+    sender_device_id:
+      typeof input.row?.sender_device_id === 'string'
+        ? input.row.sender_device_id
+        : input.row?.sender_device_id === null
+          ? null
+          : undefined,
+    sender_id:
+      typeof input.row?.sender_id === 'string' ? input.row.sender_id : null,
+    seq,
+  };
+}
+
 export function ActiveChatRealtimeSync({
   conversationId,
   currentUserId,
@@ -167,6 +238,8 @@ export function ActiveChatRealtimeSync({
   const lastRefreshAtRef = useRef(0);
   const hiddenAtRef = useRef<number | null>(null);
   const trackedMessageIdsRef = useRef(new Set(normalizedMessageIds));
+  const hasSeenSubscribedStatusRef = useRef(false);
+  const isRealtimeChannelSubscribedRef = useRef(false);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
@@ -306,8 +379,8 @@ export function ActiveChatRealtimeSync({
       }
 
       if (
-        detail.source === 'plaintext-chat-send' ||
-        detail.source === 'encrypted-dm-send'
+        detail.source &&
+        SUPPRESSED_COMMITTED_TOPOLOGY_SYNC_SOURCES.has(detail.source)
       ) {
         logDiagnostics('topology-sync:local-committed-suppressed', {
           clientId: detail.clientId ?? null,
@@ -387,6 +460,32 @@ export function ActiveChatRealtimeSync({
             messageId,
           });
           return;
+        }
+
+        if (payload.eventType === 'INSERT') {
+          const liveMessage = normalizeRealtimeConversationMessageRow({
+            conversationId,
+            row: nextRow,
+          });
+
+          if (liveMessage) {
+            emitThreadHistoryLiveMessage({
+              conversationId,
+              message: liveMessage,
+              reason: 'message-postgres:insert',
+            });
+            logDiagnostics('message-postgres:live-insert-local', {
+              conversationId,
+              messageId: liveMessage.id,
+              seq: liveMessage.seq,
+            });
+          } else {
+            logDiagnostics('message-postgres:live-insert-skipped', {
+              changedKeys,
+              conversationId,
+              messageId,
+            });
+          }
         }
 
         requestTopologySync({
@@ -536,7 +635,39 @@ export function ActiveChatRealtimeSync({
             old: payload.old,
           }),
       )
-      .subscribe();
+      .subscribe((status) => {
+        logDiagnostics('channel:status', {
+          conversationId,
+          status,
+        });
+
+        if (status === 'SUBSCRIBED') {
+          const isReconnect =
+            hasSeenSubscribedStatusRef.current &&
+            !isRealtimeChannelSubscribedRef.current;
+
+          isRealtimeChannelSubscribedRef.current = true;
+          hasSeenSubscribedStatusRef.current = true;
+
+          if (!isReconnect) {
+            return;
+          }
+
+          requestTopologySync({
+            newerThanLatest: true,
+            reason: THREAD_REALTIME_RESUBSCRIBE_RECOVERY_REASON,
+          });
+          return;
+        }
+
+        if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          isRealtimeChannelSubscribedRef.current = false;
+        }
+      });
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener(

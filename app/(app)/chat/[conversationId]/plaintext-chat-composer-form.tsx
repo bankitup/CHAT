@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { patchInboxConversationSummary } from '@/modules/messaging/realtime/inbox-summary-store';
 import { broadcastMessageCommitted } from '@/modules/messaging/realtime/live-refresh';
 import {
@@ -10,10 +10,13 @@ import {
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
 import { sendMessageMutationAction } from './actions';
+import { clearReplyTargetFromCurrentUrl } from './thread-local-reply-target';
 import { useComposerVoiceDraft } from './use-composer-voice-draft';
 import { useConversationOutgoingQueue } from './use-conversation-outgoing-queue';
 
@@ -46,21 +49,58 @@ type PlaintextChatComposerFormProps = {
   mentionParticipants?: MentionParticipant[];
   mentionSuggestionsLabel: string;
   messagePlaceholder: string;
+  onReplyTargetConsumed?: () => void;
   replyToMessageId?: string | null;
 };
 
-function clearReplyTargetFromCurrentUrl() {
-  if (typeof window === 'undefined') {
-    return;
+const COMPOSER_SEND_GUARD_MS = 320;
+
+function getComposerAttachmentLabel(input: {
+  attachment: File | null;
+  labels: {
+    attachment: string;
+    file: string;
+    image: string;
+  };
+}) {
+  if (!input.attachment) {
+    return null;
   }
 
-  const nextUrl = new URL(window.location.href);
-  nextUrl.searchParams.delete('replyToMessageId');
-  window.history.replaceState(
-    window.history.state,
-    '',
-    `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
-  );
+  if (
+    resolveMessagingAssetKindFromMimeType({
+      fileName: input.attachment.name,
+      mimeType: input.attachment.type,
+    }) === 'image'
+  ) {
+    return input.labels.image;
+  }
+
+  return input.attachment.name.trim() || input.labels.file || input.labels.attachment;
+}
+
+function readComposerDraftState(form: HTMLFormElement | null) {
+  if (!form) {
+    return {
+      attachment: null,
+      body: '',
+      hasSendableContent: false,
+    };
+  }
+
+  const formData = new FormData(form);
+  const body = String(formData.get('body') ?? '').trim();
+  const attachmentEntry = formData.get('attachment');
+  const attachment =
+    attachmentEntry instanceof File && attachmentEntry.size > 0
+      ? attachmentEntry
+      : null;
+
+  return {
+    attachment,
+    body,
+    hasSendableContent: Boolean(body || attachment),
+  };
 }
 
 export function PlaintextChatComposerForm({
@@ -75,13 +115,18 @@ export function PlaintextChatComposerForm({
   mentionParticipants,
   mentionSuggestionsLabel,
   messagePlaceholder,
+  onReplyTargetConsumed,
   replyToMessageId,
 }: PlaintextChatComposerFormProps) {
   const t = getTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
   const lastVoiceEntryAttemptAtRef = useRef(0);
+  const sendGuardTimeoutRef = useRef<number | null>(null);
+  const isSendGuardActiveRef = useRef(false);
   const [composerResetKey, setComposerResetKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSendLocked, setIsSendLocked] = useState(false);
+  const [isSendReady, setIsSendReady] = useState(false);
   const voiceDraft = useComposerVoiceDraft({
     contentMode: 'plaintext',
     conversationId,
@@ -159,6 +204,29 @@ export function PlaintextChatComposerForm({
         ? error.message
         : 'Unable to send that message right now.',
   });
+
+  const syncSendReadiness = useCallback(() => {
+    setIsSendReady(readComposerDraftState(formRef.current).hasSendableContent);
+  }, []);
+
+  const releaseSendGuard = useCallback(() => {
+    if (sendGuardTimeoutRef.current !== null) {
+      window.clearTimeout(sendGuardTimeoutRef.current);
+      sendGuardTimeoutRef.current = null;
+    }
+
+    isSendGuardActiveRef.current = false;
+    setIsSendLocked(false);
+  }, []);
+
+  const armSendGuard = useCallback(() => {
+    releaseSendGuard();
+    isSendGuardActiveRef.current = true;
+    setIsSendLocked(true);
+    sendGuardTimeoutRef.current = window.setTimeout(() => {
+      releaseSendGuard();
+    }, COMPOSER_SEND_GUARD_MS);
+  }, [releaseSendGuard]);
 
   function attemptVoiceEntry(source: 'click' | 'pointer') {
     const now = Date.now();
@@ -247,6 +315,7 @@ export function PlaintextChatComposerForm({
       enqueue({
         attachment: detail.attachment ?? null,
         attachmentLabel: detail.attachmentLabel ?? null,
+        attachmentPreviewKind: detail.attachmentPreviewKind ?? null,
         body: detail.body,
         clientId:
           detail.attemptKind === 'retry'
@@ -289,30 +358,53 @@ export function PlaintextChatComposerForm({
     };
   }, [conversationId, enqueue]);
 
+  useEffect(() => {
+    syncSendReadiness();
+  }, [composerResetKey, syncSendReadiness]);
+
+  useEffect(() => {
+    return () => {
+      releaseSendGuard();
+    };
+  }, [releaseSendGuard]);
+
   return (
     <form
       ref={formRef}
       className="stack composer-form"
+      onChange={syncSendReadiness}
+      onInput={syncSendReadiness}
       onSubmit={async (event) => {
         event.preventDefault();
 
         const form = event.currentTarget;
-        const nextFormData = new FormData(form);
-        const body = String(nextFormData.get('body') ?? '').trim();
-        const attachmentEntry = nextFormData.get('attachment');
-        const attachment =
-          attachmentEntry instanceof File && attachmentEntry.size > 0
-            ? attachmentEntry
-            : null;
+        const draftState = readComposerDraftState(form);
+        const { attachment, body } = draftState;
 
-        if (!body && !attachment) {
+        if (isSendGuardActiveRef.current) {
           return;
         }
 
+        if (!body && !attachment) {
+          syncSendReadiness();
+          return;
+        }
+
+        armSendGuard();
         setErrorMessage(null);
         enqueue({
           attachment,
-          attachmentLabel: attachment?.name ?? (attachment ? t.chat.attachment : null),
+          attachmentLabel: getComposerAttachmentLabel({
+            attachment,
+            labels: {
+              attachment: t.chat.attachment,
+              file: t.chat.file,
+              image: t.chat.photo,
+            },
+          }),
+          attachmentPreviewKind: attachment
+            ? resolveInboxAttachmentPreviewKind(attachment.type, attachment.name)
+            : null,
           body,
           kind: attachment ? 'attachment' : 'text',
           payload: {
@@ -324,7 +416,9 @@ export function PlaintextChatComposerForm({
         });
 
         form.reset();
+        setIsSendReady(false);
         setComposerResetKey((current) => current + 1);
+        onReplyTargetConsumed?.();
         clearReplyTargetFromCurrentUrl();
 
         window.requestAnimationFrame(() => {
@@ -375,6 +469,7 @@ export function PlaintextChatComposerForm({
             voiceDurationMs: voiceDraft.draft.durationMs ?? null,
           });
           voiceDraft.clearDraft();
+          onReplyTargetConsumed?.();
           clearReplyTargetFromCurrentUrl();
         }}
         onStop={voiceDraft.stopRecording}
@@ -387,12 +482,13 @@ export function PlaintextChatComposerForm({
           maxSizeBytes={attachmentMaxSizeBytes}
           maxSizeLabel={attachmentMaxSizeLabel}
           language={language}
+          onSelectionChange={syncSendReadiness}
         />
 
         <label className="field composer-input-field">
           <span className="sr-only">{messagePlaceholder}</span>
           <ComposerTypingTextarea
-            key={`textarea-${composerResetKey}`}
+            key={`textarea-${composerResetKey}-${replyToMessageId ?? 'none'}`}
             className="input textarea"
             conversationId={conversationId}
             currentUserId={currentUserId}
@@ -450,6 +546,7 @@ export function PlaintextChatComposerForm({
           <button
             aria-label={t.chat.sendMessage}
             className="button composer-button composer-button-icon"
+            disabled={!isSendReady || isSendLocked}
             type="submit"
           >
             <span aria-hidden="true">➤</span>

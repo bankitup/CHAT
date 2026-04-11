@@ -10,6 +10,10 @@ export type ReplyTargetResolutionCode =
   | 'target-not-loaded'
   | 'target-deleted'
   | 'target-voice'
+  | 'target-photo'
+  | 'target-file'
+  | 'target-audio'
+  | 'target-attachment'
   | 'target-empty-body'
   | 'target-plain-body'
   | 'resolved-from-visible-plaintext'
@@ -25,6 +29,19 @@ export type ReplyTargetResolutionCode =
   | 'decrypt-failed'
   | 'stale-cached-failure-state';
 
+export type ReplyTargetAttachmentKind =
+  | 'attachment'
+  | 'audio'
+  | 'file'
+  | 'photo'
+  | null;
+
+type ReplyTargetAttachmentLike = {
+  isAudio?: boolean | null;
+  isImage?: boolean | null;
+  isVoiceMessage?: boolean | null;
+};
+
 type DmReplyTargetSnippetProps = {
   body: unknown;
   conversationId: string;
@@ -33,17 +50,51 @@ type DmReplyTargetSnippetProps = {
   deletedFallbackLabel: string;
   emptyFallbackLabel: string;
   encryptedFallbackLabel: string;
+  historicalEncryptedFallbackLabel?: string | null;
   encryptedReferenceNote?: string | null;
   loadedFallbackLabel: string;
   messageId: string;
   surface: 'composer-reply-preview' | 'message-reply-reference';
+  attachmentFallbackLabel: string;
+  audioFallbackLabel: string;
+  fileFallbackLabel: string;
+  photoFallbackLabel: string;
   targetDeleted: boolean;
+  targetAttachmentKind?: ReplyTargetAttachmentKind;
   targetIsEncrypted: boolean;
   targetIsLoaded: boolean;
   targetKind: string | null;
   targetMessageId: string;
   voiceFallbackLabel: string;
 };
+
+export function resolveReplyTargetAttachmentKind(
+  attachments: ReplyTargetAttachmentLike[] | null | undefined,
+): ReplyTargetAttachmentKind {
+  const normalizedAttachments = attachments ?? [];
+
+  if (normalizedAttachments.length === 0) {
+    return null;
+  }
+
+  if (normalizedAttachments.some((attachment) => attachment?.isImage)) {
+    return 'photo';
+  }
+
+  if (
+    normalizedAttachments.some(
+      (attachment) => attachment?.isAudio && !attachment?.isVoiceMessage,
+    )
+  ) {
+    return 'audio';
+  }
+
+  if (normalizedAttachments.length > 0) {
+    return 'file';
+  }
+
+  return 'attachment';
+}
 
 function isDiagnosticsEnabled() {
   return process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
@@ -78,6 +129,19 @@ function logReplyTargetResolution(
   console.info('[chat-reply-target]', stage, details);
 }
 
+function isHistoricalEncryptedReplyTargetDiagnostic(
+  code: ReplyTargetResolutionCode | null,
+) {
+  return (
+    code === 'missing-envelope' ||
+    code === 'policy-blocked-history' ||
+    code === 'same-user-new-device-history-gap' ||
+    code === 'device-retired-or-mismatched' ||
+    code === 'client-key-material-missing' ||
+    code === 'local-device-record-missing'
+  );
+}
+
 export function DmReplyTargetSnippet({
   body,
   conversationId,
@@ -86,11 +150,17 @@ export function DmReplyTargetSnippet({
   deletedFallbackLabel,
   emptyFallbackLabel,
   encryptedFallbackLabel,
+  historicalEncryptedFallbackLabel = null,
   encryptedReferenceNote = null,
   loadedFallbackLabel,
   messageId,
   surface,
+  attachmentFallbackLabel,
+  audioFallbackLabel,
+  fileFallbackLabel,
+  photoFallbackLabel,
   targetDeleted,
+  targetAttachmentKind = null,
   targetIsEncrypted,
   targetIsLoaded,
   targetKind,
@@ -128,6 +198,38 @@ export function DmReplyTargetSnippet({
       };
     }
 
+    if (targetKind === 'attachment') {
+      if (targetAttachmentKind === 'photo') {
+        return {
+          diagnosticCode: 'target-photo' as const,
+          note: null,
+          text: photoFallbackLabel,
+        };
+      }
+
+      if (targetAttachmentKind === 'audio') {
+        return {
+          diagnosticCode: 'target-audio' as const,
+          note: null,
+          text: audioFallbackLabel,
+        };
+      }
+
+      if (targetAttachmentKind === 'file') {
+        return {
+          diagnosticCode: 'target-file' as const,
+          note: null,
+          text: fileFallbackLabel,
+        };
+      }
+
+      return {
+        diagnosticCode: 'target-attachment' as const,
+        note: null,
+        text: attachmentFallbackLabel,
+      };
+    }
+
     if (targetIsEncrypted) {
       if (visibleMessageState.plaintextSnippet) {
         return {
@@ -138,10 +240,16 @@ export function DmReplyTargetSnippet({
       }
 
       return {
-        diagnosticCode:
-          (visibleMessageState.diagnosticCode ?? 'temporary-loading') as ReplyTargetResolutionCode,
+        diagnosticCode: (
+          visibleMessageState.diagnosticCode ?? 'temporary-loading'
+        ) as ReplyTargetResolutionCode,
         note: visibleMessageState.diagnosticCode,
-        text: encryptedFallbackLabel,
+        text: isHistoricalEncryptedReplyTargetDiagnostic(
+          (visibleMessageState.diagnosticCode ??
+            'temporary-loading') as ReplyTargetResolutionCode,
+        )
+          ? historicalEncryptedFallbackLabel ?? encryptedFallbackLabel
+          : encryptedFallbackLabel,
       };
     }
 
@@ -162,11 +270,17 @@ export function DmReplyTargetSnippet({
     };
   }, [
     body,
+    attachmentFallbackLabel,
+    audioFallbackLabel,
     deletedFallbackLabel,
     emptyFallbackLabel,
     encryptedFallbackLabel,
+    fileFallbackLabel,
+    historicalEncryptedFallbackLabel,
     loadedFallbackLabel,
+    photoFallbackLabel,
     targetDeleted,
+    targetAttachmentKind,
     targetIsEncrypted,
     targetIsLoaded,
     targetKind,

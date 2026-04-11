@@ -1,0 +1,97 @@
+-- Prepared next RLS slice for public.conversations metadata.
+--
+-- Status:
+-- - deferred in this pass
+-- - do not apply yet
+--
+-- Safe target:
+-- - authenticated users may read only conversations where they have an active
+--   conversation_members row inside one of their spaces
+-- - ordinary authenticated insert/update/delete on public.conversations stays
+--   deferred until runtime write alignment is complete
+--
+-- Why this is not safe to apply yet:
+-- 1. createConversationWithMembers(...) still inserts into public.conversations
+--    with the authenticated request client before conversation_members rows
+--    exist.
+-- 2. updateConversationSummaryProjectionFromRow(...) still updates the
+--    conversations.last_message_* projection with the authenticated request
+--    client during normal send/edit/delete flows.
+-- 3. group metadata writes currently use
+--    createSupabaseServiceRoleClient() ?? supabase, so title/avatar/join_policy
+--    updates can still fall back to the authenticated request client when the
+--    service role is unavailable.
+--
+-- Exact next rollout prerequisite:
+-- - move conversation insert/rollback-delete into a reviewed service-role or
+--   security-definer path
+-- - move summary projection maintenance into a reviewed service-role or
+--   security-definer path
+-- - ensure group metadata writes never fall back to the authenticated request
+--   client before enabling conversations RLS
+--
+-- Once those runtime paths are aligned, apply the SQL below as the next safe
+-- conversations metadata read slice.
+
+-- grant select on public.conversations to authenticated;
+-- grant select, insert, update, delete on public.conversations to service_role;
+-- revoke insert, update, delete on public.conversations from authenticated;
+--
+-- alter table public.conversations enable row level security;
+--
+-- create or replace function public.is_current_user_active_conversation_member(
+--   target_conversation_id uuid
+-- )
+-- returns boolean
+-- language sql
+-- stable
+-- security definer
+-- set search_path = public, pg_temp
+-- as $$
+--   select exists (
+--     select 1
+--     from public.conversations c
+--     join public.space_members sm
+--       on sm.space_id = c.space_id
+--      and sm.user_id = auth.uid()
+--     join public.conversation_members cm
+--       on cm.conversation_id = c.id
+--      and cm.user_id = auth.uid()
+--     where c.id = target_conversation_id
+--       and cm.state = 'active'
+--   );
+-- $$;
+--
+-- comment on function public.is_current_user_active_conversation_member(uuid) is
+-- 'RLS helper for the CHAT MVP conversation metadata boundary. Returns true when auth.uid() is an active member of the target conversation and still belongs to that conversation''s space.';
+--
+-- revoke all on function public.is_current_user_active_conversation_member(uuid)
+-- from public;
+-- grant execute on function public.is_current_user_active_conversation_member(uuid)
+-- to authenticated;
+-- grant execute on function public.is_current_user_active_conversation_member(uuid)
+-- to service_role;
+--
+-- drop policy if exists conversations_select_active_members
+-- on public.conversations;
+--
+-- create policy conversations_select_active_members
+-- on public.conversations
+-- for select
+-- to authenticated
+-- using (public.is_current_user_active_conversation_member(id));
+--
+-- comment on policy conversations_select_active_members
+-- on public.conversations is
+-- 'First-pass CHAT MVP conversations metadata read policy. Authenticated users may read only conversations where they have an active conversation_members row inside a space they belong to.';
+--
+-- notify pgrst, 'reload schema';
+--
+-- Intentionally not included in this deferred slice:
+-- - authenticated insert policy on public.conversations
+-- - authenticated update policy on public.conversations
+-- - authenticated delete policy on public.conversations
+--
+-- If the app chooses not to migrate the remaining write paths to service role
+-- or security-definer helpers, those DML policies must be designed and reviewed
+-- separately before conversations RLS is enabled.

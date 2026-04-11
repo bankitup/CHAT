@@ -9,9 +9,12 @@ export type OptimisticThreadMessageStatus =
   | 'sent'
   | 'failed';
 
+export type OptimisticAttachmentPreviewKind = 'audio' | 'file' | 'image';
+
 export type OptimisticThreadMessagePayload = {
   attachment?: File | null;
   attachmentLabel?: string | null;
+  attachmentPreviewKind?: OptimisticAttachmentPreviewKind | null;
   body: string;
   clientId: string;
   conversationId: string;
@@ -43,6 +46,7 @@ export function emitOptimisticThreadMessage(
 export type OptimisticThreadRetryPayload = {
   attachment?: File | null;
   attachmentLabel?: string | null;
+  attachmentPreviewKind?: OptimisticAttachmentPreviewKind | null;
   attemptKind?: 'retry';
   body: string;
   clientId?: string | null;

@@ -257,6 +257,12 @@ Unsupported recovery:
 - cross-device recovery
 - recovery of old encrypted messages after true local key loss
 
+History continuity split in current v1 runtime:
+
+- if an encrypted DM message predates the currently selected active device row, missing history is expected by design because the server selects only the current-device envelope or the sender self-envelope for that same device
+- if an encrypted DM message was sent before the viewer joined the conversation, missing history is expected by design and should surface as policy-blocked history rather than device loss
+- if an encrypted DM message was created after the currently selected active device row was created and it still resolves to `missing-envelope`, treat that as suspicious runtime behavior and investigate active-device selection, stale local/device-cookie alignment, or envelope persistence
+
 Error-surface rule:
 
 - encrypted DM routes and UI should prefer stable, non-technical recovery copy over raw server/debug strings

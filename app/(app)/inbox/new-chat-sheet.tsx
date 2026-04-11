@@ -27,6 +27,9 @@ type NewChatSheetProps = {
   hasAnyDmUsers: boolean;
   hasAnyUsers: boolean;
   initialMode: NewChatMode;
+  isCandidatesLoading?: boolean;
+  loadCandidatesError?: string | null;
+  onRetryLoadCandidates?: (() => void) | null;
   onClose: () => void;
   onModeChange?: (mode: NewChatMode) => void;
   language: AppLanguage;
@@ -36,12 +39,33 @@ type NewChatSheetProps = {
 
 export type NewChatMode = 'dm' | 'group';
 
+function filterNewChatUsers(
+  users: NewChatSheetUser[],
+  normalizedPeopleSearch: string,
+) {
+  if (!normalizedPeopleSearch) {
+    return users;
+  }
+
+  return users.filter((user) => {
+    const haystack = [user.label, user.displayName, user.statusText]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(normalizedPeopleSearch);
+  });
+}
+
 export function NewChatSheet({
   availableDmUsers,
   availableGroupUsers,
   hasAnyDmUsers,
   hasAnyUsers,
   initialMode,
+  isCandidatesLoading = false,
+  loadCandidatesError = null,
+  onRetryLoadCandidates = null,
   onClose,
   onModeChange,
   language,
@@ -56,35 +80,19 @@ export function NewChatSheet({
   const [groupTitle, setGroupTitle] = useState('');
   const deferredPeopleSearch = useDeferredValue(peopleSearch);
   const normalizedPeopleSearch = deferredPeopleSearch.trim().toLowerCase();
-
-  const filteredDmUsers = useMemo(
-    () =>
-      !normalizedPeopleSearch
-        ? availableDmUsers
-        : availableDmUsers.filter((user) => {
-            const haystack = [user.label, user.displayName, user.statusText]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase();
-
-            return haystack.includes(normalizedPeopleSearch);
-          }),
-    [availableDmUsers, normalizedPeopleSearch],
+  const isDmMode = mode === 'dm';
+  const activeUsers = isDmMode ? availableDmUsers : availableGroupUsers;
+  const filteredUsers = useMemo(
+    () => filterNewChatUsers(activeUsers, normalizedPeopleSearch),
+    [activeUsers, normalizedPeopleSearch],
   );
-  const filteredGroupUsers = useMemo(
-    () =>
-      !normalizedPeopleSearch
-        ? availableGroupUsers
-        : availableGroupUsers.filter((user) => {
-            const haystack = [user.label, user.displayName, user.statusText]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase();
-
-            return haystack.includes(normalizedPeopleSearch);
-          }),
-    [availableGroupUsers, normalizedPeopleSearch],
-  );
+  const filteredDmUsers = isDmMode ? filteredUsers : availableDmUsers;
+  const filteredGroupUsers = isDmMode ? availableGroupUsers : filteredUsers;
+  const visibleUserCount = filteredUsers.length;
+  const shouldShowDmLoadingState =
+    isCandidatesLoading && availableDmUsers.length === 0;
+  const shouldShowGroupLoadingState =
+    isCandidatesLoading && availableGroupUsers.length === 0;
 
   const selectedDmUser = useMemo(
     () =>
@@ -128,11 +136,14 @@ export function NewChatSheet({
           </div>
           <button
             aria-label={t.inbox.create.closeAria}
-            className="pill inbox-create-close"
+            className="inbox-create-close"
             onClick={onClose}
             type="button"
           >
-            {t.inbox.create.close}
+            <span aria-hidden="true" className="inbox-create-close-glyph">
+              ×
+            </span>
+            <span className="sr-only">{t.inbox.create.close}</span>
           </button>
         </div>
 
@@ -189,14 +200,34 @@ export function NewChatSheet({
               <h3 className="card-title">{t.inbox.create.peopleTitle}</h3>
               <p className="muted">{t.inbox.create.peopleSubtitle}</p>
             </div>
-            {hasAnyDmUsers ? (
+            {!shouldShowDmLoadingState && hasAnyDmUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
-                {filteredDmUsers.length}
+                {visibleUserCount}
               </span>
             ) : null}
           </div>
 
-          {!hasAnyUsers ? (
+          {shouldShowDmLoadingState ? (
+            <div className="stack inbox-create-loading-state" aria-live="polite">
+              <span aria-hidden="true" className="message-status-spinner" />
+              <p className="muted inbox-compose-empty">
+                {t.inbox.create.loadingCandidates}
+              </p>
+            </div>
+          ) : loadCandidatesError && availableDmUsers.length === 0 ? (
+            <div className="stack inbox-compose-empty-state">
+              <p className="muted inbox-compose-empty">{loadCandidatesError}</p>
+              {onRetryLoadCandidates ? (
+                <button
+                  className="button button-secondary"
+                  onClick={onRetryLoadCandidates}
+                  type="button"
+                >
+                  {t.shell.retry}
+                </button>
+              ) : null}
+            </div>
+          ) : !hasAnyUsers ? (
             <div className="stack inbox-compose-empty-state">
               <p className="muted inbox-compose-empty">
                 {manageMembersHref
@@ -218,8 +249,7 @@ export function NewChatSheet({
               {t.inbox.create.noMatches}
             </p>
           ) : (
-            <div className="inbox-create-list-frame">
-              <div className="inbox-compose-user-list inbox-create-user-list">
+            <div className="inbox-compose-user-list inbox-create-user-list">
               {filteredDmUsers.map((availableUser) => {
                 const isSelected = availableUser.userId === selectedDmUserId;
 
@@ -261,14 +291,15 @@ export function NewChatSheet({
                             : 'inbox-create-option-indicator'
                         }
                       />
-                      <span className="inbox-create-option-state">
-                        {isSelected ? t.inbox.create.selected : t.inbox.create.choose}
-                      </span>
+                      {isSelected ? (
+                        <span className="inbox-create-option-state">
+                          {t.inbox.create.selected}
+                        </span>
+                      ) : null}
                     </div>
                   </button>
                 );
               })}
-              </div>
             </div>
           )}
 
@@ -303,9 +334,9 @@ export function NewChatSheet({
               <h3 className="card-title">{t.inbox.create.groupTitle}</h3>
               <p className="muted">{t.inbox.create.groupSubtitle}</p>
             </div>
-            {hasAnyUsers ? (
+            {!shouldShowGroupLoadingState && hasAnyUsers ? (
               <span className="summary-pill summary-pill-muted inbox-create-count-pill">
-                {filteredGroupUsers.length}
+                {visibleUserCount}
               </span>
             ) : null}
           </div>
@@ -327,7 +358,27 @@ export function NewChatSheet({
               />
             </label>
 
-            {!hasAnyUsers ? (
+            {shouldShowGroupLoadingState ? (
+              <div className="stack inbox-create-loading-state" aria-live="polite">
+                <span aria-hidden="true" className="message-status-spinner" />
+                <p className="muted inbox-compose-empty">
+                  {t.inbox.create.loadingCandidates}
+                </p>
+              </div>
+            ) : loadCandidatesError && availableGroupUsers.length === 0 ? (
+              <div className="stack inbox-compose-empty-state">
+                <p className="muted inbox-compose-empty">{loadCandidatesError}</p>
+                {onRetryLoadCandidates ? (
+                  <button
+                    className="button button-secondary"
+                    onClick={onRetryLoadCandidates}
+                    type="button"
+                  >
+                    {t.shell.retry}
+                  </button>
+                ) : null}
+              </div>
+            ) : !hasAnyUsers ? (
               <div className="stack inbox-compose-empty-state">
                 <p className="muted inbox-compose-empty">
                   {manageMembersHref
@@ -345,8 +396,7 @@ export function NewChatSheet({
               {t.inbox.create.noMatches}
             </p>
           ) : (
-              <div className="inbox-create-list-frame">
-                <div className="inbox-compose-user-list inbox-create-user-list">
+              <div className="inbox-compose-user-list inbox-create-user-list">
                 {filteredGroupUsers.map((availableUser) => {
                   const isSelected = selectedGroupUserIds.includes(
                     availableUser.userId,
@@ -390,14 +440,15 @@ export function NewChatSheet({
                               : 'inbox-create-option-indicator'
                           }
                         />
-                        <span className="inbox-create-option-state">
-                          {isSelected ? t.inbox.create.selected : t.inbox.create.add}
-                        </span>
+                        {isSelected ? (
+                          <span className="inbox-create-option-state">
+                            {t.inbox.create.selected}
+                          </span>
+                        ) : null}
                       </div>
                     </button>
                   );
                 })}
-                </div>
               </div>
             )}
 

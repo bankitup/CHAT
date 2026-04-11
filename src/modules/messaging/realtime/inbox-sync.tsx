@@ -1,7 +1,10 @@
 'use client';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
-import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
+import {
+  resolveInboxAttachmentPreviewKind,
+  resolveInboxAttachmentPreviewKindFromMetadata,
+} from '@/modules/messaging/inbox/preview-kind';
 import { noteWarmNavRouterRefresh } from '@/modules/messaging/performance/warm-nav-client';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useTransition } from 'react';
@@ -127,9 +130,157 @@ export function InboxRealtimeSync({
       return null;
     };
 
+    const normalizeVisibleFromSeq = (value: unknown) => {
+      const normalizedValue = normalizeLatestMessageSeq(value);
+
+      if (normalizedValue === null) {
+        return null;
+      }
+
+      return normalizedValue > 0 ? normalizedValue : null;
+    };
+
+    const resolveConversationVisibleReadFloorSeq = (
+      visibleFromSeq: number | null,
+    ) => {
+      if (visibleFromSeq === null) {
+        return null;
+      }
+
+      return Math.max(0, visibleFromSeq - 1);
+    };
+
+    const resolveConversationEffectiveLastReadSeq = (input: {
+      lastReadMessageSeq: number | null;
+      visibleFromSeq: number | null;
+    }) => {
+      const baselineReadFloorSeq = resolveConversationVisibleReadFloorSeq(
+        input.visibleFromSeq,
+      );
+
+      return input.lastReadMessageSeq === null
+        ? baselineReadFloorSeq
+        : baselineReadFloorSeq === null
+          ? input.lastReadMessageSeq
+          : Math.max(input.lastReadMessageSeq, baselineReadFloorSeq);
+    };
+
+    const fetchUnreadIncomingCount = async (input: {
+      conversationId: string;
+      lastReadMessageSeq: number | null;
+      visibleFromSeq: number | null;
+    }) => {
+      const effectiveLastReadSeq = resolveConversationEffectiveLastReadSeq({
+        lastReadMessageSeq: input.lastReadMessageSeq,
+        visibleFromSeq: input.visibleFromSeq,
+      });
+
+      let unreadQuery = supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('conversation_id', input.conversationId)
+        .neq('sender_id', userId);
+
+      if (effectiveLastReadSeq !== null) {
+        unreadQuery = unreadQuery.gt('seq', effectiveLastReadSeq);
+      }
+
+      const unreadResponse = await unreadQuery;
+
+      if (unreadResponse.error) {
+        throw unreadResponse.error;
+      }
+
+      return Number(unreadResponse.count ?? 0);
+    };
+
+    const fetchLatestConversationMessageSummary = async (conversationId: string) => {
+      const loadLatestRow = async (includeContentMode: boolean) =>
+        supabase
+          .from('messages')
+          .select(
+            includeContentMode
+              ? 'id, seq, sender_id, body, kind, content_mode, deleted_at, created_at'
+              : 'id, seq, sender_id, body, kind, deleted_at, created_at',
+          )
+          .eq('conversation_id', conversationId)
+          .order('seq', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+      let response = await loadLatestRow(true);
+
+      if (
+        response.error &&
+        response.error.message.includes('content_mode')
+      ) {
+        response = await loadLatestRow(false);
+      }
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      return (response.data ?? null) as
+        | {
+            id?: string | null;
+            seq?: number | string | null;
+            sender_id?: string | null;
+            body?: string | null;
+            kind?: string | null;
+            content_mode?: string | null;
+            deleted_at?: string | null;
+            created_at?: string | null;
+          }
+        | null;
+    };
+
     const fetchLatestMessageAttachmentKind = async (messageId: string | null) => {
       if (!messageId) {
         return null;
+      }
+
+      const assetResponse = await supabase
+        .from('message_asset_links')
+        .select('message_id, created_at, message_assets!inner(kind, mime_type)')
+        .eq('message_id', messageId)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (!assetResponse.error) {
+        const row =
+          ((assetResponse.data ?? []) as Array<{
+            message_assets:
+              | {
+                  kind?: 'image' | 'file' | 'audio' | 'voice-note' | null;
+                  mime_type?: string | null;
+                }
+              | Array<{
+                  kind?: 'image' | 'file' | 'audio' | 'voice-note' | null;
+                  mime_type?: string | null;
+                }>
+              | null;
+          }>)[0] ?? null;
+        const asset = row
+          ? Array.isArray(row.message_assets)
+            ? row.message_assets[0] ?? null
+            : row.message_assets
+          : null;
+
+        if (asset) {
+          return resolveInboxAttachmentPreviewKindFromMetadata({
+            assetKind: asset.kind ?? null,
+            mimeType: asset.mime_type ?? null,
+          });
+        }
+      } else if (
+        !assetResponse.error.message.includes('message_asset_links') &&
+        !assetResponse.error.message.includes('message_assets')
+      ) {
+        logDiagnostics('summary-asset-kind:error', {
+          message: assetResponse.error.message,
+          messageId,
+        });
       }
 
       const response = await supabase
@@ -157,14 +308,44 @@ export function InboxRealtimeSync({
     };
 
     const fetchConversationSummary = async (conversationId: string) => {
-      const response = await supabase
-        .from('conversation_members')
-        .select(
-          'conversation_id, hidden_at, last_read_message_seq, last_read_at, conversations(id, created_at, last_message_at, last_message_id, last_message_seq, last_message_sender_id, last_message_kind, last_message_content_mode, last_message_deleted_at, last_message_body)',
-        )
-        .eq('conversation_id', conversationId)
-        .eq('user_id', userId)
-        .maybeSingle();
+      type MembershipSummaryRow = {
+        conversation_id?: string | null;
+        hidden_at?: string | null;
+        last_read_at?: string | null;
+        last_read_message_seq?: number | null;
+        visible_from_seq?: number | null;
+        conversations?:
+          | {
+              created_at?: string | null;
+              id?: string | null;
+            }
+          | Array<{
+              created_at?: string | null;
+              id?: string | null;
+            }>
+          | null;
+      };
+
+      const loadMembership = async (includeVisibleFromSeq: boolean) =>
+        supabase
+          .from('conversation_members')
+          .select(
+            includeVisibleFromSeq
+              ? 'conversation_id, hidden_at, last_read_message_seq, last_read_at, visible_from_seq, conversations(id, created_at)'
+              : 'conversation_id, hidden_at, last_read_message_seq, last_read_at, conversations(id, created_at)',
+          )
+          .eq('conversation_id', conversationId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      let response = await loadMembership(true);
+
+      if (
+        response.error &&
+        response.error.message.includes('visible_from_seq')
+      ) {
+        response = await loadMembership(false);
+      }
 
       if (response.error) {
         throw response.error;
@@ -175,35 +356,41 @@ export function InboxRealtimeSync({
         return;
       }
 
-      const conversationValue = Array.isArray(response.data.conversations)
-        ? response.data.conversations[0] ?? null
-        : response.data.conversations;
+      const membershipRow = response.data as MembershipSummaryRow;
+      const conversationValue = Array.isArray(membershipRow.conversations)
+        ? membershipRow.conversations[0] ?? null
+        : membershipRow.conversations;
+      const latestMessageRow = await fetchLatestConversationMessageSummary(
+        conversationId,
+      );
       const latestMessageSeq = normalizeLatestMessageSeq(
-        conversationValue?.last_message_seq ?? null,
+        latestMessageRow?.seq ?? null,
       );
       const lastReadMessageSeq =
-        typeof response.data.last_read_message_seq === 'number'
-          ? response.data.last_read_message_seq
+        typeof membershipRow.last_read_message_seq === 'number'
+          ? membershipRow.last_read_message_seq
           : null;
-      const latestMessageId = conversationValue?.last_message_id ?? null;
-      const latestMessageBody = conversationValue?.last_message_body ?? null;
+      const visibleFromSeq = normalizeVisibleFromSeq(
+        membershipRow.visible_from_seq ?? null,
+      );
+      const latestMessageId = latestMessageRow?.id ?? null;
+      const latestMessageBody = latestMessageRow?.body ?? null;
       const latestMessageContentMode =
-        conversationValue?.last_message_content_mode ?? null;
+        latestMessageRow?.content_mode ?? null;
       const latestMessageDeletedAt =
-        conversationValue?.last_message_deleted_at ?? null;
-      const latestMessageKind = conversationValue?.last_message_kind ?? null;
-      const unreadCount =
-        latestMessageSeq === null
-          ? 0
-          : lastReadMessageSeq === null
-            ? latestMessageSeq
-            : Math.max(0, latestMessageSeq - lastReadMessageSeq);
+        latestMessageRow?.deleted_at ?? null;
+      const latestMessageKind = latestMessageRow?.kind ?? null;
+      const unreadCount = await fetchUnreadIncomingCount({
+        conversationId,
+        lastReadMessageSeq,
+        visibleFromSeq,
+      });
       const shouldResolveAttachmentKind =
         Boolean(latestMessageId) &&
         !latestMessageDeletedAt &&
-        latestMessageKind !== 'voice' &&
         latestMessageContentMode !== 'dm_e2ee_v1' &&
-        !latestMessageBody?.trim();
+        (latestMessageKind === 'attachment' ||
+          (latestMessageKind !== 'voice' && !latestMessageBody?.trim()));
       const latestMessageAttachmentKind = shouldResolveAttachmentKind
         ? await fetchLatestMessageAttachmentKind(latestMessageId)
         : null;
@@ -211,9 +398,9 @@ export function InboxRealtimeSync({
       patchInboxConversationSummary({
         conversationId,
         createdAt: conversationValue?.created_at ?? null,
-        hiddenAt: response.data.hidden_at ?? null,
-        lastMessageAt: conversationValue?.last_message_at ?? null,
-        lastReadAt: response.data.last_read_at ?? null,
+        hiddenAt: membershipRow.hidden_at ?? null,
+        lastMessageAt: latestMessageRow?.created_at ?? null,
+        lastReadAt: membershipRow.last_read_at ?? null,
         lastReadMessageSeq,
         latestMessageAttachmentKind,
         latestMessageBody,
@@ -221,8 +408,7 @@ export function InboxRealtimeSync({
         latestMessageDeletedAt,
         latestMessageId,
         latestMessageKind,
-        latestMessageSenderId:
-          conversationValue?.last_message_sender_id ?? null,
+        latestMessageSenderId: latestMessageRow?.sender_id ?? null,
         latestMessageSeq,
         removed: false,
         unreadCount,

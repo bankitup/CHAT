@@ -118,6 +118,8 @@ export type DmE2eeEnvelopeInsert = {
   usedOneTimePrekeyId: number | null;
 };
 
+export type DmE2eeMessageKind = 'attachment' | 'text';
+
 export type PublishDmE2eeOneTimePrekey = {
   prekeyId: number;
   publicKey: string;
@@ -144,7 +146,7 @@ export type DmE2eeSendRequest = {
   clientId: string;
   replyToMessageId: string | null;
   senderDeviceRecordId: string;
-  kind: 'text';
+  kind: DmE2eeMessageKind;
   contentMode: 'dm_e2ee_v1';
   envelopes: DmE2eeEnvelopeInsert[];
 };

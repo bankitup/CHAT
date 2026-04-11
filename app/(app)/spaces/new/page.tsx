@@ -36,10 +36,7 @@ export default async function CreateSpacePage({
   const superAdminGovernance = resolveSuperAdminGovernanceForUser({
     userEmail: user.email ?? null,
   });
-
-  if (!superAdminGovernance.canCreateSpaces) {
-    redirect(withSpaceParam('/spaces', query.space));
-  }
+  const canCreateSpaces = superAdminGovernance.canCreateSpaces;
 
   const t = getTranslations(language);
   const visibleError = query.error
@@ -51,6 +48,15 @@ export default async function CreateSpacePage({
     : null;
   const selectedProfile =
     normalizeSpaceProfile(query.profile) ?? 'messenger_full';
+  const routeEyebrow = canCreateSpaces
+    ? t.spaces.globalAdminEyebrow
+    : t.homeDashboard.privateSpaceCtaBadge;
+  const routeTitle = canCreateSpaces
+    ? t.spaces.createSpaceRouteTitle
+    : t.homeDashboard.privateSpaceCtaTitle;
+  const routeSubtitle = canCreateSpaces
+    ? t.spaces.createSpaceRouteSubtitle
+    : t.homeDashboard.privateSpaceCtaBody;
 
   return (
     <section className="stack spaces-screen">
@@ -66,82 +72,98 @@ export default async function CreateSpacePage({
           </Link>
         </div>
 
-        <p className="eyebrow">{t.spaces.globalAdminEyebrow}</p>
-        <h1 className="settings-hero-title">{t.spaces.createSpaceRouteTitle}</h1>
-        <p className="muted settings-hero-note">{t.spaces.createSpaceRouteSubtitle}</p>
+        <p className="eyebrow">{routeEyebrow}</p>
+        <h1 className="settings-hero-title">{routeTitle}</h1>
+        <p className="muted settings-hero-note">{routeSubtitle}</p>
       </section>
 
       {visibleError ? <p className="notice notice-error">{visibleError}</p> : null}
 
-      <section className="card stack settings-surface spaces-surface">
-        <section className="empty-card keepcozy-preview-card">
-          <div className="keepcozy-preview-header">
-            <span className="summary-pill summary-pill-muted">
-              {t.spaces.globalAdminEyebrow}
-            </span>
-          </div>
-          <h2 className="card-title">{t.spaces.createSpaceTitle}</h2>
-          <p className="muted">{t.spaces.createSpaceRouteBody}</p>
+      {canCreateSpaces ? (
+        <section className="card stack settings-surface spaces-surface">
+          <section className="empty-card keepcozy-preview-card">
+            <div className="keepcozy-preview-header">
+              <span className="summary-pill summary-pill-muted">
+                {t.spaces.globalAdminEyebrow}
+              </span>
+            </div>
+            <h2 className="card-title">{t.spaces.createSpaceTitle}</h2>
+            <p className="muted">{t.spaces.createSpaceRouteBody}</p>
+          </section>
+
+          <form action={createSpaceAction} className="stack settings-section keepcozy-section">
+            <input name="returnSpaceId" type="hidden" value={query.space ?? ''} />
+
+            <label className="field">
+              <span>{t.spaces.fieldSpaceName}</span>
+              <input
+                autoComplete="off"
+                className="input"
+                defaultValue={query.name ?? ''}
+                name="spaceName"
+                required
+              />
+            </label>
+
+            <label className="field">
+              <span>{t.spaces.fieldSpaceProfile}</span>
+              <select className="input" defaultValue={selectedProfile} name="profile">
+                {SPACE_PROFILES.map((profile) => (
+                  <option key={profile} value={profile}>
+                    {profile === 'keepcozy_ops'
+                      ? t.spaces.profileKeepCozyOps
+                      : t.spaces.profileMessengerFull}
+                  </option>
+                ))}
+              </select>
+              <p className="muted keepcozy-field-note">{t.spaces.profileHint}</p>
+            </label>
+
+            <label className="field">
+              <span>{t.spaces.fieldParticipantIdentifiers}</span>
+              <textarea
+                className="input textarea"
+                defaultValue={query.members ?? ''}
+                name="memberIdentifiers"
+                rows={5}
+              />
+              <p className="muted keepcozy-field-note">
+                {t.spaces.participantIdentifiersHint}
+              </p>
+            </label>
+
+            <label className="field">
+              <span>{t.spaces.fieldAdminIdentifiers}</span>
+              <textarea
+                className="input textarea"
+                defaultValue={query.admins ?? ''}
+                name="adminIdentifiers"
+                required
+                rows={4}
+              />
+              <p className="muted keepcozy-field-note">{t.spaces.adminIdentifiersHint}</p>
+            </label>
+
+            <p className="muted">{t.spaces.includeYourselfHint}</p>
+
+            <button className="button keepcozy-form-submit" type="submit">
+              {t.spaces.submitCreateSpace}
+            </button>
+          </form>
         </section>
-
-        <form action={createSpaceAction} className="stack settings-section keepcozy-section">
-          <input name="returnSpaceId" type="hidden" value={query.space ?? ''} />
-
-          <label className="field">
-            <span>{t.spaces.fieldSpaceName}</span>
-            <input
-              autoComplete="off"
-              className="input"
-              defaultValue={query.name ?? ''}
-              name="spaceName"
-              required
-            />
-          </label>
-
-          <label className="field">
-            <span>{t.spaces.fieldSpaceProfile}</span>
-            <select className="input" defaultValue={selectedProfile} name="profile">
-              {SPACE_PROFILES.map((profile) => (
-                <option key={profile} value={profile}>
-                  {profile === 'keepcozy_ops'
-                    ? t.spaces.profileKeepCozyOps
-                    : t.spaces.profileMessengerFull}
-                </option>
-              ))}
-            </select>
-            <p className="muted keepcozy-field-note">{t.spaces.profileHint}</p>
-          </label>
-
-          <label className="field">
-            <span>{t.spaces.fieldParticipantIdentifiers}</span>
-            <textarea
-              className="input textarea"
-              defaultValue={query.members ?? ''}
-              name="memberIdentifiers"
-              rows={5}
-            />
-            <p className="muted keepcozy-field-note">{t.spaces.participantIdentifiersHint}</p>
-          </label>
-
-          <label className="field">
-            <span>{t.spaces.fieldAdminIdentifiers}</span>
-            <textarea
-              className="input textarea"
-              defaultValue={query.admins ?? ''}
-              name="adminIdentifiers"
-              required
-              rows={4}
-            />
-            <p className="muted keepcozy-field-note">{t.spaces.adminIdentifiersHint}</p>
-          </label>
-
-          <p className="muted">{t.spaces.includeYourselfHint}</p>
-
-          <button className="button keepcozy-form-submit" type="submit">
-            {t.spaces.submitCreateSpace}
-          </button>
-        </form>
-      </section>
+      ) : (
+        <section className="card stack settings-surface spaces-surface">
+          <section className="empty-card keepcozy-preview-card">
+            <div className="keepcozy-preview-header">
+              <span className="summary-pill summary-pill-muted">
+                {t.homeDashboard.privateSpaceCtaBadge}
+              </span>
+            </div>
+            <h2 className="card-title">{t.homeDashboard.privateSpaceCtaTitle}</h2>
+            <p className="muted">{t.homeDashboard.privateSpaceCtaNote}</p>
+          </section>
+        </section>
+      )}
     </section>
   );
 }

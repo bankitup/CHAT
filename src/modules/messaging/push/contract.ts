@@ -1,3 +1,5 @@
+import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
+
 export type PushSubscriptionRecordInput = {
   endpoint: string;
   expirationTime: number | null;
@@ -8,6 +10,13 @@ export type PushSubscriptionRecordInput = {
   userAgent: string | null;
   platform: string | null;
   language: string | null;
+};
+
+export type PushSubscriptionPresenceInput = {
+  endpoint: string;
+  activeConversationId: string | null;
+  activeInApp: boolean;
+  previewMode?: InboxPreviewDisplayMode | null;
 };
 
 export type StoredPushSubscription = {

@@ -142,6 +142,21 @@ If a module is not active yet, it should still exist as a minimal placeholder wi
 
 Recent inbox-management and conversation-settings work depends on explicit schema support in Supabase. The current code-level dependency surface is documented in [docs/schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md).
 
+## Security Posture Notes
+
+The repo now has a practical MVP security snapshot in addition to longer-term target docs:
+
+- Current implemented posture: [docs/security/mvp-security-posture.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/mvp-security-posture.md)
+- Target model and rollout direction: [docs/security/mvp-security-target.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/mvp-security-target.md)
+- Runtime schema and SQL expectations: [docs/schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md)
+
+Current headline status:
+
+- outer tenancy reads for `spaces` and `space_members` are hardened
+- chat media reads are private-bucket plus membership-checked signed URLs
+- `conversations`, `conversation_members`, `messages`, and `message_reactions` still have later slices pending
+- service-role use remains intentional for governed writes, controlled delivery helpers, and repair/cleanup work
+
 ## Product Principles
 
 - Build for the active product path, not for hypothetical clients.

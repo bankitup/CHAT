@@ -54,6 +54,31 @@ export type SpaceProfileSource =
   | 'space_name_test_default'
   | 'fallback_messenger_default';
 
+export type SpaceTheme = 'dark' | 'light';
+
+export const SPACE_THEMES = [
+  'dark',
+  'light',
+] as const satisfies readonly SpaceTheme[];
+
+export function normalizeSpaceTheme(
+  value: string | null | undefined,
+): SpaceTheme | null {
+  const normalized = value?.trim() ?? '';
+
+  if (!normalized) {
+    return null;
+  }
+
+  return SPACE_THEMES.includes(normalized as SpaceTheme)
+    ? (normalized as SpaceTheme)
+    : null;
+}
+
+export type SpaceThemeSource =
+  | 'space_theme_column'
+  | 'default_dark';
+
 export type SpaceProfileDefaultShellRoute = '/inbox' | '/home';
 
 export function getDefaultShellRouteForSpaceProfile(
@@ -68,10 +93,16 @@ export type ResolvedSpaceProfile = {
   defaultShellRoute: SpaceProfileDefaultShellRoute;
 };
 
+export type ResolvedSpaceTheme = {
+  theme: SpaceTheme;
+  source: SpaceThemeSource;
+};
+
 export type SpaceRecord = {
   id: string;
   name: string;
   profile: SpaceProfile | null;
+  theme: SpaceTheme | null;
   createdBy: string;
   createdAt: string | null;
   updatedAt: string | null;

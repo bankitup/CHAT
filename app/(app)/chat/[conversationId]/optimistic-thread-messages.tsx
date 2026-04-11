@@ -1,8 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { emitOptimisticThreadRetry, LOCAL_OPTIMISTIC_MESSAGE_EVENT, type OptimisticThreadMessagePayload } from '@/modules/messaging/realtime/optimistic-thread';
+import {
+  emitOptimisticThreadRetry,
+  LOCAL_OPTIMISTIC_MESSAGE_EVENT,
+  type OptimisticAttachmentPreviewKind,
+  type OptimisticThreadMessagePayload,
+} from '@/modules/messaging/realtime/optimistic-thread';
 import { MessageStatusIndicator } from './message-status-indicator';
+import {
+  isThreadNearBottom,
+  resolveThreadScrollTarget,
+  scrollThreadToBottom,
+} from './thread-scroll';
+
+const MESSAGE_THREAD_SCROLL_TARGET_ID = 'message-thread-scroll';
 
 type OptimisticThreadMessagesProps = {
   confirmedClientIds: string[];
@@ -11,6 +23,7 @@ type OptimisticThreadMessagesProps = {
     attachment: string;
     delete: string;
     failed: string;
+    photo: string;
     justNow: string;
     queued: string;
     remove: string;
@@ -49,6 +62,125 @@ function formatVoiceDuration(durationMs: number | null) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function isOptimisticImageAttachment(input: {
+  attachment: File | null | undefined;
+  kind: OptimisticAttachmentPreviewKind | null | undefined;
+}) {
+  return Boolean(input.attachment && input.kind === 'image');
+}
+
+function OptimisticImageAttachmentCard({
+  file,
+  fallbackLabel,
+}: {
+  fallbackLabel: string;
+  file: File;
+}) {
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+
+  useEffect(() => {
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const previewLabel = file.name.trim() || fallbackLabel;
+
+  return (
+    <div
+      aria-label={previewLabel}
+      className="message-photo-card message-photo-card-committed message-photo-card-optimistic"
+      role="img"
+    >
+      <span
+        aria-hidden="true"
+        className="message-photo-card-visual"
+        style={{
+          backgroundImage: `url("${previewUrl}")`,
+        }}
+      />
+    </div>
+  );
+}
+
+function formatOptimisticAttachmentSize(sizeBytes: number) {
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return '';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let unitIndex = 0;
+  let value = sizeBytes;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const digits = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function OptimisticFileAttachmentCard({
+  fallbackLabel,
+  file,
+}: {
+  fallbackLabel: string;
+  file: File;
+}) {
+  const attachmentName = file.name.trim() || fallbackLabel;
+  const attachmentMeta = formatOptimisticAttachmentSize(file.size);
+
+  return (
+    <div className="message-attachment-card message-attachment-card-unavailable">
+      <span aria-hidden="true" className="message-attachment-file">
+        {fallbackLabel}
+      </span>
+      <span className="message-attachment-copy">
+        <span className="message-attachment-head">
+          <span className="message-attachment-name">{attachmentName}</span>
+          <span className="message-attachment-kind">{fallbackLabel}</span>
+        </span>
+        {attachmentMeta ? (
+          <span className="message-attachment-meta">{attachmentMeta}</span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+function compareOptimisticThreadMessages(
+  left: OptimisticThreadMessagePayload,
+  right: OptimisticThreadMessagePayload,
+) {
+  const leftCreatedAt = new Date(left.createdAt);
+  const rightCreatedAt = new Date(right.createdAt);
+  const leftTimestamp = Number.isNaN(leftCreatedAt.getTime())
+    ? null
+    : leftCreatedAt.getTime();
+  const rightTimestamp = Number.isNaN(rightCreatedAt.getTime())
+    ? null
+    : rightCreatedAt.getTime();
+
+  if (leftTimestamp !== null && rightTimestamp !== null && leftTimestamp !== rightTimestamp) {
+    return leftTimestamp - rightTimestamp;
+  }
+
+  if (leftTimestamp !== null && rightTimestamp === null) {
+    return -1;
+  }
+
+  if (leftTimestamp === null && rightTimestamp !== null) {
+    return 1;
+  }
+
+  return left.clientId.localeCompare(right.clientId);
+}
+
+function sortOptimisticThreadMessages(items: OptimisticThreadMessagePayload[]) {
+  return [...items].sort(compareOptimisticThreadMessages);
+}
+
 export function OptimisticThreadMessages({
   confirmedClientIds,
   conversationId,
@@ -66,8 +198,10 @@ export function OptimisticThreadMessages({
   );
   const visibleItems = useMemo(
     () =>
-      items.filter(
-        (item) => item.status === 'failed' || !confirmedIds.has(item.clientId),
+      sortOptimisticThreadMessages(
+        items.filter(
+          (item) => item.status === 'failed' || !confirmedIds.has(item.clientId),
+        ),
       ),
     [confirmedIds, items],
   );
@@ -101,38 +235,43 @@ export function OptimisticThreadMessages({
         return;
       }
 
+      const thread = resolveThreadScrollTarget(MESSAGE_THREAD_SCROLL_TARGET_ID);
+      const shouldAutoScroll =
+        detail.status === 'local_pending' &&
+        (thread ? isThreadNearBottom(thread) : false);
+
       setItems((currentItems) => {
         const nextItems = currentItems.filter(
           (item) => item.clientId !== detail.clientId,
         );
 
         if (detail.status === 'failed') {
-          return [...nextItems, detail];
+          return sortOptimisticThreadMessages([...nextItems, detail]);
         }
 
         if (confirmedIds.has(detail.clientId)) {
-          return nextItems;
+          return sortOptimisticThreadMessages(nextItems);
         }
 
-        return [
+        return sortOptimisticThreadMessages([
           ...nextItems,
           {
             ...detail,
             errorMessage: null,
           },
-        ];
+        ]);
       });
 
       window.requestAnimationFrame(() => {
-        const thread = document.getElementById('message-thread-scroll');
+        const nextThread = resolveThreadScrollTarget(
+          MESSAGE_THREAD_SCROLL_TARGET_ID,
+        );
 
-        if (!thread) {
+        if (!shouldAutoScroll || !nextThread) {
           return;
         }
 
-        thread.scrollTo({
-          top: thread.scrollHeight,
-        });
+        scrollThreadToBottom(nextThread, 'smooth');
       });
     };
 
@@ -167,6 +306,7 @@ export function OptimisticThreadMessages({
     emitOptimisticThreadRetry({
       attachment: item.attachment ?? null,
       attachmentLabel: item.attachmentLabel ?? null,
+      attachmentPreviewKind: item.attachmentPreviewKind ?? null,
       attemptKind: 'retry',
       body: item.body,
       clientId: null,
@@ -196,7 +336,16 @@ export function OptimisticThreadMessages({
         const isFailed = item.status === 'failed';
         const messagePreview =
           item.body.trim() || item.attachmentLabel?.trim() || labels.attachment;
+        const normalizedBody = item.body.trim();
         const isVoiceMessage = item.kind === 'voice';
+        const isImageAttachment = isOptimisticImageAttachment({
+          attachment: item.attachment,
+          kind: item.attachmentPreviewKind ?? null,
+        });
+        const isGenericAttachment =
+          Boolean(item.attachment) && !isImageAttachment && !isVoiceMessage;
+        const shouldRenderAttachmentCaption =
+          Boolean(item.attachment) && Boolean(normalizedBody) && !isVoiceMessage;
         const pendingStatusLabel =
           isVoiceMessage
             ? isQueued
@@ -205,16 +354,19 @@ export function OptimisticThreadMessages({
             : isQueued
               ? labels.queued
               : labels.sending;
-        const footerStatusLabel = pendingStatusLabel;
-        const voicePendingNote =
-          isVoiceMessage && isSending ? labels.voicePendingHint : null;
         const voiceProgressScale = isFailed ? 0.28 : isQueued ? 0.2 : 0.58;
         const voiceIconState = isFailed ? 'error' : isPending ? 'loading' : 'play';
 
         return (
           <article
             key={item.clientId}
-            className="message-row message-row-own message-row-optimistic"
+            className={
+              isVoiceMessage
+                ? 'message-row message-row-own message-row-optimistic message-row-optimistic-voice'
+                : isImageAttachment
+                  ? 'message-row message-row-own message-row-optimistic message-row-optimistic-media'
+                : 'message-row message-row-own message-row-optimistic'
+            }
           >
             <div
               className={
@@ -227,13 +379,19 @@ export function OptimisticThreadMessages({
                 className={
                   isFailed
                     ? 'message-bubble message-bubble-own message-bubble-optimistic message-bubble-failed'
+                    : isImageAttachment
+                      ? 'message-bubble message-bubble-own message-bubble-optimistic message-bubble-optimistic-media'
                     : 'message-bubble message-bubble-own message-bubble-optimistic'
                 }
               >
                 {isVoiceMessage ? (
                   <div className="message-voice-stack">
                     <div
-                      className="message-voice-card message-voice-card-own"
+                      className={
+                        isPending
+                          ? 'message-voice-card message-voice-card-own message-voice-card-optimistic-pending'
+                          : 'message-voice-card message-voice-card-own'
+                      }
                       data-voice-state={
                         isFailed
                           ? 'failed'
@@ -296,35 +454,55 @@ export function OptimisticThreadMessages({
                             </span>
                           </div>
                         ) : isPending ? (
-                          <div className="message-voice-meta">
-                            <span className="message-voice-state">{pendingStatusLabel}</span>
-                            {voicePendingNote ? (
-                              <span className="message-voice-note">
-                                {voicePendingNote}
-                              </span>
-                            ) : null}
-                          </div>
+                          null
                         ) : null}
                       </div>
                     </div>
+                  </div>
+                ) : isImageAttachment && item.attachment ? (
+                  <div className="message-attachment-caption-stack">
+                    <OptimisticImageAttachmentCard
+                      fallbackLabel={labels.photo}
+                      file={item.attachment}
+                    />
+                    {shouldRenderAttachmentCaption ? (
+                      <p className="message-body">{normalizedBody}</p>
+                    ) : null}
+                  </div>
+                ) : isGenericAttachment && item.attachment ? (
+                  <div className="message-attachment-caption-stack">
+                    <OptimisticFileAttachmentCard
+                      fallbackLabel={labels.attachment}
+                      file={item.attachment}
+                    />
+                    {shouldRenderAttachmentCaption ? (
+                      <p className="message-body">{normalizedBody}</p>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="message-body">{messagePreview}</p>
                 )}
               </div>
-              <div className="message-meta message-meta-own message-meta-optimistic">
+              <div
+                className={
+                  isVoiceMessage && isPending
+                    ? 'message-meta message-meta-own message-meta-optimistic message-meta-optimistic-voice-pending'
+                    : 'message-meta message-meta-own message-meta-optimistic'
+                }
+              >
                 <span>{formatOptimisticTimestamp(item.createdAt, labels.justNow)}</span>
                 {isPending ? (
                   <span className="message-status-pending-stack">
                     <MessageStatusIndicator
-                      label={footerStatusLabel}
+                      label={pendingStatusLabel}
                       status="pending"
                     />
                     <span className="message-status message-status-pending">
-                      {footerStatusLabel}
+                      {pendingStatusLabel}
                     </span>
                   </span>
-                ) : isFailed && !isVoiceMessage ? (
+                ) : isFailed && isVoiceMessage ? null : isFailed &&
+                  !isVoiceMessage ? (
                   <span className="message-status-failed-stack">
                     <span className="message-status message-status-failed">
                       {item.errorMessage ?? labels.failed}

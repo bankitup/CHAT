@@ -7,9 +7,11 @@ import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
 import { WarmNavRouteObserver } from '@/modules/messaging/performance/warm-nav-client';
 import { ChatUnreadBadgeSync } from '@/modules/messaging/push/chat-unread-badge-sync';
+import { PushSubscriptionPresenceSync } from '@/modules/messaging/push/presence-sync';
 import type {
   SpaceProfile,
   SpaceProfileDefaultShellRoute,
+  SpaceTheme,
 } from '@/modules/spaces/model';
 import { withSpaceParam } from '@/modules/spaces/url';
 
@@ -18,6 +20,7 @@ type AppShellSpaceSummary = {
   id: string;
   name: string;
   profile: SpaceProfile;
+  theme: SpaceTheme;
 };
 
 type AppShellFrameProps = {
@@ -54,6 +57,7 @@ export function AppShellFrame({
     spaces[0] ??
     null;
   const activeSpaceProfile = activeSpace?.profile ?? null;
+  const activeSpaceTheme = activeSpace?.theme ?? 'dark';
   const navSpaceHref = (pathname: string) =>
     activeSpace?.id ? withSpaceParam(pathname, activeSpace.id) : pathname;
   const badgeSyncKey = `${pathname}?${searchParams.toString()}`;
@@ -94,9 +98,11 @@ export function AppShellFrame({
       ]
         .filter(Boolean)
         .join(' ')}
+      data-space-theme={activeSpaceTheme}
     >
       <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
       <ChatUnreadBadgeSync syncKey={badgeSyncKey} />
+      <PushSubscriptionPresenceSync />
       <WarmNavRouteObserver />
       <div className="stack app-shell-content">{children}</div>
 

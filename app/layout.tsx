@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { getCookieLanguage } from '@/modules/i18n/server';
+import { getCookieAppZoomMode } from '@/modules/ui-preferences/app-zoom-server';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -32,6 +33,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  interactiveWidget: 'resizes-content',
   viewportFit: 'cover',
   themeColor: '#f7f8fa',
 };
@@ -41,10 +43,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const language = await getCookieLanguage();
+  const [language, zoomMode] = await Promise.all([
+    getCookieLanguage(),
+    getCookieAppZoomMode(),
+  ]);
 
   return (
-    <html lang={language}>
+    <html data-app-zoom={zoomMode} lang={language}>
       <body>
         {children}
         <SpeedInsights />
