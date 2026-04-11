@@ -37,6 +37,7 @@ import {
   resolveActiveSpaceForUser,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
+import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import {
   getKeepCozyPrimaryTestFlowHints,
   getKeepCozyHomeDashboardData,
@@ -392,13 +393,14 @@ export default async function HomeDashboardPage({
     query.space,
   );
   const currentZoomMode = await getRequestAppZoomMode();
+  const activeProductPosture = resolveSpaceProductPosture(activeSpace.profile);
   const canManageSpaceAppearance =
     'canManageMembers' in activeSpace && activeSpace.canManageMembers;
   const shouldShowPrivateSpaceCta =
     'canManageMembers' in activeSpace && !activeSpace.canManageMembers;
   const privateSpaceCreateHref = buildPrivateSpaceCreateHref(activeSpace.id);
 
-  if (activeSpace.profile === 'messenger_full') {
+  if (activeProductPosture === 'messenger') {
     const canManageMessengerMembers =
       'canManageMembers' in activeSpace && activeSpace.canManageMembers;
     const [currentUserProfile, manageableParticipants] = await Promise.all([

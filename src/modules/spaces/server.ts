@@ -6,9 +6,12 @@ import {
   buildAvatarDeliveryPath,
   isAbsoluteAvatarUrl,
 } from '@/modules/messaging/avatar-delivery';
+import {
+  resolveSpaceGovernanceRoleForRuntimeSpaceRole,
+  resolveSuperAdminGovernanceForUser,
+} from './governance';
 import type {
   ResolvedSpaceProfile,
-  ResolvedSpaceTheme,
   ResolvedSpaceGovernanceGlobalRole,
   ResolvedSpaceGovernanceRole,
   ResolvedSpaceGovernanceState,
@@ -17,16 +20,30 @@ import type {
   SpaceProfileSource,
   SpaceTheme,
   SpaceThemeSource,
-  SpaceGovernanceRoleSource,
   SpaceRecord,
   SpaceRole,
 } from './model';
 import {
-  getDefaultShellRouteForSpaceProfile,
-  normalizeSpaceProfile,
-  normalizeSpaceTheme,
-} from './model';
+  resolveSpaceProfileForSpace,
+  resolveSpaceProfileShellHref,
+  resolveSpaceThemeForSpace,
+} from './posture';
+import { normalizeSpaceProfile, normalizeSpaceTheme } from './model';
 import { withSpaceParam } from './url';
+export {
+  INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST,
+  resolveSpaceGovernanceRoleForRuntimeSpaceRole,
+  resolveSuperAdminGovernanceForUser,
+} from './governance';
+export {
+  DEFAULT_NEW_SPACE_PROFILE,
+  DEFAULT_SPACE_THEME,
+  LEGACY_KEEP_COZY_TEST_SPACE_NAME,
+  isLegacyKeepCozyTestSpaceName,
+  resolveSpaceProfileForSpace,
+  resolveSpaceProfileShellHref,
+  resolveSpaceThemeForSpace,
+} from './posture';
 
 export type UserSpaceRecord = SpaceRecord & {
   role: SpaceRole;
@@ -73,143 +90,6 @@ export type SpaceParticipantRecord = {
   statusUpdatedAt: string | null;
   isCurrentUser: boolean;
 };
-
-export const INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST = new Set([
-  'dmtest1@chat.local',
-  'dmtest2@chat.local',
-]);
-
-function normalizeStoredSpaceProfile(profile: string | null | undefined) {
-  if (profile === 'messenger_full' || profile === 'keepcozy_ops') {
-    return profile;
-  }
-
-  return null;
-}
-
-function normalizeStoredSpaceTheme(theme: string | null | undefined) {
-  if (theme === 'dark' || theme === 'light') {
-    return theme;
-  }
-
-  return null;
-}
-
-/**
- * Runtime profile resolver that prefers persisted profile storage when present
- * and falls back to the earlier name-based compatibility rule otherwise.
- *
- * Current fallback rule:
- *
- * - an explicit stored profile on `public.spaces.profile` wins when present
- * - the shared `TEST` space remains the canonical KeepCozy operational
- *   fallback when storage is absent or null
- * - every other space falls back to the messenger-first profile
- */
-export function resolveSpaceProfileForSpace(input: {
-  spaceId: string;
-  spaceName: string | null;
-  storedProfile?: string | null;
-}): ResolvedSpaceProfile {
-  const storedProfile = normalizeStoredSpaceProfile(input.storedProfile);
-
-  if (storedProfile) {
-    return {
-      profile: storedProfile,
-      source: 'space_profile_column',
-      defaultShellRoute: getDefaultShellRouteForSpaceProfile(storedProfile),
-    };
-  }
-
-  const normalizedSpaceName = input.spaceName?.trim().toUpperCase() ?? '';
-
-  if (normalizedSpaceName === 'TEST') {
-    return {
-      profile: 'keepcozy_ops',
-      source: 'space_name_test_default',
-      defaultShellRoute: getDefaultShellRouteForSpaceProfile('keepcozy_ops'),
-    };
-  }
-
-  return {
-    profile: 'messenger_full',
-    source: 'fallback_messenger_default',
-    defaultShellRoute: getDefaultShellRouteForSpaceProfile('messenger_full'),
-  };
-}
-
-export function resolveSpaceThemeForSpace(input: {
-  storedTheme?: string | null;
-}): ResolvedSpaceTheme {
-  const storedTheme = normalizeStoredSpaceTheme(input.storedTheme);
-
-  if (storedTheme) {
-    return {
-      source: 'space_theme_column',
-      theme: storedTheme,
-    };
-  }
-
-  return {
-    source: 'default_dark',
-    theme: 'dark',
-  };
-}
-
-export function resolveSpaceProfileShellHref(input: {
-  profile: SpaceProfile;
-  spaceId: string;
-}) {
-  return withSpaceParam(
-    getDefaultShellRouteForSpaceProfile(input.profile),
-    input.spaceId,
-  );
-}
-
-function normalizeGovernanceEmail(value: string | null | undefined) {
-  const normalizedValue = value?.trim().toLowerCase() ?? null;
-  return normalizedValue && normalizedValue.length > 0 ? normalizedValue : null;
-}
-
-export function resolveSuperAdminGovernanceForUser(input: {
-  userEmail?: string | null;
-}): ResolvedSpaceGovernanceGlobalRole {
-  const normalizedEmail = normalizeGovernanceEmail(input.userEmail);
-  const isSuperAdmin = normalizedEmail
-    ? INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST.has(normalizedEmail)
-    : false;
-
-  return {
-    globalRole: isSuperAdmin ? 'super_admin' : null,
-    globalRoleSource: isSuperAdmin
-      ? 'initial_email_allowlist'
-      : 'not_super_admin',
-    canCreateSpaces: isSuperAdmin,
-  };
-}
-
-export function resolveSpaceGovernanceRoleForRuntimeSpaceRole(
-  role: SpaceRole,
-): ResolvedSpaceGovernanceRole {
-  let governanceRole: ResolvedSpaceGovernanceRole['governanceRole'] =
-    'space_member';
-  let governanceRoleSource: SpaceGovernanceRoleSource =
-    'runtime_space_role_member';
-
-  if (role === 'owner') {
-    governanceRole = 'space_admin';
-    governanceRoleSource = 'runtime_space_role_owner';
-  } else if (role === 'admin') {
-    governanceRole = 'space_admin';
-    governanceRoleSource = 'runtime_space_role_admin';
-  }
-
-  return {
-    governanceRole,
-    governanceRoleSource,
-    canManageMembers: governanceRole === 'space_admin',
-  };
-}
 
 function getSafeSupabaseHostFragment() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();

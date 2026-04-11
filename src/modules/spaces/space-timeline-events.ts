@@ -5,7 +5,7 @@ import type {
   KeepCozySpaceTimelineEvent,
   KeepCozySpaceTimelineEventRowDraft,
   KeepCozySpaceTimelineEventSummaryPayloadDraft,
-} from './types';
+} from '@/modules/keepcozy/contract-types';
 
 /**
  * Low-level timeline row-builder boundary for future `public.space_timeline_events`

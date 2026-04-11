@@ -12,6 +12,7 @@ import {
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
 } from '@/modules/spaces/server';
+import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
   getUserFacingErrorFallback,
@@ -78,7 +79,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     activeSpaceId = activeSpaceState.activeSpace?.id ?? null;
     activeSpaceName = activeSpaceState.activeSpace?.name ?? null;
 
-    if (activeSpaceState.activeSpace?.profile === 'messenger_full') {
+    if (
+      activeSpaceState.activeSpace &&
+      resolveSpaceProductPosture(activeSpaceState.activeSpace.profile) ===
+        'messenger'
+    ) {
       redirect(
         buildHomeRedirectHref({
           error: params.error,

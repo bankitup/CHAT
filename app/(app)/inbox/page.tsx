@@ -39,10 +39,11 @@ import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
 } from '@/modules/messaging/ui/user-facing-errors';
+import {
+  resolveMessagingRouteSpaceContextForUser,
+} from '@/modules/messaging/server/route-context';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
-import { resolveActiveSpaceForUser } from '@/modules/spaces/server';
-import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
-import { resolveV1TestSpaceFallback } from '@/modules/spaces/server';
+import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import { InboxFilterableContent } from './inbox-filterable-content';
 import { redirect } from 'next/navigation';
 import {
@@ -132,68 +133,34 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   }
   logDiagnostics('auth-ok');
 
-  let activeSpaceId: string;
-  let activeSpaceName: string | null = null;
-  let canManageMembers = false;
-  let isMessengerSpace = false;
-  const explicitV1TestSpace = await resolveV1TestSpaceFallback({
+  const spaceContext = await resolveMessagingRouteSpaceContextForUser({
     requestedSpaceId: query.space,
-    source: 'inbox-page-explicit-v1-test-bypass',
+    source: 'inbox-page',
+    userEmail: user.email ?? null,
+    userId: user.id,
   });
 
-  if (explicitV1TestSpace) {
-    // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
-    // Remove once membership resolution via space_members is stable again.
-    activeSpaceId = explicitV1TestSpace.id;
-    activeSpaceName = explicitV1TestSpace.name;
+  if (spaceContext.kind === 'requested_space_invalid') {
+    logDiagnostics('invalid-space-redirect');
+    redirect('/spaces');
+  }
+
+  if (spaceContext.kind !== 'resolved') {
+    logDiagnostics('no-active-space-notFound');
+    redirect('/spaces');
+  }
+
+  const activeSpaceId = spaceContext.context.activeSpaceId;
+  const activeSpaceName = spaceContext.context.activeSpaceName;
+  const canManageMembers = spaceContext.context.canManageMembers;
+  const isMessengerProductSpace =
+    resolveSpaceProductPosture(spaceContext.context.activeSpaceProfile) ===
+    'messenger';
+
+  if (spaceContext.context.isV1TestBypass) {
     logDiagnostics('active-space-bypass-v1-test', {
-      spaceId: explicitV1TestSpace.id,
+      spaceId: activeSpaceId,
     });
-  } else {
-    try {
-      const activeSpaceState = await resolveActiveSpaceForUser({
-        userId: user.id,
-        userEmail: user.email ?? null,
-        requestedSpaceId: query.space,
-        source: 'inbox-page',
-      });
-
-      if (!activeSpaceState.activeSpace) {
-        logDiagnostics('no-active-space-notFound');
-        redirect('/spaces');
-      }
-
-      if (activeSpaceState.requestedSpaceWasInvalid) {
-        logDiagnostics('invalid-space-redirect');
-        redirect('/spaces');
-      }
-
-      activeSpaceId = activeSpaceState.activeSpace.id;
-      activeSpaceName = activeSpaceState.activeSpace.name;
-      canManageMembers = activeSpaceState.activeSpace.canManageMembers;
-      isMessengerSpace = activeSpaceState.activeSpace.profile === 'messenger_full';
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-        const fallbackSpace = await resolveV1TestSpaceFallback({
-          requestedSpaceId: query.space,
-          source: 'inbox-page',
-        });
-
-        if (!fallbackSpace) {
-          redirect('/spaces');
-        }
-
-        activeSpaceId = fallbackSpace.id;
-        activeSpaceName = fallbackSpace.name;
-        logDiagnostics('active-space-fallback-v1-test', {
-          spaceId: fallbackSpace.id,
-        });
-      } else {
-        throw error;
-      }
-    }
   }
   logDiagnostics('active-space-ok', { hasActiveSpace: true });
   const warmNavRouteKey = [
@@ -207,7 +174,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   recordWarmNavServerRender({
     details: {
       canManageMembers,
-      isMessengerSpace,
+      isMessengerSpace: isMessengerProductSpace,
     },
     routeKey: warmNavRouteKey,
     surface: 'inbox',
@@ -491,7 +458,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         initialCreateMode={initialCreateMode}
         initialFilter={activeFilter}
         initialView={activeView}
-        isMessengerSpace={isMessengerSpace}
+        isMessengerSpace={isMessengerProductSpace}
         language={language}
         mainConversationItems={mainConversationItems}
         mainSummaries={mainSummaries}

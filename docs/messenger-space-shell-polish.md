@@ -9,6 +9,8 @@ It assumes the repo already has:
   [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
 - a profile-aware shared shell in
   [app-shell-frame.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/app-shell-frame.tsx)
+- shared messaging route-access seams in
+  [route-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/route-context.ts)
 - a working messenger-space entry path into `/inbox`
 - a separate KeepCozy `TEST` space that remains the ops-oriented sandbox
 

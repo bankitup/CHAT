@@ -10,7 +10,6 @@ import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   getAvailableUsers,
   getConversationDisplayName,
-  getConversationForUser,
   getConversationMessageStats,
   getConversationParticipantIdentities,
   getConversationParticipants,
@@ -22,6 +21,9 @@ import {
   canRemoveParticipantFromGroupConversation,
   normalizeGroupConversationJoinPolicy,
 } from '@/modules/messaging/group-policy';
+import {
+  resolveMessagingConversationRouteContextForUser,
+} from '@/modules/messaging/server/route-context';
 import {
   GroupIdentityAvatar,
   IdentityAvatar,
@@ -35,11 +37,6 @@ import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,
 } from '@/modules/messaging/ui/user-facing-errors';
-import {
-  isSpaceMembersSchemaCacheErrorMessage,
-  resolveActiveSpaceForUser,
-  resolveV1TestSpaceFallback,
-} from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -169,110 +166,31 @@ export default async function ChatSettingsPage({
     redirect('/login');
   }
 
-  let activeSpaceId: string | null = null;
-  let conversation = null as Awaited<ReturnType<typeof getConversationForUser>> | null;
-  let isV1TestBypass = false;
-  const requestedSpaceId = query.space?.trim() || null;
+  const routeContext = await resolveMessagingConversationRouteContextForUser({
+    conversationId,
+    requestedSpaceId: query.space,
+    source: 'chat-settings-page',
+    userEmail: user.email ?? null,
+    userId: user.id,
+  });
 
-  if (requestedSpaceId) {
-    const explicitV1TestSpace = await resolveV1TestSpaceFallback({
-      requestedSpaceId,
-      source: 'chat-settings-page-explicit-v1-test-bypass',
-    });
-
-    if (explicitV1TestSpace) {
-      activeSpaceId = explicitV1TestSpace.id;
-      isV1TestBypass = true;
-      conversation = await getConversationForUser(conversationId, user.id, {
-        spaceId: activeSpaceId,
-      });
-    } else {
-      conversation = await getConversationForUser(conversationId, user.id, {
-        spaceId: requestedSpaceId,
-      });
-
-      if (conversation) {
-        activeSpaceId = requestedSpaceId;
-      }
-    }
+  if (routeContext.kind === 'conversation_not_found') {
+    notFound();
   }
 
-  if (!conversation || !activeSpaceId) {
-    const baseConversation =
-      conversation ?? (await getConversationForUser(conversationId, user.id));
-
-    if (!baseConversation) {
-      notFound();
-    }
-
-    if (!baseConversation.spaceId) {
-      throw new Error('Active space routing requires public.conversations.space_id.');
-    }
-
-    const fallbackRequestedSpaceId = requestedSpaceId || baseConversation.spaceId;
-    const explicitV1TestSpace = await resolveV1TestSpaceFallback({
-      requestedSpaceId: fallbackRequestedSpaceId,
-      source: 'chat-settings-page-explicit-v1-test-bypass',
-    });
-    isV1TestBypass = Boolean(explicitV1TestSpace);
-
-    if (explicitV1TestSpace) {
-      activeSpaceId = explicitV1TestSpace.id;
-    } else {
-      let activeSpaceState: Awaited<
-        ReturnType<typeof resolveActiveSpaceForUser>
-      > | null = null;
-
-      try {
-        activeSpaceState = await resolveActiveSpaceForUser({
-          userId: user.id,
-          userEmail: user.email ?? null,
-          requestedSpaceId: fallbackRequestedSpaceId,
-          source: 'chat-settings-page',
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-
-        if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-          const fallbackSpace = await resolveV1TestSpaceFallback({
-            requestedSpaceId: fallbackRequestedSpaceId,
-            source: 'chat-settings-page',
-          });
-
-          if (!fallbackSpace) {
-            redirect('/spaces');
-          }
-
-          activeSpaceId = fallbackSpace.id;
-        } else {
-          throw error;
-        }
-      }
-
-      if (!activeSpaceId) {
-        if (
-          !activeSpaceState?.activeSpace ||
-          activeSpaceState.requestedSpaceWasInvalid
-        ) {
-          notFound();
-        }
-
-        activeSpaceId = activeSpaceState.activeSpace.id;
-      }
-    }
-
-    if (!activeSpaceId) {
-      redirect('/spaces');
-    }
-
-    conversation = await getConversationForUser(conversationId, user.id, {
-      spaceId: activeSpaceId,
-    });
-
-    if (!conversation) {
-      notFound();
-    }
+  if (routeContext.kind === 'requested_space_invalid') {
+    notFound();
   }
+
+  if (routeContext.kind === 'space_unavailable') {
+    redirect('/spaces');
+  }
+
+  const {
+    activeSpaceId,
+    conversation,
+    isV1TestBypass,
+  } = routeContext.context;
 
   const language = await getRequestLanguage();
   const t = getTranslations(language);

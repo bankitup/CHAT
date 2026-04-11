@@ -3,7 +3,7 @@
 ## Purpose
 
 This document defines the hard governance, ownership, and isolation contract
-for all spaces in the shared CHAT + KeepCozy repository.
+for all spaces in the BWC platform repository.
 
 The goal is to make future space profiles, KeepCozy object provisioning, and
 product-surface splits build on one explicit rule set instead of relying on
@@ -23,9 +23,11 @@ Related documents:
 - [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
-- [types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/types.ts)
 - [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+- [governance.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/governance.ts)
+- [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+- [contract-types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/contract-types.ts)
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts)
 - [2026-04-03-spaces-v1.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-03-spaces-v1.sql)
 - [2026-04-08-spaces-runtime-contract-align.sql](/Users/danya/IOS%20-%20Apps/CHAT/docs/sql/2026-04-08-spaces-runtime-contract-align.sql)
@@ -65,6 +67,19 @@ The repository already has the first hard boundary primitives:
   [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/spaces/new/page.tsx)
   with provisioning logic in
   [write-server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/write-server.ts)
+
+Current platform ownership inside `src/modules/spaces` is:
+
+- [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+  for shared platform space types
+- [governance.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/governance.ts)
+  for shared governance resolution
+- [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
+  for shared profile/theme compatibility posture
+- [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+  for access loading and runtime resolution
+- [write-server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/write-server.ts)
+  for governed space writes
 
 The repository does not yet have:
 
@@ -158,7 +173,7 @@ In plain language:
 - a space is an isolation boundary, not just a UI grouping
 - belonging to one space must never imply visibility into another space
 - profile differences must never widen access across spaces
-- KeepCozy and CHAT must share the same boundary, not maintain parallel
+- Messenger and KeepCozy must share the same boundary, not maintain parallel
   ownership systems
 
 Practical consequences:
@@ -359,7 +374,7 @@ Must not be allowed:
 - silent creation of a second parallel space around an already-governed object
 - object rebinding across spaces without a reviewed audited path
 
-## 7. Governance Guardrails for Shared CHAT + KeepCozy Architecture
+## 7. Governance Guardrails for BWC Platform Architecture
 
 These guardrails should remain explicit in later branches.
 
