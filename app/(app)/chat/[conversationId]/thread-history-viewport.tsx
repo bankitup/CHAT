@@ -233,6 +233,8 @@ type VoiceMessageRenderState =
   | 'ready'
   | 'failed';
 
+type VoiceMessagePlayIconState = 'error' | 'loading' | 'pause' | 'play';
+
 type ThreadVoicePlaybackCacheEntry = {
   durationMs: number | null;
   playbackUrl: string | null;
@@ -723,11 +725,10 @@ function resolvePreferredThreadVoicePlaybackUrl(input: {
 }) {
   if (
     input.cacheEntry?.warmed &&
-    input.cacheEntry.playbackUrl?.startsWith('blob:') &&
-    (!input.attachmentSignedUrl ||
-      !input.cacheEntry.sourceUrl ||
-      input.cacheEntry.sourceUrl === input.attachmentSignedUrl)
+    input.cacheEntry.playbackUrl?.startsWith('blob:')
   ) {
+    // Once we have a warmed in-session blob for this stable voice cache key,
+    // prefer it over a freshly rotated signed URL so replay/re-entry stay hot.
     return input.cacheEntry.playbackUrl;
   }
 
@@ -880,7 +881,8 @@ async function warmThreadVoicePlaybackSource(input: {
       const objectUrl = URL.createObjectURL(blob);
       writeThreadVoicePlaybackCacheEntry(cacheKey, {
         playbackUrl: objectUrl,
-        sessionReady: false,
+        sessionReady:
+          threadVoicePlaybackCache.get(cacheKey)?.sessionReady ?? false,
         sourceUrl,
         warmed: true,
       });
@@ -1198,6 +1200,36 @@ function getVoiceMessageStateLabel(input: {
     default:
       return input.t.chat.voiceMessage;
   }
+}
+
+function resolveVoiceMessagePlayIconState(input: {
+  playbackState: MessagingVoicePlaybackState;
+  voiceState: VoiceMessageRenderState;
+}) {
+  if (input.voiceState === 'failed') {
+    return 'error' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (
+    input.voiceState === 'uploading' ||
+    input.voiceState === 'processing'
+  ) {
+    return 'loading' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (input.voiceState === 'pending') {
+    return 'play' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (input.playbackState === 'buffering') {
+    return 'loading' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (input.playbackState === 'playing') {
+    return 'pause' satisfies VoiceMessagePlayIconState;
+  }
+
+  return 'play' satisfies VoiceMessagePlayIconState;
 }
 
 function getMessageSeq(value: number | string) {
@@ -1545,6 +1577,7 @@ function ThreadVoiceMessageBubble({
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
+  const lastVoicePointerActivationAtRef = useRef(0);
   const hasRecoverableAttachmentStorageLocator = hasRecoverableAttachmentLocator(
     attachment,
     messageId,
@@ -1617,16 +1650,10 @@ function ThreadVoiceMessageBubble({
           )}`
         : formatVoiceDuration(resolvedDurationMs)
       : '--:--';
-  const playIconState =
-    voiceState !== 'ready'
-      ? voiceState === 'failed'
-        ? 'error'
-        : 'loading'
-      : isBuffering
-        ? 'loading'
-        : isPlaying
-          ? 'pause'
-          : 'play';
+  const playIconState = resolveVoiceMessagePlayIconState({
+    playbackState,
+    voiceState,
+  });
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -1683,6 +1710,13 @@ function ThreadVoiceMessageBubble({
         sourceUrl: cachedSourceUrl ?? effectiveSignedUrl,
         warmed: Boolean(effectiveSignedUrl.startsWith('blob:')),
       });
+      setPlaybackState((current) =>
+        current === 'buffering'
+          ? audio.currentTime > 0
+            ? 'paused'
+            : 'idle'
+          : current,
+      );
       return;
     }
 
@@ -1973,10 +2007,44 @@ function ThreadVoiceMessageBubble({
     [],
   );
 
+  const handleVoiceSurfacePointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const handleVoiceSurfaceContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const activateVoiceFromPointer = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType === 'mouse' || event.button !== 0) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      lastVoicePointerActivationAtRef.current = Date.now();
+      void togglePlayback();
+    },
+    [togglePlayback],
+  );
+
   const handleVoiceSurfaceClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
+
+      if (Date.now() - lastVoicePointerActivationAtRef.current < 420) {
+        return;
+      }
+
       void togglePlayback();
     },
     [togglePlayback],
@@ -1996,6 +2064,20 @@ function ThreadVoiceMessageBubble({
     [handleVoiceSurfaceClick],
   );
 
+  const handleVoiceCardPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('.message-voice-play')
+      ) {
+        return;
+      }
+
+      activateVoiceFromPointer(event);
+    },
+    [activateVoiceFromPointer],
+  );
+
   return (
     <div
       className={
@@ -2008,14 +2090,22 @@ function ThreadVoiceMessageBubble({
       data-play-intent={hasPendingPlaybackIntent ? 'pending' : 'idle'}
       data-voice-state={voiceState}
       onClick={handleVoiceCardClick}
+      onContextMenu={handleVoiceSurfaceContextMenu}
+      onPointerCancelCapture={handleVoiceSurfacePointerUp}
       onPointerDown={handleVoiceSurfacePointerDown}
+      onPointerDownCapture={handleVoiceSurfacePointerDown}
+      onPointerUp={handleVoiceCardPointerUp}
     >
       <button
         aria-label={playButtonLabel}
         className="message-voice-play"
         disabled={voiceState !== 'ready' && !canResolveSignedUrl}
         onClick={handleVoiceSurfaceClick}
+        onContextMenu={handleVoiceSurfaceContextMenu}
+        onPointerCancelCapture={handleVoiceSurfacePointerUp}
         onPointerDown={handleVoiceSurfacePointerDown}
+        onPointerDownCapture={handleVoiceSurfacePointerDown}
+        onPointerUp={activateVoiceFromPointer}
         type="button"
       >
         <span
@@ -2071,6 +2161,15 @@ function ThreadVoiceMessageBubble({
               sourceUrl: stablePlaybackSource,
               warmed: Boolean(stablePlaybackSource?.startsWith('blob:')),
             });
+            if (
+              !hasPendingPlaybackIntent &&
+              playbackState === 'buffering' &&
+              event.currentTarget.paused
+            ) {
+              setPlaybackState(
+                event.currentTarget.currentTime > 0 ? 'paused' : 'idle',
+              );
+            }
           }}
           onEnded={(event) => {
             releaseActiveThreadVoicePlayback(messageId, event.currentTarget);
