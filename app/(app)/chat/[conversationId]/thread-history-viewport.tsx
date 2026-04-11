@@ -2103,6 +2103,10 @@ function ThreadVoiceMessageBubble({
           startX: event.clientX,
           startY: event.clientY,
         };
+
+        if (event.pointerType !== 'mouse') {
+          event.preventDefault();
+        }
       }
       event.stopPropagation();
     },
