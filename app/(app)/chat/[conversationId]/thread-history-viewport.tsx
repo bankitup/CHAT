@@ -1578,6 +1578,13 @@ function ThreadVoiceMessageBubble({
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
   const lastVoicePointerActivationAtRef = useRef(0);
+  const playbackTogglePromiseRef = useRef<Promise<void> | null>(null);
+  const voiceTapGestureRef = useRef<{
+    didMove: boolean;
+    pointerId: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
   const hasRecoverableAttachmentStorageLocator = hasRecoverableAttachmentLocator(
     attachment,
     messageId,
@@ -1958,7 +1965,7 @@ function ThreadVoiceMessageBubble({
     voiceState,
   ]);
 
-  const togglePlayback = useCallback(async () => {
+  const togglePlaybackUnsafe = useCallback(async () => {
     if (voiceState !== 'ready') {
       if (canResolveSignedUrl) {
         setHasPendingPlaybackIntent(true);
@@ -1976,8 +1983,10 @@ function ThreadVoiceMessageBubble({
     }
 
     if (audio.paused) {
+      if (hasPendingPlaybackIntent) {
+        return;
+      }
       setHasPendingPlaybackIntent(true);
-      await startPlayback();
       return;
     }
 
@@ -1985,11 +1994,26 @@ function ThreadVoiceMessageBubble({
     audio.pause();
   }, [
     canResolveSignedUrl,
+    hasPendingPlaybackIntent,
     isResolvingSignedUrl,
     resolveSignedUrl,
-    startPlayback,
     voiceState,
   ]);
+
+  const togglePlayback = useCallback(() => {
+    if (playbackTogglePromiseRef.current) {
+      return playbackTogglePromiseRef.current;
+    }
+
+    const nextPromise = (async () => {
+      await togglePlaybackUnsafe();
+    })().finally(() => {
+      playbackTogglePromiseRef.current = null;
+    });
+
+    playbackTogglePromiseRef.current = nextPromise;
+    return nextPromise;
+  }, [togglePlaybackUnsafe]);
 
   const playButtonLabel =
     voiceState !== 'ready'
@@ -2002,6 +2026,34 @@ function ThreadVoiceMessageBubble({
 
   const handleVoiceSurfacePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.button === 0) {
+        voiceTapGestureRef.current = {
+          didMove: false,
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+        };
+      }
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const handleVoiceSurfacePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const activeGesture = voiceTapGestureRef.current;
+
+      if (!activeGesture || activeGesture.pointerId !== event.pointerId) {
+        return;
+      }
+
+      if (
+        Math.abs(event.clientX - activeGesture.startX) > 10 ||
+        Math.abs(event.clientY - activeGesture.startY) > 10
+      ) {
+        activeGesture.didMove = true;
+      }
+
       event.stopPropagation();
     },
     [],
@@ -2009,6 +2061,11 @@ function ThreadVoiceMessageBubble({
 
   const handleVoiceSurfacePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
+      if (
+        voiceTapGestureRef.current?.pointerId === event.pointerId
+      ) {
+        voiceTapGestureRef.current = null;
+      }
       event.stopPropagation();
     },
     [],
@@ -2066,10 +2123,17 @@ function ThreadVoiceMessageBubble({
 
   const handleVoiceCardPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (
-        event.target instanceof HTMLElement &&
-        event.target.closest('.message-voice-play')
-      ) {
+      const activeGesture = voiceTapGestureRef.current;
+
+      if (!activeGesture || activeGesture.pointerId !== event.pointerId) {
+        event.stopPropagation();
+        return;
+      }
+
+      voiceTapGestureRef.current = null;
+
+      if (activeGesture.didMove) {
+        event.stopPropagation();
         return;
       }
 
@@ -2092,8 +2156,8 @@ function ThreadVoiceMessageBubble({
       onClick={handleVoiceCardClick}
       onContextMenu={handleVoiceSurfaceContextMenu}
       onPointerCancelCapture={handleVoiceSurfacePointerUp}
-      onPointerDown={handleVoiceSurfacePointerDown}
       onPointerDownCapture={handleVoiceSurfacePointerDown}
+      onPointerMove={handleVoiceSurfacePointerMove}
       onPointerUp={handleVoiceCardPointerUp}
     >
       <button
@@ -2102,10 +2166,6 @@ function ThreadVoiceMessageBubble({
         disabled={voiceState !== 'ready' && !canResolveSignedUrl}
         onClick={handleVoiceSurfaceClick}
         onContextMenu={handleVoiceSurfaceContextMenu}
-        onPointerCancelCapture={handleVoiceSurfacePointerUp}
-        onPointerDown={handleVoiceSurfacePointerDown}
-        onPointerDownCapture={handleVoiceSurfacePointerDown}
-        onPointerUp={activateVoiceFromPointer}
         type="button"
       >
         <span
