@@ -294,7 +294,7 @@ const activeThreadVoicePlayback: {
   intendedMessageId: string | null;
   messageId: string | null;
   ownerVersion: number;
-  transitionPromise: Promise<void> | null;
+  transitionPromise: Promise<unknown> | null;
 } = {
   audio: null,
   intendedMessageId: null,
@@ -313,9 +313,11 @@ function getActiveThreadVoicePlaybackSnapshot() {
   };
 }
 
-function runActiveThreadVoicePlaybackTransition(task: () => Promise<void> | void) {
+function runActiveThreadVoicePlaybackTransition<T>(
+  task: () => Promise<T> | T,
+) {
   const previousTransition = activeThreadVoicePlayback.transitionPromise;
-  const nextTransition = (previousTransition ?? Promise.resolve())
+  const nextTransition: Promise<T> = (previousTransition ?? Promise.resolve())
     .catch(() => undefined)
     .then(task)
     .finally(() => {
@@ -326,6 +328,65 @@ function runActiveThreadVoicePlaybackTransition(task: () => Promise<void> | void
 
   activeThreadVoicePlayback.transitionPromise = nextTransition;
   return nextTransition;
+}
+
+type ThreadVoicePlaybackOwnership =
+  | {
+      audio: HTMLAudioElement;
+      ownerVersion: number;
+      status: 'active-owner';
+    }
+  | {
+      audio: HTMLAudioElement;
+      ownerMessageId: string;
+      ownerVersion: number;
+      status: 'other-owner';
+    }
+  | {
+      status: 'intended-owner';
+    }
+  | {
+      status: 'idle';
+    };
+
+function resolveActiveThreadVoicePlaybackOwnership(input: {
+  audio: HTMLAudioElement | null;
+  messageId: string;
+}): ThreadVoicePlaybackOwnership {
+  if (
+    input.audio &&
+    activeThreadVoicePlayback.audio === input.audio &&
+    activeThreadVoicePlayback.messageId === input.messageId
+  ) {
+    return {
+      audio: input.audio,
+      ownerVersion: activeThreadVoicePlayback.ownerVersion,
+      status: 'active-owner',
+    };
+  }
+
+  if (
+    activeThreadVoicePlayback.audio &&
+    activeThreadVoicePlayback.messageId &&
+    activeThreadVoicePlayback.messageId !== input.messageId
+  ) {
+    return {
+      audio: activeThreadVoicePlayback.audio,
+      ownerMessageId: activeThreadVoicePlayback.messageId,
+      ownerVersion: activeThreadVoicePlayback.ownerVersion,
+      status: 'other-owner',
+    };
+  }
+
+  if (activeThreadVoicePlayback.intendedMessageId === input.messageId) {
+    return {
+      status: 'intended-owner',
+    };
+  }
+
+  return {
+    status: 'idle',
+  };
 }
 
 function claimActiveThreadVoicePlayback(
@@ -1674,7 +1735,7 @@ function ThreadVoiceMessageBubble({
     void resolveSignedUrl();
   }, [canResolveSignedUrl, resolveSignedUrl, voiceState]);
 
-  const startPlayback = useCallback(
+  const startPlaybackUnsafe = useCallback(
     async (playbackSourceOverride?: string | null) => {
       const audio = audioRef.current;
       const nextPlaybackSource =
@@ -1757,6 +1818,23 @@ function ThreadVoiceMessageBubble({
       }
     },
     [effectiveVoicePlaybackSourceUrl, messageId],
+  );
+
+  const startPlayback = useCallback(
+    (playbackSourceOverride?: string | null) => {
+      return runActiveThreadVoicePlaybackTransition(async () => {
+        if (!hasActiveThreadVoicePlaybackIntent(messageId)) {
+          logVoiceThreadDiagnostic('playback-start-stopped-not-intended', {
+            messageId,
+          });
+          setHasPendingPlaybackIntent(false);
+          return false;
+        }
+
+        return startPlaybackUnsafe(playbackSourceOverride);
+      });
+    },
+    [messageId, startPlaybackUnsafe],
   );
 
   useEffect(() => {
@@ -1881,28 +1959,20 @@ function ThreadVoiceMessageBubble({
   const togglePlaybackUnsafe = useCallback(async () => {
     const audio = audioRef.current;
     const activePlaybackSnapshot = getActiveThreadVoicePlaybackSnapshot();
-    const isCurrentMessageActiveOwner =
-      Boolean(audio) &&
-      activePlaybackSnapshot.audio === audio &&
-      activePlaybackSnapshot.messageId === messageId;
-    const hasDifferentActiveOwner =
-      Boolean(activePlaybackSnapshot.audio) &&
-      Boolean(activePlaybackSnapshot.messageId) &&
-      activePlaybackSnapshot.messageId !== messageId;
-    const isCurrentMessageIntended =
-      activePlaybackSnapshot.intendedMessageId === messageId;
+    const ownership = resolveActiveThreadVoicePlaybackOwnership({
+      audio,
+      messageId,
+    });
 
     logVoiceThreadDiagnostic('voice-toggle-requested', {
       activeOwnerMessageId: activePlaybackSnapshot.messageId,
       canResolveSignedUrl,
       hasAudioElement: Boolean(audio),
-      hasDifferentActiveOwner,
       hasPendingPlaybackIntent,
       hasPlaybackSource,
       hasTransportSource: Boolean(effectiveVoiceTransportSourceUrl),
-      isCurrentMessageActiveOwner,
-      isCurrentMessageIntended,
       messageId,
+      ownershipStatus: ownership.status,
       playbackState,
       voiceInteractionAvailability,
       voiceState,
@@ -1920,8 +1990,8 @@ function ThreadVoiceMessageBubble({
     if (voiceInteractionAvailability === 'retryable') {
       logVoiceThreadDiagnostic('voice-toggle-entered-retry', {
         canResolveSignedUrl,
-        hasDifferentActiveOwner,
         messageId,
+        ownershipStatus: ownership.status,
       });
       setPlaybackFailed(false);
       requestActiveThreadVoicePlaybackIntent(messageId);
@@ -1940,8 +2010,8 @@ function ThreadVoiceMessageBubble({
       logVoiceThreadDiagnostic('voice-toggle-missing-audio-element', {
         activeOwnerMessageId: activePlaybackSnapshot.messageId,
         canResolveSignedUrl,
-        hasDifferentActiveOwner,
         messageId,
+        ownershipStatus: ownership.status,
       });
       if (canResolveSignedUrl) {
         requestActiveThreadVoicePlaybackIntent(messageId);
@@ -1953,9 +2023,10 @@ function ThreadVoiceMessageBubble({
       return;
     }
 
-    if (isCurrentMessageActiveOwner && !audio.paused) {
+    if (ownership.status === 'active-owner' && !audio.paused) {
       logVoiceThreadDiagnostic('voice-toggle-pausing-active-audio', {
         messageId,
+        ownerVersion: ownership.ownerVersion,
         playbackState,
       });
       if (hasActiveThreadVoicePlaybackIntent(messageId)) {
@@ -1966,10 +2037,11 @@ function ThreadVoiceMessageBubble({
       return;
     }
 
-    if (hasDifferentActiveOwner) {
+    if (ownership.status === 'other-owner') {
       logVoiceThreadDiagnostic('voice-toggle-switching-active-owner', {
-        activeOwnerMessageId: activePlaybackSnapshot.messageId,
+        activeOwnerMessageId: ownership.ownerMessageId,
         messageId,
+        ownerVersion: ownership.ownerVersion,
       });
       requestActiveThreadVoicePlaybackIntent(messageId);
       setHasPendingPlaybackIntent(true);
@@ -1994,7 +2066,10 @@ function ThreadVoiceMessageBubble({
     }
 
     if (audio.paused) {
-      if (hasPendingPlaybackIntent || isCurrentMessageIntended) {
+      if (
+        hasPendingPlaybackIntent ||
+        ownership.status === 'intended-owner'
+      ) {
         logVoiceThreadDiagnostic('voice-toggle-ignored-duplicate-intent', {
           messageId,
         });
@@ -2010,8 +2085,8 @@ function ThreadVoiceMessageBubble({
     }
   }, [
     canResolveSignedUrl,
-    effectiveVoiceTransportSourceUrl,
     effectiveVoicePlaybackSourceUrl,
+    effectiveVoiceTransportSourceUrl,
     hasPlaybackSource,
     hasPendingPlaybackIntent,
     isVoicePlayable,
