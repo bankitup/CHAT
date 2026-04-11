@@ -233,6 +233,11 @@ type VoiceMessageRenderState =
   | 'ready'
   | 'failed';
 
+type VoiceMessageInteractionAvailability =
+  | 'disabled'
+  | 'playable'
+  | 'retryable';
+
 type VoiceMessagePlayIconState = 'error' | 'loading' | 'pause' | 'play';
 
 type ThreadVoicePlaybackCacheEntry = {
@@ -956,20 +961,20 @@ function resolveVoiceMessageRenderState(input: {
     input.attachment?.signedUrl,
   );
 
-  if (input.stageHint === 'uploading') {
-    return 'uploading' satisfies VoiceMessageRenderState;
-  }
-
-  if (input.stageHint === 'processing') {
-    return 'processing' satisfies VoiceMessageRenderState;
-  }
-
   if (input.stageHint === 'failed' || input.playbackFailed) {
     return 'failed' satisfies VoiceMessageRenderState;
   }
 
   if (normalizedSignedUrl) {
     return 'ready' satisfies VoiceMessageRenderState;
+  }
+
+  if (input.stageHint === 'uploading') {
+    return 'uploading' satisfies VoiceMessageRenderState;
+  }
+
+  if (input.stageHint === 'processing') {
+    return 'processing' satisfies VoiceMessageRenderState;
   }
 
   if (input.isResolvingSignedUrl) {
@@ -998,14 +1003,6 @@ function resolveVoiceMessageRenderReason(input: {
     input.attachment?.signedUrl,
   );
 
-  if (input.stageHint === 'uploading') {
-    return 'stage-uploading';
-  }
-
-  if (input.stageHint === 'processing') {
-    return 'stage-processing';
-  }
-
   if (input.stageHint === 'failed') {
     return 'stage-failed';
   }
@@ -1016,6 +1013,14 @@ function resolveVoiceMessageRenderReason(input: {
 
   if (normalizedSignedUrl) {
     return 'signed-url-ready';
+  }
+
+  if (input.stageHint === 'uploading') {
+    return 'stage-uploading';
+  }
+
+  if (input.stageHint === 'processing') {
+    return 'stage-processing';
   }
 
   if (input.isResolvingSignedUrl) {
@@ -1238,6 +1243,43 @@ function getVoiceMessageStateLabel(input: {
     default:
       return input.t.chat.voiceMessage;
   }
+}
+
+function resolveVoiceMessageInteractionAvailability(input: {
+  canResolveSignedUrl: boolean;
+  hasPlaybackSource: boolean;
+  voiceState: VoiceMessageRenderState;
+}) {
+  if (input.voiceState === 'ready') {
+    return 'playable' satisfies VoiceMessageInteractionAvailability;
+  }
+
+  if (
+    input.voiceState === 'failed' &&
+    (input.hasPlaybackSource || input.canResolveSignedUrl)
+  ) {
+    return 'retryable' satisfies VoiceMessageInteractionAvailability;
+  }
+
+  return 'disabled' satisfies VoiceMessageInteractionAvailability;
+}
+
+function resolveVoiceMessageStateNote(input: {
+  interactionAvailability: VoiceMessageInteractionAvailability;
+  state: VoiceMessageRenderState;
+  t: ReturnType<typeof getTranslations>;
+}) {
+  if (input.state === 'pending') {
+    return input.t.chat.voiceMessagePendingHint;
+  }
+
+  if (input.state === 'failed') {
+    return input.interactionAvailability === 'retryable'
+      ? input.t.chat.voiceMessageRetryHint
+      : input.t.chat.voiceMessageUnavailable;
+  }
+
+  return null;
 }
 
 function resolveVoiceMessagePlayIconState(input: {
@@ -1640,6 +1682,7 @@ function ThreadVoiceMessageBubble({
   const canResolveSignedUrl =
     Boolean(conversationId && hasRecoverableAttachmentStorageLocator) &&
     !effectiveSignedUrl;
+  const hasPlaybackSource = Boolean(effectiveSignedUrl);
   const voiceStateInput = {
     attachment:
       attachment === null
@@ -1656,6 +1699,11 @@ function ThreadVoiceMessageBubble({
 
   const voiceState = resolveVoiceMessageRenderState(voiceStateInput);
   const voiceRenderReason = resolveVoiceMessageRenderReason(voiceStateInput);
+  const voiceInteractionAvailability = resolveVoiceMessageInteractionAvailability({
+    canResolveSignedUrl,
+    hasPlaybackSource,
+    voiceState,
+  });
   const totalDurationMs = resolvedDurationMs && resolvedDurationMs > 0
     ? resolvedDurationMs
     : 0;
@@ -1676,16 +1724,11 @@ function ThreadVoiceMessageBubble({
   const stateNote =
     voiceState === 'ready'
       ? null
-      : voiceState === 'pending'
-        ? t.chat.voiceMessagePendingHint
-        : voiceState === 'failed' &&
-            canResolveSignedUrl &&
-            didFailSignedUrlResolve &&
-            !isResolvingSignedUrl
-          ? t.chat.voiceMessageRetryHint
-          : voiceState === 'failed' && !canResolveSignedUrl
-            ? t.chat.voiceMessageUnavailable
-            : null;
+      : resolveVoiceMessageStateNote({
+          interactionAvailability: voiceInteractionAvailability,
+          state: voiceState,
+          t,
+        });
   const durationLabel =
     voiceState === 'ready'
       ? playbackState === 'playing' ||
@@ -1700,6 +1743,9 @@ function ThreadVoiceMessageBubble({
     playbackState,
     voiceState,
   });
+  const isVoicePlayable = voiceInteractionAvailability === 'playable';
+  const canRetryVoicePlayback =
+    voiceInteractionAvailability === 'retryable';
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -2046,7 +2092,27 @@ function ThreadVoiceMessageBubble({
   ]);
 
   const togglePlaybackUnsafe = useCallback(async () => {
-    if (voiceState !== 'ready') {
+    if (voiceInteractionAvailability === 'disabled') {
+      return;
+    }
+
+    if (voiceInteractionAvailability === 'retryable') {
+      setPlaybackFailed(false);
+      setActiveThreadVoicePlaybackIntent(messageId);
+      setHasPendingPlaybackIntent(true);
+      if (canResolveSignedUrl && !isResolvingSignedUrl) {
+        void resolveSignedUrl();
+      }
+      return;
+    }
+
+    if (!isVoicePlayable) {
+      return;
+    }
+
+    const audio = audioRef.current;
+
+    if (!audio) {
       if (canResolveSignedUrl) {
         setActiveThreadVoicePlaybackIntent(messageId);
         setHasPendingPlaybackIntent(true);
@@ -2054,12 +2120,6 @@ function ThreadVoiceMessageBubble({
           void resolveSignedUrl();
         }
       }
-      return;
-    }
-
-    const audio = audioRef.current;
-
-    if (!audio) {
       return;
     }
 
@@ -2080,10 +2140,11 @@ function ThreadVoiceMessageBubble({
   }, [
     canResolveSignedUrl,
     hasPendingPlaybackIntent,
+    isVoicePlayable,
     isResolvingSignedUrl,
     messageId,
+    voiceInteractionAvailability,
     resolveSignedUrl,
-    voiceState,
   ]);
 
   const togglePlayback = useCallback(() => {
@@ -2102,7 +2163,7 @@ function ThreadVoiceMessageBubble({
   }, [togglePlaybackUnsafe]);
 
   const playButtonLabel =
-    voiceState !== 'ready'
+    !isVoicePlayable
       ? stateLabel
       : isBuffering
         ? t.chat.voiceMessageLoading
@@ -2238,6 +2299,7 @@ function ThreadVoiceMessageBubble({
       data-message-voice-interactive="true"
       data-playback-state={voiceState === 'ready' ? playbackState : voiceState}
       data-play-intent={hasPendingPlaybackIntent ? 'pending' : 'idle'}
+      data-voice-interaction={voiceInteractionAvailability}
       data-voice-state={voiceState}
       onClick={handleVoiceCardClick}
       onContextMenu={handleVoiceSurfaceContextMenu}
@@ -2249,7 +2311,10 @@ function ThreadVoiceMessageBubble({
       <button
         aria-label={playButtonLabel}
         className="message-voice-play"
-        disabled={voiceState !== 'ready' && !canResolveSignedUrl}
+        disabled={
+          !isVoicePlayable &&
+          !canRetryVoicePlayback
+        }
         onClick={handleVoiceSurfaceClick}
         onContextMenu={handleVoiceSurfaceContextMenu}
         type="button"
