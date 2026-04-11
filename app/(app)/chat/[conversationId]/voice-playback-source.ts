@@ -40,6 +40,12 @@ export type ThreadVoiceTransportSourceResolution =
       transportSourceUrl: string | null;
     };
 
+export type ThreadVoicePreparedPlaybackSource = {
+  playbackSourceUrl: string | null;
+  status: ThreadVoiceTransportSourceResolution['status'];
+  transportSourceUrl: string | null;
+};
+
 type ThreadVoiceTransportSourceResolver = (input: {
   transportSourceUrl: string;
 }) => Promise<Blob | string | null>;
@@ -387,6 +393,57 @@ export async function resolveThreadVoiceTransportSourceUrl(input: {
       transportSourceUrl: null,
     };
   }
+}
+
+export async function prepareThreadVoicePlaybackSource(input: {
+  cacheKey: string | null;
+  locator: ThreadVoiceTransportSourceLocator;
+  onDiagnostic?: ThreadVoiceSourceDiagnosticLogger;
+  resolveTransportSource?: ThreadVoiceTransportSourceResolver;
+  transportSourceUrl: string | null;
+}): Promise<ThreadVoicePreparedPlaybackSource> {
+  // This is the thread's one player-facing resolver boundary:
+  // committed voice locator -> transport source -> local playable source.
+  // Future encrypted voice can swap the inside of this function to resolve
+  // ciphertext and return a decrypted object URL without rewriting the player.
+  let transportSourceUrl =
+    typeof input.transportSourceUrl === 'string' &&
+    input.transportSourceUrl.trim()
+      ? input.transportSourceUrl.trim()
+      : null;
+  let status: ThreadVoiceTransportSourceResolution['status'] =
+    transportSourceUrl ? 'resolved' : 'skipped';
+
+  if (!transportSourceUrl) {
+    const transportResolution = await resolveThreadVoiceTransportSourceUrl({
+      locator: input.locator,
+      onDiagnostic: input.onDiagnostic,
+    });
+
+    status = transportResolution.status;
+    transportSourceUrl = transportResolution.transportSourceUrl;
+  }
+
+  if (!transportSourceUrl) {
+    return {
+      playbackSourceUrl: null,
+      status,
+      transportSourceUrl: null,
+    };
+  }
+
+  const playbackSourceUrl = await resolveLocalThreadVoicePlaybackSource({
+    cacheKey: input.cacheKey,
+    onDiagnostic: input.onDiagnostic,
+    resolveTransportSource: input.resolveTransportSource,
+    transportSourceUrl,
+  });
+
+  return {
+    playbackSourceUrl: playbackSourceUrl ?? transportSourceUrl,
+    status: 'resolved',
+    transportSourceUrl,
+  };
 }
 
 export async function resolveLocalThreadVoicePlaybackSource(input: {
