@@ -299,6 +299,15 @@ const activeThreadVoicePlayback: {
   ownerVersion: 0,
 };
 
+function getActiveThreadVoicePlaybackSnapshot() {
+  return {
+    audio: activeThreadVoicePlayback.audio,
+    intendedMessageId: activeThreadVoicePlayback.intendedMessageId,
+    messageId: activeThreadVoicePlayback.messageId,
+    ownerVersion: activeThreadVoicePlayback.ownerVersion,
+  };
+}
+
 function claimActiveThreadVoicePlayback(
   messageId: string,
   audio: HTMLAudioElement,
@@ -321,6 +330,18 @@ function claimActiveThreadVoicePlayback(
 
 function setActiveThreadVoicePlaybackIntent(messageId: string | null) {
   activeThreadVoicePlayback.intendedMessageId = messageId;
+}
+
+function requestActiveThreadVoicePlaybackIntent(messageId: string) {
+  activeThreadVoicePlayback.intendedMessageId = messageId;
+
+  if (
+    activeThreadVoicePlayback.audio &&
+    activeThreadVoicePlayback.messageId &&
+    activeThreadVoicePlayback.messageId !== messageId
+  ) {
+    activeThreadVoicePlayback.audio.pause();
+  }
 }
 
 function hasActiveThreadVoicePlaybackIntent(messageId: string) {
@@ -1942,12 +1963,29 @@ function ThreadVoiceMessageBubble({
   ]);
 
   const togglePlaybackUnsafe = useCallback(async () => {
+    const audio = audioRef.current;
+    const activePlaybackSnapshot = getActiveThreadVoicePlaybackSnapshot();
+    const isCurrentMessageActiveOwner =
+      Boolean(audio) &&
+      activePlaybackSnapshot.audio === audio &&
+      activePlaybackSnapshot.messageId === messageId;
+    const hasDifferentActiveOwner =
+      Boolean(activePlaybackSnapshot.audio) &&
+      Boolean(activePlaybackSnapshot.messageId) &&
+      activePlaybackSnapshot.messageId !== messageId;
+    const isCurrentMessageIntended =
+      activePlaybackSnapshot.intendedMessageId === messageId;
+
     logVoiceThreadDiagnostic('voice-toggle-requested', {
+      activeOwnerMessageId: activePlaybackSnapshot.messageId,
       canResolveSignedUrl,
-      hasAudioElement: Boolean(audioRef.current),
+      hasAudioElement: Boolean(audio),
+      hasDifferentActiveOwner,
       hasPendingPlaybackIntent,
       hasPlaybackSource,
       hasTransportSource: Boolean(effectiveVoiceTransportSourceUrl),
+      isCurrentMessageActiveOwner,
+      isCurrentMessageIntended,
       messageId,
       playbackState,
       voiceInteractionAvailability,
@@ -1966,10 +2004,11 @@ function ThreadVoiceMessageBubble({
     if (voiceInteractionAvailability === 'retryable') {
       logVoiceThreadDiagnostic('voice-toggle-entered-retry', {
         canResolveSignedUrl,
+        hasDifferentActiveOwner,
         messageId,
       });
       setPlaybackFailed(false);
-      setActiveThreadVoicePlaybackIntent(messageId);
+      requestActiveThreadVoicePlaybackIntent(messageId);
       setHasPendingPlaybackIntent(true);
       if (canResolveSignedUrl && !isResolvingSignedUrl) {
         void resolveSignedUrl();
@@ -1981,15 +2020,15 @@ function ThreadVoiceMessageBubble({
       return;
     }
 
-    const audio = audioRef.current;
-
     if (!audio) {
       logVoiceThreadDiagnostic('voice-toggle-missing-audio-element', {
+        activeOwnerMessageId: activePlaybackSnapshot.messageId,
         canResolveSignedUrl,
+        hasDifferentActiveOwner,
         messageId,
       });
       if (canResolveSignedUrl) {
-        setActiveThreadVoicePlaybackIntent(messageId);
+        requestActiveThreadVoicePlaybackIntent(messageId);
         setHasPendingPlaybackIntent(true);
         if (!isResolvingSignedUrl) {
           void resolveSignedUrl();
@@ -1998,8 +2037,48 @@ function ThreadVoiceMessageBubble({
       return;
     }
 
+    if (isCurrentMessageActiveOwner && !audio.paused) {
+      logVoiceThreadDiagnostic('voice-toggle-pausing-active-audio', {
+        messageId,
+        playbackState,
+      });
+      if (hasActiveThreadVoicePlaybackIntent(messageId)) {
+        setActiveThreadVoicePlaybackIntent(null);
+      }
+      setHasPendingPlaybackIntent(false);
+      audio.pause();
+      return;
+    }
+
+    if (hasDifferentActiveOwner) {
+      logVoiceThreadDiagnostic('voice-toggle-switching-active-owner', {
+        activeOwnerMessageId: activePlaybackSnapshot.messageId,
+        messageId,
+      });
+      requestActiveThreadVoicePlaybackIntent(messageId);
+      setHasPendingPlaybackIntent(true);
+      if (
+        !effectiveVoicePlaybackSourceUrl &&
+        canResolveSignedUrl &&
+        !isResolvingSignedUrl
+      ) {
+        void resolveSignedUrl();
+      }
+      return;
+    }
+
+    if (!audio.paused) {
+      logVoiceThreadDiagnostic('voice-toggle-pausing-stale-local-audio', {
+        activeOwnerMessageId: activePlaybackSnapshot.messageId,
+        messageId,
+      });
+      setHasPendingPlaybackIntent(false);
+      audio.pause();
+      return;
+    }
+
     if (audio.paused) {
-      if (hasPendingPlaybackIntent) {
+      if (hasPendingPlaybackIntent || isCurrentMessageIntended) {
         logVoiceThreadDiagnostic('voice-toggle-ignored-duplicate-intent', {
           messageId,
         });
@@ -2009,23 +2088,14 @@ function ThreadVoiceMessageBubble({
         messageId,
         playbackState,
       });
-      setActiveThreadVoicePlaybackIntent(messageId);
+      requestActiveThreadVoicePlaybackIntent(messageId);
       setHasPendingPlaybackIntent(true);
       return;
     }
-
-    logVoiceThreadDiagnostic('voice-toggle-pausing-active-audio', {
-      messageId,
-      playbackState,
-    });
-    if (hasActiveThreadVoicePlaybackIntent(messageId)) {
-      setActiveThreadVoicePlaybackIntent(null);
-    }
-    setHasPendingPlaybackIntent(false);
-    audio.pause();
   }, [
     canResolveSignedUrl,
     effectiveVoiceTransportSourceUrl,
+    effectiveVoicePlaybackSourceUrl,
     hasPlaybackSource,
     hasPendingPlaybackIntent,
     isVoicePlayable,
