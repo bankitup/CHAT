@@ -745,96 +745,66 @@ function formatVoiceDuration(valueMs: number | null | undefined) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function resolveVoiceMessageRenderState(input: {
-  attachment: MessageAttachment | null;
+function resolveVoiceMessageRuntimeModel(input: {
+  canResolveSignedUrl: boolean;
   didFailSignedUrlResolve?: boolean;
+  hasAttachment: boolean;
+  hasPlaybackSource: boolean;
+  hasRecoverableAttachmentLocator: boolean;
   isResolvingSignedUrl?: boolean;
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
-  const normalizedSignedUrl = normalizeAttachmentSignedUrl(
-    input.attachment?.signedUrl,
-  );
+  let state: VoiceMessageRenderState;
+  let reason: string;
 
   if (input.stageHint === 'failed' || input.playbackFailed) {
-    return 'failed' satisfies VoiceMessageRenderState;
+    state = 'failed';
+    reason = input.stageHint === 'failed' ? 'stage-failed' : 'playback-failed';
+  } else if (input.hasPlaybackSource) {
+    state = 'ready';
+    reason = 'playback-source-ready';
+  } else if (input.stageHint === 'uploading') {
+    state = 'uploading';
+    reason = 'stage-uploading';
+  } else if (input.stageHint === 'processing') {
+    state = 'processing';
+    reason = 'stage-processing';
+  } else if (input.isResolvingSignedUrl) {
+    state = 'processing';
+    reason = 'signed-url-resolving';
+  } else if (input.didFailSignedUrlResolve) {
+    state = 'failed';
+    reason = 'signed-url-resolve-failed';
+  } else if (input.hasRecoverableAttachmentLocator) {
+    state = 'pending';
+    reason = input.canResolveSignedUrl
+      ? 'storage-locator-awaiting-url'
+      : 'storage-locator-pending';
+  } else if (input.hasAttachment) {
+    state = 'failed';
+    reason = 'attachment-present-without-playback-path';
+  } else {
+    state = 'failed';
+    reason = 'attachment-missing-failed';
   }
 
-  if (normalizedSignedUrl) {
-    return 'ready' satisfies VoiceMessageRenderState;
+  let interactionAvailability: VoiceMessageInteractionAvailability = 'disabled';
+
+  if (state === 'ready') {
+    interactionAvailability = 'playable';
+  } else if (
+    state === 'failed' &&
+    (input.hasPlaybackSource || input.canResolveSignedUrl)
+  ) {
+    interactionAvailability = 'retryable';
   }
 
-  if (input.stageHint === 'uploading') {
-    return 'uploading' satisfies VoiceMessageRenderState;
-  }
-
-  if (input.stageHint === 'processing') {
-    return 'processing' satisfies VoiceMessageRenderState;
-  }
-
-  if (input.isResolvingSignedUrl) {
-    return 'processing' satisfies VoiceMessageRenderState;
-  }
-
-  if (input.didFailSignedUrlResolve) {
-    return 'failed' satisfies VoiceMessageRenderState;
-  }
-
-  if (hasRecoverableAttachmentLocator(input.attachment)) {
-    return 'pending' satisfies VoiceMessageRenderState;
-  }
-
-  return 'failed' satisfies VoiceMessageRenderState;
-}
-
-function resolveVoiceMessageRenderReason(input: {
-  attachment: MessageAttachment | null;
-  didFailSignedUrlResolve?: boolean;
-  isResolvingSignedUrl?: boolean;
-  playbackFailed: boolean;
-  stageHint?: 'uploading' | 'processing' | 'failed' | null;
-}) {
-  const normalizedSignedUrl = normalizeAttachmentSignedUrl(
-    input.attachment?.signedUrl,
-  );
-
-  if (input.stageHint === 'failed') {
-    return 'stage-failed';
-  }
-
-  if (input.playbackFailed) {
-    return 'playback-failed';
-  }
-
-  if (normalizedSignedUrl) {
-    return 'signed-url-ready';
-  }
-
-  if (input.stageHint === 'uploading') {
-    return 'stage-uploading';
-  }
-
-  if (input.stageHint === 'processing') {
-    return 'stage-processing';
-  }
-
-  if (input.isResolvingSignedUrl) {
-    return 'signed-url-resolving';
-  }
-
-  if (input.didFailSignedUrlResolve) {
-    return 'signed-url-resolve-failed';
-  }
-
-  if (hasRecoverableAttachmentLocator(input.attachment)) {
-    return 'storage-locator-present-pending-url';
-  }
-
-  if (input.attachment) {
-    return 'attachment-present-without-playback-path';
-  }
-
-  return 'attachment-missing-failed';
+  return {
+    interactionAvailability,
+    reason,
+    state,
+  };
 }
 
 function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
@@ -1038,25 +1008,6 @@ function getVoiceMessageStateLabel(input: {
     default:
       return input.t.chat.voiceMessage;
   }
-}
-
-function resolveVoiceMessageInteractionAvailability(input: {
-  canResolveSignedUrl: boolean;
-  hasPlaybackSource: boolean;
-  voiceState: VoiceMessageRenderState;
-}) {
-  if (input.voiceState === 'ready') {
-    return 'playable' satisfies VoiceMessageInteractionAvailability;
-  }
-
-  if (
-    input.voiceState === 'failed' &&
-    (input.hasPlaybackSource || input.canResolveSignedUrl)
-  ) {
-    return 'retryable' satisfies VoiceMessageInteractionAvailability;
-  }
-
-  return 'disabled' satisfies VoiceMessageInteractionAvailability;
 }
 
 function resolveVoiceMessageStateNote(input: {
@@ -1498,27 +1449,19 @@ function ThreadVoiceMessageBubble({
     Boolean(conversationId && hasRecoverableAttachmentStorageLocator) &&
     !effectiveVoiceTransportSourceUrl;
   const hasPlaybackSource = Boolean(effectiveVoicePlaybackSourceUrl);
-  const voiceStateInput = {
-    attachment:
-      attachment === null
-        ? null
-        : {
-            ...attachment,
-            signedUrl: effectiveVoicePlaybackSourceUrl,
-          },
+  const voiceRuntimeModel = resolveVoiceMessageRuntimeModel({
+    canResolveSignedUrl,
     didFailSignedUrlResolve,
+    hasAttachment: Boolean(attachment),
+    hasPlaybackSource,
+    hasRecoverableAttachmentLocator: hasRecoverableAttachmentStorageLocator,
     isResolvingSignedUrl,
     playbackFailed,
     stageHint,
-  } as const;
-
-  const voiceState = resolveVoiceMessageRenderState(voiceStateInput);
-  const voiceRenderReason = resolveVoiceMessageRenderReason(voiceStateInput);
-  const voiceInteractionAvailability = resolveVoiceMessageInteractionAvailability({
-    canResolveSignedUrl,
-    hasPlaybackSource,
-    voiceState,
   });
+  const voiceState = voiceRuntimeModel.state;
+  const voiceRenderReason = voiceRuntimeModel.reason;
+  const voiceInteractionAvailability = voiceRuntimeModel.interactionAvailability;
   const totalDurationMs = resolvedDurationMs && resolvedDurationMs > 0
     ? resolvedDurationMs
     : 0;
@@ -1645,10 +1588,32 @@ function ThreadVoiceMessageBubble({
   }, [
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
-    rememberVoicePlaybackCacheEntry,
-    resolvedDurationMs,
-    shouldHydratePreparedVoicePlayback,
-  ]);
+      rememberVoicePlaybackCacheEntry,
+      resolvedDurationMs,
+      shouldHydratePreparedVoicePlayback,
+    ]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (
+      voiceState !== 'ready' ||
+      hasPendingPlaybackIntent ||
+      !audio ||
+      audio.readyState < VOICE_READY_TO_REPLAY_STATE ||
+      !audio.paused
+    ) {
+      return;
+    }
+
+    setPlaybackState((current) => {
+      if (current === 'playing') {
+        return current;
+      }
+
+      return audio.currentTime > 0 ? 'paused' : 'idle';
+    });
+  }, [effectiveVoicePlaybackSourceUrl, hasPendingPlaybackIntent, voiceState]);
 
   const resolveSignedUrl = useCallback(async () => {
     const attachmentId = attachment?.id ?? null;
