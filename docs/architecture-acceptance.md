@@ -25,6 +25,12 @@ The current acceptance bar focuses on these boundaries:
 4. KeepCozy does not depend directly on Messenger route files or shell wiring
 5. Messenger route entry continues to consume shared messaging capability seams
    instead of open-coding space access in route files
+6. Shared profile and identity entry points stay under platform ownership by
+   default
+7. Messenger thread runtime stays split across slimmer page, viewport, and
+   voice-runtime seams
+8. Messaging server seams stay independent from app-route and KeepCozy product
+   code
 
 ## Shared Platform Seams Under Acceptance
 
@@ -61,6 +67,27 @@ Current acceptance tests:
   - KeepCozy activity route consumes the bounded adapter instead of raw
     Messenger data wiring
   - Messenger inbox route consumes the shared messaging route-context seam
+- [tests/e2ee/messaging-server-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/messaging-server-boundaries.test.ts)
+  verifies messaging capability/server ownership:
+  - messaging server seams do not reach into app route files
+  - messaging server seams do not depend on KeepCozy product code
+  - canonical route-context helpers remain the access-resolution seam
+- [tests/e2ee/messenger-route-seams.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/messenger-route-seams.test.ts)
+  verifies Messenger route posture:
+  - route pages stay loader-driven instead of importing heavy messaging data
+    helpers directly
+  - the chat entry route stays composition-light after the thread split
+- [tests/e2ee/profile-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/profile-boundaries.test.ts)
+  verifies shared identity/profile ownership:
+  - shared entry surfaces use the platform profile seam
+  - shared identity/avatar consumers do not fall back into messaging by
+    default
+- [tests/e2ee/thread-runtime-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/thread-runtime-boundaries.test.ts)
+  verifies the thread runtime split:
+  - `page.tsx` stays slim
+  - thread composition remains in `thread-page-content.tsx`
+  - voice runtime remains extracted from the viewport
+  - first-pass file-size boundaries stay within the agreed range
 
 Run them with:
 
@@ -94,6 +121,12 @@ Examples:
   back into one mixed shell posture
 - if the KeepCozy boundary test fails, a product route may have started
   depending on Messenger route internals again
+- if a messaging-server boundary test fails, capability seams may be reaching
+  back into product routes or product-specific code
+- if a profile-boundary test fails, shared identity/profile work may be
+  sliding back under messaging ownership
+- if a thread-runtime boundary test fails, the Messenger thread route may be
+  collapsing back into one oversized runtime file
 
 ## Minimum Verification After Architecture Changes
 

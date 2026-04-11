@@ -34,9 +34,9 @@ test('thread viewport delegates voice runtime to the extracted voice bubble seam
     /from ['"]\.\/thread-voice-message-bubble['"]/,
   );
   assert.match(viewportSource, /<MemoizedThreadVoiceMessageBubble/);
-  assert.doesNotMatch(
+  assert.match(
     viewportSource,
-    /from ['"]\.\/voice-playback-source['"]/,
+    /import \{ configureInlineAudioElement \} from ['"]\.\/voice-playback-source['"]/,
   );
   assert.doesNotMatch(
     viewportSource,
@@ -58,4 +58,33 @@ test('extracted voice bubble owns playback-source wiring and voice diagnostics',
     /from ['"]\.\/thread-voice-diagnostics['"]/,
   );
   assert.match(voiceBubbleSource, /export const MemoizedThreadVoiceMessageBubble = memo\(/);
+});
+
+test('thread runtime split stays within the first-pass size boundaries', () => {
+  const chatPageSource = readWorkspaceFile('app/(app)/chat/[conversationId]/page.tsx');
+  const threadPageContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-page-content.tsx',
+  );
+  const viewportSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
+  );
+  const voiceBubbleSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
+  );
+
+  assert.ok(chatPageSource.split('\n').length <= 80);
+  assert.ok(threadPageContentSource.split('\n').length <= 1200);
+  assert.ok(viewportSource.split('\n').length <= 5800);
+  assert.ok(voiceBubbleSource.split('\n').length <= 2100);
+});
+
+test('thread page content remains the composition layer for thread UI pieces', () => {
+  const threadPageContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-page-content.tsx',
+  );
+
+  assert.match(threadPageContentSource, /from ['"]\.\/thread-history-viewport['"]/);
+  assert.match(threadPageContentSource, /from ['"]\.\/thread-composer-runtime['"]/);
+  assert.match(threadPageContentSource, /<ThreadHistoryViewport/);
+  assert.match(threadPageContentSource, /<ThreadComposerRuntime/);
 });

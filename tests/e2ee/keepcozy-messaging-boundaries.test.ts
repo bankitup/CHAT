@@ -39,6 +39,10 @@ test('keepcozy messaging adapter stays independent from Messenger route files', 
     adapterSource,
     /from ['"]@\/modules\/spaces\/server['"]/,
   );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/(thread-page|thread-settings-page|inbox-page|settings-page)['"]/,
+  );
 });
 
 test('keepcozy activity route consumes the bounded messaging adapter instead of raw Messenger data wiring', () => {
@@ -71,5 +75,24 @@ test('messenger inbox route consumes the shared messaging route-context seam thr
   assert.doesNotMatch(
     inboxLoaderSource,
     /from ['"]@\/modules\/spaces\/server['"]/,
+  );
+});
+
+test('keepcozy adapter only consumes the bounded messaging server seams it is allowed to compose', () => {
+  const adapterSource = readWorkspaceFile(
+    'src/modules/keepcozy/messaging-adapter.ts',
+  );
+
+  assert.match(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/operational-activity['"]/,
+  );
+  assert.match(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/operational-thread-context['"]/,
+  );
+  assert.match(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/server\/route-context['"]/,
   );
 });

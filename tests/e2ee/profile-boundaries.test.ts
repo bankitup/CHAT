@@ -50,6 +50,8 @@ test('shared identity and avatar consumers use profile helpers while messaging k
   const profileSettingsFormSource = readWorkspaceFile(
     'app/(app)/settings/profile-settings-form.tsx',
   );
+  const settingsPageSource = readWorkspaceFile('app/(app)/settings/page.tsx');
+  const homePageSource = readWorkspaceFile('app/(app)/home/page.tsx');
   const newChatSheetSource = readWorkspaceFile(
     'app/(app)/inbox/new-chat-sheet.tsx',
   );
@@ -76,6 +78,18 @@ test('shared identity and avatar consumers use profile helpers while messaging k
   assert.match(
     profileSettingsFormSource,
     /from ['"]@\/modules\/profile\/avatar['"]/,
+  );
+  assert.doesNotMatch(
+    settingsPageSource,
+    /from ['"]@\/modules\/messaging\/ui\/(identity|identity-label|identity-status)['"]/,
+  );
+  assert.doesNotMatch(
+    homePageSource,
+    /from ['"]@\/modules\/messaging\/ui\/(identity|identity-label|identity-status)['"]/,
+  );
+  assert.doesNotMatch(
+    profileSettingsFormSource,
+    /from ['"]@\/modules\/messaging\/(ui\/identity|ui\/identity-label|ui\/identity-status|profile-avatar)['"]/,
   );
   assert.match(
     newChatSheetSource,
