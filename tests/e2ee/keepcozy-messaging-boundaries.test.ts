@@ -16,13 +16,29 @@ test('keepcozy messaging adapter stays independent from Messenger route files', 
 
   assert.match(
     adapterSource,
-    /from ['"]@\/modules\/messaging\//,
+    /from ['"]@\/modules\/messaging\/server\//,
   );
   assert.doesNotMatch(
     adapterSource,
     /from ['"].*app\/\(app\)\/(inbox|chat)\//,
   );
   assert.doesNotMatch(adapterSource, /from ['"]\.\.\/\.\.\/app\//);
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/data\/server['"]/,
+  );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/data\/conversation-thread-context['"]/,
+  );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/messaging\/ui\//,
+  );
+  assert.doesNotMatch(
+    adapterSource,
+    /from ['"]@\/modules\/spaces\/server['"]/,
+  );
 });
 
 test('keepcozy activity route consumes the bounded messaging adapter instead of raw Messenger data wiring', () => {

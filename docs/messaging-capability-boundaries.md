@@ -69,9 +69,20 @@ resolution flow inline.
 KeepCozy and future products may depend on:
 
 - `src/modules/messaging/contract/**`
-- `src/modules/messaging/data/**`
 - `src/modules/messaging/server/**`
 - `app/api/messaging/**`
+
+Preferred non-Messenger server seams:
+
+- [route-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/route-context.ts)
+- [operational-activity.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-activity.ts)
+- [operational-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-thread-context.ts)
+
+Avoid for cross-product integrations unless there is no bounded seam yet:
+
+- `src/modules/messaging/data/server.ts`
+- `src/modules/messaging/data/conversation-thread-context.ts`
+- `src/modules/messaging/ui/**`
 
 Preferred KeepCozy consumption layer:
 

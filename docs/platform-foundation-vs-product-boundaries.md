@@ -137,8 +137,17 @@ KeepCozy backend:
 
 - `src/modules/keepcozy/server.ts`
 - `src/modules/keepcozy/write-server.ts`
+- `src/modules/keepcozy/messaging-adapter.ts`
 - `app/(app)/issues/actions.ts`
 - `app/(app)/tasks/actions.ts`
+
+When KeepCozy needs messaging capability, it should enter through:
+
+- `src/modules/keepcozy/messaging-adapter.ts`
+- bounded messaging server seams under `src/modules/messaging/server/**`
+
+It should avoid pulling broad messaging persistence or UI helpers directly into
+KeepCozy product code.
 
 ### Database
 

@@ -23,6 +23,12 @@ Current seams:
   centralizes shared inbox/chat route access resolution so other products do
   not need to depend on Messenger route files just to reuse messaging
   capability behavior.
+- [operational-activity.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-activity.ts)
+  owns product-neutral conversation activity shaping for KeepCozy and future
+  operational consumers.
+- [operational-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/operational-thread-context.ts)
+  exposes the access-checked operational thread context seam without forcing
+  consumers into `data/conversation-thread-context.ts`.
 - [inbox-page.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/inbox-page.ts)
   owns Messenger inbox page loading and SSR shaping.
 - [thread-page.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/thread-page.ts)
