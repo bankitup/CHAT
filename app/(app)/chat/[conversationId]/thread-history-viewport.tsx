@@ -1305,13 +1305,13 @@ function buildChatHref(input: {
   return input.hash ? `${href}${input.hash}` : href;
 }
 
-function isEncryptedDmTextMessage(value: {
+function isEncryptedDmMessage(value: {
   kind: string | null;
   content_mode?: string | null;
   deleted_at?: string | null;
 }) {
   return (
-    value.kind === 'text' &&
+    (value.kind === 'text' || value.kind === 'attachment') &&
     value.content_mode === 'dm_e2ee_v1' &&
     !value.deleted_at
   );
@@ -1378,7 +1378,7 @@ function getEncryptedDmServerRenderInputIssues(input: {
     issues.push('message.id');
   }
 
-  if (input.message.kind !== 'text') {
+  if (input.message.kind !== 'text' && input.message.kind !== 'attachment') {
     issues.push('message.kind');
   }
 
@@ -2627,7 +2627,7 @@ function resolveMissingOwnEncryptedMessageIdsForRetry(input: {
         return [];
       }
 
-      if (message.kind !== 'text' || message.content_mode !== 'dm_e2ee_v1') {
+      if (!isEncryptedDmMessage(message)) {
         return [];
       }
 
@@ -2663,7 +2663,7 @@ function shouldRenderPendingOwnEncryptedCommitTransition(input: {
   historyHint: EncryptedDmServerHistoryHint;
   pendingMessageIds: Set<string>;
 }) {
-  if (!isEncryptedDmTextMessage(input.message)) {
+  if (!isEncryptedDmMessage(input.message)) {
     return false;
   }
 
@@ -3299,7 +3299,7 @@ function getUnavailableEncryptedHistoryRunKey(input: {
   encryptedHistoryHintsByMessage: Map<string, EncryptedDmServerHistoryHint>;
   message: ConversationMessageRow | null;
 }) {
-  if (!input.message || !isEncryptedDmTextMessage(input.message)) {
+  if (!input.message || !isEncryptedDmMessage(input.message)) {
     return null;
   }
 
@@ -3819,7 +3819,7 @@ function ThreadMessageRowComponent({
     activeEditMessageId === message.id &&
     isOwnMessage &&
     !isDeletedMessage &&
-    !isEncryptedDmTextMessage(message);
+    !isEncryptedDmMessage(message);
   const isMessageInDeleteMode =
     activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
   const messageAttachments =
@@ -3846,8 +3846,13 @@ function ThreadMessageRowComponent({
       : messageAttachments.filter(
           (attachment) => attachment.id !== primaryVoiceAttachment.id,
         );
+  const shouldRenderEncryptedAttachmentComposite =
+    isEncryptedDmMessage(message) &&
+    !isDeletedMessage &&
+    nonVoiceAttachments.length > 0;
   const shouldRenderCompactImageBubble =
     !isDeletedMessage &&
+    !shouldRenderEncryptedAttachmentComposite &&
     !normalizedMessageBody &&
     nonVoiceAttachments.length > 0 &&
     nonVoiceAttachments.every((attachment) => attachment.isImage);
@@ -3876,7 +3881,7 @@ function ThreadMessageRowComponent({
   const shouldRenderPendingEncryptedCommitShell =
     isPendingEncryptedCommitTransition &&
     isOwnMessage &&
-    isEncryptedDmTextMessage(message);
+    isEncryptedDmMessage(message);
   const messageSeq = getMessageSeq(message.seq);
   const outgoingMessageStatus = getOutgoingMessageStatus({
     isDeletedMessage,
@@ -4206,7 +4211,7 @@ function ThreadMessageRowComponent({
           body: patchedBody,
           deletedAt: patchedDeletedAt,
           id: message.id,
-          isEncrypted: isEncryptedDmTextMessage(message),
+          isEncrypted: isEncryptedDmMessage(message),
           kind: message.kind,
           senderId: message.sender_id ?? null,
           senderLabel:
@@ -4232,7 +4237,7 @@ function ThreadMessageRowComponent({
     !isDeletedMessage &&
     !primaryVoiceAttachment &&
     nonVoiceAttachments.length === 0 &&
-    !isEncryptedDmTextMessage(message);
+    !isEncryptedDmMessage(message);
   const messageTimestampLabel =
     formatMessageTimestamp(message.created_at, language, t.chat.yesterday) ||
     t.chat.justNow;
@@ -4295,7 +4300,7 @@ function ThreadMessageRowComponent({
     </div>
   );
 
-  if (isEncryptedDmTextMessage(message)) {
+  if (isEncryptedDmMessage(message)) {
     const encryptedInputIssues = getEncryptedDmServerRenderInputIssues({
       envelope: encryptedEnvelope,
       historyHint: encryptedHistoryHint,
@@ -4337,7 +4342,7 @@ function ThreadMessageRowComponent({
     }
   }
 
-  if (isEncryptedDmTextMessage(message) && !canAttemptEncryptedRender) {
+  if (isEncryptedDmMessage(message) && !canAttemptEncryptedRender) {
     logEncryptedDmRenderFallback({
       clientId: message.client_id,
       conversationId,
@@ -4350,6 +4355,82 @@ function ThreadMessageRowComponent({
   if (isPendingOwnAttachmentCommitTransition) {
     return null;
   }
+
+  const encryptedMessageBodyContent = isEncryptedDmMessage(message) ? (
+    canAttemptEncryptedRender ? (
+      <DmThreadClientSubtree
+        conversationId={conversationId}
+        {...threadClientDiagnostics}
+        fallback={
+          isUnavailableHistoricalEncryptedHint ? (
+            <EncryptedHistoryUnavailableState
+              accessState={encryptedHistoryFallbackAccessState}
+              compact={compactHistoricalUnavailable}
+              continuationCount={historicalUnavailableContinuationCount}
+              note={encryptedHistoryFallbackNote}
+              title={
+                compactHistoricalUnavailable
+                  ? t.chat.encryptedMessage
+                  : t.chat.olderEncryptedMessage
+              }
+            />
+          ) : (
+            temporaryEncryptedResolutionFallback
+          )
+        }
+        messageId={message.id}
+        surface="encrypted-dm-message-body"
+      >
+        <EncryptedDmMessageBody
+          clientId={message.client_id}
+          compactHistoricalUnavailable={compactHistoricalUnavailable}
+          conversationId={conversationId}
+          currentUserId={currentUserId}
+          envelope={encryptedEnvelope}
+          fallbackLabel={t.chat.encryptedMessage}
+          historyDiagnosticHint={encryptedHistoryHint}
+          historicalUnavailableContinuationCount={
+            historicalUnavailableContinuationCount
+          }
+          olderHistoryLabel={t.chat.olderEncryptedMessage}
+          historyUnavailableNoteLabel={t.chat.encryptedHistoryUnavailableNote}
+          messageCreatedAt={message.created_at}
+          messageId={message.id}
+          messageSenderId={message.sender_id}
+          policyUnavailableNoteLabel={t.chat.encryptedHistoryPolicyBlockedNote}
+          preferTemporaryResolvingState={isPendingEncryptedCommitTransition}
+          retryLabel={t.chat.retryEncryptedAction}
+          setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
+          shouldCachePreview={conversationKind === 'dm' && isLatestConversationMessage}
+          unavailableLabel={t.chat.encryptedMessageUnavailable}
+        />
+      </DmThreadClientSubtree>
+    ) : isUnavailableHistoricalEncryptedHint ? (
+      <EncryptedHistoryUnavailableState
+        accessState={encryptedHistoryFallbackAccessState}
+        compact={compactHistoricalUnavailable}
+        continuationCount={historicalUnavailableContinuationCount}
+        debugBucket={
+          process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+            ? encryptedHistoryHint.code
+            : null
+        }
+        debugLabel={
+          process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
+            ? encryptedHistoryHint.code
+            : null
+        }
+        note={encryptedHistoryFallbackNote}
+        title={
+          compactHistoricalUnavailable
+            ? t.chat.encryptedMessage
+            : t.chat.olderEncryptedMessage
+        }
+      />
+    ) : (
+      temporaryEncryptedResolutionFallback
+    )
+  ) : null;
 
   return (
     <article
@@ -4563,7 +4644,7 @@ function ThreadMessageRowComponent({
                   targetAttachmentKind={replyTargetAttachmentKind}
                   targetDeleted={Boolean(repliedMessage?.deleted_at)}
                   targetIsEncrypted={Boolean(
-                    repliedMessage && isEncryptedDmTextMessage(repliedMessage),
+                    repliedMessage && isEncryptedDmMessage(repliedMessage),
                   )}
                   targetIsLoaded={Boolean(repliedMessage)}
                   targetKind={repliedMessage?.kind ?? null}
@@ -4586,7 +4667,7 @@ function ThreadMessageRowComponent({
               emptyMessageLabel={t.chat.emptyMessage}
               hasAttachments={messageAttachments.length > 0}
               initialBody={
-                isEncryptedDmTextMessage(message)
+                isEncryptedDmMessage(message)
                   ? ''
                   : normalizedMessageBody ?? ''
               }
@@ -4595,7 +4676,7 @@ function ThreadMessageRowComponent({
             />
           ) : activeEditMessageId === message.id &&
             isOwnMessage &&
-            isEncryptedDmTextMessage(message) ? (
+            isEncryptedDmMessage(message) ? (
             <div className="message-edit-unavailable">
               <p className="message-edit-unavailable-copy">
                 {t.chat.encryptedEditUnavailable}
@@ -4614,88 +4695,18 @@ function ThreadMessageRowComponent({
                 </Link>
               </div>
             </div>
-          ) : isEncryptedDmTextMessage(message) ? (
-            canAttemptEncryptedRender ? (
-              <DmThreadClientSubtree
-                conversationId={conversationId}
-                {...threadClientDiagnostics}
-                fallback={
-                  isUnavailableHistoricalEncryptedHint ? (
-                    <EncryptedHistoryUnavailableState
-                      accessState={encryptedHistoryFallbackAccessState}
-                      compact={compactHistoricalUnavailable}
-                      continuationCount={historicalUnavailableContinuationCount}
-                      note={encryptedHistoryFallbackNote}
-                      title={
-                        compactHistoricalUnavailable
-                          ? t.chat.encryptedMessage
-                          : t.chat.olderEncryptedMessage
-                      }
-                    />
-                  ) : temporaryEncryptedResolutionFallback
-                }
-                messageId={message.id}
-                surface="encrypted-dm-message-body"
-              >
-                <EncryptedDmMessageBody
-                  clientId={message.client_id}
-                  compactHistoricalUnavailable={compactHistoricalUnavailable}
-                  conversationId={conversationId}
-                  currentUserId={currentUserId}
-                  envelope={encryptedEnvelope}
-                  fallbackLabel={t.chat.encryptedMessage}
-                  historyDiagnosticHint={encryptedHistoryHint}
-                  historicalUnavailableContinuationCount={
-                    historicalUnavailableContinuationCount
-                  }
-                  olderHistoryLabel={t.chat.olderEncryptedMessage}
-                  historyUnavailableNoteLabel={
-                    t.chat.encryptedHistoryUnavailableNote
-                  }
-                  messageCreatedAt={message.created_at}
-                  messageId={message.id}
-                  messageSenderId={message.sender_id}
-                  policyUnavailableNoteLabel={
-                    t.chat.encryptedHistoryPolicyBlockedNote
-                  }
-                  preferTemporaryResolvingState={
-                    isPendingEncryptedCommitTransition
-                  }
-                  retryLabel={t.chat.retryEncryptedAction}
-                  setupUnavailableLabel={t.chat.encryptedMessageSetupUnavailable}
-                  shouldCachePreview={
-                    conversationKind === 'dm' && isLatestConversationMessage
-                  }
-                  unavailableLabel={t.chat.encryptedMessageUnavailable}
-                />
-              </DmThreadClientSubtree>
-            ) : (
-              isUnavailableHistoricalEncryptedHint ? (
-                <EncryptedHistoryUnavailableState
-                  accessState={encryptedHistoryFallbackAccessState}
-                  compact={compactHistoricalUnavailable}
-                  continuationCount={historicalUnavailableContinuationCount}
-                  debugBucket={
-                    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-                      ? encryptedHistoryHint.code
-                      : null
-                  }
-                  debugLabel={
-                    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-                      ? encryptedHistoryHint.code
-                      : null
-                  }
-                  note={encryptedHistoryFallbackNote}
-                  title={
-                    compactHistoricalUnavailable
-                      ? t.chat.encryptedMessage
-                      : t.chat.olderEncryptedMessage
-                  }
-                />
-              ) : (
-                temporaryEncryptedResolutionFallback
-              )
-            )
+          ) : shouldRenderEncryptedAttachmentComposite ? (
+            <div className="message-attachment-caption-stack">
+              <ThreadMessageAttachments
+                attachments={nonVoiceAttachments}
+                imagePreviewCaption={normalizedMessageBody}
+                language={language}
+                onImagePreviewClick={handleImageAttachmentPreview}
+              />
+              {encryptedMessageBodyContent}
+            </div>
+          ) : isEncryptedDmMessage(message) ? (
+            encryptedMessageBodyContent
           ) : message.kind === 'voice' ? (
             <div className="message-voice-stack">
               <MemoizedThreadVoiceMessageBubble
@@ -4737,7 +4748,9 @@ function ThreadMessageRowComponent({
           ) : !messageAttachments.length ? (
             <p className="message-body">{t.chat.emptyMessage}</p>
           ) : null}
-          {nonVoiceAttachments.length && !isDeletedMessage ? (
+          {nonVoiceAttachments.length &&
+          !isDeletedMessage &&
+          !shouldRenderEncryptedAttachmentComposite ? (
             <ThreadMessageAttachments
               attachments={nonVoiceAttachments}
               imagePreviewCaption={normalizedMessageBody}
@@ -5211,7 +5224,7 @@ export function ThreadHistoryViewport({
   const recoverableEncryptedHistoryMessageIds = useMemo(
     () =>
       historyState.messages.flatMap((message) => {
-        if (message.kind !== 'text' || message.content_mode !== 'dm_e2ee_v1') {
+        if (!isEncryptedDmMessage(message)) {
           return [];
         }
 

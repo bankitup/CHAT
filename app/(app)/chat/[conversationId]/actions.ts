@@ -420,7 +420,9 @@ export async function sendMessageMutationAction(
     }
 
     return {
-      error: 'Direct-message text must use the encrypted client path.',
+      error: attachment
+        ? 'Direct-message text with attachments must use the encrypted client path.'
+        : 'Direct-message text must use the encrypted client path.',
       ok: false,
     };
   }
@@ -894,7 +896,9 @@ export async function sendMessageAction(formData: FormData) {
 
     redirectWithError(
       conversationId,
-      'Direct-message text must use the encrypted client path.',
+      attachment
+        ? 'Direct-message text with attachments must use the encrypted client path.'
+        : 'Direct-message text must use the encrypted client path.',
       spaceId,
     );
   }

@@ -103,6 +103,52 @@ function OptimisticImageAttachmentCard({
   );
 }
 
+function formatOptimisticAttachmentSize(sizeBytes: number) {
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return '';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let unitIndex = 0;
+  let value = sizeBytes;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const digits = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function OptimisticFileAttachmentCard({
+  fallbackLabel,
+  file,
+}: {
+  fallbackLabel: string;
+  file: File;
+}) {
+  const attachmentName = file.name.trim() || fallbackLabel;
+  const attachmentMeta = formatOptimisticAttachmentSize(file.size);
+
+  return (
+    <div className="message-attachment-card message-attachment-card-unavailable">
+      <span aria-hidden="true" className="message-attachment-file">
+        {fallbackLabel}
+      </span>
+      <span className="message-attachment-copy">
+        <span className="message-attachment-head">
+          <span className="message-attachment-name">{attachmentName}</span>
+          <span className="message-attachment-kind">{fallbackLabel}</span>
+        </span>
+        {attachmentMeta ? (
+          <span className="message-attachment-meta">{attachmentMeta}</span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 function compareOptimisticThreadMessages(
   left: OptimisticThreadMessagePayload,
   right: OptimisticThreadMessagePayload,
@@ -290,11 +336,16 @@ export function OptimisticThreadMessages({
         const isFailed = item.status === 'failed';
         const messagePreview =
           item.body.trim() || item.attachmentLabel?.trim() || labels.attachment;
+        const normalizedBody = item.body.trim();
+        const isVoiceMessage = item.kind === 'voice';
         const isImageAttachment = isOptimisticImageAttachment({
           attachment: item.attachment,
           kind: item.attachmentPreviewKind ?? null,
         });
-        const isVoiceMessage = item.kind === 'voice';
+        const isGenericAttachment =
+          Boolean(item.attachment) && !isImageAttachment && !isVoiceMessage;
+        const shouldRenderAttachmentCaption =
+          Boolean(item.attachment) && Boolean(normalizedBody) && !isVoiceMessage;
         const pendingStatusLabel =
           isVoiceMessage
             ? isQueued
@@ -409,10 +460,25 @@ export function OptimisticThreadMessages({
                     </div>
                   </div>
                 ) : isImageAttachment && item.attachment ? (
-                  <OptimisticImageAttachmentCard
-                    fallbackLabel={labels.photo}
-                    file={item.attachment}
-                  />
+                  <div className="message-attachment-caption-stack">
+                    <OptimisticImageAttachmentCard
+                      fallbackLabel={labels.photo}
+                      file={item.attachment}
+                    />
+                    {shouldRenderAttachmentCaption ? (
+                      <p className="message-body">{normalizedBody}</p>
+                    ) : null}
+                  </div>
+                ) : isGenericAttachment && item.attachment ? (
+                  <div className="message-attachment-caption-stack">
+                    <OptimisticFileAttachmentCard
+                      fallbackLabel={labels.attachment}
+                      file={item.attachment}
+                    />
+                    {shouldRenderAttachmentCaption ? (
+                      <p className="message-body">{normalizedBody}</p>
+                    ) : null}
+                  </div>
                 ) : (
                   <p className="message-body">{messagePreview}</p>
                 )}

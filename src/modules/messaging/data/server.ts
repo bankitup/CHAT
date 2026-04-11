@@ -45,6 +45,7 @@ import type {
   DmE2eeApiErrorCode,
   DmE2eeBootstrapDebugState,
   DmE2eeDevicePublishResultKind,
+  DmE2eeMessageKind,
   DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendDebugState,
@@ -6366,7 +6367,8 @@ export async function getConversationHistorySnapshot(input: {
   const encryptedMessageIds = messages
     .filter(
       (message) =>
-        message.kind === 'text' && message.content_mode === 'dm_e2ee_v1',
+        (message.kind === 'text' || message.kind === 'attachment') &&
+        message.content_mode === 'dm_e2ee_v1',
     )
     .map((message) => message.id);
   const senderProfileIds = Array.from(
@@ -8353,8 +8355,14 @@ export async function sendTextMessage(input: {
   });
 }
 
-export async function sendEncryptedDmTextMessage(
-  input: DmE2eeSendRequest & { senderId: string },
+type CommitEncryptedDmMessageShellInput = DmE2eeSendRequest & {
+  messageKind?: DmE2eeMessageKind;
+  senderId: string;
+  syncConversationSummaryProjection?: boolean;
+};
+
+async function commitEncryptedDmMessageShell(
+  input: CommitEncryptedDmMessageShellInput,
 ) {
   const sendDebugState: DmE2eeSendDebugState = {
     sendExactFailureStage: 'send:start',
@@ -8371,10 +8379,12 @@ export async function sendEncryptedDmTextMessage(
     sendSelectedRecipientDeviceRowId:
       input.envelopes[0]?.recipientDeviceRecordId ?? null,
   };
+  const requestedMessageKind = input.messageKind ?? input.kind ?? 'text';
   logDmE2eeSendDiagnostics('start', {
     hasConversationId: Boolean(input.conversationId),
     hasSenderDeviceRecordId: Boolean(input.senderDeviceRecordId),
     envelopeCount: input.envelopes.length,
+    requestedMessageKind,
   });
   const conversation = await getConversationForUser(
     input.conversationId,
@@ -8631,21 +8641,200 @@ export async function sendEncryptedDmTextMessage(
     );
   }
 
+  const cleanupClient = createSupabaseServiceRoleClient() ?? supabase;
+
+  if (requestedMessageKind !== 'text') {
+    sendDebugState.sendExactFailureStage = 'send:message-kind-update';
+    const { error: messageKindUpdateError } = await cleanupClient
+      .from('messages')
+      .update({
+        kind: requestedMessageKind,
+      })
+      .eq('id', messageId)
+      .eq('conversation_id', input.conversationId)
+      .eq('sender_id', input.senderId);
+
+    if (messageKindUpdateError) {
+      await cleanupClient
+        .from('messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('conversation_id', input.conversationId);
+      sendDebugState.sendFailedOperation = 'messages.kind update';
+      sendDebugState.sendReasonCode = 'send: message row finalize failed';
+      sendDebugState.sendErrorMessage = messageKindUpdateError.message;
+      throw createDmE2eeSendProofError(
+        messageKindUpdateError.message,
+        sendDebugState,
+      );
+    }
+  }
+
   logDmE2eeSendDiagnostics('done', {
     hasMessageId: true,
+    requestedMessageKind,
   });
 
-  await syncConversationSummaryProjectionByMessageId(
-    supabase,
-    input.conversationId,
-    messageId,
-  );
+  if (input.syncConversationSummaryProjection !== false) {
+    await syncConversationSummaryProjectionByMessageId(
+      supabase,
+      input.conversationId,
+      messageId,
+    );
+  }
 
   return {
     messageId,
     timestamp: row?.created_at ?? new Date().toISOString(),
     clientId: String(row?.client_id ?? input.clientId),
   };
+}
+
+export async function sendEncryptedDmTextMessage(
+  input: DmE2eeSendRequest & { senderId: string },
+) {
+  return commitEncryptedDmMessageShell({
+    ...input,
+    messageKind: 'text',
+  });
+}
+
+export async function sendEncryptedDmMessageWithAttachment(
+  input: DmE2eeSendRequest & {
+    file: File;
+    senderId: string;
+    voiceDurationMs?: number | null;
+  },
+) {
+  if (!input.file || input.file.size === 0) {
+    throw new Error('Choose a file before sending.');
+  }
+
+  if (input.file.size > CHAT_ATTACHMENT_MAX_SIZE_BYTES) {
+    throw new Error('Attachments can be up to 10 MB in this first version.');
+  }
+
+  if (!isSupportedChatAttachmentType(input.file.type, input.file.name)) {
+    throw new Error(CHAT_ATTACHMENT_HELP_TEXT);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const storageClient =
+    (serviceSupabase ?? supabase) as Awaited<
+      ReturnType<typeof createSupabaseServerClient>
+    >;
+  const effectiveAttachmentMimeType = resolveMessagingAttachmentMimeType({
+    fileName: input.file.name,
+    mimeType: input.file.type,
+  });
+  const attachmentMessageKind = getAttachmentMessageKind(
+    effectiveAttachmentMimeType,
+  );
+
+  if (attachmentMessageKind === 'voice') {
+    throw new Error(
+      'Encrypted direct-message text with voice recordings is not supported yet.',
+    );
+  }
+
+  const committedAssetKind = resolveMessagingAssetKindFromMimeType({
+    fileName: input.file.name,
+    messageKind: attachmentMessageKind,
+    mimeType: effectiveAttachmentMimeType,
+  });
+  const storageFolder =
+    committedAssetKind === 'image'
+      ? 'images'
+      : committedAssetKind === 'audio'
+        ? 'audio'
+        : 'files';
+  const normalizedClientId = input.clientId.trim();
+
+  if (!normalizedClientId) {
+    throw new Error('Encrypted DM send requires a stable client id.');
+  }
+
+  const fileName = sanitizeAttachmentFileName(input.file.name);
+  const objectPath = `${input.conversationId}/${normalizedClientId}/${storageFolder}/${Date.now()}-${fileName}`;
+  const fileBuffer = Buffer.from(await input.file.arrayBuffer());
+  let uploadedObject = false;
+  let shellResult:
+    | {
+        clientId: string;
+        messageId: string;
+        timestamp: string;
+      }
+    | null = null;
+
+  const cleanupUploadedObject = async () => {
+    if (!uploadedObject) {
+      return;
+    }
+
+    await storageClient.storage.from(CHAT_ATTACHMENT_BUCKET).remove([objectPath]);
+  };
+
+  const cleanupCommittedShell = async () => {
+    if (!shellResult?.messageId) {
+      return;
+    }
+
+    await (createSupabaseServiceRoleClient() ?? supabase)
+      .from('messages')
+      .delete()
+      .eq('id', shellResult.messageId)
+      .eq('conversation_id', input.conversationId);
+  };
+
+  const { error: uploadError } = await storageClient.storage
+    .from(CHAT_ATTACHMENT_BUCKET)
+    .upload(objectPath, fileBuffer, {
+      cacheControl: '3600',
+      contentType: effectiveAttachmentMimeType ?? undefined,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  uploadedObject = true;
+
+  try {
+    shellResult = await commitEncryptedDmMessageShell({
+      ...input,
+      clientId: normalizedClientId,
+      kind: 'attachment',
+      messageKind: attachmentMessageKind,
+      syncConversationSummaryProjection: false,
+    });
+
+    await insertCommittedMessageAssetAndLink({
+      assetKind: committedAssetKind,
+      client: supabase,
+      conversationId: input.conversationId,
+      durationMs: input.voiceDurationMs ?? null,
+      file: input.file,
+      mimeType: effectiveAttachmentMimeType,
+      messageId: shellResult.messageId,
+      objectPath,
+      schemaRequirementErrorMessage: 'Chat media asset schema is missing.',
+      senderId: input.senderId,
+    });
+
+    await syncConversationSummaryProjectionByMessageId(
+      supabase,
+      input.conversationId,
+      shellResult.messageId,
+    );
+
+    return shellResult;
+  } catch (error) {
+    await cleanupCommittedShell();
+    await cleanupUploadedObject();
+    throw error;
+  }
 }
 
 async function createMessageRecord(input: {
