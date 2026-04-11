@@ -929,6 +929,10 @@ export function EncryptedDmComposerForm({
         nextFormData.set('clientId', item.clientId);
         nextFormData.set('attachment', payload.attachment);
 
+        if (item.body.trim()) {
+          nextFormData.set('body', item.body);
+        }
+
         if (item.replyToMessageId) {
           nextFormData.set('replyToMessageId', item.replyToMessageId);
         }
@@ -1289,16 +1293,9 @@ export function EncryptedDmComposerForm({
           return;
         }
 
-        if (body && !encryptedDmEnabled) {
+        if (body && !attachment && !encryptedDmEnabled) {
           setErrorMessage(t.chat.encryptionRolloutUnavailable);
           setErrorCode('dm_e2ee_rollout_disabled');
-          setErrorDebugDetails(null);
-          return;
-        }
-
-        if (body && attachment) {
-          setErrorMessage(t.chat.encryptedAttachmentsUnsupported);
-          setErrorCode(null);
           setErrorDebugDetails(null);
           return;
         }
@@ -1327,7 +1324,7 @@ export function EncryptedDmComposerForm({
               attachment.type,
               attachment.name,
             ),
-            body: '',
+            body,
             kind: 'attachment',
             payload: {
               attachment,

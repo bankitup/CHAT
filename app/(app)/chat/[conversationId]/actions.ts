@@ -407,7 +407,7 @@ export async function sendMessageMutationAction(
     };
   }
 
-  if (conversation.kind === 'dm' && body) {
+  if (conversation.kind === 'dm' && body && !attachment) {
     if (
       !isDmE2eeEnabledForUser(user.id, user.email ?? null, {
         source: 'chat-send-mutation',
@@ -879,7 +879,7 @@ export async function sendMessageAction(formData: FormData) {
     redirectWithError(conversationId, 'This chat is no longer available.', spaceId);
   }
 
-  if (conversation.kind === 'dm' && body) {
+  if (conversation.kind === 'dm' && body && !attachment) {
     if (
       !isDmE2eeEnabledForUser(userId, user.email ?? null, {
         source: 'chat-send-action',
