@@ -253,7 +253,6 @@ const ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON =
   'dm-e2ee-history:current-device-resync';
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
 const ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS = 2400;
-const ATTACHMENT_PENDING_COMMIT_TRANSITION_GRACE_MS = 2600;
 const ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON =
   'attachment-reopen:retry-attachment-resolution';
 const ATTACHMENT_MESSAGE_RECOVERY_REASON =
@@ -2534,23 +2533,14 @@ function isOwnAttachmentCommitTransitionPending(input: {
   normalizedBody: string | null;
 }) {
   // Keep a just-sent local attachment on its optimistic shell until the
-  // committed row has attachment data to render, instead of flashing
-  // through the empty-message fallback. Keep this window short so a genuinely
-  // broken committed attachment state can still surface truthfully.
-  const createdAt = parseSafeDate(input.message.created_at);
-
-  if (!createdAt) {
-    return false;
-  }
-
+  // committed row has its own renderable attachment data, instead of letting
+  // a still-empty committed shell replace a valid pending image/file bubble.
   return (
     input.message.kind === 'attachment' &&
     input.message.sender_id === input.currentUserId &&
     Boolean(input.message.client_id?.trim()) &&
     !input.normalizedBody &&
-    input.attachments.length === 0 &&
-    Date.now() - createdAt.getTime() <=
-      ATTACHMENT_PENDING_COMMIT_TRANSITION_GRACE_MS
+    input.attachments.length === 0
   );
 }
 
@@ -4998,8 +4988,11 @@ export function ThreadHistoryViewport({
             .filter((message) => {
               const normalizedBody = normalizeMessageBodyText(message.body);
               const messageAttachments =
-                historyState.attachmentsByMessage.get(message.id) ??
-                EMPTY_MESSAGE_ATTACHMENTS;
+                filterRenderableMessageAttachments(
+                  message.id,
+                  historyState.attachmentsByMessage.get(message.id) ??
+                    EMPTY_MESSAGE_ATTACHMENTS,
+                );
 
               return !isOwnAttachmentCommitTransitionPending({
                 attachments: messageAttachments,
