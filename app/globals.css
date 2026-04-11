@@ -8362,6 +8362,15 @@ main {
   gap: 7px;
 }
 
+.message-attachment-caption-stack {
+  display: grid;
+  gap: 7px;
+}
+
+.message-attachment-caption-stack .message-attachments {
+  margin-top: 0;
+}
+
 .message-voice-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
