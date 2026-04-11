@@ -6,6 +6,12 @@ import type {
 } from '@/modules/spaces/model';
 
 /**
+ * KeepCozy product contract scaffolding.
+ *
+ * These draft role/object/thread vocabularies are intentionally owned by the
+ * KeepCozy product layer instead of shared `spaces` runtime modules.
+ */
+/**
  * Draft table name for the future additive companion metadata layer.
  *
  * This is documentation and contract scaffolding only. It must not be treated

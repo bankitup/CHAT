@@ -9,24 +9,23 @@ import {
   type SpaceTheme,
 } from './model';
 
+/**
+ * Shared platform posture helpers for `spaces`.
+ *
+ * These helpers keep current runtime profile/theme compatibility in one place
+ * without pushing Messenger or KeepCozy shell policy into membership and
+ * access-loading code.
+ */
 export const LEGACY_KEEP_COZY_TEST_SPACE_NAME = 'TEST';
 export const DEFAULT_NEW_SPACE_PROFILE: SpaceProfile = 'messenger_full';
 export const DEFAULT_SPACE_THEME: SpaceTheme = 'dark';
 
 function normalizeStoredSpaceProfile(profile: string | null | undefined) {
-  if (profile === 'messenger_full' || profile === 'keepcozy_ops') {
-    return profile;
-  }
-
-  return null;
+  return normalizeSpaceProfile(profile);
 }
 
 function normalizeStoredSpaceTheme(theme: string | null | undefined) {
-  if (theme === 'dark' || theme === 'light') {
-    return theme;
-  }
-
-  return null;
+  return normalizeSpaceTheme(theme);
 }
 
 export function isLegacyKeepCozyTestSpaceName(

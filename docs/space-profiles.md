@@ -2,12 +2,13 @@
 
 ## Purpose
 
-This document defines the initial space-profile foundation for the shared CHAT
-and KeepCozy repository.
+This document defines the initial space-profile foundation for the BWC platform
+repository.
 
 The goal is to make one shared `space` container support different product
 surfaces in a clean, implementation-oriented way without splitting the app into
-two permanent products, two permanent branches, or two unrelated backends.
+two repos, widening shared platform modules into product-specific policy, or
+creating unrelated backends.
 
 This is a foundation document, not a runtime-redesign branch.
 
@@ -44,6 +45,15 @@ The repository already has one shared `space` foundation:
   - KeepCozy-first routes such as `/home`, `/rooms`, `/issues`, `/tasks`, and
     `/activity`
   - chat surfaces such as `/inbox` and `/chat/[conversationId]`
+
+Current implementation ownership is intentionally split:
+
+- [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
+  resolves platform-level profile/theme posture
+- [shell.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/shell.ts)
+  resolves shared shell posture from the active space
+- [contract-types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/contract-types.ts)
+  owns KeepCozy-specific future contract vocabulary outside shared `spaces`
 
 What is missing is a stable product-shaped way to say:
 

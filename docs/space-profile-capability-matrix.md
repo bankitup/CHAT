@@ -3,14 +3,15 @@
 ## Purpose
 
 This document defines the initial capability matrix for the first two space
-profiles in the shared CHAT and KeepCozy repository:
+profiles in the BWC platform repository:
 
 - `messenger_full`
 - `keepcozy_ops`
 
 The goal is to give later routing, shell, and policy branches one explicit
 reference for how these profiles should differ without inventing separate
-products or drifting into many unrelated feature flags.
+backends, widening platform modules into product policy, or drifting into many
+unrelated feature flags.
 
 This is a profile-default document, not final enforcement.
 
@@ -24,6 +25,7 @@ Related documents:
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 - [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
+- [shell.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/shell.ts)
 - [contract-types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/contract-types.ts)
 
 ## Scope of This Matrix

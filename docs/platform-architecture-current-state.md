@@ -16,7 +16,7 @@ It is intentionally honest about:
 
 The repository already behaves like a multi-product platform codebase, but the
 top-level framing and some ownership seams still describe it as a shared
-`CHAT + KeepCozy` shell.
+legacy single-product shell.
 
 That mismatch is documentation and boundary clarity debt more than a missing
 feature problem.

@@ -5,6 +5,12 @@ import type {
   SpaceRole,
 } from './model';
 
+/**
+ * Shared platform governance resolution for `spaces`.
+ *
+ * Product layers may consume these results, but they should not redefine
+ * super-admin or space-admin derivation inside product-specific modules.
+ */
 export const INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST = new Set([
   'dmtest1@chat.local',
   'dmtest2@chat.local',

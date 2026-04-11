@@ -4,6 +4,13 @@ import type {
   SpaceTheme,
 } from './model';
 
+/**
+ * Shared app-shell posture helpers.
+ *
+ * Product components still render their own navigation, but active-space
+ * selection and shared route posture live here so they are easier to reason
+ * about as platform concerns.
+ */
 export type AppShellSpaceSummary = {
   defaultShellRoute: SpaceProfileDefaultShellRoute;
   id: string;

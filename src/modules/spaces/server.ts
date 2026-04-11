@@ -12,7 +12,6 @@ import {
 } from './governance';
 import type {
   ResolvedSpaceProfile,
-  ResolvedSpaceTheme,
   ResolvedSpaceGovernanceGlobalRole,
   ResolvedSpaceGovernanceRole,
   ResolvedSpaceGovernanceState,
@@ -29,10 +28,8 @@ import {
   resolveSpaceProfileShellHref,
   resolveSpaceThemeForSpace,
 } from './posture';
-import {
-  normalizeSpaceProfile,
-  normalizeSpaceTheme,
-} from './model';
+import { normalizeSpaceProfile, normalizeSpaceTheme } from './model';
+import { withSpaceParam } from './url';
 export {
   INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST,
   resolveSpaceGovernanceRoleForRuntimeSpaceRole,
