@@ -2,6 +2,10 @@ import {
   resolveMessagingAttachmentMimeType,
   type MessagingVoicePlaybackSourceOption,
 } from '@/modules/messaging/media/message-assets';
+import {
+  classifyMessagingVoiceDevicePlaybackSupport,
+  resolveMessagingVoicePlaybackSourcePreference,
+} from '@/modules/messaging/media/voice';
 
 const THREAD_VOICE_PLAYBACK_CACHE_MAX_ENTRIES = 120;
 
@@ -179,20 +183,11 @@ function resolveThreadVoicePlaybackSupportPriority(input: {
   playbackSource: MessagingVoicePlaybackSourceOption;
   playbackSupport: ThreadVoiceDevicePlaybackSupport;
 }) {
-  const supportPriority =
-    input.playbackSupport.status === 'supported'
-      ? 0
-      : input.playbackSupport.status === 'unknown'
-        ? 1
-        : 2;
-  const sourcePriority =
-    input.playbackSupport.status === 'supported'
-      ? input.playbackSource.origin === 'derived'
-        ? 0
-        : 1
-      : input.playbackSource.origin === 'original'
-        ? 0
-        : 1;
+  const { sourcePriority, supportPriority } =
+    resolveMessagingVoicePlaybackSourcePreference({
+      origin: input.playbackSource.origin,
+      supportStatus: input.playbackSupport.status,
+    });
 
   return [supportPriority, sourcePriority, input.playbackSource.sourceId] as const;
 }
@@ -267,15 +262,10 @@ export async function resolveThreadVoiceDevicePlaybackSupport(input: {
     }
   }
 
-  const status =
-    mediaCapabilitiesSupported === false ||
-    (mediaCapabilitiesSupported !== true && canPlayType === 'no')
-      ? 'unsupported'
-      : mediaCapabilitiesSupported === true ||
-          canPlayType === 'probably' ||
-          canPlayType === 'maybe'
-        ? 'supported'
-        : 'unknown';
+  const status = classifyMessagingVoiceDevicePlaybackSupport({
+    canPlayType,
+    mediaCapabilitiesSupported,
+  });
 
   return {
     canPlayType,

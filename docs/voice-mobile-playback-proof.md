@@ -17,6 +17,7 @@ Relevant code paths:
 Follow-up architecture contract:
 
 - [voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md)
+- [voice-cross-device-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-cross-device-manual-matrix.md)
 
 ## Current Capture Order
 
