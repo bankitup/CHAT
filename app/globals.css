@@ -8670,7 +8670,8 @@ main {
 }
 
 .message-photo-card-optimistic {
-  width: min(100%, 13rem);
+  width: fit-content;
+  max-width: var(--message-photo-card-committed-max-width, min(100%, 7.25rem));
   border-color: rgba(221, 228, 238, 0.4);
   border-radius: 15px;
   background: rgba(255, 255, 255, 0.58);
@@ -8735,6 +8736,12 @@ main {
   max-height: var(--message-photo-card-committed-max-height);
   height: auto;
   aspect-ratio: auto;
+}
+
+.message-photo-card-committed .message-photo-card-visual {
+  width: min(100%, var(--message-photo-card-committed-max-width));
+  max-width: min(100%, var(--message-photo-card-committed-max-width));
+  max-height: var(--message-photo-card-committed-max-height);
 }
 
 .message-photo-card-visual-unavailable {
