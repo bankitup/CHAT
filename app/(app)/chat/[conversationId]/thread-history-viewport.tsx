@@ -194,7 +194,7 @@ type ThreadHistorySessionCacheEntry = {
 };
 
 type ActiveImagePreview = {
-  fileName: string;
+  caption: string | null;
   signedUrl: string;
 };
 
@@ -2144,12 +2144,14 @@ MemoizedThreadVoiceMessageBubble.displayName = 'MemoizedThreadVoiceMessageBubble
 
 type ThreadMessageAttachmentsProps = {
   attachments: MessageAttachment[];
+  imagePreviewCaption: string | null;
   language: AppLanguage;
   onImagePreviewClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 };
 
 const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
   attachments,
+  imagePreviewCaption,
   language,
   onImagePreviewClick,
 }: ThreadMessageAttachmentsProps) {
@@ -2168,10 +2170,8 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
         );
 
         if (attachment.isImage) {
-          const previewTitle = normalizeAttachmentDisplayName(
-            attachment.fileName,
-            t.chat.photo,
-          );
+          const previewCaption = imagePreviewCaption;
+          const previewAccessibleLabel = previewCaption ?? t.chat.photo;
 
           if (!attachmentSignedUrl) {
             return (
@@ -2191,10 +2191,10 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
             <button
               key={attachmentKey}
               aria-haspopup="dialog"
-              aria-label={t.chat.openPhotoPreviewAria(previewTitle)}
+              aria-label={t.chat.openPhotoPreviewAria(previewAccessibleLabel)}
               className="message-photo-card message-photo-card-button"
               data-message-image-preview="true"
-              data-preview-title={previewTitle}
+              data-preview-caption={previewCaption ?? ''}
               data-preview-url={attachmentSignedUrl}
               onClick={onImagePreviewClick}
               type="button"
@@ -2204,7 +2204,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
                   proves works in production. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                alt={previewTitle}
+                alt={previewAccessibleLabel}
                 className="message-photo-card-image"
                 loading="lazy"
                 src={attachmentSignedUrl}
@@ -2294,6 +2294,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
   );
 }, (previous, next) => {
   return (
+    previous.imagePreviewCaption === next.imagePreviewCaption &&
     previous.language === next.language &&
     previous.onImagePreviewClick === next.onImagePreviewClick &&
     areMessageAttachmentsEqual(previous.attachments, next.attachments)
@@ -4009,9 +4010,8 @@ function ThreadMessageRowComponent({
       event.preventDefault();
       event.stopPropagation();
       closeQuickActions();
-      const previewTitle = normalizeAttachmentDisplayName(
-        event.currentTarget.dataset.previewTitle,
-        t.chat.photo,
+      const previewCaption = normalizeMessageBodyText(
+        event.currentTarget.dataset.previewCaption,
       );
       const signedUrl = normalizeAttachmentSignedUrl(
         event.currentTarget.dataset.previewUrl,
@@ -4022,11 +4022,11 @@ function ThreadMessageRowComponent({
       }
 
       onOpenImagePreview({
-        fileName: previewTitle,
+        caption: previewCaption,
         signedUrl,
       });
     },
-    [closeQuickActions, onOpenImagePreview, t.chat.photo],
+    [closeQuickActions, onOpenImagePreview],
   );
   const handleReplyAction = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -4562,6 +4562,7 @@ function ThreadMessageRowComponent({
           {nonVoiceAttachments.length && !isDeletedMessage ? (
             <ThreadMessageAttachments
               attachments={nonVoiceAttachments}
+              imagePreviewCaption={normalizedMessageBody}
               language={language}
               onImagePreviewClick={handleImageAttachmentPreview}
             />
@@ -4630,9 +4631,10 @@ function ThreadImagePreviewOverlay({
   preview,
 }: ThreadImagePreviewOverlayProps) {
   const portalRoot = typeof document !== 'undefined' ? document.body : null;
-  const previewTitle = preview
-    ? normalizeAttachmentDisplayName(preview.fileName, fallbackTitle)
-    : fallbackTitle;
+  const previewCaption = preview
+    ? normalizeMessageBodyText(preview.caption)
+    : null;
+  const previewTitle = previewCaption ?? fallbackTitle;
   const previewSignedUrl = preview
     ? normalizeAttachmentSignedUrl(preview.signedUrl)
     : null;
@@ -4696,9 +4698,11 @@ function ThreadImagePreviewOverlay({
               className="chat-image-preview-image"
               src={previewSignedUrl}
             />
-            <figcaption className="chat-image-preview-caption">
-              {previewTitle}
-            </figcaption>
+            {previewCaption ? (
+              <figcaption className="chat-image-preview-caption">
+                {previewCaption}
+              </figcaption>
+            ) : null}
           </figure>
         </div>
       </div>
@@ -6226,25 +6230,23 @@ export function ThreadHistoryViewport({
 
   const openImagePreview = useCallback((preview: ActiveImagePreview) => {
     const signedUrl = normalizeAttachmentSignedUrl(preview.signedUrl);
-    const previewTitle = normalizeAttachmentDisplayName(
-      preview.fileName,
-      t.chat.photo,
-    );
+    const previewCaption = normalizeMessageBodyText(preview.caption);
+    const previewLabel = previewCaption ?? t.chat.photo;
 
     if (!signedUrl) {
       logThreadGuardDiagnostic(
         'image-preview-suppressed-missing-url',
-        `${conversationId}:${previewTitle}`,
+        `${conversationId}:${previewLabel}`,
         {
           conversationId,
-          fileName: previewTitle,
+          previewCaption,
         },
       );
       return;
     }
 
     setActiveImagePreview({
-      fileName: previewTitle,
+      caption: previewCaption,
       signedUrl,
     });
   }, [conversationId, t.chat.photo]);
