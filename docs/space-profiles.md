@@ -24,6 +24,7 @@ Related documents:
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 - [keepcozy-mvp-boundary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-boundary.md)
 - [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+- [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
 - [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
 - [shell.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/shell.ts)
 - [contract-types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/contract-types.ts)
@@ -48,6 +49,9 @@ The repository already has one shared `space` foundation:
 
 Current implementation ownership is intentionally split:
 
+- [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
+  resolves product capability posture from the shared platform membership and
+  governance contract
 - [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
   resolves platform-level profile/theme posture
 - [shell.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/shell.ts)
@@ -222,6 +226,9 @@ Practical rule:
 - profile should shape which capability bundle is primary
 - profile should not duplicate the underlying capability implementation if the
   same core service already exists
+- product routes should prefer the resolved product-access branch from
+  `UserSpaceRecord.access.products` over re-checking raw profile strings in
+  every surface
 
 ## How Profiles Relate to Shell Routing
 

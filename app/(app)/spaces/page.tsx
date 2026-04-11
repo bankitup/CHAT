@@ -125,7 +125,8 @@ export default async function SpacesPage({ searchParams }: SpacesPageProps) {
         </section>
       ) : null}
 
-      {currentSpaceId && currentSpace?.canManageMembers ? (
+      {currentSpaceId &&
+      currentSpace?.access.platform.governance.canManageMembers ? (
         <section className="card stack settings-surface spaces-surface">
           <p className="eyebrow">{t.spaces.spaceAdminEyebrow}</p>
           <h2 className="card-title">{t.spaces.manageMembersTitle}</h2>
