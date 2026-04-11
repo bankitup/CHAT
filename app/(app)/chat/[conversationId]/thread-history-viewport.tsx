@@ -1350,29 +1350,43 @@ function getOutgoingMessageStatus(input: {
   return 'sent' as const;
 }
 
+function getMessageInteractiveTargetElement(target: EventTarget | null) {
+  if (target instanceof Element) {
+    return target;
+  }
+
+  if (target instanceof Node) {
+    return target.parentElement;
+  }
+
+  return null;
+}
+
 function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
+  const targetElement = getMessageInteractiveTargetElement(target);
+
+  if (!targetElement) {
     return false;
   }
 
-  if (target.closest('[data-message-image-preview="true"]')) {
+  if (targetElement.closest('[data-message-image-preview="true"]')) {
     return false;
   }
 
-  if (target.closest('[data-message-voice-interactive="true"]')) {
+  if (targetElement.closest('[data-message-voice-interactive="true"]')) {
     return true;
   }
 
-  if (target.closest('[data-message-quick-actions-surface="true"]')) {
+  if (targetElement.closest('[data-message-quick-actions-surface="true"]')) {
     return true;
   }
 
-  if (target.closest('.reaction-groups')) {
+  if (targetElement.closest('.reaction-groups')) {
     return true;
   }
 
   return Boolean(
-    target.closest(
+    targetElement.closest(
       'a, button, input, textarea, select, summary, details, audio, video',
     ),
   );
@@ -2141,10 +2155,7 @@ function ThreadVoiceMessageBubble({
 
   const handleVoiceCardClick = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (
-        event.target instanceof HTMLElement &&
-        event.target.closest('.message-voice-play')
-      ) {
+      if (getMessageInteractiveTargetElement(event.target)?.closest('.message-voice-play')) {
         return;
       }
 
