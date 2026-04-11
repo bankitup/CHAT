@@ -1545,6 +1545,7 @@ function ThreadVoiceMessageBubble({
   const [isResolvingSignedUrl, setIsResolvingSignedUrl] = useState(false);
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
+  const lastVoicePointerActivationAtRef = useRef(0);
   const hasRecoverableAttachmentStorageLocator = hasRecoverableAttachmentLocator(
     attachment,
     messageId,
@@ -1988,10 +1989,29 @@ function ThreadVoiceMessageBubble({
     [],
   );
 
+  const activateVoiceFromPointer = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.pointerType === 'mouse' || event.button !== 0) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      lastVoicePointerActivationAtRef.current = Date.now();
+      void togglePlayback();
+    },
+    [togglePlayback],
+  );
+
   const handleVoiceSurfaceClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
+
+      if (Date.now() - lastVoicePointerActivationAtRef.current < 420) {
+        return;
+      }
+
       void togglePlayback();
     },
     [togglePlayback],
@@ -2011,6 +2031,20 @@ function ThreadVoiceMessageBubble({
     [handleVoiceSurfaceClick],
   );
 
+  const handleVoiceCardPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('.message-voice-play')
+      ) {
+        return;
+      }
+
+      activateVoiceFromPointer(event);
+    },
+    [activateVoiceFromPointer],
+  );
+
   return (
     <div
       className={
@@ -2027,7 +2061,7 @@ function ThreadVoiceMessageBubble({
       onPointerCancelCapture={handleVoiceSurfacePointerUp}
       onPointerDown={handleVoiceSurfacePointerDown}
       onPointerDownCapture={handleVoiceSurfacePointerDown}
-      onPointerUpCapture={handleVoiceSurfacePointerUp}
+      onPointerUp={handleVoiceCardPointerUp}
     >
       <button
         aria-label={playButtonLabel}
@@ -2038,7 +2072,7 @@ function ThreadVoiceMessageBubble({
         onPointerCancelCapture={handleVoiceSurfacePointerUp}
         onPointerDown={handleVoiceSurfacePointerDown}
         onPointerDownCapture={handleVoiceSurfacePointerDown}
-        onPointerUpCapture={handleVoiceSurfacePointerUp}
+        onPointerUp={activateVoiceFromPointer}
         type="button"
       >
         <span
