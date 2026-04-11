@@ -253,6 +253,11 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
   resolveTransportSource?: ThreadVoiceTransportSourceResolver;
   transportSourceUrl: string | null;
 }) {
+  input.onDiagnostic?.('local-playable-source-requested', {
+    cacheKey: input.cacheKey,
+    hasTransportSourceUrl: Boolean(input.transportSourceUrl),
+  });
+
   if (
     typeof window === 'undefined' ||
     !input.cacheKey ||
@@ -270,12 +275,20 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
     currentEntry.sourceUrl === transportSourceUrl &&
     currentEntry.playbackUrl
   ) {
+    input.onDiagnostic?.('local-playable-source-cache-hit', {
+      cacheKey,
+      transportSourceUrl,
+    });
     return currentEntry.playbackUrl;
   }
 
   const existingPromise = threadVoicePlaybackWarmPromises.get(cacheKey);
 
   if (existingPromise) {
+    input.onDiagnostic?.('local-playable-source-promise-reuse', {
+      cacheKey,
+      transportSourceUrl,
+    });
     return existingPromise;
   }
 
@@ -284,6 +297,10 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
 
   const promise = (async () => {
     try {
+      input.onDiagnostic?.('local-playable-source-fetch-start', {
+        cacheKey,
+        transportSourceUrl,
+      });
       const resolvedTransportSource = await resolveTransportSource({
         transportSourceUrl,
       });
