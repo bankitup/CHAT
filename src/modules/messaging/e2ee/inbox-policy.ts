@@ -1,6 +1,6 @@
-import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
-import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
-import { getPreviewPrivacyDecision } from '@/modules/messaging/privacy/preview-policy';
+import type { InboxAttachmentPreviewKind } from '../inbox/preview-kind.ts';
+import type { InboxPreviewDisplayMode } from '../inbox/preferences.ts';
+import { getPreviewPrivacyDecision } from '../privacy/preview-policy.ts';
 
 export type InboxPreviewLabels = {
   audio: string;
