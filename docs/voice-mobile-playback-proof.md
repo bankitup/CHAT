@@ -103,3 +103,11 @@ Once mobile logs confirm the failing stage:
 - If `canPlayType` rejects WebM-like MIME on mobile, the next step is a capture compatibility fix, not a transport rewrite.
 - If source preparation fails before playability is checked, the next step is transport/content-route debugging.
 - If playability looks fine but playback still stalls, the next step is hidden-audio lifecycle/runtime debugging in `thread-voice-message-bubble.tsx`.
+
+## Current Runtime Guard
+
+The voice bubble now resolves a device-aware playability verdict before treating a committed voice attachment as normally playable.
+
+- If the browser reports the MIME/container as unsupported, the bubble moves to an explicit unavailable state.
+- Unsupported voice formats no longer masquerade as generic loading or buffering.
+- This is still a proof-friendly guard, not transcoding and not a capture-policy change.

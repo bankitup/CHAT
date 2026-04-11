@@ -15,10 +15,13 @@ import {
   configureInlineAudioElement,
   hasRecoverableThreadVoicePlaybackLocator,
   prepareThreadVoicePlaybackSource,
+  resolveThreadVoiceDevicePlaybackSupport,
   resolveThreadVoicePlaybackSourceSnapshot,
   writeThreadVoicePlaybackCacheEntry,
+  type ThreadVoiceDevicePlaybackSupport,
   type ThreadVoicePlaybackCacheEntry,
 } from './voice-playback-source';
+import { resolveMessagingAttachmentMimeType } from '@/modules/messaging/media/message-assets';
 import {
   logVoiceThreadDiagnostic,
   logVoiceThreadProof,
@@ -60,6 +63,16 @@ type VoiceMessageRuntimeModel = {
   reason: string;
   state: VoiceMessageRenderState;
 };
+
+const UNKNOWN_THREAD_VOICE_DEVICE_PLAYBACK_SUPPORT: ThreadVoiceDevicePlaybackSupport =
+  {
+    canPlayType: null,
+    mediaCapabilitiesPowerEfficient: null,
+    mediaCapabilitiesSmooth: null,
+    mediaCapabilitiesSupported: null,
+    mimeType: null,
+    status: 'unknown',
+  };
 
 type VoiceMessageRendererModel = {
   canRetry: boolean;
@@ -275,15 +288,6 @@ function formatVoiceDuration(valueMs: number | null | undefined) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-const VOICE_EXTENSION_TO_MIME_TYPE = new Map<string, string>([
-  ['.aac', 'audio/aac'],
-  ['.m4a', 'audio/m4a'],
-  ['.mp4', 'audio/mp4'],
-  ['.ogg', 'audio/ogg'],
-  ['.wav', 'audio/wav'],
-  ['.webm', 'audio/webm'],
-]);
-
 function getThreadVoiceFileExtension(fileName: string | null | undefined) {
   const normalizedFileName = fileName?.trim() || '';
 
@@ -301,25 +305,6 @@ function getThreadVoiceFileExtension(fileName: string | null | undefined) {
   }
 
   return normalizedFileName.slice(extensionIndex).toLowerCase();
-}
-
-function resolveThreadVoiceMimeType(input: {
-  fileName: string | null | undefined;
-  mimeType: string | null | undefined;
-}) {
-  const normalizedMimeType = input.mimeType?.trim().toLowerCase() || '';
-
-  if (normalizedMimeType) {
-    return normalizedMimeType;
-  }
-
-  const fileExtension = getThreadVoiceFileExtension(input.fileName);
-
-  if (!fileExtension) {
-    return null;
-  }
-
-  return VOICE_EXTENSION_TO_MIME_TYPE.get(fileExtension) ?? null;
 }
 
 function resolveThreadVoicePlaybackSourceKind(input: {
@@ -351,6 +336,7 @@ function resolveAudioCanPlayTypeResult(
 
 function resolveVoiceMessageRuntimeModel(input: {
   canPreparePlaybackSource: boolean;
+  devicePlaybackSupportStatus: ThreadVoiceDevicePlaybackSupport['status'];
   didFailPlaybackSourcePrepare?: boolean;
   hasAttachment: boolean;
   hasPlaybackSource: boolean;
@@ -365,6 +351,12 @@ function resolveVoiceMessageRuntimeModel(input: {
   if (input.stageHint === 'failed' || input.playbackFailed) {
     state = 'failed';
     reason = input.stageHint === 'failed' ? 'stage-failed' : 'playback-failed';
+  } else if (
+    input.devicePlaybackSupportStatus === 'unsupported' &&
+    input.hasAttachment
+  ) {
+    state = 'failed';
+    reason = 'device-playback-unsupported';
   } else if (input.hasPlaybackSource) {
     state = 'ready';
     reason = 'playback-source-ready';
@@ -401,7 +393,9 @@ function resolveVoiceMessageRuntimeModel(input: {
       break;
     case 'failed':
       interactionAvailability =
-        input.hasPlaybackSource || input.canPreparePlaybackSource
+        reason === 'device-playback-unsupported'
+          ? 'disabled'
+          : input.hasPlaybackSource || input.canPreparePlaybackSource
           ? 'retryable'
           : 'disabled';
       break;
@@ -418,9 +412,17 @@ function resolveVoiceMessageRuntimeModel(input: {
 }
 
 function getVoiceMessageBaseStateLabel(input: {
+  reason: string;
   state: VoiceMessageRenderState;
   t: ReturnType<typeof getTranslations>;
 }) {
+  if (
+    input.state === 'failed' &&
+    input.reason === 'device-playback-unsupported'
+  ) {
+    return input.t.chat.voiceMessageUnsupported;
+  }
+
   switch (input.state) {
     case 'pending':
       return input.t.chat.voiceMessagePending;
@@ -448,12 +450,14 @@ function resolveVoiceMessageRendererModel(input: {
   const showMeta = !isReady;
   const stateLabel = isBuffering
     ? input.t.chat.voiceMessageLoading
-    : getVoiceMessageBaseStateLabel({ state, t: input.t });
+    : getVoiceMessageBaseStateLabel({ reason, state, t: input.t });
   const stateNote =
     state === 'pending'
       ? input.t.chat.voiceMessagePendingHint
       : state === 'failed'
-        ? canRetry
+        ? reason === 'device-playback-unsupported'
+          ? input.t.chat.voiceMessageUnavailable
+          : canRetry
           ? input.t.chat.voiceMessageRetryHint
           : input.t.chat.voiceMessageUnavailable
         : null;
@@ -550,11 +554,15 @@ function ThreadVoiceMessageBubble({
   );
   const voiceFileName = attachment?.fileName?.trim() || null;
   const voiceFileExtension = getThreadVoiceFileExtension(voiceFileName);
-  const storedVoiceMimeType = resolveThreadVoiceMimeType({
+  const storedVoiceMimeType = resolveMessagingAttachmentMimeType({
     fileName: voiceFileName,
     mimeType: attachment?.mimeType ?? null,
   });
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [devicePlaybackSupport, setDevicePlaybackSupport] =
+    useState<ThreadVoiceDevicePlaybackSupport>(
+      UNKNOWN_THREAD_VOICE_DEVICE_PLAYBACK_SUPPORT,
+    );
   const handleAudioRef = useCallback((audio: HTMLAudioElement | null) => {
     audioRef.current = audio;
     configureInlineAudioElement(audio);
@@ -639,6 +647,7 @@ function ThreadVoiceMessageBubble({
   });
   const voiceRuntimeModel = resolveVoiceMessageRuntimeModel({
     canPreparePlaybackSource,
+    devicePlaybackSupportStatus: devicePlaybackSupport.status,
     didFailPlaybackSourcePrepare,
     hasAttachment: Boolean(attachment),
     hasPlaybackSource,
@@ -680,12 +689,73 @@ function ThreadVoiceMessageBubble({
   const canRetryVoicePlayback = voiceRendererModel.canRetry;
 
   useEffect(() => {
+    let isCancelled = false;
+
+    if (!audioRef.current || !storedVoiceMimeType) {
+      setDevicePlaybackSupport((current) => {
+        if (
+          current.status === 'unknown' &&
+          current.mimeType === (storedVoiceMimeType ?? null)
+        ) {
+          return current;
+        }
+
+        return {
+          ...UNKNOWN_THREAD_VOICE_DEVICE_PLAYBACK_SUPPORT,
+          mimeType: storedVoiceMimeType ?? null,
+        };
+      });
+      return;
+    }
+
+    void (async () => {
+      const nextSupport = await resolveThreadVoiceDevicePlaybackSupport({
+        audio: audioRef.current,
+        mimeType: storedVoiceMimeType,
+      });
+
+      if (isCancelled) {
+        return;
+      }
+
+      setDevicePlaybackSupport(nextSupport);
+      logVoiceThreadDiagnostic('voice-device-playability-resolved', {
+        canPlayType: nextSupport.canPlayType,
+        fileExtension: voiceFileExtension,
+        mediaCapabilitiesPowerEfficient:
+          nextSupport.mediaCapabilitiesPowerEfficient,
+        mediaCapabilitiesSmooth: nextSupport.mediaCapabilitiesSmooth,
+        mediaCapabilitiesSupported: nextSupport.mediaCapabilitiesSupported,
+        messageId,
+        storedMimeType: nextSupport.mimeType,
+        supportStatus: nextSupport.status,
+      });
+      logVoiceThreadProof('voice-device-playability-resolved', {
+        canPlayType: nextSupport.canPlayType,
+        fileExtension: voiceFileExtension,
+        mediaCapabilitiesPowerEfficient:
+          nextSupport.mediaCapabilitiesPowerEfficient,
+        mediaCapabilitiesSmooth: nextSupport.mediaCapabilitiesSmooth,
+        mediaCapabilitiesSupported: nextSupport.mediaCapabilitiesSupported,
+        messageId,
+        storedMimeType: nextSupport.mimeType,
+        supportStatus: nextSupport.status,
+      });
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [messageId, storedVoiceMimeType, voiceFileExtension]);
+
+  useEffect(() => {
     const proofSnapshotKey = [
       messageId,
       voicePlaybackCacheKey ?? '',
       effectiveVoicePlaybackSourceUrl ? 'playback' : 'no-playback',
       effectiveVoiceTransportSourceUrl ? 'transport' : 'no-transport',
       shouldHydratePreparedVoicePlayback ? 'hydrate' : 'cold',
+      devicePlaybackSupport.status,
       voiceState,
       voiceRenderReason,
     ].join('|');
@@ -705,9 +775,13 @@ function ThreadVoiceMessageBubble({
       renderReason: voiceRenderReason,
       shouldHydratePreparedPlayback: shouldHydratePreparedVoicePlayback,
       storedMimeType: storedVoiceMimeType,
+      supportCanPlayType: devicePlaybackSupport.canPlayType,
+      supportStatus: devicePlaybackSupport.status,
       voiceState,
     });
   }, [
+    devicePlaybackSupport.canPlayType,
+    devicePlaybackSupport.status,
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
     messageId,
@@ -893,12 +967,16 @@ function ThreadVoiceMessageBubble({
 
       try {
         logVoiceThreadProof('voice-source-resolver-entered', {
+          canPlayType: devicePlaybackSupport.canPlayType,
           fileExtension: voiceFileExtension,
           hasExistingPlaybackSource: Boolean(effectiveVoicePlaybackSourceUrl),
           hasTransportSource: Boolean(effectiveVoiceTransportSourceUrl),
+          mediaCapabilitiesSupported:
+            devicePlaybackSupport.mediaCapabilitiesSupported,
           messageId,
           playbackSourceKind,
           storedMimeType: storedVoiceMimeType,
+          supportStatus: devicePlaybackSupport.status,
           voiceState,
         });
         const resolution = await prepareThreadVoicePlaybackSource({
@@ -929,9 +1007,12 @@ function ThreadVoiceMessageBubble({
         }
 
         logVoiceThreadProof('voice-source-prepared', {
+          canPlayType: devicePlaybackSupport.canPlayType,
           fileExtension: voiceFileExtension,
           hasPlaybackSource: Boolean(resolution.playbackSourceUrl),
           hasTransportSource: Boolean(nextTransportSourceUrl),
+          mediaCapabilitiesSupported:
+            devicePlaybackSupport.mediaCapabilitiesSupported,
           messageId,
           playbackSourceKind: resolveThreadVoicePlaybackSourceKind({
             playbackSourceUrl: resolution.playbackSourceUrl,
@@ -939,6 +1020,7 @@ function ThreadVoiceMessageBubble({
           }),
           status: resolution.status,
           storedMimeType: storedVoiceMimeType,
+          supportStatus: devicePlaybackSupport.status,
           voiceState,
         });
         return resolution.playbackSourceUrl;
@@ -955,6 +1037,9 @@ function ThreadVoiceMessageBubble({
     attachment?.messageId,
     canPreparePlaybackSource,
     conversationId,
+    devicePlaybackSupport.canPlayType,
+    devicePlaybackSupport.mediaCapabilitiesSupported,
+    devicePlaybackSupport.status,
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
     messageId,
@@ -1024,10 +1109,13 @@ function ThreadVoiceMessageBubble({
         currentSrc: audio.currentSrc || audio.src || null,
         fileExtension: voiceFileExtension,
         messageId,
+        mediaCapabilitiesSupported:
+          devicePlaybackSupport.mediaCapabilitiesSupported,
         networkState: audio.networkState,
         ownerVersion,
         playbackSource: nextPlaybackSource,
         readyState: audio.readyState,
+        supportStatus: devicePlaybackSupport.status,
         storedMimeType: storedVoiceMimeType,
       });
       logVoiceThreadProof('audio-play-requested', {
@@ -1044,6 +1132,7 @@ function ThreadVoiceMessageBubble({
         playbackSourceKind: nextPlaybackSource.startsWith('blob:')
           ? 'blob'
           : 'transport',
+        supportStatus: devicePlaybackSupport.status,
         storedMimeType: storedVoiceMimeType,
       });
       logVoiceThreadProof('voice-audio-play-requested', {
@@ -1059,6 +1148,7 @@ function ThreadVoiceMessageBubble({
         playbackSourceKind: nextPlaybackSource.startsWith('blob:')
           ? 'blob'
           : 'transport',
+        supportStatus: devicePlaybackSupport.status,
         storedMimeType: storedVoiceMimeType,
         voiceState,
       });
@@ -1076,6 +1166,7 @@ function ThreadVoiceMessageBubble({
           playbackSourceKind: nextPlaybackSource.startsWith('blob:')
             ? 'blob'
             : 'transport',
+          supportStatus: devicePlaybackSupport.status,
           storedMimeType: storedVoiceMimeType,
         });
         logVoiceThreadProof('voice-audio-play-fulfilled', {
@@ -1088,6 +1179,7 @@ function ThreadVoiceMessageBubble({
           playbackSourceKind: nextPlaybackSource.startsWith('blob:')
             ? 'blob'
             : 'transport',
+          supportStatus: devicePlaybackSupport.status,
           storedMimeType: storedVoiceMimeType,
           voiceState,
         });
@@ -1124,6 +1216,7 @@ function ThreadVoiceMessageBubble({
           playbackSourceKind: nextPlaybackSource.startsWith('blob:')
             ? 'blob'
             : 'transport',
+          supportStatus: devicePlaybackSupport.status,
           storedMimeType: storedVoiceMimeType,
         });
         logVoiceThreadProof('voice-audio-play-rejected', {
@@ -1138,6 +1231,7 @@ function ThreadVoiceMessageBubble({
           playbackSourceKind: nextPlaybackSource.startsWith('blob:')
             ? 'blob'
             : 'transport',
+          supportStatus: devicePlaybackSupport.status,
           storedMimeType: storedVoiceMimeType,
           voiceState,
         });
@@ -1158,6 +1252,8 @@ function ThreadVoiceMessageBubble({
     },
     [
       clearPendingPlaybackIntent,
+      devicePlaybackSupport.mediaCapabilitiesSupported,
+      devicePlaybackSupport.status,
       effectiveVoicePlaybackSourceUrl,
       messageId,
       storedVoiceMimeType,
@@ -1788,6 +1884,7 @@ function ThreadVoiceMessageBubble({
               networkState: event.currentTarget.networkState,
               playbackSourceKind,
               readyState: event.currentTarget.readyState,
+              supportStatus: devicePlaybackSupport.status,
               storedMimeType: storedVoiceMimeType,
             });
             const stablePlaybackSource =
@@ -1837,6 +1934,7 @@ function ThreadVoiceMessageBubble({
               networkState: event.currentTarget.networkState,
               readyState: event.currentTarget.readyState,
               src: event.currentTarget.currentSrc || event.currentTarget.src || null,
+              supportStatus: devicePlaybackSupport.status,
               storedMimeType: storedVoiceMimeType,
             });
             logVoiceThreadProof('voice-audio-element-error', {
@@ -1852,6 +1950,7 @@ function ThreadVoiceMessageBubble({
               networkState: event.currentTarget.networkState,
               playbackSourceKind,
               readyState: event.currentTarget.readyState,
+              supportStatus: devicePlaybackSupport.status,
               storedMimeType: storedVoiceMimeType,
             });
             releaseActiveThreadVoicePlayback(

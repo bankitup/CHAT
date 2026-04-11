@@ -822,6 +822,7 @@ type LanguageDictionary = {
     voiceMessageProcessing: string;
     voiceMessageRecovering: string;
     voiceMessageFailed: string;
+    voiceMessageUnsupported: string;
     voiceMessageUnavailable: string;
     encryptedMessage: string;
     olderEncryptedMessage: string;
@@ -1842,6 +1843,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessageProcessing: 'Preparing voice message',
       voiceMessageRecovering: 'Recovering voice message',
       voiceMessageFailed: 'Voice message is not available right now.',
+      voiceMessageUnsupported: 'Voice format is not supported here.',
       voiceMessageUnavailable: 'Voice message is unavailable on this device.',
       encryptedMessage: 'Encrypted message',
       olderEncryptedMessage: 'Older encrypted message',
@@ -2911,6 +2913,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       voiceMessageProcessing: 'Голосовое сообщение подготавливается',
       voiceMessageRecovering: 'Голосовое сообщение восстанавливается',
       voiceMessageFailed: 'Голосовое сообщение сейчас недоступно.',
+      voiceMessageUnsupported: 'Формат голосового сообщения здесь не поддерживается.',
       voiceMessageUnavailable: 'Голосовое сообщение недоступно на этом устройстве.',
       encryptedMessage: 'Зашифрованное сообщение',
       olderEncryptedMessage: 'Раннее зашифрованное сообщение',
