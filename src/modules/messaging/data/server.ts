@@ -23,6 +23,7 @@ import {
 import {
   resolveMessagingAssetKindFromMimeType,
   resolveMessagingAttachmentMimeType,
+  type MessagingVoicePlaybackVariantRecord,
 } from '@/modules/messaging/media/message-assets';
 import { getProfileIdentities } from './profiles-server';
 import {
@@ -455,6 +456,7 @@ export type MessageAttachment = {
   isImage: boolean;
   isAudio: boolean;
   isVoiceMessage: boolean;
+  voicePlaybackVariants?: MessagingVoicePlaybackVariantRecord[] | null;
 };
 
 type MessageAssetsWriteClient =
