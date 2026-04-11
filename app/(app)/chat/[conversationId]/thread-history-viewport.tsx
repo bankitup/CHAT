@@ -687,20 +687,23 @@ function getThreadVoicePlaybackCacheKey(input: {
   attachment: MessageAttachment | null;
   messageId: string;
 }) {
-  const attachmentId =
-    typeof input.attachment?.id === 'string' ? input.attachment.id.trim() : '';
-
-  if (attachmentId) {
-    return attachmentId;
-  }
-
   const objectPath =
     typeof input.attachment?.objectPath === 'string'
       ? input.attachment.objectPath.trim()
       : '';
 
   if (objectPath) {
+    // Prefer the stable storage locator so the same committed voice keeps its
+    // warmed/session-ready cache across thread re-entry even if attachment row
+    // projection details shift.
     return `${input.messageId}:${objectPath}`;
+  }
+
+  const attachmentId =
+    typeof input.attachment?.id === 'string' ? input.attachment.id.trim() : '';
+
+  if (attachmentId) {
+    return attachmentId;
   }
 
   return input.messageId;
