@@ -908,7 +908,6 @@ type LanguageDictionary = {
     refreshEncryptedSetup: string;
     resetEncryptedSetupDev: string;
     reloadConversation: string;
-    encryptedAttachmentsUnsupported: string;
     loadingOlderMessages: string;
     olderMessagesAutoLoad: string;
     messageReactions: string;
@@ -1941,8 +1940,6 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       refreshEncryptedSetup: 'Refresh encrypted setup',
       resetEncryptedSetupDev: 'Reset encrypted setup (dev)',
       reloadConversation: 'Reload chat',
-      encryptedAttachmentsUnsupported:
-        'Encrypted text with attachments is not supported yet in direct messages.',
       loadingOlderMessages: 'Loading older messages...',
       olderMessagesAutoLoad: 'Older messages will load automatically.',
       messageReactions: 'Message reactions',
@@ -3021,8 +3018,6 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       refreshEncryptedSetup: 'Обновить настройку шифрования',
       resetEncryptedSetupDev: 'Сбросить шифрование (dev)',
       reloadConversation: 'Обновить чат',
-      encryptedAttachmentsUnsupported:
-        'Зашифрованный текст с вложениями в личных чатах пока не поддерживается.',
       loadingOlderMessages: 'Загружаем более ранние сообщения...',
       olderMessagesAutoLoad: 'Более ранние сообщения загрузятся автоматически.',
       messageReactions: 'Реакции на сообщение',
