@@ -249,6 +249,27 @@ type VoiceMessageInteractionAvailability =
 
 type VoiceMessagePlayIconState = 'error' | 'loading' | 'pause' | 'play';
 
+type VoiceMessageRuntimeModel = {
+  interactionAvailability: VoiceMessageInteractionAvailability;
+  reason: string;
+  state: VoiceMessageRenderState;
+};
+
+type VoiceMessageRendererModel = {
+  canRetry: boolean;
+  dataPlaybackState: MessagingVoicePlaybackState | VoiceMessageRenderState;
+  interactionAvailability: VoiceMessageInteractionAvailability;
+  isBuffering: boolean;
+  isPlayable: boolean;
+  playButtonLabel: string;
+  playIconState: VoiceMessagePlayIconState;
+  reason: string;
+  showMeta: boolean;
+  state: VoiceMessageRenderState;
+  stateLabel: string;
+  stateNote: string | null;
+};
+
 const THREAD_HISTORY_PAGE_SIZE = 26;
 const IMAGE_PREVIEW_CLICK_SUPPRESSION_MS = 420;
 const PREPEND_SCROLL_RESTORE_IDLE_MS = 72;
@@ -801,7 +822,7 @@ function resolveVoiceMessageRuntimeModel(input: {
   isResolvingSignedUrl?: boolean;
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
-}) {
+}): VoiceMessageRuntimeModel {
   let state: VoiceMessageRenderState;
   let reason: string;
 
@@ -836,15 +857,21 @@ function resolveVoiceMessageRuntimeModel(input: {
     reason = 'attachment-missing-failed';
   }
 
-  let interactionAvailability: VoiceMessageInteractionAvailability = 'disabled';
+  let interactionAvailability: VoiceMessageInteractionAvailability;
 
-  if (state === 'ready') {
-    interactionAvailability = 'playable';
-  } else if (
-    state === 'failed' &&
-    (input.hasPlaybackSource || input.canResolveSignedUrl)
-  ) {
-    interactionAvailability = 'retryable';
+  switch (state) {
+    case 'ready':
+      interactionAvailability = 'playable';
+      break;
+    case 'failed':
+      interactionAvailability =
+        input.hasPlaybackSource || input.canResolveSignedUrl
+          ? 'retryable'
+          : 'disabled';
+      break;
+    default:
+      interactionAvailability = 'disabled';
+      break;
   }
 
   return {
@@ -1039,7 +1066,7 @@ function resolveRecentAttachmentMessageIdsNeedingRecovery(input: {
     .map((message) => message.id);
 }
 
-function getVoiceMessageStateLabel(input: {
+function getVoiceMessageBaseStateLabel(input: {
   state: VoiceMessageRenderState;
   t: ReturnType<typeof getTranslations>;
 }) {
@@ -1057,52 +1084,66 @@ function getVoiceMessageStateLabel(input: {
   }
 }
 
-function resolveVoiceMessageStateNote(input: {
-  interactionAvailability: VoiceMessageInteractionAvailability;
-  state: VoiceMessageRenderState;
-  t: ReturnType<typeof getTranslations>;
-}) {
-  if (input.state === 'pending') {
-    return input.t.chat.voiceMessagePendingHint;
-  }
-
-  if (input.state === 'failed') {
-    return input.interactionAvailability === 'retryable'
-      ? input.t.chat.voiceMessageRetryHint
-      : input.t.chat.voiceMessageUnavailable;
-  }
-
-  return null;
-}
-
-function resolveVoiceMessagePlayIconState(input: {
+function resolveVoiceMessageRendererModel(input: {
   playbackState: MessagingVoicePlaybackState;
-  voiceState: VoiceMessageRenderState;
-}) {
-  if (input.voiceState === 'failed') {
-    return 'error' satisfies VoiceMessagePlayIconState;
+  runtimeModel: VoiceMessageRuntimeModel;
+  t: ReturnType<typeof getTranslations>;
+}): VoiceMessageRendererModel {
+  const { interactionAvailability, reason, state } = input.runtimeModel;
+  const isReady = state === 'ready';
+  const isBuffering = isReady && input.playbackState === 'buffering';
+  const isPlayable = interactionAvailability === 'playable';
+  const canRetry = interactionAvailability === 'retryable';
+  const showMeta = !isReady;
+  const stateLabel = isBuffering
+    ? input.t.chat.voiceMessageLoading
+    : getVoiceMessageBaseStateLabel({ state, t: input.t });
+  const stateNote =
+    state === 'pending'
+      ? input.t.chat.voiceMessagePendingHint
+      : state === 'failed'
+        ? canRetry
+          ? input.t.chat.voiceMessageRetryHint
+          : input.t.chat.voiceMessageUnavailable
+        : null;
+
+  let playIconState: VoiceMessagePlayIconState;
+
+  if (state === 'failed') {
+    playIconState = 'error';
+  } else if (!isReady) {
+    playIconState = 'loading';
+  } else if (input.playbackState === 'buffering') {
+    playIconState = 'loading';
+  } else if (input.playbackState === 'playing') {
+    playIconState = 'pause';
+  } else {
+    playIconState = 'play';
   }
 
-  if (
-    input.voiceState === 'uploading' ||
-    input.voiceState === 'processing'
-  ) {
-    return 'loading' satisfies VoiceMessagePlayIconState;
-  }
+  const playButtonLabel =
+    !isPlayable
+      ? stateLabel
+      : isBuffering
+        ? input.t.chat.voiceMessageLoading
+        : input.playbackState === 'playing'
+          ? input.t.chat.voiceMessagePause
+          : input.t.chat.voiceMessagePlay;
 
-  if (input.voiceState === 'pending') {
-    return 'play' satisfies VoiceMessagePlayIconState;
-  }
-
-  if (input.playbackState === 'buffering') {
-    return 'loading' satisfies VoiceMessagePlayIconState;
-  }
-
-  if (input.playbackState === 'playing') {
-    return 'pause' satisfies VoiceMessagePlayIconState;
-  }
-
-  return 'play' satisfies VoiceMessagePlayIconState;
+  return {
+    canRetry,
+    dataPlaybackState: isReady ? input.playbackState : state,
+    interactionAvailability,
+    isBuffering,
+    isPlayable,
+    playButtonLabel,
+    playIconState,
+    reason,
+    showMeta,
+    state,
+    stateLabel,
+    stateNote,
+  };
 }
 
 function getMessageSeq(value: number | string) {
@@ -1508,9 +1549,15 @@ function ThreadVoiceMessageBubble({
     playbackFailed,
     stageHint,
   });
-  const voiceState = voiceRuntimeModel.state;
-  const voiceRenderReason = voiceRuntimeModel.reason;
-  const voiceInteractionAvailability = voiceRuntimeModel.interactionAvailability;
+  const voiceRendererModel = resolveVoiceMessageRendererModel({
+    playbackState,
+    runtimeModel: voiceRuntimeModel,
+    t,
+  });
+  const voiceState = voiceRendererModel.state;
+  const voiceRenderReason = voiceRendererModel.reason;
+  const voiceInteractionAvailability =
+    voiceRendererModel.interactionAvailability;
   const totalDurationMs = resolvedDurationMs && resolvedDurationMs > 0
     ? resolvedDurationMs
     : 0;
@@ -1518,24 +1565,9 @@ function ThreadVoiceMessageBubble({
     totalDurationMs > 0
       ? Math.min(1, Math.max(0, progressMs / totalDurationMs))
       : 0;
-  const isPlaying = playbackState === 'playing';
-  const isBuffering = playbackState === 'buffering';
-  const readyStateLabel =
-    playbackState === 'buffering'
-      ? t.chat.voiceMessageLoading
-      : t.chat.voiceMessage;
-  const stateLabel =
-    voiceState === 'ready'
-      ? readyStateLabel
-      : getVoiceMessageStateLabel({ state: voiceState, t });
-  const stateNote =
-    voiceState === 'ready'
-      ? null
-      : resolveVoiceMessageStateNote({
-          interactionAvailability: voiceInteractionAvailability,
-          state: voiceState,
-          t,
-        });
+  const isBuffering = voiceRendererModel.isBuffering;
+  const stateLabel = voiceRendererModel.stateLabel;
+  const stateNote = voiceRendererModel.stateNote;
   const durationLabel =
     voiceState === 'ready'
       ? playbackState === 'playing' ||
@@ -1546,13 +1578,9 @@ function ThreadVoiceMessageBubble({
           )}`
         : formatVoiceDuration(resolvedDurationMs)
       : '--:--';
-  const playIconState = resolveVoiceMessagePlayIconState({
-    playbackState,
-    voiceState,
-  });
-  const isVoicePlayable = voiceInteractionAvailability === 'playable';
-  const canRetryVoicePlayback =
-    voiceInteractionAvailability === 'retryable';
+  const playIconState = voiceRendererModel.playIconState;
+  const isVoicePlayable = voiceRendererModel.isPlayable;
+  const canRetryVoicePlayback = voiceRendererModel.canRetry;
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -2104,14 +2132,7 @@ function ThreadVoiceMessageBubble({
     });
   }, [togglePlaybackUnsafe]);
 
-  const playButtonLabel =
-    !isVoicePlayable
-      ? stateLabel
-      : isBuffering
-        ? t.chat.voiceMessageLoading
-        : isPlaying
-        ? t.chat.voiceMessagePause
-        : t.chat.voiceMessagePlay;
+  const playButtonLabel = voiceRendererModel.playButtonLabel;
 
   const handleVoiceSurfacePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
@@ -2249,7 +2270,7 @@ function ThreadVoiceMessageBubble({
           : 'message-voice-card'
       }
       data-message-voice-interactive="true"
-      data-playback-state={voiceState === 'ready' ? playbackState : voiceState}
+      data-playback-state={voiceRendererModel.dataPlaybackState}
       data-play-intent={hasPendingPlaybackIntent ? 'pending' : 'idle'}
       data-voice-interaction={voiceInteractionAvailability}
       data-voice-state={voiceState}
@@ -2295,7 +2316,7 @@ function ThreadVoiceMessageBubble({
             }
           />
         </div>
-        {voiceState !== 'ready' ? (
+        {voiceRendererModel.showMeta ? (
           <div className="message-voice-meta">
             <span className="message-voice-state">{stateLabel}</span>
             {stateNote ? (
