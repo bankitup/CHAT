@@ -251,6 +251,7 @@ type VoiceMessagePlayIconState = 'error' | 'loading' | 'pause' | 'play';
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
 const IMAGE_PREVIEW_CLICK_SUPPRESSION_MS = 420;
+const MESSAGE_QUICK_ACTION_LONG_PRESS_MS = 280;
 const PREPEND_SCROLL_RESTORE_IDLE_MS = 72;
 const PREPEND_SCROLL_RESTORE_MAX_MS = 480;
 const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
@@ -1440,6 +1441,7 @@ function ThreadVoiceMessageBubble({
   isOwnMessage,
   language,
   messageId,
+  onRequestQuickActions,
   stageHint = null,
 }: {
   attachment: MessageAttachment | null;
@@ -1447,6 +1449,7 @@ function ThreadVoiceMessageBubble({
   isOwnMessage: boolean;
   language: AppLanguage;
   messageId: string;
+  onRequestQuickActions?: (trigger: 'contextmenu' | 'long-press') => void;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
   const t = getTranslations(language);
@@ -1477,10 +1480,15 @@ function ThreadVoiceMessageBubble({
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const resolveSignedUrlPromiseRef = useRef<Promise<string | null> | null>(null);
   const lastVoicePointerActivationAtRef = useRef(0);
+  const lastVoiceLongPressAtRef = useRef(0);
   const claimedPlaybackOwnerVersionRef = useRef<number | null>(null);
   const lastVoiceProofSnapshotRef = useRef<string | null>(null);
+  const voiceLongPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const voiceTapGestureRef = useRef<{
     didMove: boolean;
+    didTriggerLongPress: boolean;
     pointerId: number;
     startX: number;
     startY: number;
@@ -1613,10 +1621,19 @@ function ThreadVoiceMessageBubble({
     voiceState,
   ]);
 
+  const clearVoiceLongPress = useCallback(() => {
+    if (voiceLongPressTimeoutRef.current) {
+      clearTimeout(voiceLongPressTimeoutRef.current);
+      voiceLongPressTimeoutRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     const audio = audioRef.current;
 
     return () => {
+      clearVoiceLongPress();
+
       if (hasActiveThreadVoicePlaybackIntent(messageId)) {
         setActiveThreadVoicePlaybackIntent(null);
       }
@@ -1634,7 +1651,7 @@ function ThreadVoiceMessageBubble({
       claimedPlaybackOwnerVersionRef.current = null;
       audio.src = '';
     };
-  }, [messageId]);
+  }, [clearVoiceLongPress, messageId]);
 
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? cachedDurationMs ?? null);
@@ -2192,12 +2209,48 @@ function ThreadVoiceMessageBubble({
   const handleVoiceSurfacePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       if (event.button === 0) {
+        const pointerId = event.pointerId;
+        const pointerType = event.pointerType;
+
         voiceTapGestureRef.current = {
           didMove: false,
+          didTriggerLongPress: false,
           pointerId: event.pointerId,
           startX: event.clientX,
           startY: event.clientY,
         };
+        clearVoiceLongPress();
+        logVoiceThreadProof('gesture-long-press-armed', {
+          input: 'pointer',
+          messageId,
+          pointerType,
+        });
+        voiceLongPressTimeoutRef.current = setTimeout(() => {
+          voiceLongPressTimeoutRef.current = null;
+          const activeGesture = voiceTapGestureRef.current;
+
+          if (
+            !activeGesture ||
+            activeGesture.pointerId !== pointerId ||
+            activeGesture.didMove ||
+            activeGesture.didTriggerLongPress
+          ) {
+            return;
+          }
+
+          activeGesture.didTriggerLongPress = true;
+          lastVoiceLongPressAtRef.current = Date.now();
+          logVoiceThreadProof('gesture-long-press-recognized', {
+            input: 'pointer',
+            messageId,
+            pointerType,
+          });
+          logVoiceThreadProof('gesture-popup-open-entered', {
+            messageId,
+            trigger: 'voice-long-press',
+          });
+          onRequestQuickActions?.('long-press');
+        }, MESSAGE_QUICK_ACTION_LONG_PRESS_MS);
 
         if (event.pointerType !== 'mouse') {
           event.preventDefault();
@@ -2205,7 +2258,7 @@ function ThreadVoiceMessageBubble({
       }
       event.stopPropagation();
     },
-    [],
+    [clearVoiceLongPress, messageId, onRequestQuickActions],
   );
 
   const handleVoiceSurfacePointerMove = useCallback(
@@ -2221,15 +2274,17 @@ function ThreadVoiceMessageBubble({
         Math.abs(event.clientY - activeGesture.startY) > 10
       ) {
         activeGesture.didMove = true;
+        clearVoiceLongPress();
       }
 
       event.stopPropagation();
     },
-    [],
+    [clearVoiceLongPress],
   );
 
   const handleVoiceSurfacePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
+      clearVoiceLongPress();
       if (
         voiceTapGestureRef.current?.pointerId === event.pointerId
       ) {
@@ -2237,15 +2292,22 @@ function ThreadVoiceMessageBubble({
       }
       event.stopPropagation();
     },
-    [],
+    [clearVoiceLongPress],
   );
 
   const handleVoiceSurfaceContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
+      clearVoiceLongPress();
+      lastVoiceLongPressAtRef.current = Date.now();
+      logVoiceThreadProof('gesture-popup-open-entered', {
+        messageId,
+        trigger: 'voice-contextmenu',
+      });
+      onRequestQuickActions?.('contextmenu');
     },
-    [],
+    [clearVoiceLongPress, messageId, onRequestQuickActions],
   );
 
   const activateVoiceFromPointer = useCallback(
@@ -2281,6 +2343,10 @@ function ThreadVoiceMessageBubble({
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
+
+      if (Date.now() - lastVoiceLongPressAtRef.current < 420) {
+        return;
+      }
 
       if (Date.now() - lastVoicePointerActivationAtRef.current < 420) {
         return;
@@ -2323,7 +2389,13 @@ function ThreadVoiceMessageBubble({
         return;
       }
 
+      clearVoiceLongPress();
       voiceTapGestureRef.current = null;
+
+      if (activeGesture.didTriggerLongPress) {
+        event.stopPropagation();
+        return;
+      }
 
       if (activeGesture.didMove) {
         event.stopPropagation();
@@ -2337,7 +2409,7 @@ function ThreadVoiceMessageBubble({
       });
       activateVoiceFromPointer(event);
     },
-    [activateVoiceFromPointer, messageId],
+    [activateVoiceFromPointer, clearVoiceLongPress, messageId],
   );
 
   return (
@@ -2619,6 +2691,7 @@ const MemoizedThreadVoiceMessageBubble = memo(
     previous.isOwnMessage === next.isOwnMessage &&
     previous.language === next.language &&
     previous.messageId === next.messageId &&
+    previous.onRequestQuickActions === next.onRequestQuickActions &&
     previous.stageHint === next.stageHint &&
     areMessageAttachmentValuesEqual(previous.attachment, next.attachment),
 );
@@ -4257,6 +4330,17 @@ function ThreadMessageRowComponent({
     setIsQuickActionsOpen(false);
   }, []);
 
+  const openQuickActions = useCallback(() => {
+    if (!canShowQuickActions) {
+      return;
+    }
+
+    imagePreviewClickSuppressedUntilRef.current =
+      Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
+    clearLongPress();
+    setIsQuickActionsOpen(true);
+  }, [canShowQuickActions, clearLongPress]);
+
   useEffect(() => {
     if (canShowQuickActions) {
       return;
@@ -4444,13 +4528,11 @@ function ThreadMessageRowComponent({
             trigger: 'long-press',
           });
         }
-        imagePreviewClickSuppressedUntilRef.current =
-          Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
-        setIsQuickActionsOpen(true);
         longPressTimeoutRef.current = null;
-      }, 280);
+        openQuickActions();
+      }, MESSAGE_QUICK_ACTION_LONG_PRESS_MS);
     },
-    [canShowQuickActions, clearLongPress, message.id],
+    [canShowQuickActions, clearLongPress, message.id, openQuickActions],
   );
 
   const handleBubblePointerMove = useCallback(
@@ -4502,12 +4584,9 @@ function ThreadMessageRowComponent({
           trigger: 'contextmenu',
         });
       }
-      imagePreviewClickSuppressedUntilRef.current =
-        Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
-      clearLongPress();
-      setIsQuickActionsOpen(true);
+      openQuickActions();
     },
-    [canShowQuickActions, clearLongPress, message.id],
+    [canShowQuickActions, message.id, openQuickActions],
   );
   const handleImageAttachmentPreview = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -5055,6 +5134,7 @@ function ThreadMessageRowComponent({
                 isOwnMessage={isOwnMessage}
                 language={language}
                 messageId={message.id}
+                onRequestQuickActions={openQuickActions}
               />
               {normalizedMessageBody ? (
                 <p className="message-body">{normalizedMessageBody}</p>
