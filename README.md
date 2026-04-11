@@ -1,207 +1,77 @@
-# KeepCozy + CHAT Foundation
+# BWC Platform Repository
 
-KeepCozy is the current product focus in a mobile-first PWA repository built on
-a reusable messaging module foundation. CHAT remains the shared communication
-core, and the current product shell is a Next.js application deployed through
-Vercel with Supabase as the backend source of truth for auth, data, and access
-control.
+This repository is the current shared BWC platform codebase.
 
-This repository should be treated as `messaging-core + current product shell`, not as a one-off chat UI and not as a placeholder for separate native apps.
+It is not a chat app with KeepCozy layered on top.
+It is not a KeepCozy shell with messaging beside it.
 
-Current focus update:
+The intended platform-first model is:
 
-- KeepCozy is now the primary product focus inside this shared repository.
-- CHAT remains the reusable communication core and shared Supabase/runtime
-  foundation beside that product work.
-- The current KeepCozy MVP boundary is documented in
-  [docs/keepcozy-mvp-boundary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-boundary.md)
-  and
-  [docs/keepcozy-mvp-schema-runtime-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-mvp-schema-runtime-alignment.md).
+- BWC platform foundation
+- Messenger as one product on that foundation
+- KeepCozy as a separate product on that foundation
+- shared capabilities, including messaging, reused where justified
 
-## Product Direction
+Current product reading:
 
-The active product path is clear:
+- Messenger is the private community messaging product.
+- KeepCozy is the home-operations product.
+- KeepCozy may later reuse parts of the messaging capability for contractor or
+  vendor communication, but it is not a profile layered on Messenger.
 
-- The current Next.js app is the main product shell.
-- The primary user experience target is mobile usage through a PWA.
-- Deployment is intended for Vercel.
-- Desktop and broader web access remain available, but they are secondary to the mobile experience.
-- Supabase remains the shared backend truth.
+## Source Of Truth Docs
 
-The architecture must stay reusable even while the current delivery path is focused on one product shell.
+Use these as the current architecture reference:
 
-## Product Vision
+- [docs/platform-architecture-current-state.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/platform-architecture-current-state.md)
+- [docs/platform-architecture-target-shape.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/platform-architecture-target-shape.md)
+- [docs/platform-foundation-vs-product-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/platform-foundation-vs-product-boundaries.md)
+- [docs/refactor-order-platform-first.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/refactor-order-platform-first.md)
 
-CHAT is being built as a durable messaging foundation that can support a real product, not just a single interface. The goal is to create a reusable messaging module with clean boundaries around contracts, data access, auth, and client-facing integration.
+The existing stability planning docs remain relevant for runtime hardening work:
 
-That foundation should support:
+- [docs/stability/chat-stability-baseline.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/stability/chat-stability-baseline.md)
+- [docs/stability/chat-critical-paths.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/stability/chat-critical-paths.md)
+- [docs/stability/manual-test-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/stability/manual-test-matrix.md)
 
-1. The current mobile-first PWA product.
-2. Future embedding into other product surfaces if needed.
-3. Continued evolution of the same messaging system without rewriting the backend model.
+## Current Repo Shape
 
-The current phase does not include separate native iOS or Android applications.
+The repo currently contains all of these in one shared Next.js App Router PWA:
 
-## Current Phase
+- platform shell and auth/session infrastructure
+- shared `spaces` boundary and membership runtime
+- Messenger UI routes and messaging capability
+- KeepCozy UI routes and home-ops domain logic
 
-Phase 1 is foundation and product-shell execution:
+Key directories:
 
-- Next.js App Router as the active application shell.
-- Mobile-first PWA framing.
-- Vercel deployment path.
-- Supabase-backed auth and session handling.
-- Supabase-backed schema and access patterns.
-- Row Level Security strategy.
-- Messaging module boundaries that remain reusable outside the current shell.
+- `app/(app)` for the shared authenticated shell and both product surfaces
+- `app/api/messaging` for messaging-related API routes
+- `src/lib` for Supabase and request-context infrastructure
+- `src/modules/spaces` for the shared space boundary
+- `src/modules/messaging` for the messaging capability
+- `src/modules/keepcozy` for the KeepCozy domain
 
-Current implementation priority is foundation first:
+## Working Interpretation
 
-- auth
-- schema
-- RLS
-- messaging domain structure
-- mobile-first web shell
+For current work in this repo:
 
-## Current Scope
+- treat `spaces` as a shared platform boundary
+- treat `src/modules/messaging` as a shared capability with Messenger as the
+  first-class product consumer
+- treat `src/modules/keepcozy` as a separate product domain
+- keep the shared-repo approach
+- avoid feature expansion while architecture and stability boundaries are being
+  clarified
 
-Current scope is shared foundation plus the first KeepCozy MVP slice.
+## Non-Goals Right Now
 
-The repository still carries a reusable messaging core, but chat is no longer
-the standalone product direction. The current product boundary is centered on:
+- no repo split
+- no billing or commercial implementation
+- no messaging domain rewrite
+- no E2EE rewrite
+- no schema redesign just to fit a cleaner narrative
+- no large UI rewrite
 
-- home
-- room
-- issue
-- task
-- update/history
-- resolution
-
-Broader home-ops domains and richer chat-centric expansion should not redefine
-the current product slice ahead of that loop.
-
-## Explicitly Out of Scope
-
-The following are out of scope for the current phase:
-
-- Separate native iOS applications.
-- Separate native Android applications.
-- Audio calls.
-- Video calls.
-- Rich media or attachment systems before the foundation is stable.
-- Realtime implementation before the core auth and data model are stable.
-- Product-specific shortcuts that tightly couple the messaging core to one screen or route structure.
-
-Realtime is planned later through Supabase Broadcast and Presence, but it should be treated as follow-on work rather than part of the current base scaffold.
-
-## Core Architecture Direction
-
-The repository should preserve a clear separation between:
-
-- Messaging core: contracts, persistence-facing logic, reusable client-facing interfaces, and infrastructure boundaries.
-- Product shell: routes, layouts, page-level flows, and PWA-specific presentation behavior.
-
-The current Next.js app is the live shell for the product, but it should not absorb responsibilities that belong to the reusable messaging module.
-
-Supabase is the backend truth. It owns:
-
-- authentication state
-- persisted data
-- authorization boundaries
-- long-term backend consistency across client surfaces
-
-## Main Stack
-
-- Next.js App Router for the active product shell
-- TypeScript for application and domain code
-- Vercel for deployment
-- Supabase for auth, database, and future realtime infrastructure
-- ESLint for code quality
-
-## Project Structure Overview
-
-The structure should remain modular from the start:
-
-```text
-app/                        # Current Next.js product shell
-src/
-  lib/
-    supabase/              # Shared Supabase helpers and SSR integration
-  modules/
-    messaging/
-      contract/            # Domain contracts and shared messaging types
-      data/                # Persistence-facing logic and repositories
-      sdk/                 # Reusable client-facing integration layer
-      realtime/            # Future realtime boundary
-      ui/                  # Messaging-specific reusable UI primitives
-docs/                      # Product and implementation guidance
-```
-
-If a module is not active yet, it should still exist as a minimal placeholder with a clear purpose.
-
-## Supabase Schema Notes
-
-Recent inbox-management and conversation-settings work depends on explicit schema support in Supabase. The current code-level dependency surface is documented in [docs/schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md).
-
-## Product Principles
-
-- Build for the active product path, not for hypothetical clients.
-- Optimize the UX for mobile usage first.
-- Keep the messaging foundation reusable.
-- Treat Supabase as the shared source of truth.
-- Keep the current Next.js shell production-minded and deployable.
-- Avoid coupling core messaging logic to route-level or page-level implementation details.
-
-## Engineering Principles
-
-- Foundation before feature breadth.
-- Clean boundaries between product shell and messaging core.
-- Minimal dependencies unless they clearly improve the foundation.
-- Vercel-friendly and Supabase-aligned implementation choices.
-- Mobile-first execution without turning the codebase into a one-client dead end.
-
-## Development Philosophy
-
-Work in this repository should strengthen the actual shipping path: the current mobile-first PWA on Next.js.
-
-When making changes:
-
-- treat the Next.js app as the active product shell
-- optimize flows and structure for mobile-first usage
-- keep desktop/web compatibility, but do not optimize for it first
-- avoid drifting into native app planning
-- preserve reusable messaging boundaries
-- keep Supabase-centered auth and data assumptions explicit
-
-## Near-Term Roadmap
-
-1. Stabilize auth, sessions, and protected routing in the current shell.
-2. Define the initial Supabase schema and RLS model for messaging.
-3. Formalize messaging contracts and data boundaries.
-4. Build the minimal inbox and conversation surfaces for the mobile-first PWA.
-5. Add realtime through Supabase Broadcast and Presence after the base model is stable.
-
-Attachments, richer messaging flows, and deeper product behavior come after the foundation is working cleanly.
-
-## Long-Term Direction
-
-The long-term direction is a reusable messaging system with a strong current product shell, not a fragmented multi-client strategy from day one.
-
-Over time, the messaging module may support additional surfaces, but current execution should remain centered on:
-
-- the mobile-first PWA
-- Vercel deployment
-- Supabase-backed backend consistency
-- reusable messaging boundaries
-
-Separate native clients are not part of the current phase and should not shape near-term implementation decisions.
-
-## Guidance for AI Agents and Collaborators
-
-Approach this repository as a real product codebase with one active delivery path: the current mobile-first PWA.
-
-- Treat the Next.js app as the active shell, not as a throwaway prototype.
-- Keep work aligned with Vercel deployment and Supabase SSR patterns.
-- Protect the messaging-core boundary from page-specific coupling.
-- Do not invent native client plans or abstractions that are not needed now.
-- Prefer execution-focused documentation and code over speculative architecture.
-- When in doubt, choose the path that improves the current mobile-first PWA without reducing backend or module reuse.
+The immediate job is to document and then gradually align the repo to the
+platform-first shape without destabilizing the current products.
