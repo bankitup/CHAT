@@ -10,3 +10,6 @@ Planned responsibilities:
 - Future DM E2EE transport contracts that keep plaintext and private keys out of server boundaries.
 
 Keep this layer free of web-specific UI concerns.
+
+Product routes should consume this layer through messaging capability modules,
+not treat Messenger pages as a contract surface.

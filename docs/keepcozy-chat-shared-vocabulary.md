@@ -27,6 +27,7 @@ Related documents:
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
+- [messaging-capability-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/messaging-capability-boundaries.md)
 - [types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/types.ts)
 - [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
 - [group-policy.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/group-policy.ts)
@@ -150,6 +151,8 @@ for common cross-product concepts.
 When writing docs or code in future KeepCozy branches:
 
 - say `conversation` when you mean the current runtime shell or active table
+- depend on messaging capability modules instead of Messenger route files when
+  you need current runtime conversation/message behavior
 - say `thread` when you mean the user-facing operational communication lane
 - say `space role` when you mean KeepCozy business/operational role
 - say `thread participation role` or `moderation role` when you mean current

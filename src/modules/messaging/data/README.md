@@ -10,6 +10,13 @@ Planned responsibilities:
 
 Do not place page or component logic here.
 
+Route-level access resolution now belongs in:
+
+- [server/README.md](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/server/README.md)
+
+Keep `data/` focused on persistence-facing logic rather than Messenger page
+composition.
+
 Current KeepCozy companion-metadata note:
 
 - [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)

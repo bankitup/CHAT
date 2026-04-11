@@ -27,6 +27,7 @@ Related documents:
 - [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - [keepcozy-chat-shared-vocabulary.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-shared-vocabulary.md)
 - [keepcozy-chat-role-alignment.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-chat-role-alignment.md)
+- [messaging-capability-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/messaging-capability-boundaries.md)
 - [keepcozy-space-foundation-implementation-plan.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-foundation-implementation-plan.md)
 - [space-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/space-model.md)
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
@@ -83,13 +84,14 @@ Important rule:
 - it should not take ownership of the low-level message shell, DM E2EE, or
   generic group moderation runtime
 
-## 2. What CHAT Will Own
+## 2. What Messaging Capability Will Own
 
-CHAT should continue owning the generic communication core.
+Shared messaging capability should continue owning the generic communication
+core.
 
 ### Current runtime ownership
 
-CHAT owns:
+Messaging capability owns:
 
 - `public.spaces` and current space selection/runtime routing
 - `public.space_members` as the active coarse space boundary
@@ -103,18 +105,20 @@ CHAT owns:
 
 ### Ongoing architectural ownership
 
-CHAT should continue owning:
+Messaging capability should continue owning:
 
 - the generic messaging service layer
 - current message-history loading
-- current inbox/activity/chat entry behavior
+- shared server-side route-access seams for messaging surfaces
 - the compatibility surfaces that KeepCozy will attach to later
 
 Important rule:
 
-- CHAT remains the communication substrate
-- KeepCozy should not require CHAT to rename `conversation` into `thread` in
-  active runtime code or to overload `public.conversations.kind`
+- messaging remains the communication substrate
+- Messenger product owns inbox/activity/chat route composition on top of that
+  substrate
+- KeepCozy should not require messaging capability to rename `conversation`
+  into `thread` in active runtime code or to overload `public.conversations.kind`
 
 ## 3. Shared Contract Entities
 
@@ -123,9 +127,9 @@ KeepCozy.
 
 | Shared contract | Owned primarily by | Why it is shared |
 | --- | --- | --- |
-| `space` | CHAT runtime foundation, reused by KeepCozy | outer tenancy, routing, and access boundary |
-| `space_members` | CHAT runtime foundation, later interpreted by KeepCozy policy | coarse member allowlist and compatibility role surface |
-| `conversation` shell | CHAT runtime foundation | active communication container that future KeepCozy threads attach to |
+| `space` | platform foundation, reused by messaging capability and KeepCozy | outer tenancy, routing, and access boundary |
+| `space_members` | platform foundation, later interpreted by KeepCozy policy | coarse member allowlist and compatibility role surface |
+| `conversation` shell | messaging capability | active communication container that future KeepCozy threads attach to |
 | companion metadata contract | shared contract layer | carries future operational thread meaning without mutating conversation core |
 | operational object ref contract | shared contract layer | lets KeepCozy attach durable objects to conversation shells later |
 | space timeline event contract | shared contract layer | lets KeepCozy connect thread/object transitions into one operational history surface |
@@ -135,7 +139,18 @@ Practical rule:
 
 - shared contracts should stay product-neutral where possible
 - product-specific behavior should be layered on top of them, not written back
-  into current CHAT shell concepts
+  into current messaging shell concepts
+
+Current product-consumption rule:
+
+- KeepCozy may depend on:
+  - `src/modules/messaging/contract/**`
+  - `src/modules/messaging/data/**`
+  - `src/modules/messaging/server/**`
+  - `app/api/messaging/**`
+- KeepCozy should not depend on:
+  - `app/(app)/inbox/**`
+  - `app/(app)/chat/**`
 
 ## 4. How KeepCozy Should Attach To The Existing CHAT Test Space
 

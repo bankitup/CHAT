@@ -90,6 +90,12 @@ Primary files today:
 - `src/modules/messaging/**`
 - `app/api/messaging/**`
 
+Important current split inside `src/modules/messaging`:
+
+- `contract/` for stable shared messaging contract vocabulary
+- `data/` for persistence-facing messaging logic
+- `server/` for access-checked server seams consumed by product routes
+
 ## Ownership Split By Delivery Layer
 
 ### Frontend
@@ -189,6 +195,7 @@ forces it later.
 Architecture source of truth now lives in:
 
 - `README.md`
+- `docs/messaging-capability-boundaries.md`
 - `docs/platform-architecture-current-state.md`
 - `docs/platform-architecture-target-shape.md`
 - `docs/platform-foundation-vs-product-boundaries.md`

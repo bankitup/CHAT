@@ -14,7 +14,6 @@ import {
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   getConversationDisplayName,
   getDirectMessageDisplayName,
-  getConversationForUser,
   getConversationHistorySnapshot,
   getConversationHistoryWindowSizeForMessageTargets,
   getConversationMemberReadStates,
@@ -29,6 +28,9 @@ import {
   canRemoveParticipantFromGroupConversation,
   normalizeGroupConversationJoinPolicy,
 } from '@/modules/messaging/group-policy';
+import {
+  resolveMessagingConversationRouteContextForUser,
+} from '@/modules/messaging/server/route-context';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
 import {
@@ -38,11 +40,6 @@ import {
   measureWarmNavServerLoad,
   recordWarmNavServerRender,
 } from '@/modules/messaging/performance/warm-nav-server';
-import {
-  resolveV1TestSpaceFallback,
-  resolveActiveSpaceForUser,
-  isSpaceMembersSchemaCacheErrorMessage,
-} from '@/modules/spaces/server';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
   GroupIdentityAvatar,
@@ -455,127 +452,46 @@ export default async function ChatPage({
   if (!user) {
     notFound();
   }
-  let activeSpaceId: string | null = null;
-  let conversation = null as Awaited<ReturnType<typeof getConversationForUser>> | null;
-  let isV1TestBypass = false;
-  const requestedSpaceId = query.space?.trim() || null;
+  const routeContext = await resolveMessagingConversationRouteContextForUser({
+    conversationId,
+    requestedSpaceId: query.space,
+    source: 'chat-page',
+    userEmail: user.email ?? null,
+    userId: user.id,
+  });
 
-  if (requestedSpaceId) {
-    const explicitV1TestSpace = await resolveV1TestSpaceFallback({
-      requestedSpaceId,
-      source: 'chat-page-explicit-v1-test-bypass',
-    });
-
-    if (explicitV1TestSpace) {
-      // Temporary v1 unblocker: bypass fragile space_members SSR path for explicit TEST-space entry.
-      // Remove once membership resolution via space_members is stable again.
-      activeSpaceId = explicitV1TestSpace.id;
-      isV1TestBypass = true;
-      conversation = await getConversationForUser(conversationId, user.id, {
-        spaceId: activeSpaceId,
-      });
-    } else {
-      conversation = await getConversationForUser(conversationId, user.id, {
-        spaceId: requestedSpaceId,
-      });
-
-      if (conversation) {
-        activeSpaceId = requestedSpaceId;
-      }
-    }
+  if (routeContext.kind === 'conversation_not_found') {
+    notFound();
   }
 
-  if (!conversation || !activeSpaceId) {
-    const baseConversation =
-      conversation ?? (await getConversationForUser(conversationId, user.id));
+  if (routeContext.kind === 'requested_space_invalid') {
+    notFound();
+  }
 
-    if (!baseConversation) {
-      notFound();
-    }
+  if (routeContext.kind === 'space_unavailable') {
+    redirect('/spaces');
+  }
 
-    if (!baseConversation.spaceId) {
-      throw new Error(
-        'Active space routing requires public.conversations.space_id.',
-      );
-    }
+  const {
+    activeSpaceId,
+    conversation,
+    isV1TestBypass,
+    shouldRedirectToCanonicalSpace,
+  } = routeContext.context;
 
-    const fallbackRequestedSpaceId = requestedSpaceId || baseConversation.spaceId;
-    const explicitV1TestSpace = await resolveV1TestSpaceFallback({
-      requestedSpaceId: fallbackRequestedSpaceId,
-      source: 'chat-page-explicit-v1-test-bypass',
-    });
-    isV1TestBypass = Boolean(explicitV1TestSpace);
-
-    if (explicitV1TestSpace) {
-      activeSpaceId = explicitV1TestSpace.id;
-    } else {
-      let activeSpaceState: Awaited<
-        ReturnType<typeof resolveActiveSpaceForUser>
-      > | null = null;
-      try {
-        activeSpaceState = await resolveActiveSpaceForUser({
-          userId: user.id,
-          userEmail: user.email ?? null,
-          requestedSpaceId: fallbackRequestedSpaceId,
-          source: 'chat-page',
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-
-        if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-          const fallbackSpace = await resolveV1TestSpaceFallback({
-            requestedSpaceId: fallbackRequestedSpaceId,
-            source: 'chat-page',
-          });
-
-          if (!fallbackSpace) {
-            redirect('/spaces');
-          }
-
-          activeSpaceId = fallbackSpace.id;
-        } else {
-          throw error;
-        }
-      }
-
-      if (!activeSpaceId) {
-        if (
-          !activeSpaceState?.activeSpace ||
-          activeSpaceState.requestedSpaceWasInvalid
-        ) {
-          notFound();
-        }
-
-        activeSpaceId = activeSpaceState.activeSpace.id;
-      }
-    }
-
-    if (!activeSpaceId) {
-      redirect('/spaces');
-    }
-
-    if (!query.space || query.space !== activeSpaceId) {
-      redirect(
-        buildChatHref({
-          conversationId,
-          spaceId: activeSpaceId,
-          actionMessageId: query.actionMessageId ?? null,
-          deleteMessageId: query.deleteMessageId ?? null,
-          editMessageId: query.editMessageId ?? null,
-          error: query.error ?? null,
-          replyToMessageId: query.replyToMessageId ?? null,
-          details: query.details ?? query.settings ?? null,
-        }),
-      );
-    }
-
-    conversation = await getConversationForUser(conversationId, user.id, {
-      spaceId: activeSpaceId,
-    });
-
-    if (!conversation) {
-      notFound();
-    }
+  if (shouldRedirectToCanonicalSpace) {
+    redirect(
+      buildChatHref({
+        conversationId,
+        spaceId: activeSpaceId,
+        actionMessageId: query.actionMessageId ?? null,
+        deleteMessageId: query.deleteMessageId ?? null,
+        editMessageId: query.editMessageId ?? null,
+        error: query.error ?? null,
+        replyToMessageId: query.replyToMessageId ?? null,
+        details: query.details ?? query.settings ?? null,
+      }),
+    );
   }
 
   const language = await languagePromise;
