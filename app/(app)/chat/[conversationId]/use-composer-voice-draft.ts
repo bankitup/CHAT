@@ -72,6 +72,25 @@ function createLocalDraftId() {
   return `voice-draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function getVoiceDraftFileExtension(fileName: string | null | undefined) {
+  const normalizedFileName = fileName?.trim() || '';
+
+  if (!normalizedFileName) {
+    return null;
+  }
+
+  const extensionIndex = normalizedFileName.lastIndexOf('.');
+
+  if (
+    extensionIndex < 0 ||
+    extensionIndex === normalizedFileName.length - 1
+  ) {
+    return null;
+  }
+
+  return normalizedFileName.slice(extensionIndex).toLowerCase();
+}
+
 function resolveSupportedMimeType() {
   if (
     typeof window === 'undefined' ||
@@ -264,6 +283,16 @@ export function useComposerVoiceDraft({
       stage: 'draft',
       waveformPeaks: null,
     } satisfies MessagingVoiceMessageDraftRecord;
+    logVoiceComposerDiagnostics('draft:finalized', {
+      blobMimeType: blob.type || null,
+      chunkMimeType: chunksRef.current[0]?.type || null,
+      conversationId,
+      durationMs,
+      fileExtension: getVoiceDraftFileExtension(nextDraft.fileName),
+      fileName: nextDraft.fileName,
+      mimeType: nextDraft.mimeType,
+      sizeBytes: nextDraft.sizeBytes,
+    });
     setDraft(nextDraft);
     void saveLocalMessagingVoiceDraft({
       clientDraftId: nextDraft.clientDraftId,
@@ -439,6 +468,8 @@ export function useComposerVoiceDraft({
       setCaptureState('recording');
       logVoiceComposerDiagnostics('entry:recording', {
         conversationId,
+        mediaRecorderMimeType: mediaRecorder.mimeType || null,
+        mimePreferenceOrder: SUPPORTED_MIME_TYPES,
         mimeType: mimeType ?? mediaRecorder.mimeType ?? null,
       });
 

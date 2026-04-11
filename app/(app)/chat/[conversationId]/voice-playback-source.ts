@@ -469,6 +469,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       cacheKey: input.cacheKey,
       mode: 'passthrough',
       playbackSourceKind: input.transportSourceUrl ? 'transport' : 'missing',
+      resolvedMimeType: null,
       transportSourceUrl: input.transportSourceUrl,
     });
     return input.transportSourceUrl;
@@ -489,6 +490,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       playbackSourceKind: currentEntry.playbackUrl.startsWith('blob:')
         ? 'blob'
         : 'transport',
+      resolvedMimeType: null,
       transportSourceUrl,
     });
     input.onDiagnostic?.('local-playable-source-cache-hit', {
@@ -532,6 +534,10 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       const warmed =
         resolvedTransportSource instanceof Blob ||
         localPlaybackUrl.startsWith('blob:');
+      const resolvedMimeType =
+        resolvedTransportSource instanceof Blob
+          ? resolvedTransportSource.type || null
+          : null;
 
       writeThreadVoicePlaybackCacheEntry(cacheKey, {
         playbackUrl: localPlaybackUrl,
@@ -542,6 +548,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
       });
       input.onDiagnostic?.('local-playable-source-ready', {
         cacheKey,
+        resolvedMimeType,
         transportSourceUrl,
         warmed,
       });
@@ -551,6 +558,7 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
         playbackSourceKind: localPlaybackUrl.startsWith('blob:')
           ? 'blob'
           : 'transport',
+        resolvedMimeType,
         transportSourceUrl,
       });
       return localPlaybackUrl;
