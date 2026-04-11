@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { PushSubscriptionRecordInput } from '@/modules/messaging/push/contract';
+import { getInboxSectionPreferences } from '@/modules/messaging/inbox/preferences-server';
+import { normalizeInboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
+import type {
+  PushSubscriptionPresenceInput,
+  PushSubscriptionRecordInput,
+} from '@/modules/messaging/push/contract';
 import {
   disablePushSubscriptionForUser,
   getPushSubscriptionStateForUser,
   isMissingPushSubscriptionsSchemaMessage,
+  updatePushSubscriptionPresenceForUser,
   upsertPushSubscriptionForUser,
 } from '@/modules/messaging/push/server';
 
@@ -46,6 +52,27 @@ function isDeletePushSubscriptionInput(
   const candidate = value as { endpoint?: unknown };
 
   return typeof candidate.endpoint === 'string' && candidate.endpoint.trim().length > 0;
+}
+
+function isPushSubscriptionPresenceInput(
+  value: unknown,
+): value is PushSubscriptionPresenceInput {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<PushSubscriptionPresenceInput>;
+
+  return (
+    typeof candidate.endpoint === 'string' &&
+    candidate.endpoint.trim().length > 0 &&
+    typeof candidate.activeInApp === 'boolean' &&
+    (candidate.previewMode === undefined ||
+      candidate.previewMode === null ||
+      typeof candidate.previewMode === 'string') &&
+    (candidate.activeConversationId === null ||
+      typeof candidate.activeConversationId === 'string')
+  );
 }
 
 function createMissingSchemaResponse() {
@@ -140,7 +167,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    const inboxPreferences = await getInboxSectionPreferences();
     const subscription = await upsertPushSubscriptionForUser({
+      previewMode: inboxPreferences.previewMode,
       userId: user.id,
       subscription: input,
     });
@@ -223,6 +252,92 @@ export async function DELETE(request: Request) {
     return NextResponse.json(
       {
         error: 'Unable to remove this push subscription right now.',
+      },
+      { status: 400 },
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.id) {
+    return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
+  }
+
+  let input: unknown;
+
+  try {
+    input = await request.json();
+  } catch {
+    return NextResponse.json(
+      {
+        error: 'Invalid push subscription payload.',
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!isPushSubscriptionPresenceInput(input)) {
+    return NextResponse.json(
+      {
+        error: 'Invalid push subscription payload.',
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const synced = await updatePushSubscriptionPresenceForUser({
+      userId: user.id,
+      presence: {
+        activeConversationId: input.activeInApp
+          ? input.activeConversationId?.trim() || null
+          : null,
+        activeInApp: input.activeInApp,
+        endpoint: input.endpoint.trim(),
+        previewMode:
+          input.previewMode == null
+            ? null
+            : normalizeInboxPreviewDisplayMode(input.previewMode),
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      synced,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unable to sync push subscription presence.';
+
+    if (
+      message.toLowerCase().includes('presence_updated_at') ||
+      message.toLowerCase().includes('active_conversation_id')
+    ) {
+      return NextResponse.json({
+        ok: true,
+        reason: 'presence-schema-missing',
+        synced: false,
+      });
+    }
+
+    if (isMissingPushSubscriptionsSchemaMessage(message)) {
+      return NextResponse.json({
+        ok: true,
+        reason: 'subscription-schema-missing',
+        synced: false,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Unable to sync push subscription presence right now.',
       },
       { status: 400 },
     );

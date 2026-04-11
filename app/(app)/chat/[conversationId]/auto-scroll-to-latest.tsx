@@ -1,6 +1,11 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import {
+  isThreadNearBottom,
+  resolveThreadScrollTarget,
+  scrollThreadToBottom,
+} from './thread-scroll';
 
 type AutoScrollToLatestProps = {
   bottomSentinelId: string;
@@ -51,19 +56,14 @@ export function AutoScrollToLatest({
   ]);
 
   useEffect(() => {
-    const target =
-      typeof document === 'undefined'
-        ? null
-        : document.getElementById(targetId);
+    const target = resolveThreadScrollTarget(targetId);
 
     if (!target) {
       return;
     }
 
     const updateNearBottomState = () => {
-      const distanceFromBottom =
-        target.scrollHeight - target.scrollTop - target.clientHeight;
-      isNearBottomRef.current = distanceFromBottom < 160;
+      isNearBottomRef.current = isThreadNearBottom(target);
     };
 
     updateNearBottomState();
@@ -81,10 +81,7 @@ export function AutoScrollToLatest({
       lastConversationIdRef.current = conversationId;
     }
 
-    const target =
-      typeof document === 'undefined'
-        ? null
-        : document.getElementById(targetId);
+    const target = resolveThreadScrollTarget(targetId);
     const bottomSentinel =
       typeof document === 'undefined'
         ? null
@@ -95,9 +92,7 @@ export function AutoScrollToLatest({
     }
 
     const snapToBottom = () => {
-      bottomSentinel.scrollIntoView({
-        block: 'end',
-      });
+      scrollThreadToBottom(target);
       hasInitializedRef.current = true;
       isNearBottomRef.current = true;
     };

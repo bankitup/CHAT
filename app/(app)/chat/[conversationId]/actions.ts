@@ -21,6 +21,7 @@ import {
   editMessage,
   hideConversationForUser,
   isSupportedChatAttachmentType,
+  isSupportedVoiceAttachmentType,
   leaveGroupConversation,
   markConversationRead,
   removeParticipantFromGroupConversation,
@@ -36,6 +37,7 @@ import {
   type InboxConversationSummarySnapshot,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
+import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { sendChatPushNotifications } from '@/modules/messaging/push/server';
 import {
   logControlledUiError,
@@ -362,7 +364,7 @@ export async function sendMessageMutationAction(
     };
   }
 
-  if (attachment && !isSupportedChatAttachmentType(attachment.type)) {
+  if (attachment && !isSupportedChatAttachmentType(attachment.type, attachment.name)) {
     return {
       error: CHAT_ATTACHMENT_HELP_TEXT,
       ok: false,
@@ -418,7 +420,9 @@ export async function sendMessageMutationAction(
     }
 
     return {
-      error: 'Direct-message text must use the encrypted client path.',
+      error: attachment
+        ? 'Direct-message text with attachments must use the encrypted client path.'
+        : 'Direct-message text must use the encrypted client path.',
       ok: false,
     };
   }
@@ -465,6 +469,14 @@ export async function sendMessageMutationAction(
 
     try {
       await sendChatPushNotifications({
+        attachmentPreviewKind: attachment
+          ? isSupportedVoiceAttachmentType(attachment.type)
+            ? null
+            : resolveInboxAttachmentPreviewKind(
+                attachment.type,
+                attachment.name,
+              )
+          : null,
         body: body || null,
         contentMode: 'plaintext',
         conversationId,
@@ -833,7 +845,7 @@ export async function sendMessageAction(formData: FormData) {
     );
   }
 
-  if (attachment && !isSupportedChatAttachmentType(attachment.type)) {
+  if (attachment && !isSupportedChatAttachmentType(attachment.type, attachment.name)) {
     redirectWithError(conversationId, CHAT_ATTACHMENT_HELP_TEXT, spaceId);
   }
 
@@ -884,7 +896,9 @@ export async function sendMessageAction(formData: FormData) {
 
     redirectWithError(
       conversationId,
-      'Direct-message text must use the encrypted client path.',
+      attachment
+        ? 'Direct-message text with attachments must use the encrypted client path.'
+        : 'Direct-message text must use the encrypted client path.',
       spaceId,
     );
   }

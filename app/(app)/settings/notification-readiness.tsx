@@ -118,6 +118,7 @@ export function NotificationReadinessPanel({
   const [isPending, startTransition] = useTransition();
   const t = getTranslations(language);
   const isActivitySurface = embedded && surface === 'activity';
+  const showInternalDiagnostics = isActivitySurface && allowTestSend;
   const badgeSupported = supportsAppBadge();
 
   useEffect(() => {
@@ -259,6 +260,43 @@ export function NotificationReadinessPanel({
                 ? null
                 : statusCopy.body
               : null;
+  const userFacingNote = isActivitySurface
+    ? feedback?.message
+      ? feedback.message
+      : readiness?.status === 'blocked'
+        ? t.notifications.browserSettingsNote
+        : readiness?.status === 'available'
+          ? readiness.permission === 'granted'
+            ? t.notifications.permissionReadyNote
+            : t.notifications.availableNote
+          : null
+    : detailNote;
+  const internalDetailNote =
+    !showInternalDiagnostics
+      ? null
+      : feedback?.message
+        ? null
+        : readiness?.status === 'enabled'
+          ? readiness.deliveryConfigured
+            ? t.notifications.testReadyNote
+            : t.notifications.deliveryNotReadyNote
+          : readiness?.status === 'unconfigured'
+            ? t.notifications.notConfiguredNote
+            : readiness?.status === 'unsupported'
+              ? statusCopy.body
+              : t.notifications.internalToolsNote;
+  const activityStatusValue =
+    readiness?.status === 'enabled'
+      ? t.notifications.on
+      : readiness?.status === 'blocked'
+        ? t.notifications.off
+        : readiness?.status === 'unconfigured'
+          ? t.notifications.setupNeeded
+          : readiness?.status === 'unsupported'
+            ? t.notifications.unavailable
+            : readiness
+              ? t.notifications.available
+              : t.notifications.checking;
 
   return (
     <section
@@ -309,20 +347,12 @@ export function NotificationReadinessPanel({
         {isActivitySurface ? (
           <>
             <div className="settings-capability-row">
-              <span className="settings-capability-label">{t.notifications.permission}</span>
-              <span className="settings-capability-value">{permissionValue}</span>
+              <span className="settings-capability-label">{t.notifications.status}</span>
+              <span className="settings-capability-value">{activityStatusValue}</span>
             </div>
             <div className="settings-capability-row">
               <span className="settings-capability-label">{t.notifications.device}</span>
               <span className="settings-capability-value">{deviceValue}</span>
-            </div>
-            <div className="settings-capability-row">
-              <span className="settings-capability-label">{t.notifications.test}</span>
-              <span className="settings-capability-value">{testValue}</span>
-            </div>
-            <div className="settings-capability-row">
-              <span className="settings-capability-label">{t.notifications.badge}</span>
-              <span className="settings-capability-value">{badgeValue}</span>
             </div>
           </>
         ) : (
@@ -381,6 +411,7 @@ export function NotificationReadinessPanel({
         ) : null}
 
         {allowTestSend &&
+        !isActivitySurface &&
         readiness?.deliveryConfigured &&
         readiness?.status === 'enabled' ? (
           <button
@@ -418,7 +449,7 @@ export function NotificationReadinessPanel({
           </button>
         ) : null}
 
-        {detailNote ? (
+        {userFacingNote ? (
           <p
             className={
               [
@@ -436,10 +467,97 @@ export function NotificationReadinessPanel({
                 .join(' ')
             }
           >
-            {detailNote}
+            {userFacingNote}
           </p>
         ) : null}
       </div>
+
+      {showInternalDiagnostics ? (
+        <details className="messenger-activity-notification-debug">
+          <summary className="messenger-activity-notification-debug-summary">
+            {t.notifications.internalTools}
+          </summary>
+
+          <div className="stack messenger-activity-notification-debug-body">
+            <div className="settings-capability-list messenger-activity-notification-status-list">
+              <div className="settings-capability-row">
+                <span className="settings-capability-label">{t.notifications.permission}</span>
+                <span className="settings-capability-value">{permissionValue}</span>
+              </div>
+              <div className="settings-capability-row">
+                <span className="settings-capability-label">{t.notifications.device}</span>
+                <span className="settings-capability-value">{deviceValue}</span>
+              </div>
+              <div className="settings-capability-row">
+                <span className="settings-capability-label">{t.notifications.test}</span>
+                <span className="settings-capability-value">{testValue}</span>
+              </div>
+              <div className="settings-capability-row">
+                <span className="settings-capability-label">{t.notifications.badge}</span>
+                <span className="settings-capability-value">{badgeValue}</span>
+              </div>
+            </div>
+
+            {allowTestSend &&
+            readiness?.deliveryConfigured &&
+            readiness?.status === 'enabled' ? (
+              <button
+                className="button button-secondary"
+                disabled={isPending}
+                type="button"
+                onClick={() => {
+                  setPendingAction('test');
+                  startTransition(async () => {
+                    try {
+                      await sendNotificationReadinessTest({
+                        spaceId: testSpaceId ?? null,
+                      });
+                      setFeedback({
+                        kind: 'success',
+                        message: t.notifications.testSentNote,
+                      });
+                    } catch (error) {
+                      setFeedback({
+                        kind: 'error',
+                        message:
+                          error instanceof Error && error.message.trim().length > 0
+                            ? error.message
+                            : t.notifications.testFailedNote,
+                      });
+                    } finally {
+                      setPendingAction(null);
+                    }
+                  });
+                }}
+              >
+                {isPending && pendingAction === 'test'
+                  ? t.notifications.sendingTest
+                  : t.notifications.sendTest}
+              </button>
+            ) : null}
+
+            {internalDetailNote ? (
+              <p
+                className={
+                  [
+                    'muted settings-note messenger-activity-notification-note messenger-activity-notification-debug-note',
+                    feedback?.kind === 'success'
+                      ? 'messenger-activity-notification-note-feedback messenger-activity-notification-note-success'
+                      : null,
+                    feedback?.kind === 'error'
+                      ? 'messenger-activity-notification-note-feedback messenger-activity-notification-note-error'
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                }
+              >
+                {internalDetailNote}
+              </p>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
     </section>
   );
 }

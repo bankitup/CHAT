@@ -53,6 +53,11 @@ function normalizeAfterSeq(value: string | null) {
   return Math.floor(parsed);
 }
 
+function normalizeActiveDeviceId(value: string | null) {
+  const trimmed = value?.trim() || '';
+  return looksLikeUuid(trimmed) ? trimmed : null;
+}
+
 function shouldLogHistoryRouteDiagnostics() {
   return (
     process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1' ||
@@ -128,6 +133,9 @@ export async function GET(
   const { searchParams } = new URL(request.url);
   const rawBeforeSeqExclusive = normalizeBeforeSeq(searchParams.get('beforeSeq'));
   const rawAfterSeqExclusive = normalizeAfterSeq(searchParams.get('afterSeq'));
+  const preferredDeviceRecordId = normalizeActiveDeviceId(
+    searchParams.get('activeDeviceId'),
+  );
   const requestedMessageIds = Array.from(
     new Set(searchParams.getAll('messageId').map((messageId) => messageId.trim()).filter(Boolean)),
   );
@@ -208,6 +216,7 @@ export async function GET(
   }
 
   logHistoryRouteDiagnostics('request:normalized', {
+    activeDeviceIdPresent: Boolean(preferredDeviceRecordId),
     afterSeqExclusive,
     beforeSeqExclusive,
     conversationId,
@@ -223,6 +232,7 @@ export async function GET(
     debugRequestId: searchParams.get('debugRequestId'),
     limit: normalizePositiveInteger(searchParams.get('limit'), 26, 104),
     messageIds,
+    preferredDeviceRecordId,
     userId: user.id,
   });
 

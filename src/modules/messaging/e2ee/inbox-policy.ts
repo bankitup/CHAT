@@ -1,5 +1,6 @@
 import type { InboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
+import { getPreviewPrivacyDecision } from '@/modules/messaging/privacy/preview-policy';
 
 export type InboxPreviewLabels = {
   audio: string;
@@ -49,6 +50,10 @@ function getGenericConversationPreviewByKind(
   return labels.attachment;
 }
 
+function shouldUseBodyPreview(latestMessageKind: string | null) {
+  return latestMessageKind !== 'attachment' && latestMessageKind !== 'voice';
+}
+
 export function getInboxPreviewText(
   conversation: {
     lastMessageAt: string | null;
@@ -77,7 +82,7 @@ export function getInboxPreviewText(
 
   const body = conversation.latestMessageBody?.trim();
 
-  if (body) {
+  if (body && shouldUseBodyPreview(conversation.latestMessageKind)) {
     return body;
   }
 
@@ -110,7 +115,10 @@ export function getMaskedInboxPreviewText(
       : labels.encryptedMessage;
   }
 
-  if (conversation.latestMessageBody?.trim()) {
+  if (
+    conversation.latestMessageBody?.trim() &&
+    shouldUseBodyPreview(conversation.latestMessageKind)
+  ) {
     return labels.newMessage;
   }
 
@@ -130,11 +138,12 @@ export function getInboxDisplayPreviewText(
   labels: InboxDisplayPreviewLabels,
   mode: InboxPreviewDisplayMode,
 ) {
-  if (mode === 'mask') {
-    return getMaskedInboxPreviewText(conversation, labels);
-  }
-
-  if (mode === 'reveal_after_open' && (conversation.unreadCount ?? 0) > 0) {
+  if (
+    getPreviewPrivacyDecision({
+      mode,
+      unreadCount: conversation.unreadCount,
+    }).inbox === 'generic'
+  ) {
     return getMaskedInboxPreviewText(conversation, labels);
   }
 

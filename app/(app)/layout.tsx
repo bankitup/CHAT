@@ -41,18 +41,21 @@ export default async function AppLayout({
   });
 
   return (
-    <AppShellFrame
-      dmE2eeEnabled={dmE2eeEnabled}
-      language={language}
-      spaces={spaces.map((space) => ({
-        defaultShellRoute: space.defaultShellRoute,
-        id: space.id,
-        name: space.name,
-        profile: space.profile,
-      }))}
-      userId={user.id}
-    >
-      {children}
-    </AppShellFrame>
+    <div className="app-route-shell-root">
+      <AppShellFrame
+        dmE2eeEnabled={dmE2eeEnabled}
+        language={language}
+        spaces={spaces.map((space) => ({
+          defaultShellRoute: space.defaultShellRoute,
+          id: space.id,
+          name: space.name,
+          profile: space.profile,
+          theme: space.theme,
+        }))}
+        userId={user.id}
+      >
+        {children}
+      </AppShellFrame>
+    </div>
   );
 }

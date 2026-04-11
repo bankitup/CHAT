@@ -234,6 +234,15 @@ to:
 
 - encrypted asset -> signed ciphertext URL -> local decrypt -> object URL
 
+Today that thread-side boundary is intentionally narrow and frontend-local in
+[app/(app)/chat/[conversationId]/voice-playback-source.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/chat/%5BconversationId%5D/voice-playback-source.ts),
+with `prepareThreadVoicePlaybackSource(...)` as the player-facing preparation boundary, so encrypted voice can replace:
+
+- committed transport-source lookup
+- local playable-source preparation
+
+without rewriting the player UI again.
+
 ## Inbox and activity behavior
 
 Inbox and activity stay blob-free.

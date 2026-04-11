@@ -4,6 +4,8 @@ export const LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT =
   'chat:thread-history-sync-request';
 export const LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT =
   'chat:thread-history-visible-message-ids';
+export const LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT =
+  'chat:thread-history-live-message';
 
 export type ThreadHistorySyncRequestPayload = {
   conversationId: string;
@@ -15,6 +17,26 @@ export type ThreadHistorySyncRequestPayload = {
 export type ThreadHistoryVisibleMessageIdsPayload = {
   conversationId: string;
   messageIds: string[];
+};
+
+export type ThreadHistoryLiveMessagePayload = {
+  conversationId: string;
+  message: {
+    body: string | null;
+    client_id: string | null;
+    content_mode?: string | null;
+    conversation_id: string;
+    created_at: string | null;
+    deleted_at: string | null;
+    edited_at: string | null;
+    id: string;
+    kind: string;
+    reply_to_message_id: string | null;
+    sender_device_id?: string | null;
+    sender_id: string | null;
+    seq: number | string;
+  };
+  reason?: string | null;
 };
 
 const diagnosticsEnabled =
@@ -126,6 +148,32 @@ export function emitThreadHistoryVisibleMessageIds(
       LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
       {
         detail: normalizedPayload,
+      },
+    ),
+  );
+}
+
+export function emitThreadHistoryLiveMessage(
+  payload: ThreadHistoryLiveMessagePayload,
+) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  logThreadHistorySyncDiagnostics('live-message', {
+    conversationId: payload.conversationId,
+    messageId: payload.message.id,
+    reason: payload.reason?.trim() || null,
+    seq: payload.message.seq,
+  });
+  window.dispatchEvent(
+    new CustomEvent<ThreadHistoryLiveMessagePayload>(
+      LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
+      {
+        detail: {
+          ...payload,
+          reason: payload.reason?.trim() || null,
+        },
       },
     ),
   );

@@ -11,6 +11,24 @@ type LanguageDictionary = {
     ru: string;
     label: string;
   };
+  zoomSwitcher: {
+    label: string;
+    trigger: string;
+    title: string;
+    body: string;
+    standard: string;
+    standardHint: string;
+    larger: string;
+    largerHint: string;
+    largest: string;
+    largestHint: string;
+    currentBadge: string;
+    previewBadge: string;
+    previewNotice: string;
+    confirm: string;
+    cancel: string;
+    saveFailed: string;
+  };
   publicHome: {
     eyebrow: string;
     title: string;
@@ -205,6 +223,15 @@ type LanguageDictionary = {
     participantsBody: string;
     participantsEmptyBody: string;
     participantsLockedHint: string;
+    participantsAdminSeatsLabel: string;
+    participantsMakeAdminAction: string;
+    participantsMakeAdminPending: string;
+    participantsMakeAdminSelectionRequired: string;
+    participantsMakeAdminSuccess: string;
+    participantsMakeAdminFailed: string;
+    participantsMakeAdminFailedLimit: string;
+    participantsMakeAdminFailedSelection: string;
+    participantsMakeAdminFailedSelectionOverflow: string;
     participantsRemoveAction: string;
     participantsRemoveConfirmBody: string;
     participantsConfirmRemoveAction: string;
@@ -218,6 +245,28 @@ type LanguageDictionary = {
     participantsRequestPending: string;
     participantsRequestSuccess: string;
     participantsRequestFailed: string;
+    spaceUsageTitle: string;
+    spaceUsageBody: string;
+    spaceUsagePreviewPill: string;
+    spaceUsageCurrentPlanLabel: string;
+    spaceUsageManagePlanAction: string;
+    spaceUsageMembersLabel: string;
+    spaceUsageAdminsLabel: string;
+    spaceUsageStorageLabel: string;
+    spaceUsageCallMinutesLabel: string;
+    spaceUsageFutureTrackingNote: string;
+    spaceUsagePrivatePlanLabel: string;
+    spaceUsagePrivatePlanSummary: string;
+    spaceUsageCommunityPlanLabel: string;
+    spaceUsageCommunityPlanSummary: string;
+    spaceUsageFutureLabel: string;
+    spaceUsageNearingLimitLabel: string;
+    spaceUsageOverLimitLabel: string;
+    spaceUsageUpgradeRecommendedLabel: string;
+    spaceUsageUpgradeToCommunityAction: string;
+    spaceUsageViewUsageAction: string;
+    spaceUsageStorageUnit: string;
+    spaceUsageMinutesUnit: string;
     currentUserBadge: string;
   };
   messengerActivity: {
@@ -276,6 +325,21 @@ type LanguageDictionary = {
     testFlowMismatchBody: string;
     openChats: string;
     openSettings: string;
+    spaceThemeTitle: string;
+    spaceThemeBody: string;
+    spaceThemeSpaceWideBadge: string;
+    spaceThemeDarkLabel: string;
+    spaceThemeDarkHint: string;
+    spaceThemeLightLabel: string;
+    spaceThemeLightHint: string;
+    spaceThemeCurrentBadge: string;
+    spaceThemeNote: string;
+    spaceThemeSaveFailed: string;
+    privateSpaceCtaTitle: string;
+    privateSpaceCtaBody: string;
+    privateSpaceCtaBadge: string;
+    privateSpaceCtaAction: string;
+    privateSpaceCtaNote: string;
   };
   rooms: {
     title: string;
@@ -553,11 +617,15 @@ type LanguageDictionary = {
     permissionReadyNote: string;
     notConfiguredNote: string;
     syncFailedNote: string;
+    privateMessageTitle: string;
+    privateMessageBody: string;
     sendTest: string;
     sendingTest: string;
     testReadyNote: string;
     testSentNote: string;
     testFailedNote: string;
+    internalTools: string;
+    internalToolsNote: string;
   };
     inbox: {
       title: string;
@@ -621,6 +689,8 @@ type LanguageDictionary = {
       subtitle: string;
       closeAria: string;
       close: string;
+      loadingCandidates: string;
+      loadingCandidatesFailed: string;
       modeAria: string;
       direct: string;
       group: string;
@@ -650,6 +720,9 @@ type LanguageDictionary = {
     openInfoAria: (title: string) => string;
     openAvatarPreviewAria: (title: string) => string;
     closeAvatarPreview: string;
+    openPhotoPreviewAria: (title: string) => string;
+    closePhotoPreview: string;
+    jumpToLatest: string;
     directChat: string;
     person: string;
     group: string;
@@ -738,11 +811,13 @@ type LanguageDictionary = {
     emptyMessage: string;
     newMessage: string;
     image: string;
+    photo: string;
     audio: string;
     voiceMessage: string;
     voiceMessagePlay: string;
     voiceMessagePause: string;
     voiceMessageLoading: string;
+    voiceMessagePending: string;
     voiceMessageUploading: string;
     voiceMessageProcessing: string;
     voiceMessageRecovering: string;
@@ -786,6 +861,7 @@ type LanguageDictionary = {
     member: string;
     attachmentOptions: string;
     photoOrFile: string;
+    photoLibrary: string;
     camera: string;
     soon: string;
     microphone: string;
@@ -832,7 +908,6 @@ type LanguageDictionary = {
     refreshEncryptedSetup: string;
     resetEncryptedSetupDev: string;
     reloadConversation: string;
-    encryptedAttachmentsUnsupported: string;
     loadingOlderMessages: string;
     olderMessagesAutoLoad: string;
     messageReactions: string;
@@ -846,6 +921,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       en: 'EN',
       ru: 'RU',
       label: 'Language',
+    },
+    zoomSwitcher: {
+      label: 'App zoom',
+      trigger: 'Size',
+      title: 'App zoom',
+      body: 'Preview a larger interface before saving it for this device. The preview updates the shell immediately, including controls and tap targets.',
+      standard: 'Standard',
+      standardHint: 'Balanced layout and default density.',
+      larger: 'Larger',
+      largerHint: 'Bigger text, controls, and spacing.',
+      largest: 'Largest',
+      largestHint: 'Maximum comfort for reading and tapping.',
+      currentBadge: 'Current',
+      previewBadge: 'Preview',
+      previewNotice: 'Preview applies immediately. Confirm to keep this size across the app on this device.',
+      confirm: 'Use this size',
+      cancel: 'Cancel',
+      saveFailed: 'Unable to save the display size right now.',
     },
     publicHome: {
       eyebrow: 'Build With Care',
@@ -1070,6 +1163,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       participantsEmptyBody: 'No participants are available in this space yet.',
       participantsLockedHint:
         'Owners and your own account stay protected here. Everything else remains scoped to this space only.',
+      participantsAdminSeatsLabel: 'Admin seats',
+      participantsMakeAdminAction: 'Make admin',
+      participantsMakeAdminPending: 'Promoting...',
+      participantsMakeAdminSelectionRequired:
+        'Select at least one member to promote.',
+      participantsMakeAdminSuccess:
+        'Selected members were promoted to admin.',
+      participantsMakeAdminFailed:
+        'Unable to update admin access right now.',
+      participantsMakeAdminFailedLimit:
+        'Admin seats are full for this space. Remove an admin or upgrade the plan first.',
+      participantsMakeAdminFailedSelection:
+        'Select member accounts only. Owners and existing admins cannot be promoted here.',
+      participantsMakeAdminFailedSelectionOverflow:
+        'Selected members exceed the remaining admin seats for this space.',
       participantsRemoveAction: 'Remove selected',
       participantsRemoveConfirmBody:
         'Confirm removal for the selected participants. This changes access only inside the current space.',
@@ -1088,6 +1196,32 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       participantsRequestSuccess: 'Account request sent for staff review.',
       participantsRequestFailed:
         'Unable to send the account request right now.',
+      spaceUsageTitle: 'Space usage',
+      spaceUsageBody:
+        'Keep future plan limits visible for this space without turning Home into a billing surface.',
+      spaceUsagePreviewPill: 'Admin view',
+      spaceUsageCurrentPlanLabel: 'Current plan',
+      spaceUsageManagePlanAction: 'Manage plan',
+      spaceUsageMembersLabel: 'Members',
+      spaceUsageAdminsLabel: 'Admins',
+      spaceUsageStorageLabel: 'Storage',
+      spaceUsageCallMinutesLabel: 'Call minutes',
+      spaceUsageFutureTrackingNote:
+        'Call minutes stay on preview counters until live usage tracking is enabled for this space.',
+      spaceUsagePrivatePlanLabel: 'Private',
+      spaceUsagePrivatePlanSummary:
+        '1 space · DM + basic groups · fixed history',
+      spaceUsageCommunityPlanLabel: 'Community',
+      spaceUsageCommunityPlanSummary:
+        '1 space · moderation · activity logs · metadata exports',
+      spaceUsageFutureLabel: 'Later',
+      spaceUsageNearingLimitLabel: 'Nearing limit',
+      spaceUsageOverLimitLabel: 'Over limit',
+      spaceUsageUpgradeRecommendedLabel: 'Upgrade recommended',
+      spaceUsageUpgradeToCommunityAction: 'Upgrade to Community',
+      spaceUsageViewUsageAction: 'View usage',
+      spaceUsageStorageUnit: 'GB',
+      spaceUsageMinutesUnit: 'min',
       currentUserBadge: 'You',
     },
     messengerActivity: {
@@ -1158,6 +1292,26 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'This branch uses the seeded TEST home as the canonical MVP proof path. Switch homes before validating the flow.',
       openChats: 'Open chats',
       openSettings: 'Open profile',
+      spaceThemeTitle: 'Space theme',
+      spaceThemeBody:
+        'Set the base look for everyone in this space. Dark is the default theme, and you can switch back to a lighter shell whenever needed.',
+      spaceThemeSpaceWideBadge: 'Space-wide',
+      spaceThemeDarkLabel: 'Dark',
+      spaceThemeDarkHint: 'Default base theme with softer glare and stronger contrast.',
+      spaceThemeLightLabel: 'Light',
+      spaceThemeLightHint: 'Brighter shell for spaces that prefer the current classic look.',
+      spaceThemeCurrentBadge: 'Current',
+      spaceThemeNote:
+        'This appearance setting applies to the current space and is ready for more space-level styling controls later.',
+      spaceThemeSaveFailed:
+        'Unable to save the space theme right now. Please try again.',
+      privateSpaceCtaTitle: 'Want a private chat space of your own?',
+      privateSpaceCtaBody:
+        'Start a quieter personal space when you are ready for a chat home that belongs just to you.',
+      privateSpaceCtaBadge: 'Personal space',
+      privateSpaceCtaAction: 'Start private space',
+      privateSpaceCtaNote:
+        'We will take you into the current personal-space setup flow from here.',
     },
     rooms: {
       title: 'Rooms',
@@ -1469,6 +1623,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       notConfiguredNote:
         'Add a web-push VAPID public key for runtime config and apply the push-subscriptions SQL before enabling this here.',
       syncFailedNote: 'We could not connect this browser to push notifications just now. Please try again.',
+      privateMessageTitle: 'New message',
+      privateMessageBody: 'Open the app to read it.',
       sendTest: 'Send test notification',
       sendingTest: 'Sending test notification…',
       testReadyNote: 'Send a test notification to verify this browser.',
@@ -1476,6 +1632,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Test notification sent. Put the app in the background if you want to confirm the browser alert.',
       testFailedNote:
         'We could not send a test notification to this device just now. Please try again.',
+      internalTools: 'Internal notification tools',
+      internalToolsNote:
+        'Includes test delivery and readiness details for preview and admin checks.',
     },
     inbox: {
       title: 'Chats',
@@ -1544,6 +1703,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         subtitle: 'Choose a direct message or start a group.',
         closeAria: 'Close create chat',
         close: 'Close',
+        loadingCandidates: 'Loading people...',
+        loadingCandidatesFailed:
+          'Unable to load people right now. Please try again.',
         modeAria: 'New chat mode',
         direct: 'Direct message',
         group: 'Group chat',
@@ -1574,6 +1736,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openInfoAria: (title) => `Open info for ${title}`,
       openAvatarPreviewAria: (title) => `Open avatar preview for ${title}`,
       closeAvatarPreview: 'Close avatar preview',
+      openPhotoPreviewAria: (title) => `Open photo preview for ${title}`,
+      closePhotoPreview: 'Close photo preview',
+      jumpToLatest: 'Jump to latest messages',
       directChat: 'Direct chat',
       person: 'Person',
       group: 'Group',
@@ -1666,11 +1831,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyMessage: 'Empty message',
       newMessage: 'New message',
       image: 'Image',
+      photo: 'Photo',
       audio: 'Audio',
       voiceMessage: 'Voice message',
       voiceMessagePlay: 'Play voice message',
       voiceMessagePause: 'Pause voice message',
       voiceMessageLoading: 'Loading voice message',
+      voiceMessagePending: 'Voice message pending',
       voiceMessageUploading: 'Uploading voice message',
       voiceMessageProcessing: 'Preparing voice message',
       voiceMessageRecovering: 'Recovering voice message',
@@ -1714,6 +1881,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       member: 'Member',
       attachmentOptions: 'Attachment options',
       photoOrFile: 'Photo or file',
+      photoLibrary: 'Photos',
       camera: 'Camera',
       soon: 'Soon',
       microphone: 'Voice message',
@@ -1772,8 +1940,6 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       refreshEncryptedSetup: 'Refresh encrypted setup',
       resetEncryptedSetupDev: 'Reset encrypted setup (dev)',
       reloadConversation: 'Reload chat',
-      encryptedAttachmentsUnsupported:
-        'Encrypted text with attachments is not supported yet in direct messages.',
       loadingOlderMessages: 'Loading older messages...',
       olderMessagesAutoLoad: 'Older messages will load automatically.',
       messageReactions: 'Message reactions',
@@ -1785,6 +1951,24 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       en: 'EN',
       ru: 'RU',
       label: 'Язык',
+    },
+    zoomSwitcher: {
+      label: 'Размер интерфейса',
+      trigger: 'Размер',
+      title: 'Размер интерфейса',
+      body: 'Сначала посмотрите увеличенный интерфейс, а потом сохраните его для этого устройства. Превью сразу обновляет оболочку, кнопки и области касания.',
+      standard: 'Стандартный',
+      standardHint: 'Сбалансированная плотность и обычный размер.',
+      larger: 'Крупнее',
+      largerHint: 'Крупнее текст, кнопки и отступы.',
+      largest: 'Самый крупный',
+      largestHint: 'Максимально комфортно для чтения и касаний.',
+      currentBadge: 'Сейчас',
+      previewBadge: 'Превью',
+      previewNotice: 'Превью применяется сразу. Подтвердите, чтобы сохранить этот размер для всего приложения на этом устройстве.',
+      confirm: 'Сохранить размер',
+      cancel: 'Отмена',
+      saveFailed: 'Сейчас не удалось сохранить размер интерфейса.',
     },
     publicHome: {
       eyebrow: 'Build With Care',
@@ -2014,6 +2198,21 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       participantsEmptyBody: 'В этом пространстве пока нет доступных участников.',
       participantsLockedHint:
         'Владелец пространства и ваш собственный аккаунт здесь защищены. Все остальные изменения остаются только внутри этого пространства.',
+      participantsAdminSeatsLabel: 'Места администраторов',
+      participantsMakeAdminAction: 'Сделать админом',
+      participantsMakeAdminPending: 'Повышаем...',
+      participantsMakeAdminSelectionRequired:
+        'Выберите хотя бы одного участника для повышения.',
+      participantsMakeAdminSuccess:
+        'Выбранные участники стали администраторами.',
+      participantsMakeAdminFailed:
+        'Сейчас не удалось обновить доступ администратора.',
+      participantsMakeAdminFailedLimit:
+        'Места администраторов в этом пространстве закончились. Сначала снимите одного админа или обновите план.',
+      participantsMakeAdminFailedSelection:
+        'Для повышения выбирайте только участников со статусом member. Владельцев и действующих админов здесь повышать нельзя.',
+      participantsMakeAdminFailedSelectionOverflow:
+        'Выбранных участников больше, чем оставшихся мест администраторов.',
       participantsRemoveAction: 'Удалить выбранных',
       participantsRemoveConfirmBody:
         'Подтвердите удаление выбранных участников. Это меняет доступ только внутри текущего пространства.',
@@ -2035,6 +2234,32 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Запрос на дополнительные аккаунты отправлен на проверку.',
       participantsRequestFailed:
         'Сейчас не удалось отправить запрос на аккаунты.',
+      spaceUsageTitle: 'Использование пространства',
+      spaceUsageBody:
+        'Держите будущие лимиты тарифа на виду для этого пространства, не превращая Home в тяжёлый биллинговый экран.',
+      spaceUsagePreviewPill: 'Только для админов',
+      spaceUsageCurrentPlanLabel: 'Текущий план',
+      spaceUsageManagePlanAction: 'Управлять планом',
+      spaceUsageMembersLabel: 'Участники',
+      spaceUsageAdminsLabel: 'Админы',
+      spaceUsageStorageLabel: 'Хранилище',
+      spaceUsageCallMinutesLabel: 'Минуты звонков',
+      spaceUsageFutureTrackingNote:
+        'Минуты звонков пока остаются preview-счётчиками, пока для этого пространства не включён живой usage tracking.',
+      spaceUsagePrivatePlanLabel: 'Private',
+      spaceUsagePrivatePlanSummary:
+        '1 пространство · личные сообщения + базовые группы · фиксированная история',
+      spaceUsageCommunityPlanLabel: 'Community',
+      spaceUsageCommunityPlanSummary:
+        '1 пространство · модерация · логи активности · экспорт метаданных',
+      spaceUsageFutureLabel: 'Позже',
+      spaceUsageNearingLimitLabel: 'Почти лимит',
+      spaceUsageOverLimitLabel: 'Лимит превышен',
+      spaceUsageUpgradeRecommendedLabel: 'Рекомендуем апгрейд',
+      spaceUsageUpgradeToCommunityAction: 'Перейти на Community',
+      spaceUsageViewUsageAction: 'Посмотреть использование',
+      spaceUsageStorageUnit: 'ГБ',
+      spaceUsageMinutesUnit: 'мин',
       currentUserBadge: 'Вы',
     },
     messengerActivity: {
@@ -2111,6 +2336,28 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'В этой ветке канонический MVP-путь проверяется через seeded-дом TEST. Переключите дом перед проверкой сценария.',
       openChats: 'Открыть чаты',
       openSettings: 'Открыть профиль',
+      spaceThemeTitle: 'Тема пространства',
+      spaceThemeBody:
+        'Задайте базовый вид для всех участников этого пространства. Темная тема остается стандартной, а при необходимости можно вернуть более светлую оболочку.',
+      spaceThemeSpaceWideBadge: 'Для всего пространства',
+      spaceThemeDarkLabel: 'Тёмная',
+      spaceThemeDarkHint:
+        'Базовая тема по умолчанию с меньшими бликами и более уверенным контрастом.',
+      spaceThemeLightLabel: 'Светлая',
+      spaceThemeLightHint:
+        'Более светлая оболочка для пространств, которым ближе текущий классический вид.',
+      spaceThemeCurrentBadge: 'Сейчас',
+      spaceThemeNote:
+        'Эта настройка применяется ко всему текущему пространству и готова к расширению на другие параметры внешнего вида.',
+      spaceThemeSaveFailed:
+        'Сейчас не удалось сохранить тему пространства. Попробуйте ещё раз.',
+      privateSpaceCtaTitle: 'Хотите своё приватное чат-пространство?',
+      privateSpaceCtaBody:
+        'Когда будете готовы, начните более тихое личное пространство для чатов, которое будет только вашим.',
+      privateSpaceCtaBadge: 'Личное пространство',
+      privateSpaceCtaAction: 'Начать приватное пространство',
+      privateSpaceCtaNote:
+        'Отсюда вы перейдёте в текущий поток настройки личного пространства.',
     },
     rooms: {
       title: 'Комнаты',
@@ -2445,6 +2692,8 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Добавьте VAPID public key для runtime-настройки push и примените SQL для push_subscriptions, прежде чем включать это здесь.',
       syncFailedNote:
         'Сейчас не удалось подключить этот браузер к push-уведомлениям. Попробуйте ещё раз.',
+      privateMessageTitle: 'Новое сообщение',
+      privateMessageBody: 'Откройте приложение, чтобы прочитать его.',
       sendTest: 'Отправить тестовое уведомление',
       sendingTest: 'Отправляем тестовое уведомление…',
       testReadyNote: 'Отправьте тестовое уведомление, чтобы проверить этот браузер.',
@@ -2452,6 +2701,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         'Тестовое уведомление отправлено. Сверните приложение, если хотите проверить системное оповещение браузера.',
       testFailedNote:
         'Сейчас не удалось отправить тестовое уведомление на это устройство. Попробуйте ещё раз.',
+      internalTools: 'Внутренние инструменты уведомлений',
+      internalToolsNote:
+        'Здесь остаются тестовая доставка и детали готовности для превью и админ-проверок.',
     },
     inbox: {
       title: 'Чаты',
@@ -2520,6 +2772,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
         subtitle: 'Выберите личный чат или создайте группу.',
         closeAria: 'Закрыть создание чата',
         close: 'Закрыть',
+        loadingCandidates: 'Загружаем людей...',
+        loadingCandidatesFailed:
+          'Сейчас не удаётся загрузить людей. Попробуйте ещё раз.',
         modeAria: 'Режим нового чата',
         direct: 'Личный чат',
         group: 'Групповой чат',
@@ -2550,6 +2805,9 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       openInfoAria: (title) => `Открыть информацию о чате ${title}`,
       openAvatarPreviewAria: (title) => `Открыть фото профиля чата ${title}`,
       closeAvatarPreview: 'Закрыть просмотр аватара',
+      openPhotoPreviewAria: (title) => `Открыть фото ${title}`,
+      closePhotoPreview: 'Закрыть фото',
+      jumpToLatest: 'Перейти к последним сообщениям',
       directChat: 'Личный чат',
       person: 'Человек',
       group: 'Группа',
@@ -2642,11 +2900,13 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       emptyMessage: 'Пустое сообщение',
       newMessage: 'Новое сообщение',
       image: 'Изображение',
+      photo: 'Фото',
       audio: 'Аудио',
       voiceMessage: 'Голосовое сообщение',
       voiceMessagePlay: 'Воспроизвести голосовое сообщение',
       voiceMessagePause: 'Поставить голосовое сообщение на паузу',
       voiceMessageLoading: 'Голосовое сообщение загружается',
+      voiceMessagePending: 'Голосовое сообщение ожидает',
       voiceMessageUploading: 'Голосовое сообщение загружается',
       voiceMessageProcessing: 'Голосовое сообщение подготавливается',
       voiceMessageRecovering: 'Голосовое сообщение восстанавливается',
@@ -2691,6 +2951,7 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       member: 'Участник',
       attachmentOptions: 'Вложения',
       photoOrFile: 'Фото или файл',
+      photoLibrary: 'Фото',
       camera: 'Камера',
       soon: 'Скоро',
       microphone: 'Голосовое сообщение',
@@ -2757,8 +3018,6 @@ export const translations: Record<AppLanguage, LanguageDictionary> = {
       refreshEncryptedSetup: 'Обновить настройку шифрования',
       resetEncryptedSetupDev: 'Сбросить шифрование (dev)',
       reloadConversation: 'Обновить чат',
-      encryptedAttachmentsUnsupported:
-        'Зашифрованный текст с вложениями в личных чатах пока не поддерживается.',
       loadingOlderMessages: 'Загружаем более ранние сообщения...',
       olderMessagesAutoLoad: 'Более ранние сообщения загрузятся автоматически.',
       messageReactions: 'Реакции на сообщение',

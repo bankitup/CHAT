@@ -1,4 +1,11 @@
-import type { PushSubscriptionRecordInput } from '@/modules/messaging/push/contract';
+import type {
+  PushSubscriptionPresenceInput,
+  PushSubscriptionRecordInput,
+} from '@/modules/messaging/push/contract';
+import {
+  INBOX_SECTION_PREFERENCES_COOKIE,
+  parseInboxSectionPreferencesCookie,
+} from '@/modules/messaging/inbox/preferences';
 
 export type NotificationReadinessStatus =
   | 'unsupported'
@@ -187,6 +194,12 @@ type PushTestSendResponse = {
   error?: string;
 };
 
+type PushPresenceSyncResponse = {
+  ok?: boolean;
+  reason?: string | null;
+  synced?: boolean;
+};
+
 function serializePushSubscription(
   subscription: PushSubscription,
 ): PushSubscriptionRecordInput {
@@ -222,6 +235,36 @@ function serializePushSubscription(
   };
 }
 
+function getClientCookieValue(name: string) {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const prefix = `${encodeURIComponent(name)}=`;
+
+  for (const entry of document.cookie.split(';')) {
+    const trimmed = entry.trim();
+
+    if (trimmed.startsWith(prefix)) {
+      const rawValue = trimmed.slice(prefix.length);
+
+      try {
+        return decodeURIComponent(rawValue);
+      } catch {
+        return rawValue;
+      }
+    }
+  }
+
+  return null;
+}
+
+function getCurrentInboxPreviewModeFromCookie() {
+  return parseInboxSectionPreferencesCookie(
+    getClientCookieValue(INBOX_SECTION_PREFERENCES_COOKIE),
+  ).previewMode;
+}
+
 async function syncPushSubscriptionWithServer(subscription: PushSubscription) {
   const response = await fetch('/api/messaging/push-subscriptions', {
     method: 'POST',
@@ -254,6 +297,74 @@ async function syncPushSubscriptionWithServer(subscription: PushSubscription) {
 
     throw new Error(errorMessage);
   }
+}
+
+export async function syncCurrentPushSubscriptionPresence(
+  input: Omit<PushSubscriptionPresenceInput, 'endpoint'>,
+) {
+  if (!supportsPushSubscriptions()) {
+    return {
+      synced: false,
+      reason: 'unsupported',
+    } as const;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return {
+      synced: false,
+      reason: 'permission-not-granted',
+    } as const;
+  }
+
+  const subscription = await getCurrentPushSubscription();
+
+  if (!subscription) {
+    return {
+      synced: false,
+      reason: 'subscription-missing',
+    } as const;
+  }
+
+  const response = await fetch('/api/messaging/push-subscriptions', {
+    keepalive: true,
+    method: 'PATCH',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      activeConversationId: input.activeInApp ? input.activeConversationId : null,
+      activeInApp: input.activeInApp,
+      previewMode: input.previewMode ?? getCurrentInboxPreviewModeFromCookie(),
+    } satisfies PushSubscriptionPresenceInput),
+  });
+
+  let body: PushPresenceSyncResponse | null = null;
+
+  try {
+    body = (await response.json()) as PushPresenceSyncResponse;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    return {
+      synced: false,
+      reason: body?.reason ?? 'request-failed',
+    } as const;
+  }
+
+  if (body?.synced === false) {
+    return {
+      synced: false,
+      reason: body.reason ?? 'server-skipped',
+    } as const;
+  }
+
+  return {
+    synced: true,
+    reason: null,
+  } as const;
 }
 
 async function getServerPushSubscriptionState(subscription: PushSubscription) {

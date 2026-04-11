@@ -17,8 +17,13 @@ import {
 import { buildMessageInsertPayload } from '@/modules/messaging/data/message-shell';
 import {
   resolveInboxAttachmentPreviewKind,
+  resolveInboxAttachmentPreviewKindFromMetadata,
   type InboxAttachmentPreviewKind,
 } from '@/modules/messaging/inbox/preview-kind';
+import {
+  resolveMessagingAssetKindFromMimeType,
+  resolveMessagingAttachmentMimeType,
+} from '@/modules/messaging/media/message-assets';
 import {
   canAddParticipantsToGroupConversation,
   canEditGroupConversationIdentity,
@@ -40,6 +45,7 @@ import type {
   DmE2eeApiErrorCode,
   DmE2eeBootstrapDebugState,
   DmE2eeDevicePublishResultKind,
+  DmE2eeMessageKind,
   DmE2eeRecipientReadinessDebugState,
   DmE2eeRecipientBundleResponse,
   DmE2eeSendDebugState,
@@ -406,6 +412,21 @@ type MessageAttachmentPreviewRow = {
   mime_type: string | null;
 };
 
+type MessageAssetPreviewRow = {
+  created_at: string | null;
+  message_assets:
+    | {
+        kind: 'image' | 'file' | 'audio' | 'voice-note';
+        mime_type?: string | null;
+      }
+    | Array<{
+        kind: 'image' | 'file' | 'audio' | 'voice-note';
+        mime_type?: string | null;
+      }>
+    | null;
+  message_id: string;
+};
+
 export type MessageAttachment = {
   id: string;
   messageId: string;
@@ -535,10 +556,66 @@ type MessageE2eeEnvelopeRow = {
 
 export const STARTER_REACTIONS = ['❤️', '👍', '😂', '😮', '😢', '🎉'] as const;
 export const CHAT_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
-export const CHAT_ATTACHMENT_ACCEPT =
-  'image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,audio/webm,audio/mp4,audio/mpeg,audio/ogg,audio/wav,audio/x-wav,audio/aac,audio/mp3,audio/m4a';
+const SUPPORTED_ATTACHMENT_EXTENSIONS = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.gif',
+  '.heic',
+  '.heif',
+  '.pdf',
+  '.txt',
+  '.csv',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+  '.rtf',
+  '.json',
+  '.md',
+  '.markdown',
+  '.zip',
+] as const;
+const SUPPORTED_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/rtf',
+  'application/json',
+  'text/markdown',
+  'application/zip',
+  'application/x-zip-compressed',
+  'audio/webm',
+  'audio/mp4',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/aac',
+  'audio/mp3',
+  'audio/m4a',
+] as const;
+export const CHAT_ATTACHMENT_ACCEPT = [
+  ...SUPPORTED_ATTACHMENT_MIME_TYPES,
+  ...SUPPORTED_ATTACHMENT_EXTENSIONS,
+].join(',');
 export const CHAT_ATTACHMENT_HELP_TEXT =
-  'Supported files: JPG, PNG, WEBP, GIF, PDF, TXT, and common audio files up to 10 MB.';
+  'Supported photos, documents, ZIP files, and common audio files up to 10 MB.';
 export const PROFILE_AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 export const PROFILE_AVATAR_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 
@@ -609,23 +686,10 @@ const CHAT_ATTACHMENT_BUCKET_CONFIG = resolveChatAttachmentBucketConfig();
 const CHAT_ATTACHMENT_BUCKET = CHAT_ATTACHMENT_BUCKET_CONFIG.actualBucket;
 const PROFILE_AVATAR_BUCKET =
   process.env.SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
-const SUPPORTED_ATTACHMENT_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'application/pdf',
-  'text/plain',
-  'audio/webm',
-  'audio/mp4',
-  'audio/mpeg',
-  'audio/ogg',
-  'audio/wav',
-  'audio/x-wav',
-  'audio/aac',
-  'audio/mp3',
-  'audio/m4a',
-]);
+const SUPPORTED_ATTACHMENT_TYPES = new Set<string>(SUPPORTED_ATTACHMENT_MIME_TYPES);
+const SUPPORTED_ATTACHMENT_EXTENSION_SET = new Set<string>(
+  SUPPORTED_ATTACHMENT_EXTENSIONS,
+);
 const SUPPORTED_VOICE_ATTACHMENT_TYPES = new Set([
   'audio/webm',
   'audio/mp4',
@@ -637,8 +701,50 @@ const SUPPORTED_VOICE_ATTACHMENT_TYPES = new Set([
   'audio/wav',
   'audio/x-wav',
 ]);
-export function isSupportedChatAttachmentType(mimeType: string) {
-  return SUPPORTED_ATTACHMENT_TYPES.has(mimeType);
+function getAttachmentFileExtension(fileName: string | null | undefined) {
+  const normalizedFileName = fileName?.trim() || '';
+
+  if (!normalizedFileName) {
+    return null;
+  }
+
+  const lastSegment = normalizedFileName.split(/[\\/]/).pop()?.trim() || '';
+  const extensionIndex = lastSegment.lastIndexOf('.');
+
+  if (extensionIndex < 0 || extensionIndex === lastSegment.length - 1) {
+    return null;
+  }
+
+  return lastSegment.slice(extensionIndex).toLowerCase();
+}
+
+function isBinaryAttachmentMimeType(mimeType: string | null | undefined) {
+  const normalizedMimeType = mimeType?.trim().toLowerCase() || '';
+
+  return (
+    !normalizedMimeType ||
+    normalizedMimeType === 'application/octet-stream' ||
+    normalizedMimeType === 'binary/octet-stream' ||
+    normalizedMimeType === 'application/x-download'
+  );
+}
+
+export function isSupportedChatAttachmentType(
+  mimeType: string,
+  fileName?: string | null,
+) {
+  const normalizedMimeType = mimeType.trim().toLowerCase();
+
+  if (SUPPORTED_ATTACHMENT_TYPES.has(normalizedMimeType)) {
+    return true;
+  }
+
+  if (!isBinaryAttachmentMimeType(normalizedMimeType)) {
+    return false;
+  }
+
+  const extension = getAttachmentFileExtension(fileName);
+  return Boolean(extension && SUPPORTED_ATTACHMENT_EXTENSION_SET.has(extension));
 }
 
 function normalizeConversation(
@@ -707,16 +813,6 @@ function markConversationSummaryProjectionAvailability(
   );
 }
 
-function hasConversationSummaryProjectionFields(record: ConversationRecord | null) {
-  if (!record) {
-    return false;
-  }
-
-  return CONVERSATION_SUMMARY_PROJECTION_COLUMNS.some((columnName) =>
-    Object.prototype.hasOwnProperty.call(record, columnName),
-  );
-}
-
 function normalizeConversationLatestMessageSeq(value: number | string | null | undefined) {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
@@ -752,32 +848,80 @@ function resolveConversationVisibleReadFloorSeq(
   return Math.max(0, visibleFromSeq - 1);
 }
 
-function resolveConversationUnreadCount(input: {
+function resolveConversationEffectiveLastReadSeq(input: {
   lastReadMessageSeq: number | null;
-  latestMessageSeq: number | null;
   visibleFromSeq?: number | null;
 }) {
-  const latestMessageSeq = input.latestMessageSeq;
-
-  if (latestMessageSeq === null) {
-    return 0;
-  }
-
   const baselineReadFloorSeq = resolveConversationVisibleReadFloorSeq(
     input.visibleFromSeq ?? null,
   );
-  const effectiveLastReadSeq =
-    input.lastReadMessageSeq === null
-      ? baselineReadFloorSeq
-      : baselineReadFloorSeq === null
-        ? input.lastReadMessageSeq
-        : Math.max(input.lastReadMessageSeq, baselineReadFloorSeq);
+  return input.lastReadMessageSeq === null
+    ? baselineReadFloorSeq
+    : baselineReadFloorSeq === null
+      ? input.lastReadMessageSeq
+      : Math.max(input.lastReadMessageSeq, baselineReadFloorSeq);
+}
 
-  if (effectiveLastReadSeq === null) {
-    return latestMessageSeq;
+async function countConversationUnreadIncomingMessages(input: {
+  conversationId: string;
+  currentUserId: string;
+  lastReadMessageSeq: number | null;
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  visibleFromSeq?: number | null;
+}) {
+  const effectiveLastReadSeq = resolveConversationEffectiveLastReadSeq({
+    lastReadMessageSeq: input.lastReadMessageSeq,
+    visibleFromSeq: input.visibleFromSeq ?? null,
+  });
+
+  let unreadQuery = input.supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', input.conversationId)
+    .neq('sender_id', input.currentUserId);
+
+  if (effectiveLastReadSeq !== null) {
+    unreadQuery = unreadQuery.gt('seq', effectiveLastReadSeq);
   }
 
-  return Math.max(0, latestMessageSeq - effectiveLastReadSeq);
+  const unreadResponse = await unreadQuery;
+
+  if (unreadResponse.error) {
+    throw new Error(unreadResponse.error.message);
+  }
+
+  return Number(unreadResponse.count ?? 0);
+}
+
+async function loadUnreadIncomingCountByConversation(input: {
+  currentUserId: string;
+  rows: ConversationMemberRow[];
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+}) {
+  const unreadCounts = await Promise.all(
+    input.rows.map(async (row) => {
+      const lastReadMessageSeq =
+        typeof row.last_read_message_seq === 'number'
+          ? row.last_read_message_seq
+          : null;
+      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
+        row.visible_from_seq,
+      );
+
+      return [
+        row.conversation_id,
+        await countConversationUnreadIncomingMessages({
+          conversationId: row.conversation_id,
+          currentUserId: input.currentUserId,
+          lastReadMessageSeq,
+          supabase: input.supabase,
+          visibleFromSeq,
+        }),
+      ] as const;
+    }),
+  );
+
+  return new Map(unreadCounts);
 }
 
 function getConversationSummarySelect(input?: {
@@ -1309,6 +1453,7 @@ async function getConversationsByVisibility(
     mapInboxConversations(
       await attachConversationsToMembershipRows(membershipRows, supabase, options),
       supabase,
+      userId,
     );
 
   try {
@@ -1349,6 +1494,7 @@ async function getConversationsByVisibility(
     return mapInboxConversations(
       await attachConversationsToMembershipRows(scopedMembershipRows, supabase, options),
       supabase,
+      userId,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1374,22 +1520,33 @@ async function getConversationsWithoutArchiveVisibility(
 ) {
   const supabase = await createSupabaseServerClient();
   const baseMembershipSelect =
-    'conversation_id, state, last_read_message_seq, last_read_at';
+    'conversation_id, state, last_read_message_seq, last_read_at, visible_from_seq';
   const baseMemberships = await supabase
     .from('conversation_members')
     .select(baseMembershipSelect)
     .eq('user_id', userId)
     .eq('state', 'active');
+  const fallbackBaseMemberships =
+    baseMemberships.error &&
+    isMissingColumnErrorMessage(baseMemberships.error.message, 'visible_from_seq')
+      ? await supabase
+          .from('conversation_members')
+          .select('conversation_id, state, last_read_message_seq, last_read_at')
+          .eq('user_id', userId)
+          .eq('state', 'active')
+      : null;
+  const resolvedBaseMemberships = fallbackBaseMemberships ?? baseMemberships;
 
-  if (baseMemberships.error) {
-    throw new Error(baseMemberships.error.message);
+  if (resolvedBaseMemberships.error) {
+    throw new Error(resolvedBaseMemberships.error.message);
   }
 
-  const membershipRows = (baseMemberships.data ?? []) as ConversationMemberRow[];
+  const membershipRows = (resolvedBaseMemberships.data ?? []) as ConversationMemberRow[];
 
   return mapInboxConversations(
     await attachConversationsToMembershipRows(membershipRows, supabase, options),
     supabase,
+    userId,
   );
 }
 
@@ -1571,22 +1728,14 @@ async function attachConversationsToMembershipRows(
 async function mapInboxConversations(
   rows: ConversationMemberRow[],
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  currentUserId: string,
 ) {
-  type LatestMessageRow = {
-    conversation_id: string;
-    id: string;
-    seq: number | string;
-    body: string | null;
-    kind: string | null;
-    content_mode?: string | null;
-    deleted_at: string | null;
-  };
-
   const conversationIds = rows.map((row) => row.conversation_id);
   const latestMessageSeqByConversation = new Map<string, number>();
   const latestMessageByConversation = new Map<
     string,
     {
+      createdAt: string | null;
       id: string | null;
       senderId: string | null;
       body: string | null;
@@ -1595,131 +1744,39 @@ async function mapInboxConversations(
       deletedAt: string | null;
     }
   >();
-  const unreadCountByConversation = new Map<string, number>();
-  const summaryProjectionAvailable =
-    rows.length > 0 &&
-    rows.every((row) =>
-      hasConversationSummaryProjectionFields(
-        normalizeConversation(row.conversations),
-      ),
+  const unreadCountByConversation =
+    await loadUnreadIncomingCountByConversation({
+      currentUserId,
+      rows,
+      supabase,
+    });
+  const latestMessageRowsByConversationId =
+    await loadLatestConversationSummaryMessageRowsByConversationId(
+      supabase,
+      conversationIds,
     );
 
-  if (summaryProjectionAvailable) {
-    for (const membershipRow of rows) {
-      const conversation = normalizeConversation(membershipRow.conversations);
-      const latestSeq = normalizeConversationLatestMessageSeq(
-        conversation?.last_message_seq ?? null,
-      );
+  for (const membershipRow of rows) {
+    const latestRow =
+      latestMessageRowsByConversationId.get(membershipRow.conversation_id) ?? null;
+    const latestSeq = normalizeConversationLatestMessageSeq(latestRow?.seq ?? null);
 
-      if (conversation && conversation.last_message_id !== undefined) {
-        latestMessageByConversation.set(membershipRow.conversation_id, {
-          id: conversation.last_message_id ?? null,
-          senderId: conversation.last_message_sender_id ?? null,
-          body: conversation.last_message_body ?? null,
-          kind: conversation.last_message_kind ?? null,
-          contentMode: conversation.last_message_content_mode ?? null,
-          deletedAt: conversation.last_message_deleted_at ?? null,
-        });
-      }
-
-      if (latestSeq !== null) {
-        latestMessageSeqByConversation.set(membershipRow.conversation_id, latestSeq);
-      }
-
-      const lastReadSeq =
-        typeof membershipRow.last_read_message_seq === 'number'
-          ? membershipRow.last_read_message_seq
-          : null;
-      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
-        membershipRow.visible_from_seq,
-      );
-
-      unreadCountByConversation.set(
-        membershipRow.conversation_id,
-        resolveConversationUnreadCount({
-          lastReadMessageSeq: lastReadSeq,
-          latestMessageSeq: latestSeq,
-          visibleFromSeq,
-        }),
-      );
-    }
-  } else if (conversationIds.length > 0) {
-    const latestMessagesWithContentMode = await supabase
-      .from('messages')
-      .select('id, conversation_id, seq, body, kind, content_mode, deleted_at')
-      .in('conversation_id', conversationIds)
-      .order('conversation_id', { ascending: true })
-      .order('seq', { ascending: false });
-
-    let messageRows = (latestMessagesWithContentMode.data ?? null) as
-      | LatestMessageRow[]
-      | null;
-
-    if (latestMessagesWithContentMode.error) {
-      if (
-        isMissingColumnErrorMessage(
-          latestMessagesWithContentMode.error.message,
-          'content_mode',
-        )
-      ) {
-        const fallbackLatestMessages = await supabase
-          .from('messages')
-          .select('id, conversation_id, seq, body, kind, deleted_at')
-          .in('conversation_id', conversationIds)
-          .order('conversation_id', { ascending: true })
-          .order('seq', { ascending: false });
-
-        if (fallbackLatestMessages.error) {
-          throw new Error(fallbackLatestMessages.error.message);
-        }
-
-        messageRows = (fallbackLatestMessages.data ?? null) as LatestMessageRow[] | null;
-      } else {
-        throw new Error(latestMessagesWithContentMode.error.message);
-      }
+    if (latestRow) {
+      latestMessageByConversation.set(membershipRow.conversation_id, {
+        createdAt: latestRow.created_at ?? null,
+        id: latestRow.id ?? null,
+        senderId: latestRow.sender_id ?? null,
+        body: latestRow.body ?? null,
+        kind: latestRow.kind ?? null,
+        contentMode: latestRow.content_mode ?? null,
+        deletedAt: latestRow.deleted_at ?? null,
+      });
     }
 
-    for (const row of messageRows ?? []) {
-      const messageSeq =
-        typeof row.seq === 'number' ? row.seq : Number(row.seq);
-
-      if (!Number.isFinite(messageSeq)) {
-        continue;
-      }
-
-      if (!latestMessageSeqByConversation.has(row.conversation_id)) {
-        latestMessageSeqByConversation.set(row.conversation_id, messageSeq);
-        latestMessageByConversation.set(row.conversation_id, {
-          id: row.id ?? null,
-          senderId: null,
-          body: row.body ?? null,
-          kind: row.kind ?? null,
-          contentMode: row.content_mode ?? null,
-          deletedAt: row.deleted_at ?? null,
-        });
-      }
+    if (latestSeq !== null) {
+      latestMessageSeqByConversation.set(membershipRow.conversation_id, latestSeq);
     }
 
-    for (const membershipRow of rows) {
-      const lastReadSeq =
-        typeof membershipRow.last_read_message_seq === 'number'
-          ? membershipRow.last_read_message_seq
-          : null;
-      const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
-        membershipRow.visible_from_seq,
-      );
-      const latestSeq =
-        latestMessageSeqByConversation.get(membershipRow.conversation_id) ?? null;
-
-      unreadCountByConversation.set(
-        membershipRow.conversation_id,
-        resolveConversationUnreadCount({
-          lastReadMessageSeq: lastReadSeq,
-          latestMessageSeq: latestSeq,
-          visibleFromSeq,
-        }),
-      );
-    }
   }
 
   const latestMessageAttachmentKindByMessageId =
@@ -1762,7 +1819,7 @@ async function mapInboxConversations(
         conversation?.avatar_path ?? null,
       ),
       createdBy: conversation?.created_by ?? null,
-      lastMessageAt: latestMessageVisible ? conversation?.last_message_at ?? null : null,
+      lastMessageAt: latestMessageVisible ? latestMessage?.createdAt ?? null : null,
       createdAt: conversation?.created_at ?? null,
       hiddenAt: row.hidden_at ?? null,
       lastReadMessageSeq,
@@ -2044,36 +2101,22 @@ export async function getConversationSummaryForUser(
     return null;
   }
 
-  let latestMessageSeq =
-    normalizeConversationLatestMessageSeq(conversation.last_message_seq ?? null);
-  let latestMessage = hasConversationSummaryProjectionFields(conversation)
+  const latestRow = await loadLatestConversationSummaryMessageRow(
+    supabase,
+    conversationId,
+  );
+  const latestMessageSeq = normalizeConversationLatestMessageSeq(latestRow?.seq ?? null);
+  const latestMessage = latestRow
     ? {
-        body: conversation.last_message_body ?? null,
-        contentMode: conversation.last_message_content_mode ?? null,
-        deletedAt: conversation.last_message_deleted_at ?? null,
-        id: conversation.last_message_id ?? null,
-        kind: conversation.last_message_kind ?? null,
-        senderId: conversation.last_message_sender_id ?? null,
+        body: latestRow.body ?? null,
+        contentMode: latestRow.content_mode ?? null,
+        createdAt: latestRow.created_at ?? null,
+        deletedAt: latestRow.deleted_at ?? null,
+        id: latestRow.id ?? null,
+        kind: latestRow.kind ?? null,
+        senderId: latestRow.sender_id ?? null,
       }
     : null;
-
-  if (!hasConversationSummaryProjectionFields(conversation)) {
-    const latestRow = await loadLatestConversationSummaryMessageRow(
-      supabase,
-      conversationId,
-    );
-    latestMessageSeq = normalizeConversationLatestMessageSeq(latestRow?.seq ?? null);
-    latestMessage = latestRow
-      ? {
-          body: latestRow.body ?? null,
-          contentMode: latestRow.content_mode ?? null,
-          deletedAt: latestRow.deleted_at ?? null,
-          id: latestRow.id ?? null,
-          kind: latestRow.kind ?? null,
-          senderId: latestRow.sender_id ?? null,
-        }
-      : null;
-  }
 
   const lastReadMessageSeq =
     typeof scopedRow.last_read_message_seq === 'number'
@@ -2082,9 +2125,11 @@ export async function getConversationSummaryForUser(
   const visibleFromSeq = normalizeConversationMemberVisibleFromSeq(
     scopedRow.visible_from_seq,
   );
-  const unreadCount = resolveConversationUnreadCount({
+  const unreadCount = await countConversationUnreadIncomingMessages({
+    conversationId,
+    currentUserId: userId,
     lastReadMessageSeq,
-    latestMessageSeq,
+    supabase,
     visibleFromSeq,
   });
   const latestMessageVisible =
@@ -2099,7 +2144,7 @@ export async function getConversationSummaryForUser(
     conversationId: scopedRow.conversation_id,
     createdAt: conversation.created_at ?? null,
     hiddenAt: scopedRow.hidden_at ?? null,
-    lastMessageAt: latestMessageVisible ? conversation.last_message_at ?? null : null,
+    lastMessageAt: latestMessageVisible ? latestMessage?.createdAt ?? null : null,
     lastReadAt: scopedRow.last_read_at ?? null,
     lastReadMessageSeq,
     latestMessageAttachmentKind:
@@ -2737,7 +2782,7 @@ function getAttachmentMessageKind(mimeType: string | null) {
     return 'voice' as const;
   }
 
-  return 'text' as const;
+  return 'attachment' as const;
 }
 
 export async function getProfileIdentities(
@@ -4388,27 +4433,27 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
   recipientDebugState.recipientSelectedDeviceAvailablePrekeyCount =
     availablePrekeyCount;
 
-  if (availablePrekeyCount < 1 || availablePrekeys.length === 0) {
-    recipientDebugState.recipientBundleQueryStage = 'prekey-query:none-available';
-    recipientDebugState.recipientReadinessFailedReason =
-      'recipient readiness: no available one-time prekeys';
-    throw createDmE2eeRecipientReadinessError(
-      'dm_e2ee_recipient_unavailable',
-      'Recipient does not have available one-time prekeys for encrypted direct messages.',
-      recipientDebugState,
-    );
-  }
+  const hasAvailableOneTimePrekey =
+    availablePrekeyCount > 0 && availablePrekeys.length > 0;
 
-  recipientDebugState.recipientBundleQueryStage = 'bundle:resolved';
-  logDmE2eeRecipientBundleDiagnostics('bundle:resolved', {
+  recipientDebugState.recipientBundleQueryStage = hasAvailableOneTimePrekey
+    ? 'bundle:resolved'
+    : 'bundle:resolved:signed-prekey-only';
+  recipientDebugState.recipientReadinessFailedReason = null;
+  logDmE2eeRecipientBundleDiagnostics(
+    hasAvailableOneTimePrekey
+      ? 'bundle:resolved'
+      : 'bundle:resolved:signed-prekey-only',
+    {
     conversationId: input.conversationId,
     recipientUserId: recipientParticipant.userId,
     usedPrivilegedDeviceLookup,
     usedPrivilegedPrekeyLookup,
     ...recipientDebugState,
     hasRecipientDevice: true,
-    hasOneTimePrekey: availablePrekeys.length > 0,
-  });
+    hasOneTimePrekey: hasAvailableOneTimePrekey,
+  },
+  );
 
   return {
     conversationId: input.conversationId,
@@ -4421,8 +4466,12 @@ export async function getCurrentUserDmE2eeRecipientBundle(input: {
       signedPrekeyId: recipientSignedPrekeyId,
       signedPrekeyPublic: recipientSignedPrekeyPublic,
       signedPrekeySignature: recipientSignedPrekeySignature,
-      oneTimePrekeyId: availablePrekeys[0]?.prekey_id ?? null,
-      oneTimePrekeyPublic: availablePrekeys[0]?.public_key ?? null,
+      oneTimePrekeyId: hasAvailableOneTimePrekey
+        ? availablePrekeys[0]?.prekey_id ?? null
+        : null,
+      oneTimePrekeyPublic: hasAvailableOneTimePrekey
+        ? availablePrekeys[0]?.public_key ?? null
+        : null,
     } satisfies UserDevicePublicBundle,
   } satisfies DmE2eeRecipientBundleResponse;
 }
@@ -4529,33 +4578,59 @@ export async function resetCurrentUserDmE2eeDeviceForDev(input: {
   };
 }
 
-async function getCurrentUserActiveDmE2eeDeviceInfo(userId: string) {
+async function getCurrentUserActiveDmE2eeDeviceInfo(input: {
+  preferredDeviceRecordId?: string | null;
+  userId: string;
+}) {
   const supabase = await createSupabaseServerClient();
   const cookieStore = await cookies();
   const hintedDeviceRecordId =
     cookieStore.get(DM_E2EE_CURRENT_DEVICE_COOKIE)?.value?.trim() || null;
+  const preferredDeviceRecordId =
+    input.preferredDeviceRecordId?.trim() || null;
   const resolveDevice = async (hintedId: string | null) =>
     hintedId
       ? supabase
           .from('user_devices')
           .select('id, created_at')
-          .eq('user_id', userId)
+          .eq('user_id', input.userId)
           .eq('id', hintedId)
           .is('retired_at', null)
           .maybeSingle()
       : supabase
           .from('user_devices')
           .select('id, created_at')
-          .eq('user_id', userId)
+          .eq('user_id', input.userId)
           .is('retired_at', null)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+  const candidateDeviceIds = Array.from(
+    new Set(
+      [preferredDeviceRecordId, hintedDeviceRecordId]
+        .map((value) => value?.trim() || '')
+        .filter(Boolean),
+    ),
+  );
+  let response:
+    | Awaited<ReturnType<typeof resolveDevice>>
+    | null = null;
+  let selectionSource: 'client-hint' | 'cookie' | 'latest-active' =
+    'latest-active';
 
-  let response = await resolveDevice(hintedDeviceRecordId);
+  for (const candidateDeviceId of candidateDeviceIds) {
+    response = await resolveDevice(candidateDeviceId);
 
-  if (!response.error && !response.data && hintedDeviceRecordId) {
+    if (response.error || response.data) {
+      selectionSource =
+        candidateDeviceId === preferredDeviceRecordId ? 'client-hint' : 'cookie';
+      break;
+    }
+  }
+
+  if (!response || (!response.error && !response.data)) {
     response = await resolveDevice(null);
+    selectionSource = 'latest-active';
   }
 
   if (response.error) {
@@ -4576,10 +4651,7 @@ async function getCurrentUserActiveDmE2eeDeviceInfo(userId: string) {
   return {
     createdAt: row?.created_at ?? null,
     id: (row?.id ?? null) as string | null,
-    selectionSource:
-      hintedDeviceRecordId && row?.id === hintedDeviceRecordId
-        ? 'cookie'
-        : 'latest-active',
+    selectionSource,
   } as const;
 }
 
@@ -4587,6 +4659,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
   debugRequestId?: string | null;
   userId: string;
   messageIds: string[];
+  preferredDeviceRecordId?: string | null;
 }) {
   const diagnosticsEnabled = process.env.CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
   const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
@@ -4614,7 +4687,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     };
   }
 
-  const activeDevice = await getCurrentUserActiveDmE2eeDeviceInfo(input.userId);
+  const activeDevice = await getCurrentUserActiveDmE2eeDeviceInfo({
+    preferredDeviceRecordId: input.preferredDeviceRecordId ?? null,
+    userId: input.userId,
+  });
   const activeDeviceRecordId = activeDevice?.id ?? null;
   logDiagnostics('envelopes:active-device-resolved', {
     currentUserId: input.userId,
@@ -4643,6 +4719,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     let malformedEnvelopeCount = 0;
     let selectedCurrentDeviceEnvelopeCount = 0;
     let selectedSenderSelfEnvelopeCount = 0;
+    const messagesWithAnyEnvelopeRows = new Set<string>();
+    const messagesWithOtherDeviceEnvelopes = new Set<string>();
+    const messagesWithReadableEnvelope = new Set<string>();
+    const otherRecipientDeviceIds = new Set<string>();
     const selectedEnvelopes = (rows ?? []).flatMap<
       [string, StoredDmE2eeEnvelope]
     >((row) => {
@@ -4653,6 +4733,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       const senderId = String(messageRecord?.sender_id ?? '').trim();
       const recipientDeviceRecordId = String(row.recipient_device_id ?? '').trim();
       const ciphertext = String(row.ciphertext ?? '').trim();
+      messagesWithAnyEnvelopeRows.add(row.message_id);
 
       const isCurrentDeviceEnvelope =
         Boolean(activeDeviceRecordId) &&
@@ -4663,6 +4744,10 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
         recipientDeviceRecordId === senderDeviceRecordId;
 
       if (!isCurrentDeviceEnvelope && !isSenderSelfEnvelope) {
+        if (recipientDeviceRecordId) {
+          otherRecipientDeviceIds.add(recipientDeviceRecordId);
+        }
+        messagesWithOtherDeviceEnvelopes.add(row.message_id);
         return [];
       }
 
@@ -4684,6 +4769,7 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
       } else if (isSenderSelfEnvelope) {
         selectedSenderSelfEnvelopeCount += 1;
       }
+      messagesWithReadableEnvelope.add(row.message_id);
 
       return [[
         row.message_id,
@@ -4705,8 +4791,14 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     return {
       envelopeMap: new Map(selectedEnvelopes),
       malformedEnvelopeCount,
+      messagesWithOnlyOtherDeviceEnvelopes: Array.from(
+        messagesWithOtherDeviceEnvelopes,
+      ).filter((messageId) => !messagesWithReadableEnvelope.has(messageId)),
+      otherRecipientDeviceIds: Array.from(otherRecipientDeviceIds),
       selectedCurrentDeviceEnvelopeCount,
       selectedSenderSelfEnvelopeCount,
+      totalEnvelopeRowCount: (rows ?? []).length,
+      totalMessagesWithAnyEnvelopeRows: messagesWithAnyEnvelopeRows.size,
     };
   };
 
@@ -4797,7 +4889,14 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     authEnvelopeRowCount,
     authSelectedEnvelopeCount,
     debugRequestId: input.debugRequestId ?? null,
+    messagesWithOnlyOtherDeviceEnvelopes:
+      selectedEnvelopeResult.messagesWithOnlyOtherDeviceEnvelopes,
+    messagesWithOnlyOtherDeviceEnvelopesCount:
+      selectedEnvelopeResult.messagesWithOnlyOtherDeviceEnvelopes.length,
     malformedEnvelopeCount: selectedEnvelopeResult.malformedEnvelopeCount,
+    otherRecipientDeviceCount:
+      selectedEnvelopeResult.otherRecipientDeviceIds.length,
+    otherRecipientDeviceIds: selectedEnvelopeResult.otherRecipientDeviceIds,
     selectedCurrentDeviceEnvelopeCount:
       selectedEnvelopeResult.selectedCurrentDeviceEnvelopeCount,
     selectedSenderSelfEnvelopeCount:
@@ -4805,6 +4904,9 @@ export async function getCurrentUserDmE2eeEnvelopesForMessages(input: {
     requestedMessageCount: uniqueMessageIds.length,
     envelopeCount: selectedEnvelopeResult.envelopeMap.size,
     selectionSource: activeDevice?.selectionSource ?? null,
+    totalEnvelopeRowCount: selectedEnvelopeResult.totalEnvelopeRowCount,
+    totalMessagesWithAnyEnvelopeRows:
+      selectedEnvelopeResult.totalMessagesWithAnyEnvelopeRows,
     usedPrivilegedEnvelopeLookup,
   });
 
@@ -6232,6 +6334,7 @@ export async function getConversationHistorySnapshot(input: {
   debugRequestId?: string | null;
   limit: number;
   messageIds?: string[] | null;
+  preferredDeviceRecordId?: string | null;
   userId: string;
 }): Promise<ConversationHistoryPageSnapshot> {
   const normalizedLimit =
@@ -6264,7 +6367,8 @@ export async function getConversationHistorySnapshot(input: {
   const encryptedMessageIds = messages
     .filter(
       (message) =>
-        message.kind === 'text' && message.content_mode === 'dm_e2ee_v1',
+        (message.kind === 'text' || message.kind === 'attachment') &&
+        message.content_mode === 'dm_e2ee_v1',
     )
     .map((message) => message.id);
   const senderProfileIds = Array.from(
@@ -6328,10 +6432,11 @@ export async function getConversationHistorySnapshot(input: {
       includeStatuses: false,
     }),
     getGroupedReactionsForMessages(messageIds, input.userId),
-    getMessageAttachments(attachmentMessageIds),
+    getMessageAttachments(input.conversationId, attachmentMessageIds),
     getCurrentUserDmE2eeEnvelopesForMessages({
       debugRequestId: input.debugRequestId ?? null,
       messageIds: encryptedMessageIds,
+      preferredDeviceRecordId: input.preferredDeviceRecordId ?? null,
       userId: input.userId,
     }),
   ]);
@@ -6594,7 +6699,7 @@ export async function getMessageSenderProfiles(
   return getProfileIdentities(userIds, options);
 }
 
-async function createSignedChatAttachmentUrl(input: {
+function buildChatAttachmentDeliveryUrl(input: {
   attachmentId: string;
   bucket: string;
   conversationId?: string | null;
@@ -6605,73 +6710,183 @@ async function createSignedChatAttachmentUrl(input: {
   serviceClient: Awaited<ReturnType<typeof createSupabaseServiceRoleClient>> | null;
   source: 'legacy-attachment' | 'message-asset';
 }) {
-  const createSignedUrl = async (
-    client: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  ) =>
-    client.storage.from(input.bucket).createSignedUrl(input.objectPath, 60 * 60);
+  return buildConversationAttachmentContentUrl({
+    attachmentId: input.attachmentId,
+    conversationId: input.conversationId ?? '',
+    messageId: input.messageId,
+  });
+}
 
-  const preferredResponse = await createSignedUrl(input.preferredClient);
+function buildConversationAttachmentContentUrl(input: {
+  attachmentId: string;
+  conversationId: string;
+  messageId: string;
+}) {
+  return `/api/messaging/conversations/${input.conversationId}/messages/${input.messageId}/attachments/${input.attachmentId}/content`;
+}
 
-  if (!preferredResponse.error) {
-    return preferredResponse.data.signedUrl;
-  }
+export type ResolvedConversationAttachmentContentTarget = {
+  attachmentId: string;
+  bucket: string;
+  fileName: string | null;
+  messageId: string;
+  mimeType: string | null;
+  objectPath: string;
+  source: 'legacy-attachment' | 'message-asset';
+};
 
-  if (input.serviceClient && input.serviceClient !== input.preferredClient) {
-    const serviceResponse = await createSignedUrl(
-      input.serviceClient as Awaited<ReturnType<typeof createSupabaseServerClient>>,
-    );
+export async function resolveConversationAttachmentContentTarget(input: {
+  attachmentId: string;
+  conversationId: string;
+  messageId: string;
+  userId: string;
+}): Promise<ResolvedConversationAttachmentContentTarget | null> {
+  const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const normalizedAttachmentId = input.attachmentId.trim();
+  const normalizedConversationId = input.conversationId.trim();
+  const normalizedMessageId = input.messageId.trim();
 
-    if (!serviceResponse.error) {
-      logChatHistoryDiagnostics('attachments:signed-url-service-fallback', {
-        attachmentId: input.attachmentId,
-        bucket: input.bucket,
-        conversationId: input.conversationId ?? null,
-        initialErrorMessage: preferredResponse.error.message,
-        isVoiceMessage: input.isVoiceMessage,
-        messageId: input.messageId,
-        objectPath: input.objectPath,
-        source: input.source,
-      });
-
-      return serviceResponse.data.signedUrl;
-    }
-
-    logChatHistoryDiagnostics(
-      'attachments:signed-url-failed',
-      {
-        attachmentId: input.attachmentId,
-        bucket: input.bucket,
-        conversationId: input.conversationId ?? null,
-        errorMessage: preferredResponse.error.message,
-        isVoiceMessage: input.isVoiceMessage,
-        messageId: input.messageId,
-        objectPath: input.objectPath,
-        serviceErrorMessage: serviceResponse.error.message,
-        source: input.source,
-      },
-      input.isVoiceMessage ? 'warn' : 'error',
-    );
-
+  if (
+    !normalizedAttachmentId ||
+    !normalizedConversationId ||
+    !normalizedMessageId ||
+    !input.userId.trim()
+  ) {
     return null;
   }
 
-  logChatHistoryDiagnostics(
-    'attachments:signed-url-failed',
-    {
-      attachmentId: input.attachmentId,
-      bucket: input.bucket,
-      conversationId: input.conversationId ?? null,
-      errorMessage: preferredResponse.error.message,
-      isVoiceMessage: input.isVoiceMessage,
-      messageId: input.messageId,
-      objectPath: input.objectPath,
-      serviceErrorMessage: null,
-      source: input.source,
-    },
-    input.isVoiceMessage ? 'warn' : 'error',
-  );
+  const messageLookup = await supabase
+    .from('messages')
+    .select('id')
+    .eq('id', normalizedMessageId)
+    .eq('conversation_id', normalizedConversationId)
+    .maybeSingle();
 
-  return null;
+  if (messageLookup.error) {
+    throw new Error(messageLookup.error.message);
+  }
+
+  if (!messageLookup.data) {
+    logChatHistoryDiagnostics('attachment-content:message-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      userId: input.userId,
+    });
+    return null;
+  }
+
+  const legacyAttachmentLookup = await supabase
+    .from('message_attachments')
+    .select('id, message_id, bucket, object_path, mime_type')
+    .eq('id', normalizedAttachmentId)
+    .eq('message_id', normalizedMessageId)
+    .maybeSingle();
+
+  if (legacyAttachmentLookup.error) {
+    if (
+      !isMissingRelationErrorMessage(
+        legacyAttachmentLookup.error.message,
+        'message_attachments',
+      )
+    ) {
+      throw new Error(legacyAttachmentLookup.error.message);
+    }
+  } else if (legacyAttachmentLookup.data) {
+    return {
+      attachmentId: String(legacyAttachmentLookup.data.id),
+      bucket: String(legacyAttachmentLookup.data.bucket),
+      fileName: getAttachmentFileName(String(legacyAttachmentLookup.data.object_path)),
+      messageId: normalizedMessageId,
+      mimeType:
+        typeof legacyAttachmentLookup.data.mime_type === 'string'
+          ? legacyAttachmentLookup.data.mime_type
+          : null,
+      objectPath: String(legacyAttachmentLookup.data.object_path),
+      source: 'legacy-attachment' as const,
+    };
+  }
+
+  const loadAssetLinkRow = async (client: MessageAssetsWriteClient) =>
+    client
+      .from('message_asset_links')
+      .select(
+        'message_id, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url, mime_type, file_name)',
+      )
+      .eq('message_id', normalizedMessageId)
+      .eq('asset_id', normalizedAttachmentId)
+      .maybeSingle();
+
+  let assetLookup = await loadAssetLinkRow(supabase);
+
+  if (assetLookup.error) {
+    const shouldRetryWithServiceRole =
+      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_asset_links') &&
+      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_assets');
+
+    if (shouldRetryWithServiceRole && serviceSupabase) {
+      assetLookup = await loadAssetLinkRow(
+        serviceSupabase as MessageAssetsWriteClient,
+      );
+    }
+
+    if (assetLookup.error) {
+      throw new Error(assetLookup.error.message);
+    }
+  }
+
+  const asset = normalizeJoinedRecord(assetLookup.data?.message_assets ?? null);
+
+  if (!asset) {
+    logChatHistoryDiagnostics('attachment-content:asset-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      userId: input.userId,
+    });
+    return null;
+  }
+
+  if (asset.source === 'external-url') {
+    logChatHistoryDiagnostics(
+      'attachment-content:external-url-blocked',
+      {
+        attachmentId: normalizedAttachmentId,
+        conversationId: normalizedConversationId,
+        messageId: normalizedMessageId,
+        source: asset.source,
+        userId: input.userId,
+      },
+      'warn',
+    );
+    return null;
+  }
+
+  if (!asset.storage_bucket || !asset.storage_object_path) {
+    logChatHistoryDiagnostics('attachment-content:storage-locator-missing', {
+      attachmentId: normalizedAttachmentId,
+      conversationId: normalizedConversationId,
+      messageId: normalizedMessageId,
+      source: asset.source,
+      userId: input.userId,
+    });
+    return null;
+  }
+
+  return {
+    attachmentId: String(asset.id),
+    bucket: String(asset.storage_bucket),
+    fileName:
+      typeof asset.file_name === 'string' && asset.file_name.trim()
+        ? asset.file_name.trim()
+        : getAttachmentFileName(String(asset.storage_object_path)),
+    messageId: normalizedMessageId,
+    mimeType:
+      typeof asset.mime_type === 'string' ? asset.mime_type : null,
+    objectPath: String(asset.storage_object_path),
+    source: 'message-asset' as const,
+  };
 }
 
 export async function getGroupedReactionsForMessages(
@@ -6731,7 +6946,10 @@ export async function getGroupedReactionsForMessages(
   );
 }
 
-export async function getMessageAttachments(messageIds: string[]) {
+export async function getMessageAttachments(
+  conversationId: string,
+  messageIds: string[],
+) {
   const uniqueMessageIds = Array.from(new Set(messageIds.filter(Boolean)));
 
   if (uniqueMessageIds.length === 0) {
@@ -6871,10 +7089,10 @@ export async function getMessageAttachments(messageIds: string[]) {
     [
       ...((data ?? []) as MessageAttachmentRow[]).map(async (row) => {
         const isVoiceMessage = row.object_path.includes('/voice/');
-        const signedUrl = await createSignedChatAttachmentUrl({
+        const signedUrl = buildChatAttachmentDeliveryUrl({
           attachmentId: row.id,
           bucket: row.bucket,
-          conversationId: null,
+          conversationId,
           isVoiceMessage,
           messageId: row.message_id,
           objectPath: row.object_path,
@@ -6900,18 +7118,29 @@ export async function getMessageAttachments(messageIds: string[]) {
         } satisfies MessageAttachment;
       }),
       ...assetRows.map(async (row) => {
-        let signedUrl: string | null = row.external_url ?? null;
+        let signedUrl: string | null = null;
         const isVoiceMessage = row.kind === 'voice-note';
 
-        if (
+        if (row.source === 'external-url') {
+          logChatHistoryDiagnostics(
+            'attachments:external-url-blocked',
+            {
+              attachmentId: row.asset_id,
+              conversationId,
+              messageId: row.message_id,
+              source: row.source,
+            },
+            'warn',
+          );
+        } else if (
           row.source === 'supabase-storage' &&
           row.storage_bucket &&
           row.storage_object_path
         ) {
-          signedUrl = await createSignedChatAttachmentUrl({
+          signedUrl = buildChatAttachmentDeliveryUrl({
             attachmentId: row.asset_id,
             bucket: row.storage_bucket,
-            conversationId: null,
+            conversationId,
             isVoiceMessage,
             messageId: row.message_id,
             objectPath: row.storage_object_path,
@@ -6961,166 +7190,32 @@ export async function resolveConversationAttachmentSignedUrl(input: {
   messageId: string;
   userId: string;
 }) {
-  const supabase = await createSupabaseServerClient();
-  const serviceSupabase = createSupabaseServiceRoleClient();
-  const normalizedAttachmentId = input.attachmentId.trim();
-  const normalizedConversationId = input.conversationId.trim();
-  const normalizedMessageId = input.messageId.trim();
+  const resolvedTarget = await resolveConversationAttachmentContentTarget(input);
 
-  if (
-    !normalizedAttachmentId ||
-    !normalizedConversationId ||
-    !normalizedMessageId ||
-    !input.userId.trim()
-  ) {
+  if (!resolvedTarget) {
     return null;
   }
 
-  const messageLookup = await supabase
-    .from('messages')
-    .select('id, sender_id, created_at, kind')
-    .eq('id', normalizedMessageId)
-    .eq('conversation_id', normalizedConversationId)
-    .maybeSingle();
-
-  if (messageLookup.error) {
-    throw new Error(messageLookup.error.message);
-  }
-
-  if (!messageLookup.data) {
-    logChatHistoryDiagnostics('attachment-signed-url:message-missing', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      userId: input.userId,
-    });
-    return null;
-  }
-
-  const legacyAttachmentLookup = await supabase
-    .from('message_attachments')
-    .select('id, message_id, bucket, object_path')
-    .eq('id', normalizedAttachmentId)
-    .eq('message_id', normalizedMessageId)
-    .maybeSingle();
-
-  if (legacyAttachmentLookup.error) {
-    if (!isMissingRelationErrorMessage(legacyAttachmentLookup.error.message, 'message_attachments')) {
-      throw new Error(legacyAttachmentLookup.error.message);
-    }
-  } else if (legacyAttachmentLookup.data) {
-    const signedUrl = await createSignedChatAttachmentUrl({
-      attachmentId: String(legacyAttachmentLookup.data.id),
-      bucket: String(legacyAttachmentLookup.data.bucket),
-      conversationId: normalizedConversationId,
-      isVoiceMessage: String(legacyAttachmentLookup.data.object_path).includes('/voice/'),
-      messageId: normalizedMessageId,
-      objectPath: String(legacyAttachmentLookup.data.object_path),
-      preferredClient: supabase,
-      serviceClient: serviceSupabase,
-      source: 'legacy-attachment',
-    });
-
-    return {
-      signedUrl,
-      source: 'legacy-attachment' as const,
-    };
-  }
-
-  const loadAssetLinkRow = async (client: MessageAssetsWriteClient) =>
-    client
-      .from('message_asset_links')
-      .select(
-        'message_id, message_assets!inner(id, kind, source, storage_bucket, storage_object_path, external_url)',
-      )
-      .eq('message_id', normalizedMessageId)
-      .eq('asset_id', normalizedAttachmentId)
-      .maybeSingle();
-
-  let assetLookup = await loadAssetLinkRow(supabase);
-
-  if (assetLookup.error) {
-    const shouldRetryWithServiceRole =
-      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_asset_links') &&
-      !isMissingRelationErrorMessage(assetLookup.error.message, 'message_assets');
-
-    if (shouldRetryWithServiceRole && serviceSupabase) {
-      assetLookup = await loadAssetLinkRow(
-        serviceSupabase as MessageAssetsWriteClient,
-      );
-    }
-
-    if (assetLookup.error) {
-      throw new Error(assetLookup.error.message);
-    }
-  }
-
-  const asset = normalizeJoinedRecord(assetLookup.data?.message_assets ?? null);
-
-  if (!asset) {
-    logChatHistoryDiagnostics('attachment-signed-url:asset-missing', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      userId: input.userId,
-    });
-    return null;
-  }
-
-  if (asset.source === 'external-url') {
-    logChatHistoryDiagnostics('attachment-signed-url:external-url', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      source: asset.source,
-      userId: input.userId,
-    });
-    return {
-      signedUrl:
-        typeof asset.external_url === 'string' && asset.external_url.trim()
-          ? asset.external_url
-          : null,
-      source: 'message-asset-external' as const,
-    };
-  }
-
-  if (!asset.storage_bucket || !asset.storage_object_path) {
-    logChatHistoryDiagnostics('attachment-signed-url:storage-locator-missing', {
-      attachmentId: normalizedAttachmentId,
-      conversationId: normalizedConversationId,
-      messageId: normalizedMessageId,
-      source: asset.source,
-      userId: input.userId,
-    });
-    return null;
-  }
-
-  const signedUrl = await createSignedChatAttachmentUrl({
-    attachmentId: String(asset.id),
-    bucket: String(asset.storage_bucket),
-    conversationId: normalizedConversationId,
-    isVoiceMessage: asset.kind === 'voice-note',
-    messageId: normalizedMessageId,
-    objectPath: String(asset.storage_object_path),
-    preferredClient: supabase,
-    serviceClient: serviceSupabase,
-    source: 'message-asset',
+  const signedUrl = buildConversationAttachmentContentUrl({
+    attachmentId: resolvedTarget.attachmentId,
+    conversationId: input.conversationId.trim(),
+    messageId: resolvedTarget.messageId,
   });
 
-  logChatHistoryDiagnostics('attachment-signed-url:resolved', {
-    attachmentId: normalizedAttachmentId,
-    conversationId: normalizedConversationId,
-    hasSignedUrl: Boolean(signedUrl),
-    messageId: normalizedMessageId,
-    source: asset.source,
-    storageBucket: asset.storage_bucket,
-    storageObjectPath: asset.storage_object_path,
+  logChatHistoryDiagnostics('attachment-delivery-url:resolved', {
+    attachmentId: resolvedTarget.attachmentId,
+    bucket: resolvedTarget.bucket,
+    conversationId: input.conversationId.trim(),
+    hasDeliveryUrl: Boolean(signedUrl),
+    messageId: resolvedTarget.messageId,
+    objectPath: resolvedTarget.objectPath,
+    source: resolvedTarget.source,
     userId: input.userId,
   });
 
   return {
     signedUrl,
-    source: 'message-asset' as const,
+    source: resolvedTarget.source,
   };
 }
 
@@ -7136,28 +7231,82 @@ async function getInboxAttachmentPreviewKindsByMessageId(
     return new Map<string, InboxAttachmentPreviewKind>();
   }
 
-  const loadRows = async (client: MessageAttachmentLookupClient) => {
+  const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const canIgnoreMessageAssetPreviewError = (message: string) =>
+    isMissingRelationErrorMessage(message, 'message_asset_links') ||
+    isMissingRelationErrorMessage(message, 'message_assets');
+  const loadAssetRows = async (client: MessageAttachmentLookupClient) =>
+    client
+      .from('message_asset_links')
+      .select('message_id, created_at, message_assets!inner(kind, mime_type)')
+      .in('message_id', uniqueMessageIds)
+      .order('created_at', { ascending: true });
+
+  let assetResponse = await loadAssetRows(supabase);
+
+  if (assetResponse.error) {
+    if (!canIgnoreMessageAssetPreviewError(assetResponse.error.message) && serviceSupabase) {
+      assetResponse = await loadAssetRows(
+        serviceSupabase as MessageAttachmentLookupClient,
+      );
+    }
+
+    if (assetResponse.error && !canIgnoreMessageAssetPreviewError(assetResponse.error.message)) {
+      throw new Error(assetResponse.error.message);
+    }
+  }
+
+  if (!assetResponse.error) {
+    for (const row of (assetResponse.data ?? []) as MessageAssetPreviewRow[]) {
+      if (previewKindsByMessageId.has(row.message_id)) {
+        continue;
+      }
+
+      const asset = normalizeJoinedRecord(row.message_assets);
+
+      if (!asset) {
+        continue;
+      }
+
+      previewKindsByMessageId.set(
+        row.message_id,
+        resolveInboxAttachmentPreviewKindFromMetadata({
+          assetKind: asset.kind,
+          mimeType: asset.mime_type ?? null,
+        }),
+      );
+    }
+  }
+
+  const remainingMessageIds = uniqueMessageIds.filter(
+    (messageId) => !previewKindsByMessageId.has(messageId),
+  );
+
+  if (remainingMessageIds.length === 0) {
+    return previewKindsByMessageId;
+  }
+
+  const loadLegacyRows = async (client: MessageAttachmentLookupClient) => {
     return client
       .from('message_attachments')
       .select('message_id, mime_type, created_at')
-      .in('message_id', uniqueMessageIds)
+      .in('message_id', remainingMessageIds)
       .order('created_at', { ascending: true });
   };
 
-  let response = await loadRows(supabase);
+  let response = await loadLegacyRows(supabase);
 
   if (response.error) {
     if (isMissingRelationErrorMessage(response.error.message, 'message_attachments')) {
-      return new Map<string, InboxAttachmentPreviewKind>();
+      return previewKindsByMessageId;
     }
-
-    const serviceSupabase = createSupabaseServiceRoleClient();
 
     if (!serviceSupabase) {
       throw new Error(response.error.message);
     }
 
-    const serviceResponse = await loadRows(
+    const serviceResponse = await loadLegacyRows(
       serviceSupabase as MessageAttachmentLookupClient,
     );
 
@@ -7168,7 +7317,7 @@ async function getInboxAttachmentPreviewKindsByMessageId(
           'message_attachments',
         )
       ) {
-        return new Map<string, InboxAttachmentPreviewKind>();
+        return previewKindsByMessageId;
       }
 
       throw new Error(serviceResponse.error.message);
@@ -7178,7 +7327,6 @@ async function getInboxAttachmentPreviewKindsByMessageId(
   }
 
   const rows = (response.data ?? []) as MessageAttachmentPreviewRow[];
-  const previewKindsByMessageId = new Map<string, InboxAttachmentPreviewKind>();
 
   for (const row of rows) {
     if (previewKindsByMessageId.has(row.message_id)) {
@@ -7471,6 +7619,21 @@ export async function deleteDirectConversationForUser(input: {
       throw new Error(attachmentRowsError.message);
     }
 
+    const { data: assetLinkRows, error: assetLinkRowsError } = await serviceSupabase
+      .from('message_asset_links')
+      .select(
+        'message_id, message_assets!inner(id, source, storage_bucket, storage_object_path)',
+      )
+      .in('message_id', messageIds);
+
+    if (
+      assetLinkRowsError &&
+      !isMissingRelationErrorMessage(assetLinkRowsError.message, 'message_asset_links') &&
+      !isMissingRelationErrorMessage(assetLinkRowsError.message, 'message_assets')
+    ) {
+      throw new Error(assetLinkRowsError.message);
+    }
+
     const { error: attachmentsError } = await serviceSupabase
       .from('message_attachments')
       .delete()
@@ -7514,6 +7677,38 @@ export async function deleteDirectConversationForUser(input: {
       const existing = storageObjectsByBucket.get(bucket) ?? [];
       existing.push(objectPath);
       storageObjectsByBucket.set(bucket, existing);
+    }
+
+    for (const row of (assetLinkRows ?? []) as Array<{
+      message_assets:
+        | {
+            id: string;
+            source: 'supabase-storage' | 'external-url';
+            storage_bucket?: string | null;
+            storage_object_path?: string | null;
+          }
+        | Array<{
+            id: string;
+            source: 'supabase-storage' | 'external-url';
+            storage_bucket?: string | null;
+            storage_object_path?: string | null;
+          }>
+        | null;
+    }>) {
+      const asset = normalizeJoinedRecord(row.message_assets);
+
+      if (
+        !asset ||
+        asset.source !== 'supabase-storage' ||
+        !asset.storage_bucket?.trim() ||
+        !asset.storage_object_path?.trim()
+      ) {
+        continue;
+      }
+
+      const existing = storageObjectsByBucket.get(asset.storage_bucket.trim()) ?? [];
+      existing.push(asset.storage_object_path.trim());
+      storageObjectsByBucket.set(asset.storage_bucket.trim(), existing);
     }
 
     for (const [bucket, objectPaths] of storageObjectsByBucket) {
@@ -7899,6 +8094,11 @@ type ConversationSummaryMessageRow = {
   created_at: string | null;
 };
 
+type ConversationSummaryMessageRowWithConversationId =
+  ConversationSummaryMessageRow & {
+    conversation_id: string;
+  };
+
 async function loadConversationSummaryMessageRowById(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   messageId: string,
@@ -7928,6 +8128,81 @@ async function loadConversationSummaryMessageRowById(
   }
 
   return (response.data ?? null) as ConversationSummaryMessageRow | null;
+}
+
+async function loadLatestConversationSummaryMessageRowsByConversationId(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  conversationIds: string[],
+) {
+  const uniqueConversationIds = Array.from(new Set(conversationIds.filter(Boolean)));
+
+  if (uniqueConversationIds.length === 0) {
+    return new Map<string, ConversationSummaryMessageRowWithConversationId>();
+  }
+
+  const loadLatestRowsWithContentMode = async () =>
+    supabase
+      .from('messages')
+      .select(
+        'id, conversation_id, seq, sender_id, body, kind, content_mode, deleted_at, created_at',
+      )
+      .in('conversation_id', uniqueConversationIds)
+      .order('conversation_id', { ascending: true })
+      .order('seq', { ascending: false });
+
+  const loadLatestRowsWithoutContentMode = async () =>
+    supabase
+      .from('messages')
+      .select(
+        'id, conversation_id, seq, sender_id, body, kind, deleted_at, created_at',
+      )
+      .in('conversation_id', uniqueConversationIds)
+      .order('conversation_id', { ascending: true })
+      .order('seq', { ascending: false });
+
+  const responseWithContentMode = await loadLatestRowsWithContentMode();
+  let rows: ConversationSummaryMessageRowWithConversationId[] = [];
+
+  if (responseWithContentMode.error) {
+    if (isMissingColumnErrorMessage(responseWithContentMode.error.message, 'content_mode')) {
+      const fallbackResponse = await loadLatestRowsWithoutContentMode();
+
+      if (fallbackResponse.error) {
+        throw new Error(fallbackResponse.error.message);
+      }
+
+      rows =
+        (fallbackResponse.data ?? []) as ConversationSummaryMessageRowWithConversationId[];
+    } else {
+      throw new Error(responseWithContentMode.error.message);
+    }
+  } else {
+    rows =
+      (responseWithContentMode.data ?? []) as ConversationSummaryMessageRowWithConversationId[];
+  }
+
+  const latestRowsByConversationId = new Map<
+    string,
+    ConversationSummaryMessageRowWithConversationId
+  >();
+
+  for (const row of rows) {
+    const conversationId = row.conversation_id?.trim();
+
+    if (!conversationId || latestRowsByConversationId.has(conversationId)) {
+      continue;
+    }
+
+    const normalizedSeq = normalizeConversationLatestMessageSeq(row.seq ?? null);
+
+    if (normalizedSeq === null) {
+      continue;
+    }
+
+    latestRowsByConversationId.set(conversationId, row);
+  }
+
+  return latestRowsByConversationId;
 }
 
 async function loadLatestConversationSummaryMessageRow(
@@ -8080,8 +8355,14 @@ export async function sendTextMessage(input: {
   });
 }
 
-export async function sendEncryptedDmTextMessage(
-  input: DmE2eeSendRequest & { senderId: string },
+type CommitEncryptedDmMessageShellInput = DmE2eeSendRequest & {
+  messageKind?: DmE2eeMessageKind;
+  senderId: string;
+  syncConversationSummaryProjection?: boolean;
+};
+
+async function commitEncryptedDmMessageShell(
+  input: CommitEncryptedDmMessageShellInput,
 ) {
   const sendDebugState: DmE2eeSendDebugState = {
     sendExactFailureStage: 'send:start',
@@ -8098,10 +8379,12 @@ export async function sendEncryptedDmTextMessage(
     sendSelectedRecipientDeviceRowId:
       input.envelopes[0]?.recipientDeviceRecordId ?? null,
   };
+  const requestedMessageKind = input.messageKind ?? input.kind ?? 'text';
   logDmE2eeSendDiagnostics('start', {
     hasConversationId: Boolean(input.conversationId),
     hasSenderDeviceRecordId: Boolean(input.senderDeviceRecordId),
     envelopeCount: input.envelopes.length,
+    requestedMessageKind,
   });
   const conversation = await getConversationForUser(
     input.conversationId,
@@ -8358,21 +8641,200 @@ export async function sendEncryptedDmTextMessage(
     );
   }
 
+  const cleanupClient = createSupabaseServiceRoleClient() ?? supabase;
+
+  if (requestedMessageKind !== 'text') {
+    sendDebugState.sendExactFailureStage = 'send:message-kind-update';
+    const { error: messageKindUpdateError } = await cleanupClient
+      .from('messages')
+      .update({
+        kind: requestedMessageKind,
+      })
+      .eq('id', messageId)
+      .eq('conversation_id', input.conversationId)
+      .eq('sender_id', input.senderId);
+
+    if (messageKindUpdateError) {
+      await cleanupClient
+        .from('messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('conversation_id', input.conversationId);
+      sendDebugState.sendFailedOperation = 'messages.kind update';
+      sendDebugState.sendReasonCode = 'send: message row finalize failed';
+      sendDebugState.sendErrorMessage = messageKindUpdateError.message;
+      throw createDmE2eeSendProofError(
+        messageKindUpdateError.message,
+        sendDebugState,
+      );
+    }
+  }
+
   logDmE2eeSendDiagnostics('done', {
     hasMessageId: true,
+    requestedMessageKind,
   });
 
-  await syncConversationSummaryProjectionByMessageId(
-    supabase,
-    input.conversationId,
-    messageId,
-  );
+  if (input.syncConversationSummaryProjection !== false) {
+    await syncConversationSummaryProjectionByMessageId(
+      supabase,
+      input.conversationId,
+      messageId,
+    );
+  }
 
   return {
     messageId,
     timestamp: row?.created_at ?? new Date().toISOString(),
     clientId: String(row?.client_id ?? input.clientId),
   };
+}
+
+export async function sendEncryptedDmTextMessage(
+  input: DmE2eeSendRequest & { senderId: string },
+) {
+  return commitEncryptedDmMessageShell({
+    ...input,
+    messageKind: 'text',
+  });
+}
+
+export async function sendEncryptedDmMessageWithAttachment(
+  input: DmE2eeSendRequest & {
+    file: File;
+    senderId: string;
+    voiceDurationMs?: number | null;
+  },
+) {
+  if (!input.file || input.file.size === 0) {
+    throw new Error('Choose a file before sending.');
+  }
+
+  if (input.file.size > CHAT_ATTACHMENT_MAX_SIZE_BYTES) {
+    throw new Error('Attachments can be up to 10 MB in this first version.');
+  }
+
+  if (!isSupportedChatAttachmentType(input.file.type, input.file.name)) {
+    throw new Error(CHAT_ATTACHMENT_HELP_TEXT);
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const serviceSupabase = createSupabaseServiceRoleClient();
+  const storageClient =
+    (serviceSupabase ?? supabase) as Awaited<
+      ReturnType<typeof createSupabaseServerClient>
+    >;
+  const effectiveAttachmentMimeType = resolveMessagingAttachmentMimeType({
+    fileName: input.file.name,
+    mimeType: input.file.type,
+  });
+  const attachmentMessageKind = getAttachmentMessageKind(
+    effectiveAttachmentMimeType,
+  );
+
+  if (attachmentMessageKind === 'voice') {
+    throw new Error(
+      'Encrypted direct-message text with voice recordings is not supported yet.',
+    );
+  }
+
+  const committedAssetKind = resolveMessagingAssetKindFromMimeType({
+    fileName: input.file.name,
+    messageKind: attachmentMessageKind,
+    mimeType: effectiveAttachmentMimeType,
+  });
+  const storageFolder =
+    committedAssetKind === 'image'
+      ? 'images'
+      : committedAssetKind === 'audio'
+        ? 'audio'
+        : 'files';
+  const normalizedClientId = input.clientId.trim();
+
+  if (!normalizedClientId) {
+    throw new Error('Encrypted DM send requires a stable client id.');
+  }
+
+  const fileName = sanitizeAttachmentFileName(input.file.name);
+  const objectPath = `${input.conversationId}/${normalizedClientId}/${storageFolder}/${Date.now()}-${fileName}`;
+  const fileBuffer = Buffer.from(await input.file.arrayBuffer());
+  let uploadedObject = false;
+  let shellResult:
+    | {
+        clientId: string;
+        messageId: string;
+        timestamp: string;
+      }
+    | null = null;
+
+  const cleanupUploadedObject = async () => {
+    if (!uploadedObject) {
+      return;
+    }
+
+    await storageClient.storage.from(CHAT_ATTACHMENT_BUCKET).remove([objectPath]);
+  };
+
+  const cleanupCommittedShell = async () => {
+    if (!shellResult?.messageId) {
+      return;
+    }
+
+    await (createSupabaseServiceRoleClient() ?? supabase)
+      .from('messages')
+      .delete()
+      .eq('id', shellResult.messageId)
+      .eq('conversation_id', input.conversationId);
+  };
+
+  const { error: uploadError } = await storageClient.storage
+    .from(CHAT_ATTACHMENT_BUCKET)
+    .upload(objectPath, fileBuffer, {
+      cacheControl: '3600',
+      contentType: effectiveAttachmentMimeType ?? undefined,
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message);
+  }
+
+  uploadedObject = true;
+
+  try {
+    shellResult = await commitEncryptedDmMessageShell({
+      ...input,
+      clientId: normalizedClientId,
+      kind: 'attachment',
+      messageKind: attachmentMessageKind,
+      syncConversationSummaryProjection: false,
+    });
+
+    await insertCommittedMessageAssetAndLink({
+      assetKind: committedAssetKind,
+      client: supabase,
+      conversationId: input.conversationId,
+      durationMs: input.voiceDurationMs ?? null,
+      file: input.file,
+      mimeType: effectiveAttachmentMimeType,
+      messageId: shellResult.messageId,
+      objectPath,
+      schemaRequirementErrorMessage: 'Chat media asset schema is missing.',
+      senderId: input.senderId,
+    });
+
+    await syncConversationSummaryProjectionByMessageId(
+      supabase,
+      input.conversationId,
+      shellResult.messageId,
+    );
+
+    return shellResult;
+  } catch (error) {
+    await cleanupCommittedShell();
+    await cleanupUploadedObject();
+    throw error;
+  }
 }
 
 async function createMessageRecord(input: {
@@ -9178,25 +9640,35 @@ export async function leaveGroupConversation(input: {
   }
 }
 
-async function insertCommittedVoiceAssetAndLink(input: {
+async function insertCommittedMessageAssetAndLink(input: {
+  assetKind: 'image' | 'file' | 'audio' | 'voice-note';
   client: MessageAssetsWriteClient;
   conversationId: string;
   durationMs: number | null;
   file: File;
+  mimeType: string | null;
   messageId: string;
   objectPath: string;
+  schemaRequirementErrorMessage: string;
   senderId: string;
 }) {
-  const normalizedDurationMs = normalizeVoiceDurationMs(input.durationMs);
-  logVoiceSendDiagnostics('message-assets-insert:started', {
-    conversationId: input.conversationId,
-    durationMs: normalizedDurationMs,
-    fileName: sanitizeAttachmentFileName(input.file.name),
-    messageId: input.messageId,
-    mimeType: input.file.type,
-    objectPath: input.objectPath,
-    sizeBytes: input.file.size,
-  });
+  const isVoiceAsset = input.assetKind === 'voice-note';
+  const normalizedDurationMs = isVoiceAsset
+    ? normalizeVoiceDurationMs(input.durationMs)
+    : null;
+
+  if (isVoiceAsset) {
+    logVoiceSendDiagnostics('message-assets-insert:started', {
+      conversationId: input.conversationId,
+      durationMs: normalizedDurationMs,
+      fileName: sanitizeAttachmentFileName(input.file.name),
+      messageId: input.messageId,
+      mimeType: input.mimeType,
+      objectPath: input.objectPath,
+      sizeBytes: input.file.size,
+    });
+  }
+
   const { data: assetRow, error: assetError } = await input.client
     .from('message_assets')
     .insert({
@@ -9204,8 +9676,8 @@ async function insertCommittedVoiceAssetAndLink(input: {
       created_by: input.senderId,
       duration_ms: normalizedDurationMs,
       file_name: sanitizeAttachmentFileName(input.file.name),
-      kind: 'voice-note',
-      mime_type: input.file.type,
+      kind: input.assetKind,
+      mime_type: input.mimeType,
       size_bytes: input.file.size,
       source: 'supabase-storage',
       storage_bucket: CHAT_ATTACHMENT_BUCKET,
@@ -9215,25 +9687,27 @@ async function insertCommittedVoiceAssetAndLink(input: {
     .single();
 
   if (assetError) {
-    logVoiceSendDiagnostics(
-      'message-assets-insert:failed',
-      {
-        conversationId: input.conversationId,
-        errorMessage: assetError.message,
-        messageId: input.messageId,
-        objectPath: input.objectPath,
-      },
-      'error',
-    );
+    if (isVoiceAsset) {
+      logVoiceSendDiagnostics(
+        'message-assets-insert:failed',
+        {
+          conversationId: input.conversationId,
+          errorMessage: assetError.message,
+          messageId: input.messageId,
+          objectPath: input.objectPath,
+        },
+        'error',
+      );
+    }
+
     if (
       isMissingRelationErrorMessage(assetError.message, 'message_assets') ||
-      isMissingColumnErrorMessage(assetError.message, 'duration_ms') ||
       isMissingColumnErrorMessage(assetError.message, 'storage_bucket') ||
-      isMissingColumnErrorMessage(assetError.message, 'storage_object_path')
+      isMissingColumnErrorMessage(assetError.message, 'storage_object_path') ||
+      (isVoiceAsset &&
+        isMissingColumnErrorMessage(assetError.message, 'duration_ms'))
     ) {
-      throw createSchemaRequirementError(
-        'Voice message media schema is missing.',
-      );
+      throw createSchemaRequirementError(input.schemaRequirementErrorMessage);
     }
 
     throw new Error(assetError.message);
@@ -9242,19 +9716,22 @@ async function insertCommittedVoiceAssetAndLink(input: {
   const assetId = String(assetRow?.id ?? '').trim();
 
   if (!assetId) {
-    throw new Error('Voice message asset insert did not return an asset id.');
+    throw new Error('Message asset insert did not return an asset id.');
   }
 
-  logVoiceSendDiagnostics('message-assets-insert:completed', {
-    assetId,
-    conversationId: input.conversationId,
-    messageId: input.messageId,
-  });
-  logVoiceSendDiagnostics('message-asset-links-insert:started', {
-    assetId,
-    conversationId: input.conversationId,
-    messageId: input.messageId,
-  });
+  if (isVoiceAsset) {
+    logVoiceSendDiagnostics('message-assets-insert:completed', {
+      assetId,
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+    });
+    logVoiceSendDiagnostics('message-asset-links-insert:started', {
+      assetId,
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+    });
+  }
+
   const { error: linkError } = await input.client.from('message_asset_links').insert({
     asset_id: assetId,
     message_id: input.messageId,
@@ -9270,7 +9747,7 @@ async function insertCommittedVoiceAssetAndLink(input: {
       .delete()
       .eq('id', assetId);
 
-    if (assetCleanupError) {
+    if (assetCleanupError && isVoiceAsset) {
       logVoiceSendDiagnostics(
         'message-assets-cleanup:failed',
         {
@@ -9283,33 +9760,36 @@ async function insertCommittedVoiceAssetAndLink(input: {
       );
     }
 
-    logVoiceSendDiagnostics(
-      'message-asset-links-insert:failed',
-      {
-        assetId,
-        conversationId: input.conversationId,
-        errorMessage: linkError.message,
-        messageId: input.messageId,
-      },
-      'error',
-    );
+    if (isVoiceAsset) {
+      logVoiceSendDiagnostics(
+        'message-asset-links-insert:failed',
+        {
+          assetId,
+          conversationId: input.conversationId,
+          errorMessage: linkError.message,
+          messageId: input.messageId,
+        },
+        'error',
+      );
+    }
+
     if (
       isMissingRelationErrorMessage(linkError.message, 'message_asset_links') ||
       isMissingColumnErrorMessage(linkError.message, 'render_as_primary')
     ) {
-      throw createSchemaRequirementError(
-        'Voice message media schema is missing.',
-      );
+      throw createSchemaRequirementError(input.schemaRequirementErrorMessage);
     }
 
     throw new Error(linkError.message);
   }
 
-  logVoiceSendDiagnostics('message-asset-links-insert:completed', {
-    assetId,
-    conversationId: input.conversationId,
-    messageId: input.messageId,
-  });
+  if (isVoiceAsset) {
+    logVoiceSendDiagnostics('message-asset-links-insert:completed', {
+      assetId,
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+    });
+  }
 }
 
 export async function sendMessageWithAttachment(input: {
@@ -9329,7 +9809,7 @@ export async function sendMessageWithAttachment(input: {
     throw new Error('Attachments can be up to 10 MB in this first version.');
   }
 
-  if (!isSupportedChatAttachmentType(input.file.type)) {
+  if (!isSupportedChatAttachmentType(input.file.type, input.file.name)) {
     throw new Error(CHAT_ATTACHMENT_HELP_TEXT);
   }
 
@@ -9339,9 +9819,27 @@ export async function sendMessageWithAttachment(input: {
     (serviceSupabase ?? supabase) as Awaited<
       ReturnType<typeof createSupabaseServerClient>
     >;
-  const attachmentMessageKind = getAttachmentMessageKind(input.file.type);
+  const effectiveAttachmentMimeType = resolveMessagingAttachmentMimeType({
+    fileName: input.file.name,
+    mimeType: input.file.type,
+  });
+  const attachmentMessageKind = getAttachmentMessageKind(
+    effectiveAttachmentMimeType,
+  );
+  const committedAssetKind = resolveMessagingAssetKindFromMimeType({
+    fileName: input.file.name,
+    messageKind: attachmentMessageKind,
+    mimeType: effectiveAttachmentMimeType,
+  });
   const isVoiceMessageSend = attachmentMessageKind === 'voice';
-  const storageFolder = attachmentMessageKind === 'voice' ? 'voice' : 'files';
+  const storageFolder =
+    committedAssetKind === 'voice-note'
+      ? 'voice'
+      : committedAssetKind === 'image'
+        ? 'images'
+        : committedAssetKind === 'audio'
+          ? 'audio'
+          : 'files';
 
   if (isVoiceMessageSend) {
     logVoiceSendDiagnostics('send:start', {
@@ -9466,7 +9964,7 @@ export async function sendMessageWithAttachment(input: {
     .from(CHAT_ATTACHMENT_BUCKET)
     .upload(objectPath, fileBuffer, {
       cacheControl: '3600',
-      contentType: input.file.type,
+      contentType: effectiveAttachmentMimeType ?? undefined,
       upsert: false,
     });
 
@@ -9518,58 +10016,58 @@ export async function sendMessageWithAttachment(input: {
     });
   }
 
-  const attachmentError =
-    attachmentMessageKind === 'voice'
-      ? await (async () => {
-          try {
-            logVoiceSendDiagnostics('asset-link-commit:started', {
-              conversationId: input.conversationId,
-              messageId: messageResult.messageId,
-              objectPath,
-            });
-            await insertCommittedVoiceAssetAndLink({
-              client: supabase,
-              conversationId: input.conversationId,
-              durationMs: input.voiceDurationMs ?? null,
-              file: input.file,
-              messageId: messageResult.messageId,
-              objectPath,
-              senderId: input.senderId,
-            });
-            logVoiceSendDiagnostics('asset-link-commit:completed', {
-              conversationId: input.conversationId,
-              messageId: messageResult.messageId,
-            });
-            return null;
-          } catch (error) {
-            logVoiceSendDiagnostics(
-              'asset-link-commit:failed',
-              {
-                conversationId: input.conversationId,
-                errorMessage:
-                  error instanceof Error ? error.message : String(error),
-                messageId: messageResult.messageId,
-              },
-              'error',
-            );
-            return error instanceof Error ? error : new Error('Unknown voice asset error');
-          }
-        })()
-      : await (async () => {
-          const { error } = await supabase
-            .from('message_attachments')
-            .insert({
-              message_id: messageResult.messageId,
-              bucket: CHAT_ATTACHMENT_BUCKET,
-              object_path: objectPath,
-              mime_type: input.file.type,
-              size_bytes: input.file.size,
-            });
+  const assetCommitError = await (async () => {
+    try {
+      if (isVoiceMessageSend) {
+        logVoiceSendDiagnostics('asset-link-commit:started', {
+          conversationId: input.conversationId,
+          messageId: messageResult.messageId,
+          objectPath,
+        });
+      }
 
-          return error ? new Error(error.message) : null;
-        })();
+      await insertCommittedMessageAssetAndLink({
+        assetKind: committedAssetKind,
+        client: supabase,
+        conversationId: input.conversationId,
+        durationMs: input.voiceDurationMs ?? null,
+        file: input.file,
+        mimeType: effectiveAttachmentMimeType,
+        messageId: messageResult.messageId,
+        objectPath,
+        schemaRequirementErrorMessage: isVoiceMessageSend
+          ? 'Voice message media schema is missing.'
+          : 'Chat media asset schema is missing.',
+        senderId: input.senderId,
+      });
 
-  if (attachmentError) {
+      if (isVoiceMessageSend) {
+        logVoiceSendDiagnostics('asset-link-commit:completed', {
+          conversationId: input.conversationId,
+          messageId: messageResult.messageId,
+        });
+      }
+
+      return null;
+    } catch (error) {
+      if (isVoiceMessageSend) {
+        logVoiceSendDiagnostics(
+          'asset-link-commit:failed',
+          {
+            conversationId: input.conversationId,
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
+            messageId: messageResult.messageId,
+          },
+          'error',
+        );
+      }
+
+      return error instanceof Error ? error : new Error('Unknown media asset error');
+    }
+  })();
+
+  if (assetCommitError) {
     if (isVoiceMessageSend) {
       logVoiceSendDiagnostics(
         'send:rollback-after-attachment-failure',
@@ -9577,7 +10075,7 @@ export async function sendMessageWithAttachment(input: {
           bucket: CHAT_ATTACHMENT_BUCKET,
           clientId: messageResult.clientId,
           conversationId: input.conversationId,
-          errorMessage: attachmentError.message,
+          errorMessage: assetCommitError.message,
           messageId: messageResult.messageId,
           objectPath,
         },
@@ -9586,7 +10084,7 @@ export async function sendMessageWithAttachment(input: {
     }
     await cleanupUploadedObject('attachment-metadata');
     await cleanupFailedMessageShell('attachment-metadata');
-    throw attachmentError;
+    throw assetCommitError;
   }
 
   await syncConversationSummaryProjectionByMessageId(

@@ -120,6 +120,32 @@ export function getEncryptedDmDebugBucket(
   }
 }
 
+function shouldTreatEncryptedDmAsTemporarilyResolving(input: {
+  diagnosticCode: EncryptedDmDiagnosticCode;
+  failureKind: EncryptedDmFailureKind;
+  preferTemporaryResolvingState: boolean;
+}) {
+  if (!input.preferTemporaryResolvingState) {
+    return false;
+  }
+
+  if (input.failureKind === 'device-setup') {
+    return false;
+  }
+
+  switch (input.diagnosticCode) {
+    case 'temporary-loading':
+    case 'stale-cached-failure-state':
+    case 'missing-envelope':
+    case 'same-user-new-device-history-gap':
+    case 'device-retired-or-mismatched':
+    case 'local-device-record-missing':
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function classifyEncryptedDmFailureDiagnostic(
   error: unknown,
 ): EncryptedDmDiagnosticCode {
@@ -168,6 +194,7 @@ export function getEncryptedDmBodyRenderState(input: {
   failureKind: EncryptedDmFailureKind;
   diagnosticCode?: EncryptedDmDiagnosticCode;
   fallbackLabel: string;
+  preferTemporaryResolvingState?: boolean;
   setupUnavailableLabel: string;
   unavailableLabel: string;
 }) {
@@ -182,6 +209,26 @@ export function getEncryptedDmBodyRenderState(input: {
       showRetryAction: false,
       diagnosticCode: null,
       debugBucket: null,
+    };
+  }
+
+  if (
+    shouldTreatEncryptedDmAsTemporarilyResolving({
+      diagnosticCode,
+      failureKind: input.failureKind,
+      preferTemporaryResolvingState:
+        input.preferTemporaryResolvingState ?? false,
+    })
+  ) {
+    return {
+      kind: 'fallback' as const,
+      committedHistoryState: 'present' as const,
+      currentDeviceAccessState: 'temporary-local-read-failure' as const,
+      text: input.fallbackLabel,
+      showRetryAction: false,
+      unavailableNoteKind: null,
+      diagnosticCode,
+      debugBucket: getEncryptedDmDebugBucket(diagnosticCode),
     };
   }
 
