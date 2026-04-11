@@ -25,6 +25,7 @@ Related documents:
 - [keepcozy-space-thread-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-thread-model.md)
 - [keepcozy-space-contract-types.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-contract-types.md)
 - [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
+- [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
 - [shell.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/shell.ts)
 - [contract-types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/contract-types.ts)
 
@@ -49,6 +50,8 @@ Practical rule:
 
 - later runtime work should resolve one profile and apply its default posture
 - exceptions should be explicit and rare
+- route surfaces should consume the shared resolved access contract instead of
+  mixing raw profile checks with ad hoc membership booleans
 
 ## Shared Baseline Across All Profiles
 

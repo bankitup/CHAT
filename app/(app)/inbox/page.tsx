@@ -43,7 +43,6 @@ import {
   resolveMessagingRouteSpaceContextForUser,
 } from '@/modules/messaging/server/route-context';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
-import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import { InboxFilterableContent } from './inbox-filterable-content';
 import { redirect } from 'next/navigation';
 import {
@@ -152,10 +151,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
   const activeSpaceId = spaceContext.context.activeSpaceId;
   const activeSpaceName = spaceContext.context.activeSpaceName;
-  const canManageMembers = spaceContext.context.canManageMembers;
+  const canManageMembers =
+    spaceContext.context.platformAccess.governance.canManageMembers;
   const isMessengerProductSpace =
-    resolveSpaceProductPosture(spaceContext.context.activeSpaceProfile) ===
-    'messenger';
+    spaceContext.context.productAccess.messenger.isPrimaryProfile;
 
   if (spaceContext.context.isV1TestBypass) {
     logDiagnostics('active-space-bypass-v1-test', {

@@ -29,6 +29,7 @@ Related documents:
 - [keepcozy-space-policy-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-policy-matrix.md)
 - [types.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/types.ts)
 - [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+- [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
 - [group-policy.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/group-policy.ts)
 
 ## Current Repo Reality
@@ -48,6 +49,15 @@ What is still missing is one explicit governance matrix saying which layer owns
 which meaning.
 
 This document provides that matrix.
+
+Current runtime consumption rule:
+
+- platform-facing routes should consume
+  `access.platform.membership` and `access.platform.governance`
+- product-facing routes may consume `access.products.messenger` or
+  `access.products.keepcozy`
+- product code should not reinterpret raw `SpaceRole` values as if they were
+  product-business roles
 
 ## 1. Four Role Planes
 

@@ -13,6 +13,7 @@ Primary backend helper:
 
 - [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts)
 - [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts)
+- [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts)
 
 Related documents:
 
@@ -88,6 +89,7 @@ adapter file and several future wrapper seams around it.
 | --- | --- | --- |
 | [conversation-companion-metadata.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-companion-metadata.ts) | direct low-level adapter for `public.conversation_companion_metadata` | active on this branch |
 | [conversation-thread-context.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/conversation-thread-context.ts) | access-checked conversation-level read composition helper for optional operational thread context | active on this branch |
+| [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts) | KeepCozy-owned product adapter over messaging capability seams for activity feeds, linked-thread reads, and role translation | active on this branch |
 | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `createConversationWithMembers(...)` | future access-checked write wrapper seam | unchanged in this branch |
 | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationForUser(...)` | access-checked base conversation read seam used by the composition helper | unchanged in this branch |
 | [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/data/server.ts) `getConversationSummaryForUser(...)` | future access-checked summary read seam | unchanged in this branch |
@@ -99,6 +101,9 @@ Practical rule:
 
 - only `conversation-companion-metadata.ts` should touch the companion table
   directly in the current branch
+- KeepCozy product routes should prefer
+  [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts)
+  instead of importing these low-level messaging data helpers directly
 - all later access-checked usage should flow through messaging data service
   wrappers or composition helpers, not directly from UI or page code
 

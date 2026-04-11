@@ -1,31 +1,17 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { NotificationReadinessPanel } from '../settings/notification-readiness';
-import { getRequestViewer } from '@/lib/request-context/server';
-import { getTranslations } from '@/modules/i18n';
-import { getRequestLanguage } from '@/modules/i18n/server';
-import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
-  getArchivedConversations,
-  getConversationDisplayName,
-  getDirectMessageDisplayName,
-  getConversationParticipantIdentities,
-  getInboxConversationsStable,
-  type InboxConversation,
-} from '@/modules/messaging/data/server';
+  getKeepCozyMessagingActivityFeed,
+  requireKeepCozyMessagingSpaceContext,
+  type KeepCozyMessagingActivityItem,
+} from '@/modules/keepcozy/messaging-adapter';
 import { isPushTestSendEnabledForUser } from '@/modules/messaging/push/server';
 import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
 import {
   getKeepCozyPrimaryTestFlowHints,
   getKeepCozyActivityData,
   isKeepCozyPrimaryTestHomeName,
 } from '@/modules/keepcozy/server';
-import {
-  isSpaceMembersSchemaCacheErrorMessage,
-  resolveActiveSpaceForUser,
-  resolveV1TestSpaceFallback,
-} from '@/modules/spaces/server';
 import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
@@ -43,24 +29,7 @@ type MessengerActivityFilterValue =
   | 'direct'
   | 'groups';
 
-type ActivityItem = {
-  conversationId: string;
-  title: string;
-  groupAvatarPath: string | null;
-  preview: string | null;
-  lastActivityAt: string | null;
-  unreadCount: number;
-  isGroupConversation: boolean;
-  primaryParticipant:
-    | {
-        userId: string;
-        displayName: string | null;
-        avatarPath?: string | null;
-      }
-    | null;
-};
-
-type MessengerNotificationItem = ActivityItem & {
+type MessengerNotificationItem = KeepCozyMessagingActivityItem & {
   variant: 'attention' | 'recent';
 };
 
@@ -111,78 +80,7 @@ function normalizeMessengerActivityFilter(
 }
 
 async function requireActivitySpaceContext(requestedSpaceId?: string) {
-  const [user, language] = await Promise.all([
-    getRequestViewer(),
-    getRequestLanguage(),
-  ]);
-
-  if (!user?.id) {
-    redirect('/login');
-  }
-
-  const explicitV1TestSpace = await resolveV1TestSpaceFallback({
-    requestedSpaceId,
-    source: 'activity-page-explicit-v1-test-bypass',
-  });
-
-  if (explicitV1TestSpace) {
-    return {
-      activeSpace: {
-        id: explicitV1TestSpace.id,
-        name: explicitV1TestSpace.name,
-        profile: 'keepcozy_ops' as const,
-      },
-      language,
-      t: getTranslations(language),
-      user,
-    };
-  }
-
-  try {
-    const activeSpaceState = await resolveActiveSpaceForUser({
-      requestedSpaceId,
-      source: 'activity-page',
-      userEmail: user.email ?? null,
-      userId: user.id,
-    });
-
-    if (!activeSpaceState.activeSpace || activeSpaceState.requestedSpaceWasInvalid) {
-      redirect('/spaces');
-    }
-
-    return {
-      activeSpace: activeSpaceState.activeSpace,
-      language,
-      t: getTranslations(language),
-      user,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (isSpaceMembersSchemaCacheErrorMessage(message)) {
-      const fallbackSpace = await resolveV1TestSpaceFallback({
-        requestedSpaceId,
-        source: 'activity-page',
-      });
-
-      if (!fallbackSpace) {
-        redirect('/spaces');
-      }
-
-      return {
-        activeSpace: {
-          id: fallbackSpace.id,
-          name: fallbackSpace.name,
-          profile: 'keepcozy_ops' as const,
-        },
-        language,
-        t: getTranslations(language),
-        user,
-      };
-    }
-
-    throw error;
-  }
+  return requireKeepCozyMessagingSpaceContext(requestedSpaceId);
 }
 
 export default async function ActivityPage({ searchParams }: ActivityPageProps) {
@@ -194,95 +92,29 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   const allowNotificationTestSend = isPushTestSendEnabledForUser({
     userEmail: user.email ?? null,
   });
-  const [conversations, archivedConversations]: [
-    InboxConversation[],
-    InboxConversation[],
-  ] = await Promise.all([
-    getInboxConversationsStable(user.id, { spaceId: activeSpace.id }),
-    getArchivedConversations(user.id, { spaceId: activeSpace.id }),
-  ]);
-  const participantIdentities = await getConversationParticipantIdentities(
-    conversations.map((conversation) => conversation.conversationId),
-  );
-  const participantIdentitiesByConversation = participantIdentities.reduce(
-    (map, identity) => {
-      const existing = map.get(identity.conversationId) ?? [];
-      existing.push(identity);
-      map.set(identity.conversationId, existing);
-      return map;
+  const {
+    activityItems,
+    archivedConversationCount,
+    conversationIds,
+    initialSummaries,
+  } = await getKeepCozyMessagingActivityFeed({
+    labels: {
+      attachment: t.chat.attachment,
+      audio: t.chat.audio,
+      deletedMessage: t.chat.deletedMessage,
+      encryptedMessage: t.chat.encryptedMessage,
+      file: t.chat.file,
+      image: t.chat.photo,
+      newEncryptedMessage: t.chat.newEncryptedMessage,
+      unknownUser: t.chat.unknownUser,
+      voiceMessage: t.chat.voiceMessage,
     },
-    new Map<string, (typeof participantIdentities)[number][]>(),
-  );
-  const activityItems = conversations
-    .map((conversation) => {
-      const participantOptions =
-        participantIdentitiesByConversation.get(conversation.conversationId) ?? [];
-      const otherParticipants = participantOptions.filter(
-        (participant) => participant.userId !== user.id,
-      );
-      const otherParticipantLabels = otherParticipants.map((participant) =>
-        resolvePublicIdentityLabel(participant, t.chat.unknownUser),
-      );
-      const isGroupConversation = conversation.kind === 'group';
-      const title = isGroupConversation
-        ? getConversationDisplayName({
-            kind: conversation.kind ?? null,
-            title: conversation.title,
-            participantLabels: otherParticipantLabels,
-            fallbackTitles: {
-              dm: language === 'ru' ? 'Новый чат' : 'New chat',
-              group: language === 'ru' ? 'Новая группа' : 'New group',
-            },
-          })
-        : getDirectMessageDisplayName(otherParticipantLabels, t.chat.unknownUser);
-      const lastActivityAt = conversation.lastMessageAt ?? conversation.createdAt;
-
-      return {
-        conversationId: conversation.conversationId,
-        groupAvatarPath: conversation.avatarPath,
-        isGroupConversation,
-        lastActivityAt,
-        preview: getInboxPreviewText(conversation, {
-          attachment: t.chat.attachment,
-          audio: t.chat.audio,
-          deletedMessage: t.chat.deletedMessage,
-          encryptedMessage: t.chat.encryptedMessage,
-          file: t.chat.file,
-          image: t.chat.photo,
-          newEncryptedMessage: t.chat.newEncryptedMessage,
-          voiceMessage: t.chat.voiceMessage,
-        }),
-        primaryParticipant: otherParticipants[0] ?? null,
-        title,
-        unreadCount: conversation.unreadCount,
-      } satisfies ActivityItem;
-    })
-    .sort((left, right) => {
-      const leftValue = left.lastActivityAt ? new Date(left.lastActivityAt).getTime() : 0;
-      const rightValue = right.lastActivityAt ? new Date(right.lastActivityAt).getTime() : 0;
-      return rightValue - leftValue;
-    });
+    language,
+    spaceId: activeSpace.id,
+    userId: user.id,
+  });
   const liveSummariesByConversationId = new Map(
-    conversations.map((conversation) => [
-      conversation.conversationId,
-      {
-        conversationId: conversation.conversationId,
-        createdAt: conversation.createdAt,
-        hiddenAt: conversation.hiddenAt,
-        lastMessageAt: conversation.lastMessageAt,
-        lastReadAt: conversation.lastReadAt,
-        lastReadMessageSeq: conversation.lastReadMessageSeq,
-        latestMessageAttachmentKind: conversation.latestMessageAttachmentKind,
-        latestMessageBody: conversation.latestMessageBody,
-        latestMessageContentMode: conversation.latestMessageContentMode,
-        latestMessageDeletedAt: conversation.latestMessageDeletedAt,
-        latestMessageId: conversation.latestMessageId,
-        latestMessageKind: conversation.latestMessageKind,
-        latestMessageSenderId: conversation.latestMessageSenderId,
-        latestMessageSeq: conversation.latestMessageSeq,
-        unreadCount: conversation.unreadCount,
-      },
-    ]),
+    initialSummaries.map((summary) => [summary.conversationId, summary]),
   );
 
   const unreadItems = activityItems.filter((conversation) => conversation.unreadCount > 0);
@@ -367,24 +199,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
     return (
       <section className="stack settings-screen settings-shell activity-screen messenger-activity-screen">
         <InboxRealtimeSync
-          conversationIds={conversations.map((conversation) => conversation.conversationId)}
-          initialSummaries={conversations.map((conversation) => ({
-            conversationId: conversation.conversationId,
-            createdAt: conversation.createdAt,
-            hiddenAt: conversation.hiddenAt,
-            lastMessageAt: conversation.lastMessageAt,
-            lastReadAt: conversation.lastReadAt,
-            lastReadMessageSeq: conversation.lastReadMessageSeq,
-            latestMessageAttachmentKind: conversation.latestMessageAttachmentKind,
-            latestMessageBody: conversation.latestMessageBody,
-            latestMessageContentMode: conversation.latestMessageContentMode,
-            latestMessageDeletedAt: conversation.latestMessageDeletedAt,
-            latestMessageId: conversation.latestMessageId,
-            latestMessageKind: conversation.latestMessageKind,
-            latestMessageSenderId: conversation.latestMessageSenderId,
-            latestMessageSeq: conversation.latestMessageSeq,
-            unreadCount: conversation.unreadCount,
-          }))}
+          conversationIds={conversationIds}
+          initialSummaries={initialSummaries}
           userId={user.id}
         />
 
@@ -403,7 +219,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
               <p className="muted">{t.messengerActivity.surfaceBody}</p>
             </div>
 
-            {archivedConversations.length > 0 ? (
+            {archivedConversationCount > 0 ? (
               <Link
                 className="pill messenger-activity-head-pill messenger-activity-surface-pill"
                 href={buildInboxHref({
@@ -653,24 +469,8 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   return (
     <section className="stack settings-screen settings-shell activity-screen">
       <InboxRealtimeSync
-        conversationIds={conversations.map((conversation) => conversation.conversationId)}
-        initialSummaries={conversations.map((conversation) => ({
-          conversationId: conversation.conversationId,
-          createdAt: conversation.createdAt,
-          hiddenAt: conversation.hiddenAt,
-          lastMessageAt: conversation.lastMessageAt,
-          lastReadAt: conversation.lastReadAt,
-          lastReadMessageSeq: conversation.lastReadMessageSeq,
-          latestMessageAttachmentKind: conversation.latestMessageAttachmentKind,
-          latestMessageBody: conversation.latestMessageBody,
-          latestMessageContentMode: conversation.latestMessageContentMode,
-          latestMessageDeletedAt: conversation.latestMessageDeletedAt,
-          latestMessageId: conversation.latestMessageId,
-          latestMessageKind: conversation.latestMessageKind,
-          latestMessageSenderId: conversation.latestMessageSenderId,
-          latestMessageSeq: conversation.latestMessageSeq,
-          unreadCount: conversation.unreadCount,
-        }))}
+        conversationIds={conversationIds}
+        initialSummaries={initialSummaries}
         userId={user.id}
       />
 
@@ -1039,7 +839,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             </div>
             <div className="activity-summary-card">
               <span className="activity-summary-label">{t.activity.archivedChats}</span>
-              <span className="activity-summary-value">{archivedConversations.length}</span>
+              <span className="activity-summary-value">{archivedConversationCount}</span>
             </div>
           </div>
         </section>
@@ -1134,7 +934,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
             </div>
             <div className="activity-section-actions">
               <span className="activity-section-count">{recentItems.length}</span>
-              {archivedConversations.length > 0 ? (
+              {archivedConversationCount > 0 ? (
                 <Link
                   className="pill activity-section-link"
                   href={buildInboxHref({

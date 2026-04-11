@@ -24,6 +24,7 @@ Related documents:
 - [keepcozy-space-access-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-space-access-model.md)
 - [keepcozy-role-layering.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/keepcozy-role-layering.md)
 - [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
+- [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
 - [governance.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/governance.ts)
 - [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
 - [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
@@ -72,6 +73,8 @@ Current platform ownership inside `src/modules/spaces` is:
 
 - [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
   for shared platform space types
+- [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
+  for the resolved platform-access contract that product routes consume
 - [governance.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/governance.ts)
   for shared governance resolution
 - [posture.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/posture.ts)
@@ -93,6 +96,32 @@ That means the governance foundation must distinguish clearly between:
 
 - what is already structurally true
 - what still needs later enforcement work
+
+### Current Runtime Access Contract
+
+The current runtime now exposes one additive platform access contract per
+resolved space.
+
+In
+[server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts),
+each `UserSpaceRecord` carries:
+
+- `access.platform.membership`
+  for the shared outer `space_members` boundary
+- `access.platform.governance`
+  for the current one-space governance interpretation
+- `access.products.messenger`
+  for Messenger product posture derived from the same shared platform rule
+- `access.products.keepcozy`
+  for KeepCozy product posture derived from the same shared platform rule
+
+Important rule:
+
+- product routes should prefer the resolved `access` contract over open-coding
+  checks from loose combinations of `role`, `profile`, and convenience
+  booleans
+- global `super_admin` capability remains a separate platform governance seam
+  on the resolved active-space state, not a hidden per-space member role
 
 ### Current `public.spaces` Runtime Contract
 

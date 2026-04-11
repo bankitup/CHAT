@@ -1,17 +1,25 @@
 import 'server-only';
 
 import { getConversationForUser } from '@/modules/messaging/data/server';
-import type { SpaceProfile } from '@/modules/spaces/model';
 import {
+  resolveSpaceAccessContract,
+  resolveSpaceGovernanceRoleForRuntimeSpaceRole,
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
+import type {
+  ResolvedPlatformSpaceAccess,
+  ResolvedSpaceProductAccess,
+  SpaceProfile,
+} from '@/modules/spaces/model';
 
 export type MessagingRouteSpaceContext = {
   activeSpaceId: string;
   activeSpaceName: string | null;
   activeSpaceProfile: SpaceProfile;
+  platformAccess: ResolvedPlatformSpaceAccess;
+  productAccess: ResolvedSpaceProductAccess;
   canManageMembers: boolean;
   isV1TestBypass: boolean;
 };
@@ -69,11 +77,19 @@ async function resolveV1TestMessagingSpaceContext(input: {
     return null;
   }
 
+  const access = resolveSpaceAccessContract({
+    governance: resolveSpaceGovernanceRoleForRuntimeSpaceRole('member'),
+    profile: 'keepcozy_ops',
+    role: 'member',
+  });
+
   return {
     activeSpaceId: fallbackSpace.id,
     activeSpaceName: fallbackSpace.name,
     activeSpaceProfile: 'keepcozy_ops',
-    canManageMembers: false,
+    platformAccess: access.platform,
+    productAccess: access.products,
+    canManageMembers: access.platform.governance.canManageMembers,
     isV1TestBypass: true,
   };
 }
@@ -126,7 +142,10 @@ export async function resolveMessagingRouteSpaceContextForUser(input: {
         activeSpaceId: activeSpaceState.activeSpace.id,
         activeSpaceName: activeSpaceState.activeSpace.name,
         activeSpaceProfile: activeSpaceState.activeSpace.profile,
-        canManageMembers: activeSpaceState.activeSpace.canManageMembers,
+        platformAccess: activeSpaceState.activeSpace.access.platform,
+        productAccess: activeSpaceState.activeSpace.access.products,
+        canManageMembers:
+          activeSpaceState.activeSpace.access.platform.governance.canManageMembers,
         isV1TestBypass: false,
       },
     };

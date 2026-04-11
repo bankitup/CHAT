@@ -49,6 +49,16 @@ Minimum v1 roles:
 This is the broader access boundary for everything inside the space. It is not
 an encryption boundary and it does not imply message plaintext visibility.
 
+Current runtime note:
+
+- the platform now resolves this membership boundary into an additive access
+  contract in
+  [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
+  and
+  [server.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/server.ts)
+- product routes should prefer that resolved contract over re-deriving access
+  from raw `owner | admin | member` values
+
 ### `public.conversations.space_id`
 
 Every conversation belongs to one space.
@@ -90,6 +100,8 @@ These are related but not the same thing.
 Practical v1 rule:
 
 - a conversation member should also be a member of that conversation's parent space
+- Messenger and KeepCozy should both treat the shared `space_members` boundary
+  as the outer source of truth, then layer product capability mapping on top
 
 ## Space access vs E2EE confidentiality
 

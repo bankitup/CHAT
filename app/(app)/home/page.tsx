@@ -35,6 +35,8 @@ import {
   getManageableSpaceParticipantsForUser,
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
+  resolveSpaceAccessContract,
+  resolveSpaceGovernanceRoleForRuntimeSpaceRole,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
 import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
@@ -324,12 +326,26 @@ async function requireHomeSpaceContext(requestedSpaceId?: string) {
   });
 
   if (explicitV1TestSpace) {
+    const access = resolveSpaceAccessContract({
+      governance: resolveSpaceGovernanceRoleForRuntimeSpaceRole('member'),
+      profile: 'keepcozy_ops',
+      role: 'member',
+    });
+
     return {
       activeSpace: {
+        access,
+        canManageMembers: access.platform.governance.canManageMembers,
+        defaultShellRoute: '/home' as const,
+        governanceRole: access.platform.governance.governanceRole,
+        governanceRoleSource: access.platform.governance.governanceRoleSource,
         id: explicitV1TestSpace.id,
         name: explicitV1TestSpace.name,
         profile: 'keepcozy_ops' as const,
+        profileSource: 'space_name_test_default' as const,
+        role: 'member' as const,
         theme: 'dark' as const,
+        themeSource: 'default_dark' as const,
       },
       language,
       t: getTranslations(language),
@@ -368,12 +384,26 @@ async function requireHomeSpaceContext(requestedSpaceId?: string) {
         redirect('/spaces');
       }
 
+      const access = resolveSpaceAccessContract({
+        governance: resolveSpaceGovernanceRoleForRuntimeSpaceRole('member'),
+        profile: 'keepcozy_ops',
+        role: 'member',
+      });
+
       return {
         activeSpace: {
+          access,
+          canManageMembers: access.platform.governance.canManageMembers,
+          defaultShellRoute: '/home' as const,
+          governanceRole: access.platform.governance.governanceRole,
+          governanceRoleSource: access.platform.governance.governanceRoleSource,
           id: fallbackSpace.id,
           name: fallbackSpace.name,
           profile: 'keepcozy_ops' as const,
+          profileSource: 'space_name_test_default' as const,
+          role: 'member' as const,
           theme: 'dark' as const,
+          themeSource: 'default_dark' as const,
         },
         language,
         t: getTranslations(language),
@@ -395,14 +425,14 @@ export default async function HomeDashboardPage({
   const currentZoomMode = await getRequestAppZoomMode();
   const activeProductPosture = resolveSpaceProductPosture(activeSpace.profile);
   const canManageSpaceAppearance =
-    'canManageMembers' in activeSpace && activeSpace.canManageMembers;
+    activeSpace.access.platform.governance.canManageMembers;
   const shouldShowPrivateSpaceCta =
-    'canManageMembers' in activeSpace && !activeSpace.canManageMembers;
+    !activeSpace.access.platform.governance.canManageMembers;
   const privateSpaceCreateHref = buildPrivateSpaceCreateHref(activeSpace.id);
 
   if (activeProductPosture === 'messenger') {
     const canManageMessengerMembers =
-      'canManageMembers' in activeSpace && activeSpace.canManageMembers;
+      activeSpace.access.platform.governance.canManageMembers;
     const [currentUserProfile, manageableParticipants] = await Promise.all([
       getCurrentUserProfile(user.id, user.email ?? null),
       canManageMessengerMembers

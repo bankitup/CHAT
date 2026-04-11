@@ -28,6 +28,42 @@ export type ResolvedSpaceGovernanceRole = {
 export type ResolvedSpaceGovernanceState =
   ResolvedSpaceGovernanceGlobalRole & ResolvedSpaceGovernanceRole;
 
+export type ResolvedSpaceMembershipState = {
+  canAccessSpace: true;
+  isSpaceMember: true;
+  membershipSource: 'space_members_row';
+  role: SpaceRole;
+};
+
+export type ResolvedPlatformSpaceAccess = {
+  governance: ResolvedSpaceGovernanceRole;
+  membership: ResolvedSpaceMembershipState;
+};
+
+export type ResolvedMessengerSpaceAccess = {
+  canAccessChat: boolean;
+  canAccessInbox: boolean;
+  canManageMembers: boolean;
+  isPrimaryProfile: boolean;
+};
+
+export type ResolvedKeepCozySpaceAccess = {
+  canAccessOperationalActivity: boolean;
+  canAccessOperationalShell: boolean;
+  canManageMembers: boolean;
+  isPrimaryProfile: boolean;
+};
+
+export type ResolvedSpaceProductAccess = {
+  keepcozy: ResolvedKeepCozySpaceAccess;
+  messenger: ResolvedMessengerSpaceAccess;
+};
+
+export type ResolvedSpaceAccessContract = {
+  platform: ResolvedPlatformSpaceAccess;
+  products: ResolvedSpaceProductAccess;
+};
+
 export type SpaceProfile = 'messenger_full' | 'keepcozy_ops';
 
 export const SPACE_PROFILES = [

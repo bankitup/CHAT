@@ -73,6 +73,15 @@ The design principle is:
 - structured objects hold operational truth
 - timeline events connect those layers into a searchable history
 
+Current product integration rule:
+
+- KeepCozy route/server code should consume messaging capability through
+  [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts)
+  where possible
+- that adapter may compose low-level messaging capability helpers, but
+  KeepCozy product routes should not treat Messenger route files as the
+  dependency surface for communication behavior
+
 ## 2. Recommended Top-Level Entities
 
 KeepCozy should treat the following entities as the core data map for a space.

@@ -10,8 +10,10 @@ import {
   resolveSpaceGovernanceRoleForRuntimeSpaceRole,
   resolveSuperAdminGovernanceForUser,
 } from './governance';
+import { resolveSpaceAccessContract } from './access';
 import type {
   ResolvedSpaceProfile,
+  ResolvedSpaceAccessContract,
   ResolvedSpaceGovernanceGlobalRole,
   ResolvedSpaceGovernanceRole,
   ResolvedSpaceGovernanceState,
@@ -31,6 +33,9 @@ import {
 import { normalizeSpaceProfile, normalizeSpaceTheme } from './model';
 import { withSpaceParam } from './url';
 export {
+  resolveSpaceAccessContract,
+} from './access';
+export {
   INITIAL_SUPER_ADMIN_EMAIL_ALLOWLIST,
   resolveSpaceGovernanceRoleForRuntimeSpaceRole,
   resolveSuperAdminGovernanceForUser,
@@ -46,20 +51,22 @@ export {
 } from './posture';
 
 export type UserSpaceRecord = SpaceRecord & {
-  role: SpaceRole;
+  access: ResolvedSpaceAccessContract;
+  canManageMembers: boolean;
+  defaultShellRoute: SpaceProfileDefaultShellRoute;
   governanceRole: ResolvedSpaceGovernanceRole['governanceRole'];
   governanceRoleSource: ResolvedSpaceGovernanceRole['governanceRoleSource'];
-  canManageMembers: boolean;
+  role: SpaceRole;
   profile: SpaceProfile;
   profileSource: SpaceProfileSource;
   theme: SpaceTheme;
   themeSource: SpaceThemeSource;
-  defaultShellRoute: SpaceProfileDefaultShellRoute;
 };
 
 export type ResolvedActiveSpaceState = {
   spaces: UserSpaceRecord[];
   activeSpace: UserSpaceRecord | null;
+  activeSpaceAccess: ResolvedSpaceAccessContract | null;
   activeSpaceGovernance: ResolvedSpaceGovernanceState | null;
   activeSpaceProfile: ResolvedSpaceProfile | null;
   globalGovernance: ResolvedSpaceGovernanceGlobalRole;
@@ -69,6 +76,7 @@ export type ResolvedActiveSpaceState = {
 
 export type ExactUserSpaceAccessState = {
   activeSpace: UserSpaceRecord;
+  activeSpaceAccess: ResolvedSpaceAccessContract;
   activeSpaceGovernance: ResolvedSpaceGovernanceState;
   activeSpaceProfile: ResolvedSpaceProfile;
   globalGovernance: ResolvedSpaceGovernanceGlobalRole;
@@ -567,13 +575,19 @@ export async function getUserSpaces(
       const governanceResolution = resolveSpaceGovernanceRoleForRuntimeSpaceRole(
         membership.role,
       );
+      const access = resolveSpaceAccessContract({
+        governance: governanceResolution,
+        profile: profileResolution.profile,
+        role: membership.role,
+      });
 
       return {
         ...space,
-        canManageMembers: governanceResolution.canManageMembers,
+        access,
+        canManageMembers: access.platform.governance.canManageMembers,
         defaultShellRoute: profileResolution.defaultShellRoute,
-        governanceRole: governanceResolution.governanceRole,
-        governanceRoleSource: governanceResolution.governanceRoleSource,
+        governanceRole: access.platform.governance.governanceRole,
+        governanceRoleSource: access.platform.governance.governanceRoleSource,
         profile: profileResolution.profile,
         profileSource: profileResolution.source,
         theme: themeResolution.theme,
@@ -625,13 +639,15 @@ export async function resolveActiveSpaceForUser(input: {
   const activeSpaceGovernance = activeSpace
     ? ({
         canCreateSpaces: globalGovernance.canCreateSpaces,
-        canManageMembers: activeSpace.canManageMembers,
+        canManageMembers: activeSpace.access.platform.governance.canManageMembers,
         globalRole: globalGovernance.globalRole,
         globalRoleSource: globalGovernance.globalRoleSource,
-        governanceRole: activeSpace.governanceRole,
-        governanceRoleSource: activeSpace.governanceRoleSource,
+        governanceRole: activeSpace.access.platform.governance.governanceRole,
+        governanceRoleSource:
+          activeSpace.access.platform.governance.governanceRoleSource,
       } satisfies ResolvedSpaceGovernanceState)
     : null;
+  const activeSpaceAccess = activeSpace?.access ?? null;
   const activeSpaceProfile = activeSpace
     ? ({
         defaultShellRoute: activeSpace.defaultShellRoute,
@@ -654,6 +670,7 @@ export async function resolveActiveSpaceForUser(input: {
   return {
     spaces,
     activeSpace,
+    activeSpaceAccess,
     activeSpaceGovernance,
     activeSpaceProfile,
     globalGovernance,
@@ -683,6 +700,7 @@ export async function requireExactSpaceAccessForUser(input: {
 
   if (
     !resolved.activeSpace ||
+    !resolved.activeSpaceAccess ||
     !resolved.activeSpaceGovernance ||
     !resolved.activeSpaceProfile ||
     resolved.requestedSpaceWasInvalid ||
@@ -693,6 +711,7 @@ export async function requireExactSpaceAccessForUser(input: {
 
   return {
     activeSpace: resolved.activeSpace,
+    activeSpaceAccess: resolved.activeSpaceAccess,
     activeSpaceGovernance: resolved.activeSpaceGovernance,
     activeSpaceProfile: resolved.activeSpaceProfile,
     globalGovernance: resolved.globalGovernance,

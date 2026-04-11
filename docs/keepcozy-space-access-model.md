@@ -49,6 +49,10 @@ Current-runtime note:
 
 - [model.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/model.ts)
   currently supports only `SpaceRole = 'owner' | 'admin' | 'member'`
+- [access.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/spaces/access.ts)
+  now exposes the shared platform membership and governance contract that
+  KeepCozy should consume before layering any KeepCozy-specific business-role
+  interpretation
 - [group-policy.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/messaging/group-policy.ts)
   currently supports only generic conversation moderation roles
 - this document therefore describes the target access model, not active runtime
