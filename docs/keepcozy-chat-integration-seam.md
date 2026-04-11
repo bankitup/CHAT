@@ -143,7 +143,9 @@ Practical rule:
 
 Current product-consumption rule:
 
-- KeepCozy may depend on:
+- KeepCozy product code should prefer:
+  - [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts)
+- the KeepCozy adapter may depend on:
   - `src/modules/messaging/contract/**`
   - `src/modules/messaging/data/**`
   - `src/modules/messaging/server/**`
@@ -151,6 +153,21 @@ Current product-consumption rule:
 - KeepCozy should not depend on:
   - `app/(app)/inbox/**`
   - `app/(app)/chat/**`
+
+Current adapter ownership:
+
+- `requireKeepCozyMessagingSpaceContext(...)`
+  resolves the active space for KeepCozy messaging-related surfaces without
+  routing those pages through Messenger space-selection code
+- `getKeepCozyMessagingActivityFeed(...)`
+  builds KeepCozy-facing conversation activity data from messaging capability
+  seams without making KeepCozy routes own the inbox query/title/preview logic
+- `getKeepCozyLinkedThreadContextForUser(...)`
+  is the first KeepCozy-owned read seam for optional operational thread
+  context
+- `mapKeepCozyActorToMessagingParticipant(...)`
+  keeps role translation at the integration seam instead of scattering it
+  through product routes
 
 ## 4. How KeepCozy Should Attach To The Existing CHAT Test Space
 

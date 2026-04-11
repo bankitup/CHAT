@@ -258,6 +258,15 @@ Recommended design rule:
 
 - keep `public.conversations.kind` as the shell discriminator for `dm` vs `group`
 - add operational thread classification separately
+
+Current implementation seam:
+
+- KeepCozy product code should reach current messaging capability through
+  [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts)
+  first
+- that adapter may call messaging capability helpers such as companion-metadata
+  and conversation-context loaders, but KeepCozy routes should not depend on
+  Messenger inbox/chat route internals to work with operational threads later
 - prefer a companion metadata layer keyed by `conversation_id` rather than
   assuming all new fields belong directly on `public.conversations`
 

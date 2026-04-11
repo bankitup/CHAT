@@ -73,6 +73,12 @@ KeepCozy and future products may depend on:
 - `src/modules/messaging/server/**`
 - `app/api/messaging/**`
 
+Preferred KeepCozy consumption layer:
+
+- [messaging-adapter.ts](/Users/danya/IOS%20-%20Apps/CHAT/src/modules/keepcozy/messaging-adapter.ts)
+  should be the first integration point for KeepCozy product code
+  when it needs messaging capability behavior
+
 They should not depend on:
 
 - `app/(app)/inbox/**`
@@ -83,6 +89,8 @@ They should not depend on:
 Practical rule:
 
 - depend on messaging capability modules
+- let KeepCozy product routes depend on the KeepCozy adapter before depending
+  on raw messaging helper files
 - do not depend on Messenger route files
 
 ## Why This Boundary Matters
