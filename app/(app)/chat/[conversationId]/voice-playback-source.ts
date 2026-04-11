@@ -1,3 +1,12 @@
+import {
+  resolveMessagingAttachmentMimeType,
+  type MessagingVoicePlaybackSourceOption,
+} from '@/modules/messaging/media/message-assets';
+import {
+  classifyMessagingVoiceDevicePlaybackSupport,
+  resolveMessagingVoicePlaybackSourcePreference,
+} from '@/modules/messaging/media/voice';
+
 const THREAD_VOICE_PLAYBACK_CACHE_MAX_ENTRIES = 120;
 
 export type ThreadVoicePlaybackAttachmentDescriptor = {
@@ -20,6 +29,7 @@ export type ThreadVoicePlaybackSourceSnapshot = {
   cacheKey: string | null;
   cachedDurationMs: number | null;
   localPlaybackUrl: string | null;
+  selectedSourceId: string | null;
   shouldHydratePreparedPlayback: boolean;
   transportSourceUrl: string | null;
 };
@@ -42,6 +52,7 @@ export type ThreadVoiceTransportSourceResolution =
 
 export type ThreadVoicePreparedPlaybackSource = {
   playbackSourceUrl: string | null;
+  selectedPlaybackSource: MessagingVoicePlaybackSourceOption | null;
   status: ThreadVoiceTransportSourceResolution['status'];
   transportSourceUrl: string | null;
 };
@@ -55,6 +66,11 @@ export type ThreadVoiceDevicePlaybackSupport = {
   status: 'supported' | 'unknown' | 'unsupported';
 };
 
+export type ThreadVoicePreferredPlaybackSourceResolution = {
+  playbackSource: MessagingVoicePlaybackSourceOption | null;
+  playbackSupport: ThreadVoiceDevicePlaybackSupport;
+};
+
 type ThreadVoiceTransportSourceResolver = (input: {
   transportSourceUrl: string;
 }) => Promise<Blob | string | null>;
@@ -66,6 +82,115 @@ type ThreadVoiceSourceDiagnosticLogger = (
 
 const threadVoicePlaybackCache = new Map<string, ThreadVoicePlaybackCacheEntry>();
 const threadVoicePlaybackWarmPromises = new Map<string, Promise<string | null>>();
+
+function normalizeThreadVoicePlaybackSourceUrl(value: string | null | undefined) {
+  const normalizedValue = value?.trim() || '';
+  return normalizedValue || null;
+}
+
+function buildLegacyThreadVoicePlaybackSources(input: {
+  attachment: ThreadVoicePlaybackAttachmentDescriptor | null;
+  messageId: string;
+  transportSourceUrl: string | null;
+}): MessagingVoicePlaybackSourceOption[] {
+  if (!input.attachment) {
+    return [];
+  }
+
+  const assetId =
+    typeof input.attachment.id === 'string' ? input.attachment.id.trim() : '';
+  const storageObjectPath =
+    typeof input.attachment.objectPath === 'string'
+      ? input.attachment.objectPath.trim()
+      : '';
+
+  if (!assetId && !storageObjectPath && !input.transportSourceUrl) {
+    return [];
+  }
+
+  return [
+    {
+      assetId: assetId || null,
+      durationMs: input.attachment.durationMs ?? null,
+      fileName: null,
+      mimeType: null,
+      origin: 'original',
+      role: 'original-capture',
+      source: null,
+      sourceId: ['legacy-original', assetId || 'asset-missing', storageObjectPath || 'object-missing']
+        .join(':'),
+      storageBucket:
+        typeof input.attachment.bucket === 'string'
+          ? input.attachment.bucket.trim() || null
+          : null,
+      storageObjectPath: storageObjectPath || null,
+      transportSourceUrl: input.transportSourceUrl,
+    },
+  ];
+}
+
+function orderThreadVoicePlaybackSources(input: {
+  playbackSources?: readonly MessagingVoicePlaybackSourceOption[] | null;
+  preferredSourceId?: string | null;
+}) {
+  const preferredSourceId = input.preferredSourceId?.trim() || null;
+  const dedupedSources = new Map<string, MessagingVoicePlaybackSourceOption>();
+
+  for (const source of input.playbackSources ?? []) {
+    if (!source.sourceId || dedupedSources.has(source.sourceId)) {
+      continue;
+    }
+
+    dedupedSources.set(source.sourceId, source);
+  }
+
+  const orderedSources = Array.from(dedupedSources.values());
+
+  if (!preferredSourceId) {
+    return orderedSources;
+  }
+
+  const preferredSourceIndex = orderedSources.findIndex(
+    (source) => source.sourceId === preferredSourceId,
+  );
+
+  if (preferredSourceIndex < 1) {
+    return orderedSources;
+  }
+
+  const [preferredSource] = orderedSources.splice(preferredSourceIndex, 1);
+  orderedSources.unshift(preferredSource);
+  return orderedSources;
+}
+
+function getThreadVoicePlaybackCacheKeyForSource(input: {
+  messageId: string;
+  playbackSource: MessagingVoicePlaybackSourceOption;
+}) {
+  return getThreadVoicePlaybackCacheKey({
+    attachment: {
+      bucket: input.playbackSource.storageBucket,
+      durationMs: input.playbackSource.durationMs ?? null,
+      id: input.playbackSource.assetId,
+      messageId: input.messageId,
+      objectPath: input.playbackSource.storageObjectPath,
+    },
+    messageId: input.messageId,
+  });
+}
+
+function resolveThreadVoicePlaybackSupportPriority(input: {
+  playbackSource: MessagingVoicePlaybackSourceOption;
+  playbackSupport: ThreadVoiceDevicePlaybackSupport;
+}) {
+  const { sourcePriority, supportPriority } =
+    resolveMessagingVoicePlaybackSourcePreference({
+      origin: input.playbackSource.origin,
+      supportStatus: input.playbackSupport.status,
+    });
+
+  return [supportPriority, sourcePriority, input.playbackSource.sourceId] as const;
+}
 
 function looksLikeUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -137,15 +262,10 @@ export async function resolveThreadVoiceDevicePlaybackSupport(input: {
     }
   }
 
-  const status =
-    mediaCapabilitiesSupported === false ||
-    (mediaCapabilitiesSupported !== true && canPlayType === 'no')
-      ? 'unsupported'
-      : mediaCapabilitiesSupported === true ||
-          canPlayType === 'probably' ||
-          canPlayType === 'maybe'
-        ? 'supported'
-        : 'unknown';
+  const status = classifyMessagingVoiceDevicePlaybackSupport({
+    canPlayType,
+    mediaCapabilitiesSupported,
+  });
 
   return {
     canPlayType,
@@ -154,6 +274,100 @@ export async function resolveThreadVoiceDevicePlaybackSupport(input: {
     mediaCapabilitiesSupported,
     mimeType: normalizedMimeType,
     status,
+  };
+}
+
+export async function resolveThreadVoicePreferredPlaybackSource(input: {
+  audio: HTMLAudioElement | null;
+  playbackSources?: readonly MessagingVoicePlaybackSourceOption[] | null;
+  preferredSourceId?: string | null;
+}): Promise<ThreadVoicePreferredPlaybackSourceResolution> {
+  const orderedSources = orderThreadVoicePlaybackSources({
+    playbackSources: input.playbackSources,
+    preferredSourceId: input.preferredSourceId,
+  });
+
+  if (orderedSources.length === 0) {
+    return {
+      playbackSource: null,
+      playbackSupport: {
+        canPlayType: null,
+        mediaCapabilitiesPowerEfficient: null,
+        mediaCapabilitiesSmooth: null,
+        mediaCapabilitiesSupported: null,
+        mimeType: null,
+        status: 'unknown',
+      },
+    };
+  }
+
+  if (input.preferredSourceId) {
+    const preferredSource = orderedSources[0] ?? null;
+    const preferredMimeType = preferredSource
+      ? resolveMessagingAttachmentMimeType({
+          fileName: preferredSource.fileName,
+          mimeType: preferredSource.mimeType,
+        })
+      : null;
+
+    return {
+      playbackSource: preferredSource,
+      playbackSupport: await resolveThreadVoiceDevicePlaybackSupport({
+        audio: input.audio,
+        mimeType: preferredMimeType,
+      }),
+    };
+  }
+
+  const evaluatedSources = await Promise.all(
+    orderedSources.map(async (playbackSource) => {
+      const playbackMimeType = resolveMessagingAttachmentMimeType({
+        fileName: playbackSource.fileName,
+        mimeType: playbackSource.mimeType,
+      });
+
+      return {
+        playbackSource,
+        playbackSupport: await resolveThreadVoiceDevicePlaybackSupport({
+          audio: input.audio,
+          mimeType: playbackMimeType,
+        }),
+      };
+    }),
+  );
+
+  evaluatedSources.sort((left, right) => {
+    const leftPriority = resolveThreadVoicePlaybackSupportPriority(left);
+    const rightPriority = resolveThreadVoicePlaybackSupportPriority(right);
+
+    for (let index = 0; index < leftPriority.length; index += 1) {
+      const leftValue = leftPriority[index];
+      const rightValue = rightPriority[index];
+
+      if (leftValue < rightValue) {
+        return -1;
+      }
+
+      if (leftValue > rightValue) {
+        return 1;
+      }
+    }
+
+    return 0;
+  });
+
+  const selectedSource = evaluatedSources[0];
+
+  return {
+    playbackSource: selectedSource?.playbackSource ?? null,
+    playbackSupport: selectedSource?.playbackSupport ?? {
+      canPlayType: null,
+      mediaCapabilitiesPowerEfficient: null,
+      mediaCapabilitiesSmooth: null,
+      mediaCapabilitiesSupported: null,
+      mimeType: null,
+      status: 'unknown',
+    },
   };
 }
 
@@ -265,42 +479,69 @@ export function resolveThreadVoicePlaybackSourceSnapshot(input: {
   attachment: ThreadVoicePlaybackAttachmentDescriptor | null;
   ignoredTransportSourceUrl?: string | null;
   messageId: string;
+  playbackSources?: readonly MessagingVoicePlaybackSourceOption[] | null;
+  preferredSourceId?: string | null;
   transportSourceUrl: string | null;
 }): ThreadVoicePlaybackSourceSnapshot {
-  const cacheKey = getThreadVoicePlaybackCacheKey({
-    attachment: input.attachment,
-    messageId: input.messageId,
-  });
-  const cacheEntry = readThreadVoicePlaybackCacheEntry(cacheKey);
   const normalizedIgnoredTransportSourceUrl =
     typeof input.ignoredTransportSourceUrl === 'string' &&
     input.ignoredTransportSourceUrl.trim()
       ? input.ignoredTransportSourceUrl.trim()
       : null;
-  const requestedTransportSourceUrl =
-    typeof input.transportSourceUrl === 'string' && input.transportSourceUrl.trim()
-      ? input.transportSourceUrl.trim()
-      : null;
+  const normalizedPlaybackSources =
+    orderThreadVoicePlaybackSources({
+      playbackSources:
+        input.playbackSources && input.playbackSources.length > 0
+          ? input.playbackSources
+          : buildLegacyThreadVoicePlaybackSources({
+              attachment: input.attachment,
+              messageId: input.messageId,
+              transportSourceUrl: normalizeThreadVoicePlaybackSourceUrl(
+                input.transportSourceUrl,
+              ),
+            }),
+      preferredSourceId: input.preferredSourceId,
+    }) ?? [];
+  const selectedPlaybackSource = normalizedPlaybackSources[0] ?? null;
+  const cacheKey = selectedPlaybackSource
+    ? getThreadVoicePlaybackCacheKeyForSource({
+        messageId: input.messageId,
+        playbackSource: selectedPlaybackSource,
+      })
+    : getThreadVoicePlaybackCacheKey({
+        attachment: input.attachment,
+        messageId: input.messageId,
+      });
+  const cacheEntry = readThreadVoicePlaybackCacheEntry(cacheKey);
+  const requestedTransportSourceUrl = selectedPlaybackSource
+    ? normalizeThreadVoicePlaybackSourceUrl(
+        selectedPlaybackSource.transportSourceUrl,
+      )
+    : normalizeThreadVoicePlaybackSourceUrl(input.transportSourceUrl);
   const cacheTransportSourceUrl =
     cacheEntry?.sourceUrl &&
     cacheEntry.sourceUrl !== normalizedIgnoredTransportSourceUrl
       ? cacheEntry.sourceUrl
       : null;
-  const transportSourceUrl = requestedTransportSourceUrl ?? cacheTransportSourceUrl;
+  const transportSourceUrl =
+    requestedTransportSourceUrl &&
+    requestedTransportSourceUrl !== normalizedIgnoredTransportSourceUrl
+      ? requestedTransportSourceUrl
+      : cacheTransportSourceUrl;
   const localPlaybackUrl = resolvePreferredLocalThreadVoicePlaybackUrl({
-    cacheEntry:
-      cacheEntry?.warmed || cacheEntry?.playbackUrl?.startsWith('blob:')
-        ? cacheEntry
-        : cacheTransportSourceUrl
-          ? cacheEntry
-          : null,
+    cacheEntry,
     transportSourceUrl,
   });
 
   return {
     cacheKey,
-    cachedDurationMs: cacheEntry?.durationMs ?? input.attachment?.durationMs ?? null,
+    cachedDurationMs:
+      cacheEntry?.durationMs ??
+      selectedPlaybackSource?.durationMs ??
+      input.attachment?.durationMs ??
+      null,
     localPlaybackUrl,
+    selectedSourceId: selectedPlaybackSource?.sourceId ?? null,
     shouldHydratePreparedPlayback: Boolean(
       localPlaybackUrl && (cacheEntry?.warmed || cacheEntry?.sessionReady),
     ),
@@ -479,8 +720,12 @@ export async function resolveThreadVoiceTransportSourceUrl(input: {
 
 export async function prepareThreadVoicePlaybackSource(input: {
   cacheKey: string | null;
+  conversationId?: string | null;
   locator: ThreadVoiceTransportSourceLocator;
+  messageId?: string | null;
   onDiagnostic?: ThreadVoiceSourceDiagnosticLogger;
+  playbackSources?: readonly MessagingVoicePlaybackSourceOption[] | null;
+  preferredSourceId?: string | null;
   resolveTransportSource?: ThreadVoiceTransportSourceResolver;
   transportSourceUrl: string | null;
 }): Promise<ThreadVoicePreparedPlaybackSource> {
@@ -488,6 +733,75 @@ export async function prepareThreadVoicePlaybackSource(input: {
   // committed voice locator -> transport source -> local playable source.
   // Future encrypted voice can swap the inside of this function to resolve
   // ciphertext and return a decrypted object URL without rewriting the player.
+  const orderedPlaybackSources = orderThreadVoicePlaybackSources({
+    playbackSources: input.playbackSources,
+    preferredSourceId: input.preferredSourceId,
+  });
+
+  if (orderedPlaybackSources.length > 0) {
+    let lastStatus: ThreadVoiceTransportSourceResolution['status'] = 'skipped';
+
+    for (const playbackSource of orderedPlaybackSources) {
+      const sourceCacheKey = getThreadVoicePlaybackCacheKeyForSource({
+        messageId:
+          (input.messageId?.trim() || input.locator.messageId?.trim() || ''),
+        playbackSource,
+      });
+      let transportSourceUrl = normalizeThreadVoicePlaybackSourceUrl(
+        playbackSource.transportSourceUrl,
+      );
+      let status: ThreadVoiceTransportSourceResolution['status'] =
+        transportSourceUrl ? 'resolved' : 'skipped';
+
+      if (!transportSourceUrl) {
+        const transportResolution = await resolveThreadVoiceTransportSourceUrl({
+          locator: {
+            attachmentId: playbackSource.assetId,
+            conversationId:
+              input.conversationId?.trim() ||
+              input.locator.conversationId?.trim() ||
+              null,
+            messageId:
+              input.messageId?.trim() || input.locator.messageId?.trim() || null,
+          },
+          onDiagnostic: input.onDiagnostic,
+        });
+
+        status = transportResolution.status;
+        transportSourceUrl = transportResolution.transportSourceUrl;
+      }
+
+      if (!transportSourceUrl) {
+        if (status === 'failed') {
+          lastStatus = 'failed';
+        }
+
+        continue;
+      }
+
+      const playbackSourceUrl = await resolveLocalThreadVoicePlaybackSource({
+        cacheKey: sourceCacheKey,
+        onDiagnostic: input.onDiagnostic,
+        resolveTransportSource: input.resolveTransportSource,
+        transportSourceUrl,
+      });
+
+      return {
+        playbackSourceUrl: playbackSourceUrl ?? transportSourceUrl,
+        selectedPlaybackSource: playbackSource,
+        status: 'resolved',
+        transportSourceUrl,
+      };
+    }
+
+    return {
+      playbackSourceUrl: null,
+      selectedPlaybackSource: orderedPlaybackSources[0] ?? null,
+      status: lastStatus,
+      transportSourceUrl: null,
+    };
+  }
+
   let transportSourceUrl =
     typeof input.transportSourceUrl === 'string' &&
     input.transportSourceUrl.trim()
@@ -509,6 +823,7 @@ export async function prepareThreadVoicePlaybackSource(input: {
   if (!transportSourceUrl) {
     return {
       playbackSourceUrl: null,
+      selectedPlaybackSource: null,
       status,
       transportSourceUrl: null,
     };
@@ -523,6 +838,7 @@ export async function prepareThreadVoicePlaybackSource(input: {
 
   return {
     playbackSourceUrl: playbackSourceUrl ?? transportSourceUrl,
+    selectedPlaybackSource: null,
     status: 'resolved',
     transportSourceUrl,
   };

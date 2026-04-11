@@ -3,6 +3,7 @@ import type {
   MessagingVoiceMessageStage,
 } from './types';
 import type { MessagingMessageContentMode } from './message-metadata';
+import type { MessagingVoicePlaybackSourceOption } from './message-assets';
 
 export type MessagingVoiceCaptureState =
   | 'idle'
@@ -20,6 +21,11 @@ export type MessagingVoicePlaybackState =
   | 'paused'
   | 'ended'
   | 'failed';
+
+export type MessagingVoiceDevicePlaybackSupportStatus =
+  | 'supported'
+  | 'unknown'
+  | 'unsupported';
 
 export type MessagingVoiceMessageDraftRecord = {
   blobUrl: string | null;
@@ -75,6 +81,53 @@ export type MessagingVoiceComposerRuntime = {
   getDraftSnapshot(conversationId: string): MessagingVoiceMessageDraftRecord[];
   subscribe(conversationId: string, listener: () => void): () => void;
 };
+
+export function classifyMessagingVoiceDevicePlaybackSupport(input: {
+  canPlayType: 'maybe' | 'no' | 'probably' | null;
+  mediaCapabilitiesSupported: boolean | null;
+}): MessagingVoiceDevicePlaybackSupportStatus {
+  if (
+    input.mediaCapabilitiesSupported === false ||
+    (input.mediaCapabilitiesSupported !== true && input.canPlayType === 'no')
+  ) {
+    return 'unsupported';
+  }
+
+  if (
+    input.mediaCapabilitiesSupported === true ||
+    input.canPlayType === 'probably' ||
+    input.canPlayType === 'maybe'
+  ) {
+    return 'supported';
+  }
+
+  return 'unknown';
+}
+
+export function resolveMessagingVoicePlaybackSourcePreference(input: {
+  origin: MessagingVoicePlaybackSourceOption['origin'];
+  supportStatus: MessagingVoiceDevicePlaybackSupportStatus;
+}) {
+  const supportPriority =
+    input.supportStatus === 'supported'
+      ? 0
+      : input.supportStatus === 'unknown'
+        ? 1
+        : 2;
+  const sourcePriority =
+    input.supportStatus === 'supported'
+      ? input.origin === 'derived'
+        ? 0
+        : 1
+      : input.origin === 'original'
+        ? 0
+        : 1;
+
+  return {
+    sourcePriority,
+    supportPriority,
+  };
+}
 
 export function isMessagingVoiceDraftTerminal(
   stage: MessagingVoiceMessageStage,

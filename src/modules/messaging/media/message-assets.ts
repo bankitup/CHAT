@@ -72,6 +72,49 @@ export type MessagingVoiceMessageAssetFields = Pick<
   kind: 'voice-note';
 };
 
+export type MessagingVoicePlaybackVariantRole = 'playback-normalized';
+
+export type MessagingVoicePlaybackOriginalSourceRecord = Pick<
+  MessagingVoiceMessageAssetFields,
+  | 'durationMs'
+  | 'fileName'
+  | 'mimeType'
+  | 'source'
+  | 'storageBucket'
+  | 'storageObjectPath'
+> & {
+  assetId: string | null;
+  transportSourceUrl?: string | null;
+};
+
+export type MessagingVoicePlaybackVariantRecord = Pick<
+  MessagingMessageAssetRecord,
+  | 'assetId'
+  | 'durationMs'
+  | 'fileName'
+  | 'mimeType'
+  | 'source'
+  | 'storageBucket'
+  | 'storageObjectPath'
+> & {
+  role: MessagingVoicePlaybackVariantRole;
+  transportSourceUrl?: string | null;
+};
+
+export type MessagingVoicePlaybackSourceOption = {
+  assetId: string | null;
+  durationMs: number | null;
+  fileName: string | null;
+  mimeType: string | null;
+  origin: 'derived' | 'original';
+  role: 'original-capture' | MessagingVoicePlaybackVariantRole;
+  source: MessagingCommittedMediaAssetSource | null;
+  sourceId: string;
+  storageBucket: string | null;
+  storageObjectPath: string | null;
+  transportSourceUrl: string | null;
+};
+
 export type MessagingMessageAssetCommitIntent = {
   assetId: string | null;
   clientUploadId: string | null;
@@ -89,6 +132,121 @@ export type MessagingMessageAssetCommitIntent = {
   storageBucket: string | null;
   storageObjectPath: string | null;
 };
+
+function normalizeMessagingVoicePlaybackSourceValue(value: string | null | undefined) {
+  const normalizedValue = value?.trim() || '';
+  return normalizedValue || null;
+}
+
+function buildMessagingVoicePlaybackSourceId(input: {
+  assetId: string | null;
+  origin: MessagingVoicePlaybackSourceOption['origin'];
+  role: MessagingVoicePlaybackSourceOption['role'];
+  storageObjectPath: string | null;
+  transportSourceUrl: string | null;
+}) {
+  return [
+    input.origin,
+    input.role,
+    input.assetId ?? 'asset-missing',
+    input.storageObjectPath ?? 'object-missing',
+    input.transportSourceUrl ?? 'transport-missing',
+  ].join(':');
+}
+
+export function resolveMessagingVoicePlaybackSourceOptions(input: {
+  original: MessagingVoicePlaybackOriginalSourceRecord | null;
+  variants?: readonly MessagingVoicePlaybackVariantRecord[] | null;
+}) {
+  const candidates: MessagingVoicePlaybackSourceOption[] = [];
+
+  for (const variant of input.variants ?? []) {
+    const assetId = normalizeMessagingVoicePlaybackSourceValue(variant.assetId);
+    const storageObjectPath = normalizeMessagingVoicePlaybackSourceValue(
+      variant.storageObjectPath,
+    );
+    const transportSourceUrl = normalizeMessagingVoicePlaybackSourceValue(
+      variant.transportSourceUrl,
+    );
+
+    if (!assetId && !storageObjectPath && !transportSourceUrl) {
+      continue;
+    }
+
+    candidates.push({
+      assetId,
+      durationMs: variant.durationMs ?? null,
+      fileName: normalizeMessagingVoicePlaybackSourceValue(variant.fileName),
+      mimeType: normalizeMessagingVoicePlaybackSourceValue(variant.mimeType),
+      origin: 'derived',
+      role: variant.role,
+      source: variant.source ?? null,
+      sourceId: buildMessagingVoicePlaybackSourceId({
+        assetId,
+        origin: 'derived',
+        role: variant.role,
+        storageObjectPath,
+        transportSourceUrl,
+      }),
+      storageBucket: normalizeMessagingVoicePlaybackSourceValue(
+        variant.storageBucket,
+      ),
+      storageObjectPath,
+      transportSourceUrl,
+    });
+  }
+
+  if (input.original) {
+    const assetId = normalizeMessagingVoicePlaybackSourceValue(input.original.assetId);
+    const storageObjectPath = normalizeMessagingVoicePlaybackSourceValue(
+      input.original.storageObjectPath,
+    );
+    const transportSourceUrl = normalizeMessagingVoicePlaybackSourceValue(
+      input.original.transportSourceUrl,
+    );
+
+    if (
+      assetId ||
+      storageObjectPath ||
+      transportSourceUrl ||
+      normalizeMessagingVoicePlaybackSourceValue(input.original.fileName) ||
+      normalizeMessagingVoicePlaybackSourceValue(input.original.mimeType) ||
+      input.original.durationMs !== null
+    ) {
+      candidates.push({
+        assetId,
+        durationMs: input.original.durationMs ?? null,
+        fileName: normalizeMessagingVoicePlaybackSourceValue(input.original.fileName),
+        mimeType: normalizeMessagingVoicePlaybackSourceValue(input.original.mimeType),
+        origin: 'original',
+        role: 'original-capture',
+        source: input.original.source ?? null,
+        sourceId: buildMessagingVoicePlaybackSourceId({
+          assetId,
+          origin: 'original',
+          role: 'original-capture',
+          storageObjectPath,
+          transportSourceUrl,
+        }),
+        storageBucket: normalizeMessagingVoicePlaybackSourceValue(
+          input.original.storageBucket,
+        ),
+        storageObjectPath,
+        transportSourceUrl,
+      });
+    }
+  }
+
+  const dedupedCandidates = new Map<string, MessagingVoicePlaybackSourceOption>();
+
+  for (const candidate of candidates) {
+    if (!dedupedCandidates.has(candidate.sourceId)) {
+      dedupedCandidates.set(candidate.sourceId, candidate);
+    }
+  }
+
+  return Array.from(dedupedCandidates.values());
+}
 
 export function resolveMessagingAssetPreviewMode(
   kind: MessagingMediaAssetKind,

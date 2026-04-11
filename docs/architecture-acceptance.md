@@ -31,6 +31,8 @@ The current acceptance bar focuses on these boundaries:
    voice-runtime seams
 8. Messaging server seams stay independent from app-route and KeepCozy product
    code
+9. Voice playback source selection stays honest about original-vs-derived
+   sources and unsupported-device behavior
 
 ## Shared Platform Seams Under Acceptance
 
@@ -88,6 +90,12 @@ Current acceptance tests:
   - thread composition remains in `thread-page-content.tsx`
   - voice runtime remains extracted from the viewport
   - first-pass file-size boundaries stay within the agreed range
+- [tests/e2ee/voice-playback-foundation.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/voice-playback-foundation.test.ts)
+  verifies the current voice playback foundation:
+  - original-only source behavior remains stable
+  - derived playback candidates stay additive
+  - device playability classification stays truthful
+  - unsupported-device handling stays distinct from generic loading
 
 Run them with:
 

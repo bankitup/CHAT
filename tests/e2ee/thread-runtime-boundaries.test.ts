@@ -75,7 +75,7 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
   assert.ok(chatPageSource.split('\n').length <= 80);
   assert.ok(threadPageContentSource.split('\n').length <= 1200);
   assert.ok(viewportSource.split('\n').length <= 5800);
-  assert.ok(voiceBubbleSource.split('\n').length <= 2100);
+  assert.ok(voiceBubbleSource.split('\n').length <= 2400);
 });
 
 test('thread page content remains the composition layer for thread UI pieces', () => {

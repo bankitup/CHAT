@@ -4,6 +4,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -15,13 +16,18 @@ import {
   configureInlineAudioElement,
   hasRecoverableThreadVoicePlaybackLocator,
   prepareThreadVoicePlaybackSource,
-  resolveThreadVoiceDevicePlaybackSupport,
+  resolveThreadVoicePreferredPlaybackSource,
   resolveThreadVoicePlaybackSourceSnapshot,
   writeThreadVoicePlaybackCacheEntry,
   type ThreadVoiceDevicePlaybackSupport,
   type ThreadVoicePlaybackCacheEntry,
 } from './voice-playback-source';
-import { resolveMessagingAttachmentMimeType } from '@/modules/messaging/media/message-assets';
+import {
+  resolveMessagingAttachmentMimeType,
+  resolveMessagingVoicePlaybackSourceOptions,
+  type MessagingVoicePlaybackSourceOption,
+  type MessagingVoicePlaybackVariantRecord,
+} from '@/modules/messaging/media/message-assets';
 import {
   logVoiceThreadDiagnostic,
   logVoiceThreadProof,
@@ -42,6 +48,7 @@ type ThreadVoiceAttachment = {
   mimeType?: string | null;
   objectPath?: string;
   signedUrl: string | null;
+  voicePlaybackVariants?: MessagingVoicePlaybackVariantRecord[] | null;
 };
 
 type VoiceMessageRenderState =
@@ -334,6 +341,52 @@ function resolveAudioCanPlayTypeResult(
   return result || 'no';
 }
 
+function resolveThreadVoicePlaybackSourceById(
+  playbackSources: readonly MessagingVoicePlaybackSourceOption[],
+  sourceId: string | null | undefined,
+) {
+  if (!sourceId) {
+    return null;
+  }
+
+  return (
+    playbackSources.find((playbackSource) => playbackSource.sourceId === sourceId) ??
+    null
+  );
+}
+
+function areVoicePlaybackVariantsEqual(
+  left: ThreadVoiceAttachment['voicePlaybackVariants'],
+  right: ThreadVoiceAttachment['voicePlaybackVariants'],
+) {
+  if (left === right) {
+    return true;
+  }
+
+  const normalizedLeft = left ?? [];
+  const normalizedRight = right ?? [];
+
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return false;
+  }
+
+  return normalizedLeft.every((variant, index) => {
+    const nextVariant = normalizedRight[index];
+
+    return (
+      variant.assetId === nextVariant?.assetId &&
+      variant.durationMs === nextVariant.durationMs &&
+      variant.fileName === nextVariant.fileName &&
+      variant.mimeType === nextVariant.mimeType &&
+      variant.role === nextVariant.role &&
+      variant.source === nextVariant.source &&
+      variant.storageBucket === nextVariant.storageBucket &&
+      variant.storageObjectPath === nextVariant.storageObjectPath &&
+      variant.transportSourceUrl === nextVariant.transportSourceUrl
+    );
+  });
+}
+
 function resolveVoiceMessageRuntimeModel(input: {
   canPreparePlaybackSource: boolean;
   devicePlaybackSupportStatus: ThreadVoiceDevicePlaybackSupport['status'];
@@ -535,7 +588,11 @@ function areMessageAttachmentValuesEqual(
     left.bucket === right.bucket &&
     left.mimeType === right.mimeType &&
     left.objectPath === right.objectPath &&
-    left.messageId === right.messageId
+    left.messageId === right.messageId &&
+    areVoicePlaybackVariantsEqual(
+      left.voicePlaybackVariants,
+      right.voicePlaybackVariants,
+    )
   );
 }
 
@@ -552,12 +609,6 @@ function ThreadVoiceMessageBubble({
   const attachmentTransportSourceUrl = normalizeAttachmentSignedUrl(
     attachment?.signedUrl,
   );
-  const voiceFileName = attachment?.fileName?.trim() || null;
-  const voiceFileExtension = getThreadVoiceFileExtension(voiceFileName);
-  const storedVoiceMimeType = resolveMessagingAttachmentMimeType({
-    fileName: voiceFileName,
-    mimeType: attachment?.mimeType ?? null,
-  });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [devicePlaybackSupport, setDevicePlaybackSupport] =
     useState<ThreadVoiceDevicePlaybackSupport>(
@@ -574,13 +625,22 @@ function ThreadVoiceMessageBubble({
     attachment?.durationMs ?? null,
   );
   const [playbackFailed, setPlaybackFailed] = useState(false);
-  const [resolvedTransportSourceUrl, setResolvedTransportSourceUrl] = useState<
-    string | null
-  >(attachmentTransportSourceUrl);
   const [
-    ignoredAttachmentTransportSourceUrl,
-    setIgnoredAttachmentTransportSourceUrl,
-  ] = useState<string | null>(null);
+    resolvedPlaybackSourceState,
+    setResolvedPlaybackSourceState,
+  ] = useState<{
+    sourceId: string;
+    transportSourceUrl: string | null;
+  } | null>(null);
+  const [
+    ignoredPlaybackTransportState,
+    setIgnoredPlaybackTransportState,
+  ] = useState<{
+    sourceId: string;
+    transportSourceUrl: string | null;
+  } | null>(null);
+  const [preferredDevicePlaybackSourceId, setPreferredDevicePlaybackSourceId] =
+    useState<string | null>(null);
   const [didFailPlaybackSourcePrepare, setDidFailPlaybackSourcePrepare] =
     useState(false);
   const [isPreparingPlaybackSource, setIsPreparingPlaybackSource] =
@@ -604,36 +664,122 @@ function ThreadVoiceMessageBubble({
     startX: number;
     startY: number;
   } | null>(null);
+  const voicePlaybackSourceOptions = useMemo(
+    () =>
+      resolveMessagingVoicePlaybackSourceOptions({
+        original: attachment
+          ? {
+              assetId: attachment.id,
+              durationMs: attachment.durationMs ?? null,
+              fileName: attachment.fileName ?? null,
+              mimeType: attachment.mimeType ?? null,
+              source: 'supabase-storage',
+              storageBucket: attachment.bucket ?? null,
+              storageObjectPath: attachment.objectPath ?? null,
+              transportSourceUrl: attachmentTransportSourceUrl,
+            }
+          : null,
+        variants:
+          attachment?.voicePlaybackVariants?.map((variant) => ({
+            ...variant,
+            transportSourceUrl: normalizeAttachmentSignedUrl(
+              variant.transportSourceUrl,
+            ),
+          })) ?? null,
+      }),
+    [attachment, attachmentTransportSourceUrl],
+  );
+  const runtimeVoicePlaybackSources = useMemo(
+    () =>
+      voicePlaybackSourceOptions.map((playbackSource) => {
+        let transportSourceUrl = normalizeAttachmentSignedUrl(
+          playbackSource.transportSourceUrl,
+        );
+
+        if (
+          ignoredPlaybackTransportState?.sourceId === playbackSource.sourceId &&
+          transportSourceUrl === ignoredPlaybackTransportState.transportSourceUrl
+        ) {
+          transportSourceUrl = null;
+        }
+
+        if (
+          resolvedPlaybackSourceState?.sourceId === playbackSource.sourceId &&
+          resolvedPlaybackSourceState.transportSourceUrl
+        ) {
+          transportSourceUrl = resolvedPlaybackSourceState.transportSourceUrl;
+        }
+
+        return transportSourceUrl === playbackSource.transportSourceUrl
+          ? playbackSource
+          : {
+              ...playbackSource,
+              transportSourceUrl,
+            };
+      }),
+    [
+      ignoredPlaybackTransportState,
+      resolvedPlaybackSourceState,
+      voicePlaybackSourceOptions,
+    ],
+  );
+  const voicePlaybackSourceSignature = runtimeVoicePlaybackSources
+    .map((playbackSource) => playbackSource.sourceId)
+    .join('|');
+  const fallbackVoicePlaybackSource =
+    runtimeVoicePlaybackSources.find(
+      (playbackSource) => playbackSource.origin === 'original',
+    ) ??
+    runtimeVoicePlaybackSources[0] ??
+    null;
+  const activeVoicePlaybackSource =
+    resolveThreadVoicePlaybackSourceById(
+      runtimeVoicePlaybackSources,
+      resolvedPlaybackSourceState?.sourceId ?? preferredDevicePlaybackSourceId,
+    ) ?? fallbackVoicePlaybackSource;
+  const voiceFileName = activeVoicePlaybackSource?.fileName?.trim() || null;
+  const voiceFileExtension = getThreadVoiceFileExtension(voiceFileName);
+  const storedVoiceMimeType = resolveMessagingAttachmentMimeType({
+    fileName: voiceFileName,
+    mimeType: activeVoicePlaybackSource?.mimeType ?? null,
+  });
   const hasRecoverableAttachmentStorageLocator =
     hasRecoverableThreadVoicePlaybackLocator({
-      attachment,
+      attachment: activeVoicePlaybackSource
+        ? {
+            bucket: activeVoicePlaybackSource.storageBucket,
+            durationMs: activeVoicePlaybackSource.durationMs ?? null,
+            id: activeVoicePlaybackSource.assetId,
+            messageId,
+            objectPath: activeVoicePlaybackSource.storageObjectPath,
+          }
+        : null,
       expectedMessageId: messageId,
     });
-
-  const preferredTransportSourceUrl =
-    resolvedTransportSourceUrl?.trim() ||
-    (attachmentTransportSourceUrl &&
-    attachmentTransportSourceUrl !== ignoredAttachmentTransportSourceUrl
-      ? attachmentTransportSourceUrl
-      : null);
   const voicePlaybackSourceSnapshot = resolveThreadVoicePlaybackSourceSnapshot({
-    attachment: attachment
+    attachment: activeVoicePlaybackSource
       ? {
-          bucket: attachment.bucket,
-          durationMs: attachment.durationMs ?? null,
-          id: attachment.id,
-          messageId: attachment.messageId,
-          objectPath: attachment.objectPath,
+          bucket: activeVoicePlaybackSource.storageBucket,
+          durationMs: activeVoicePlaybackSource.durationMs ?? null,
+          id: activeVoicePlaybackSource.assetId,
+          messageId,
+          objectPath: activeVoicePlaybackSource.storageObjectPath,
         }
       : null,
-    ignoredTransportSourceUrl: ignoredAttachmentTransportSourceUrl,
+    ignoredTransportSourceUrl:
+      ignoredPlaybackTransportState?.sourceId === activeVoicePlaybackSource?.sourceId
+        ? ignoredPlaybackTransportState.transportSourceUrl
+        : null,
     messageId,
-    transportSourceUrl: preferredTransportSourceUrl,
+    playbackSources: runtimeVoicePlaybackSources,
+    preferredSourceId: activeVoicePlaybackSource?.sourceId ?? null,
+    transportSourceUrl: activeVoicePlaybackSource?.transportSourceUrl ?? null,
   });
   const {
     cacheKey: voicePlaybackCacheKey,
     cachedDurationMs,
     localPlaybackUrl: effectiveVoicePlaybackSourceUrl,
+    selectedSourceId: effectiveVoicePlaybackSourceId,
     shouldHydratePreparedPlayback: shouldHydratePreparedVoicePlayback,
     transportSourceUrl: effectiveVoiceTransportSourceUrl,
   } = voicePlaybackSourceSnapshot;
@@ -691,67 +837,68 @@ function ThreadVoiceMessageBubble({
   useEffect(() => {
     let isCancelled = false;
 
-    if (!audioRef.current || !storedVoiceMimeType) {
-      setDevicePlaybackSupport((current) => {
-        if (
-          current.status === 'unknown' &&
-          current.mimeType === (storedVoiceMimeType ?? null)
-        ) {
-          return current;
-        }
-
-        return {
-          ...UNKNOWN_THREAD_VOICE_DEVICE_PLAYBACK_SUPPORT,
-          mimeType: storedVoiceMimeType ?? null,
-        };
-      });
-      return;
-    }
-
     void (async () => {
-      const nextSupport = await resolveThreadVoiceDevicePlaybackSupport({
+      const selection = await resolveThreadVoicePreferredPlaybackSource({
         audio: audioRef.current,
-        mimeType: storedVoiceMimeType,
+        playbackSources: runtimeVoicePlaybackSources,
+        preferredSourceId: resolvedPlaybackSourceState?.sourceId ?? null,
       });
 
       if (isCancelled) {
         return;
       }
 
-      setDevicePlaybackSupport(nextSupport);
+      setPreferredDevicePlaybackSourceId(selection.playbackSource?.sourceId ?? null);
+      setDevicePlaybackSupport(selection.playbackSupport);
       logVoiceThreadDiagnostic('voice-device-playability-resolved', {
-        canPlayType: nextSupport.canPlayType,
+        canPlayType: selection.playbackSupport.canPlayType,
         fileExtension: voiceFileExtension,
         mediaCapabilitiesPowerEfficient:
-          nextSupport.mediaCapabilitiesPowerEfficient,
-        mediaCapabilitiesSmooth: nextSupport.mediaCapabilitiesSmooth,
-        mediaCapabilitiesSupported: nextSupport.mediaCapabilitiesSupported,
+          selection.playbackSupport.mediaCapabilitiesPowerEfficient,
+        mediaCapabilitiesSmooth:
+          selection.playbackSupport.mediaCapabilitiesSmooth,
+        mediaCapabilitiesSupported:
+          selection.playbackSupport.mediaCapabilitiesSupported,
         messageId,
-        storedMimeType: nextSupport.mimeType,
-        supportStatus: nextSupport.status,
+        playbackSourceOrigin: selection.playbackSource?.origin ?? null,
+        playbackSourceRole: selection.playbackSource?.role ?? null,
+        playbackSourceSourceId: selection.playbackSource?.sourceId ?? null,
+        storedMimeType: selection.playbackSupport.mimeType,
+        supportStatus: selection.playbackSupport.status,
       });
       logVoiceThreadProof('voice-device-playability-resolved', {
-        canPlayType: nextSupport.canPlayType,
+        canPlayType: selection.playbackSupport.canPlayType,
         fileExtension: voiceFileExtension,
         mediaCapabilitiesPowerEfficient:
-          nextSupport.mediaCapabilitiesPowerEfficient,
-        mediaCapabilitiesSmooth: nextSupport.mediaCapabilitiesSmooth,
-        mediaCapabilitiesSupported: nextSupport.mediaCapabilitiesSupported,
+          selection.playbackSupport.mediaCapabilitiesPowerEfficient,
+        mediaCapabilitiesSmooth:
+          selection.playbackSupport.mediaCapabilitiesSmooth,
+        mediaCapabilitiesSupported:
+          selection.playbackSupport.mediaCapabilitiesSupported,
         messageId,
-        storedMimeType: nextSupport.mimeType,
-        supportStatus: nextSupport.status,
+        playbackSourceOrigin: selection.playbackSource?.origin ?? null,
+        playbackSourceRole: selection.playbackSource?.role ?? null,
+        playbackSourceSourceId: selection.playbackSource?.sourceId ?? null,
+        storedMimeType: selection.playbackSupport.mimeType,
+        supportStatus: selection.playbackSupport.status,
       });
     })();
 
     return () => {
       isCancelled = true;
     };
-  }, [messageId, storedVoiceMimeType, voiceFileExtension]);
+  }, [
+    messageId,
+    resolvedPlaybackSourceState?.sourceId,
+    runtimeVoicePlaybackSources,
+    voiceFileExtension,
+  ]);
 
   useEffect(() => {
     const proofSnapshotKey = [
       messageId,
       voicePlaybackCacheKey ?? '',
+      effectiveVoicePlaybackSourceId ?? activeVoicePlaybackSource?.sourceId ?? '',
       effectiveVoicePlaybackSourceUrl ? 'playback' : 'no-playback',
       effectiveVoiceTransportSourceUrl ? 'transport' : 'no-transport',
       shouldHydratePreparedVoicePlayback ? 'hydrate' : 'cold',
@@ -771,7 +918,11 @@ function ThreadVoiceMessageBubble({
       hasPlaybackSource: Boolean(effectiveVoicePlaybackSourceUrl),
       hasTransportSource: Boolean(effectiveVoiceTransportSourceUrl),
       messageId,
+      playbackSourceOrigin: activeVoicePlaybackSource?.origin ?? null,
       playbackSourceKind,
+      playbackSourceRole: activeVoicePlaybackSource?.role ?? null,
+      playbackSourceSourceId:
+        effectiveVoicePlaybackSourceId ?? activeVoicePlaybackSource?.sourceId ?? null,
       renderReason: voiceRenderReason,
       shouldHydratePreparedPlayback: shouldHydratePreparedVoicePlayback,
       storedMimeType: storedVoiceMimeType,
@@ -782,6 +933,10 @@ function ThreadVoiceMessageBubble({
   }, [
     devicePlaybackSupport.canPlayType,
     devicePlaybackSupport.status,
+    activeVoicePlaybackSource?.origin,
+    activeVoicePlaybackSource?.role,
+    activeVoicePlaybackSource?.sourceId,
+    effectiveVoicePlaybackSourceId,
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
     messageId,
@@ -860,18 +1015,18 @@ function ThreadVoiceMessageBubble({
 
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? cachedDurationMs ?? null);
-    setResolvedTransportSourceUrl(attachmentTransportSourceUrl);
+    setResolvedPlaybackSourceState(null);
     setDidFailPlaybackSourcePrepare(false);
-    setIgnoredAttachmentTransportSourceUrl(null);
+    setIgnoredPlaybackTransportState(null);
+    setPreferredDevicePlaybackSourceId(null);
     clearPendingPlaybackIntent();
     setPlaybackFailed(false);
   }, [
-    attachmentTransportSourceUrl,
     attachment?.durationMs,
     attachment?.id,
-    attachment?.signedUrl,
     cachedDurationMs,
     clearPendingPlaybackIntent,
+    voicePlaybackSourceSignature,
   ]);
 
   const rememberVoicePlaybackCacheEntry = useCallback(
@@ -947,12 +1102,9 @@ function ThreadVoiceMessageBubble({
   }, [effectiveVoicePlaybackSourceUrl, hasPendingPlaybackIntent, voiceState]);
 
   const preparePlaybackSource = useCallback(async () => {
-    const attachmentId = attachment?.id ?? null;
-    const attachmentMessageId = attachment?.messageId ?? null;
-
     if (
       !effectiveVoiceTransportSourceUrl &&
-      (!canPreparePlaybackSource || !attachmentId || !attachmentMessageId)
+      (!canPreparePlaybackSource || !activeVoicePlaybackSource)
     ) {
       return effectiveVoicePlaybackSourceUrl ?? effectiveVoiceTransportSourceUrl;
     }
@@ -974,19 +1126,26 @@ function ThreadVoiceMessageBubble({
           mediaCapabilitiesSupported:
             devicePlaybackSupport.mediaCapabilitiesSupported,
           messageId,
+          playbackSourceOrigin: activeVoicePlaybackSource?.origin ?? null,
           playbackSourceKind,
+          playbackSourceRole: activeVoicePlaybackSource?.role ?? null,
+          playbackSourceSourceId: activeVoicePlaybackSource?.sourceId ?? null,
           storedMimeType: storedVoiceMimeType,
           supportStatus: devicePlaybackSupport.status,
           voiceState,
         });
         const resolution = await prepareThreadVoicePlaybackSource({
           cacheKey: voicePlaybackCacheKey,
+          conversationId,
           locator: {
-            attachmentId,
+            attachmentId: activeVoicePlaybackSource?.assetId ?? null,
             conversationId,
-            messageId: attachmentMessageId,
+            messageId,
           },
+          messageId,
           onDiagnostic: logVoiceThreadDiagnostic,
+          playbackSources: runtimeVoicePlaybackSources,
+          preferredSourceId: activeVoicePlaybackSource?.sourceId ?? null,
           transportSourceUrl: effectiveVoiceTransportSourceUrl,
         });
 
@@ -997,13 +1156,15 @@ function ThreadVoiceMessageBubble({
         const nextTransportSourceUrl = resolution.transportSourceUrl;
 
         if (nextTransportSourceUrl) {
-          setIgnoredAttachmentTransportSourceUrl(null);
+          setIgnoredPlaybackTransportState(null);
           setDidFailPlaybackSourcePrepare(false);
           setPlaybackFailed(false);
-          setResolvedTransportSourceUrl(nextTransportSourceUrl);
-          rememberVoicePlaybackCacheEntry({
-            sourceUrl: nextTransportSourceUrl,
-          });
+          if (resolution.selectedPlaybackSource) {
+            setResolvedPlaybackSourceState({
+              sourceId: resolution.selectedPlaybackSource.sourceId,
+              transportSourceUrl: nextTransportSourceUrl,
+            });
+          }
         }
 
         logVoiceThreadProof('voice-source-prepared', {
@@ -1014,10 +1175,22 @@ function ThreadVoiceMessageBubble({
           mediaCapabilitiesSupported:
             devicePlaybackSupport.mediaCapabilitiesSupported,
           messageId,
+          playbackSourceOrigin:
+            resolution.selectedPlaybackSource?.origin ??
+            activeVoicePlaybackSource?.origin ??
+            null,
           playbackSourceKind: resolveThreadVoicePlaybackSourceKind({
             playbackSourceUrl: resolution.playbackSourceUrl,
             transportSourceUrl: nextTransportSourceUrl,
           }),
+          playbackSourceRole:
+            resolution.selectedPlaybackSource?.role ??
+            activeVoicePlaybackSource?.role ??
+            null,
+          playbackSourceSourceId:
+            resolution.selectedPlaybackSource?.sourceId ??
+            activeVoicePlaybackSource?.sourceId ??
+            null,
           status: resolution.status,
           storedMimeType: storedVoiceMimeType,
           supportStatus: devicePlaybackSupport.status,
@@ -1033,8 +1206,7 @@ function ThreadVoiceMessageBubble({
     preparePlaybackSourcePromiseRef.current = promise;
     return promise;
   }, [
-    attachment?.id,
-    attachment?.messageId,
+    activeVoicePlaybackSource,
     canPreparePlaybackSource,
     conversationId,
     devicePlaybackSupport.canPlayType,
@@ -1042,8 +1214,8 @@ function ThreadVoiceMessageBubble({
     devicePlaybackSupport.status,
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
+    runtimeVoicePlaybackSources,
     messageId,
-    rememberVoicePlaybackCacheEntry,
     playbackSourceKind,
     voiceState,
     voicePlaybackCacheKey,
@@ -1296,25 +1468,32 @@ function ThreadVoiceMessageBubble({
 
   useEffect(() => {
     logVoiceThreadDiagnostic('render-state', {
-      attachmentId: attachment?.id ?? null,
-      attachmentMessageId: attachment?.messageId ?? null,
+      attachmentId: activeVoicePlaybackSource?.assetId ?? attachment?.id ?? null,
+      attachmentMessageId: messageId,
       canPreparePlaybackSource,
       conversationId,
       hasPlaybackSource,
       hasTransportSource: Boolean(effectiveVoiceTransportSourceUrl),
       isOwnMessage,
       messageId,
+      playbackSourceOrigin: activeVoicePlaybackSource?.origin ?? null,
+      playbackSourceRole: activeVoicePlaybackSource?.role ?? null,
+      playbackSourceSourceId: activeVoicePlaybackSource?.sourceId ?? null,
       renderReason: voiceRenderReason,
       renderState: voiceState,
       storageLocatorPresent: Boolean(
-        attachment?.bucket && attachment?.objectPath,
+        activeVoicePlaybackSource?.storageBucket &&
+          activeVoicePlaybackSource.storageObjectPath,
       ),
     });
   }, [
-    attachment?.bucket,
     attachment?.id,
-    attachment?.messageId,
-    attachment?.objectPath,
+    activeVoicePlaybackSource?.assetId,
+    activeVoicePlaybackSource?.origin,
+    activeVoicePlaybackSource?.role,
+    activeVoicePlaybackSource?.sourceId,
+    activeVoicePlaybackSource?.storageBucket,
+    activeVoicePlaybackSource?.storageObjectPath,
     canPreparePlaybackSource,
     conversationId,
     effectiveVoiceTransportSourceUrl,
@@ -1967,11 +2146,16 @@ function ThreadVoiceMessageBubble({
               effectiveVoiceTransportSourceUrl &&
               hasRecoverableAttachmentStorageLocator
             ) {
-              setIgnoredAttachmentTransportSourceUrl(
-                effectiveVoiceTransportSourceUrl,
+              setIgnoredPlaybackTransportState(
+                activeVoicePlaybackSource
+                  ? {
+                      sourceId: activeVoicePlaybackSource.sourceId,
+                      transportSourceUrl: effectiveVoiceTransportSourceUrl,
+                    }
+                  : null,
               );
               setDidFailPlaybackSourcePrepare(false);
-              setResolvedTransportSourceUrl(null);
+              setResolvedPlaybackSourceState(null);
               setPlaybackFailed(false);
               setPlaybackState('idle');
               return;
@@ -2064,12 +2248,16 @@ function ThreadVoiceMessageBubble({
             ) {
               void prepareThreadVoicePlaybackSource({
                 cacheKey: voicePlaybackCacheKey,
+                conversationId,
                 locator: {
-                  attachmentId: attachment?.id ?? null,
+                  attachmentId: activeVoicePlaybackSource?.assetId ?? null,
                   conversationId,
-                  messageId: attachment?.messageId ?? null,
+                  messageId,
                 },
+                messageId,
                 onDiagnostic: logVoiceThreadDiagnostic,
+                playbackSources: runtimeVoicePlaybackSources,
+                preferredSourceId: activeVoicePlaybackSource?.sourceId ?? null,
                 transportSourceUrl: effectiveVoiceTransportSourceUrl,
               });
             }

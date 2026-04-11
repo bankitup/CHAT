@@ -11,6 +11,10 @@ For every scenario below:
 - slow completion must still look alive
 - final success or failure must be explicit
 
+Voice-specific cross-device verification lives in:
+
+- [voice-cross-device-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-cross-device-manual-matrix.md)
+
 ## Matrix
 
 | Area | Scenario | Steps | Expected result | Evidence to watch |
@@ -24,6 +28,7 @@ For every scenario below:
 | Chat send | Group camera capture send | Use camera mode, take photo, send | Same as gallery path, no inflated pending shell, no duplicate send | same as above |
 | Chat send | Group file send | Pick non-image file and send | Immediate pending state, final attachment row appears once, no duplicate message shell | same as above |
 | Chat send | Voice send | Record voice note, send, tap replay, pause, resume | Send acknowledges immediately, replay works, repeated taps do not destabilize page | voice runtime files under `/app/(app)/chat/[conversationId]` |
+| Chat send | Voice cross-device matrix | Run the dedicated desktop/mobile matrix for Chrome, Safari, and Android Chrome where available | Playback either succeeds or lands in explicit unsupported/failed state; it must not masquerade as generic loading | `/docs/voice-cross-device-manual-matrix.md`, `/docs/voice-mobile-playback-proof.md` |
 | Encrypted DM | Text send | In DM, type text, send | Local ack appears immediately, one committed encrypted message appears, no duplicate row | `/app/(app)/chat/[conversationId]/encrypted-dm-composer-form.tsx`, `/app/api/messaging/dm-e2ee/send/route.ts` |
 | Encrypted DM | Text + attachment send | In DM, attach photo or file and type text, send | One optimistic row, one committed row, no split-send behavior | same as above plus `/src/modules/messaging/data/server.ts#sendEncryptedDmMessageWithAttachment` |
 | Encrypted DM | Attachment-only send | In DM, attach file without text | Existing attachment-only flow still works cleanly | same as above |

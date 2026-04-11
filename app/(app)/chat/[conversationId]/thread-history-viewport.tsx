@@ -64,6 +64,7 @@ import { resolveThreadScrollTarget } from './thread-scroll';
 import { logVoiceThreadProof } from './thread-voice-diagnostics';
 import { MemoizedThreadVoiceMessageBubble } from './thread-voice-message-bubble';
 import { configureInlineAudioElement } from './voice-playback-source';
+import type { MessagingVoicePlaybackVariantRecord } from '@/modules/messaging/media/message-assets';
 
 type ConversationMessageRow = {
   body: string | null;
@@ -95,6 +96,7 @@ type MessageAttachment = {
   objectPath?: string;
   signedUrl: string | null;
   sizeBytes: number | null;
+  voicePlaybackVariants?: MessagingVoicePlaybackVariantRecord[] | null;
 };
 
 type MessageReactionGroup = {
@@ -2266,7 +2268,43 @@ function areMessageAttachmentsEqual(
       attachment.bucket === nextAttachment.bucket &&
       attachment.objectPath === nextAttachment.objectPath &&
       attachment.messageId === nextAttachment.messageId &&
-      attachment.createdAt === nextAttachment.createdAt
+      attachment.createdAt === nextAttachment.createdAt &&
+      areVoicePlaybackVariantsEqual(
+        attachment.voicePlaybackVariants,
+        nextAttachment.voicePlaybackVariants,
+      )
+    );
+  });
+}
+
+function areVoicePlaybackVariantsEqual(
+  left: MessageAttachment['voicePlaybackVariants'],
+  right: MessageAttachment['voicePlaybackVariants'],
+) {
+  if (left === right) {
+    return true;
+  }
+
+  const normalizedLeft = left ?? [];
+  const normalizedRight = right ?? [];
+
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return false;
+  }
+
+  return normalizedLeft.every((variant, index) => {
+    const nextVariant = normalizedRight[index];
+
+    return (
+      variant.assetId === nextVariant?.assetId &&
+      variant.durationMs === nextVariant.durationMs &&
+      variant.fileName === nextVariant.fileName &&
+      variant.mimeType === nextVariant.mimeType &&
+      variant.role === nextVariant.role &&
+      variant.source === nextVariant.source &&
+      variant.storageBucket === nextVariant.storageBucket &&
+      variant.storageObjectPath === nextVariant.storageObjectPath &&
+      variant.transportSourceUrl === nextVariant.transportSourceUrl
     );
   });
 }
