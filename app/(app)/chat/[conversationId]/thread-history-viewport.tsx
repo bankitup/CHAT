@@ -271,6 +271,7 @@ type VoiceMessageRendererModel = {
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
 const IMAGE_PREVIEW_CLICK_SUPPRESSION_MS = 420;
+const MESSAGE_QUICK_ACTION_LONG_PRESS_MS = 280;
 const PREPEND_SCROLL_RESTORE_IDLE_MS = 72;
 const PREPEND_SCROLL_RESTORE_MAX_MS = 480;
 const ENCRYPTED_DM_MISSING_ENVELOPE_RECOVERY_REASON =
@@ -1462,12 +1463,25 @@ function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
   );
 }
 
+function isVoiceInteractiveMessageTarget(target: EventTarget | null) {
+  const targetElement = getMessageInteractiveTargetElement(target);
+
+  if (!targetElement) {
+    return false;
+  }
+
+  return Boolean(
+    targetElement.closest('[data-message-voice-interactive="true"]'),
+  );
+}
+
 function ThreadVoiceMessageBubble({
   attachment,
   conversationId,
   isOwnMessage,
   language,
   messageId,
+  onRequestQuickActions,
   stageHint = null,
 }: {
   attachment: MessageAttachment | null;
@@ -1475,6 +1489,7 @@ function ThreadVoiceMessageBubble({
   isOwnMessage: boolean;
   language: AppLanguage;
   messageId: string;
+  onRequestQuickActions?: (trigger: 'contextmenu' | 'long-press') => void;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
   const t = getTranslations(language);
@@ -1507,11 +1522,18 @@ function ThreadVoiceMessageBubble({
   const [hasPendingPlaybackIntent, setHasPendingPlaybackIntent] = useState(false);
   const preparePlaybackSourcePromiseRef =
     useRef<Promise<string | null> | null>(null);
+  const playbackIntentVersionRef = useRef(0);
+  const queuedPlaybackIntentVersionRef = useRef<number | null>(null);
   const lastVoicePointerActivationAtRef = useRef(0);
+  const lastVoiceLongPressAtRef = useRef(0);
   const claimedPlaybackOwnerVersionRef = useRef<number | null>(null);
   const lastVoiceProofSnapshotRef = useRef<string | null>(null);
+  const voiceLongPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const voiceTapGestureRef = useRef<{
     didMove: boolean;
+    didTriggerLongPress: boolean;
     pointerId: number;
     startX: number;
     startY: number;
@@ -1631,10 +1653,45 @@ function ThreadVoiceMessageBubble({
     voiceState,
   ]);
 
+  const clearVoiceLongPress = useCallback(() => {
+    if (voiceLongPressTimeoutRef.current) {
+      clearTimeout(voiceLongPressTimeoutRef.current);
+      voiceLongPressTimeoutRef.current = null;
+    }
+  }, []);
+
+  const invalidatePlaybackStartRequests = useCallback(() => {
+    playbackIntentVersionRef.current += 1;
+    queuedPlaybackIntentVersionRef.current = null;
+    return playbackIntentVersionRef.current;
+  }, []);
+
+  const clearPendingPlaybackIntent = useCallback(
+    (options?: { clearGlobalIntent?: boolean }) => {
+      invalidatePlaybackStartRequests();
+      setHasPendingPlaybackIntent(false);
+
+      if (options?.clearGlobalIntent && hasActiveThreadVoicePlaybackIntent(messageId)) {
+        setActiveThreadVoicePlaybackIntent(null);
+      }
+    },
+    [invalidatePlaybackStartRequests, messageId],
+  );
+
+  const armPendingPlaybackIntent = useCallback(() => {
+    const nextIntentVersion = invalidatePlaybackStartRequests();
+    requestActiveThreadVoicePlaybackIntent(messageId);
+    setHasPendingPlaybackIntent(true);
+    return nextIntentVersion;
+  }, [invalidatePlaybackStartRequests, messageId]);
+
   useEffect(() => {
     const audio = audioRef.current;
 
     return () => {
+      clearVoiceLongPress();
+      invalidatePlaybackStartRequests();
+
       if (hasActiveThreadVoicePlaybackIntent(messageId)) {
         setActiveThreadVoicePlaybackIntent(null);
       }
@@ -1652,14 +1709,14 @@ function ThreadVoiceMessageBubble({
       claimedPlaybackOwnerVersionRef.current = null;
       audio.src = '';
     };
-  }, [messageId]);
+  }, [clearVoiceLongPress, invalidatePlaybackStartRequests, messageId]);
 
   useEffect(() => {
     setResolvedDurationMs(attachment?.durationMs ?? cachedDurationMs ?? null);
     setResolvedTransportSourceUrl(attachmentTransportSourceUrl);
     setDidFailPlaybackSourcePrepare(false);
     setIgnoredAttachmentTransportSourceUrl(null);
-    setHasPendingPlaybackIntent(false);
+    clearPendingPlaybackIntent();
     setPlaybackFailed(false);
   }, [
     attachmentTransportSourceUrl,
@@ -1667,6 +1724,7 @@ function ThreadVoiceMessageBubble({
     attachment?.id,
     attachment?.signedUrl,
     cachedDurationMs,
+    clearPendingPlaybackIntent,
   ]);
 
   const rememberVoicePlaybackCacheEntry = useCallback(
@@ -1894,7 +1952,7 @@ function ThreadVoiceMessageBubble({
           messageId,
           ownerVersion,
         });
-        setHasPendingPlaybackIntent(false);
+        clearPendingPlaybackIntent();
         return true;
       } catch (error) {
         logVoiceThreadProof('audio-play-rejected', {
@@ -1912,30 +1970,45 @@ function ThreadVoiceMessageBubble({
         if (claimedPlaybackOwnerVersionRef.current === ownerVersion) {
           claimedPlaybackOwnerVersionRef.current = null;
         }
-        setHasPendingPlaybackIntent(false);
+        clearPendingPlaybackIntent();
         setPlaybackFailed(true);
         setPlaybackState('failed');
         return false;
       }
     },
-    [effectiveVoicePlaybackSourceUrl, messageId],
+    [clearPendingPlaybackIntent, effectiveVoicePlaybackSourceUrl, messageId],
   );
 
   const startPlayback = useCallback(
-    (playbackSourceOverride?: string | null) => {
+    (
+      playbackSourceOverride?: string | null,
+      expectedIntentVersion?: number | null,
+    ) => {
       return runActiveThreadVoicePlaybackTransition(async () => {
+        if (
+          expectedIntentVersion != null &&
+          playbackIntentVersionRef.current !== expectedIntentVersion
+        ) {
+          logVoiceThreadDiagnostic('playback-start-stopped-stale-intent', {
+            expectedIntentVersion,
+            messageId,
+            playbackIntentVersion: playbackIntentVersionRef.current,
+          });
+          return false;
+        }
+
         if (!hasActiveThreadVoicePlaybackIntent(messageId)) {
           logVoiceThreadDiagnostic('playback-start-stopped-not-intended', {
             messageId,
           });
-          setHasPendingPlaybackIntent(false);
+          clearPendingPlaybackIntent();
           return false;
         }
 
         return startPlaybackUnsafe(playbackSourceOverride);
       });
     },
-    [messageId, startPlaybackUnsafe],
+    [clearPendingPlaybackIntent, messageId, startPlaybackUnsafe],
   );
 
   useEffect(() => {
@@ -1977,6 +2050,8 @@ function ThreadVoiceMessageBubble({
         setActiveThreadVoicePlaybackIntent(null);
       }
 
+      clearPendingPlaybackIntent();
+
       if (audio) {
         audio.pause();
         releaseActiveThreadVoicePlayback(
@@ -1998,7 +2073,7 @@ function ThreadVoiceMessageBubble({
     setPlaybackState((current) =>
       current === 'failed' || current === 'buffering' ? current : 'idle',
     );
-  }, [effectiveVoicePlaybackSourceUrl, messageId]);
+  }, [clearPendingPlaybackIntent, effectiveVoicePlaybackSourceUrl, messageId]);
 
   useEffect(() => {
     if (!hasPendingPlaybackIntent) {
@@ -2009,7 +2084,7 @@ function ThreadVoiceMessageBubble({
       logVoiceThreadDiagnostic('playback-intent-cleared-not-active-owner', {
         messageId,
       });
-      setHasPendingPlaybackIntent(false);
+      clearPendingPlaybackIntent();
       return;
     }
 
@@ -2034,19 +2109,32 @@ function ThreadVoiceMessageBubble({
           messageId,
           voiceState,
         });
-        setHasPendingPlaybackIntent(false);
+        clearPendingPlaybackIntent();
       }
 
       return;
     }
 
+    const currentIntentVersion = playbackIntentVersionRef.current;
+
+    if (queuedPlaybackIntentVersionRef.current === currentIntentVersion) {
+      logVoiceThreadDiagnostic('playback-intent-start-already-queued', {
+        intentVersion: currentIntentVersion,
+        messageId,
+      });
+      return;
+    }
+
+    queuedPlaybackIntentVersionRef.current = currentIntentVersion;
     logVoiceThreadDiagnostic('playback-intent-starting-audio', {
       hasPlaybackSource: Boolean(effectiveVoicePlaybackSourceUrl),
+      intentVersion: currentIntentVersion,
       messageId,
     });
-    void startPlayback(effectiveVoicePlaybackSourceUrl);
+    void startPlayback(effectiveVoicePlaybackSourceUrl, currentIntentVersion);
   }, [
     canPreparePlaybackSource,
+    clearPendingPlaybackIntent,
     effectiveVoicePlaybackSourceUrl,
     hasPendingPlaybackIntent,
     isPreparingPlaybackSource,
@@ -2095,8 +2183,7 @@ function ThreadVoiceMessageBubble({
         ownershipStatus: ownership.status,
       });
       setPlaybackFailed(false);
-      requestActiveThreadVoicePlaybackIntent(messageId);
-      setHasPendingPlaybackIntent(true);
+      armPendingPlaybackIntent();
       if (canPreparePlaybackSource && !isPreparingPlaybackSource) {
         void preparePlaybackSource();
       }
@@ -2115,8 +2202,7 @@ function ThreadVoiceMessageBubble({
         ownershipStatus: ownership.status,
       });
       if (canPreparePlaybackSource) {
-        requestActiveThreadVoicePlaybackIntent(messageId);
-        setHasPendingPlaybackIntent(true);
+        armPendingPlaybackIntent();
         if (!isPreparingPlaybackSource) {
           void preparePlaybackSource();
         }
@@ -2130,10 +2216,7 @@ function ThreadVoiceMessageBubble({
         ownerVersion: ownership.ownerVersion,
         playbackState,
       });
-      if (hasActiveThreadVoicePlaybackIntent(messageId)) {
-        setActiveThreadVoicePlaybackIntent(null);
-      }
-      setHasPendingPlaybackIntent(false);
+      clearPendingPlaybackIntent({ clearGlobalIntent: true });
       audio.pause();
       return;
     }
@@ -2144,8 +2227,7 @@ function ThreadVoiceMessageBubble({
         messageId,
         ownerVersion: ownership.ownerVersion,
       });
-      requestActiveThreadVoicePlaybackIntent(messageId);
-      setHasPendingPlaybackIntent(true);
+      armPendingPlaybackIntent();
       if (
         !effectiveVoicePlaybackSourceUrl &&
         canPreparePlaybackSource &&
@@ -2161,7 +2243,7 @@ function ThreadVoiceMessageBubble({
         activeOwnerMessageId: activePlaybackSnapshot.messageId,
         messageId,
       });
-      setHasPendingPlaybackIntent(false);
+      clearPendingPlaybackIntent();
       audio.pause();
       return;
     }
@@ -2180,12 +2262,13 @@ function ThreadVoiceMessageBubble({
         messageId,
         playbackState,
       });
-      requestActiveThreadVoicePlaybackIntent(messageId);
-      setHasPendingPlaybackIntent(true);
+      armPendingPlaybackIntent();
       return;
     }
   }, [
+    armPendingPlaybackIntent,
     canPreparePlaybackSource,
+    clearPendingPlaybackIntent,
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
     hasPlaybackSource,
@@ -2210,12 +2293,48 @@ function ThreadVoiceMessageBubble({
   const handleVoiceSurfacePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       if (event.button === 0) {
+        const pointerId = event.pointerId;
+        const pointerType = event.pointerType;
+
         voiceTapGestureRef.current = {
           didMove: false,
+          didTriggerLongPress: false,
           pointerId: event.pointerId,
           startX: event.clientX,
           startY: event.clientY,
         };
+        clearVoiceLongPress();
+        logVoiceThreadProof('gesture-long-press-armed', {
+          input: 'pointer',
+          messageId,
+          pointerType,
+        });
+        voiceLongPressTimeoutRef.current = setTimeout(() => {
+          voiceLongPressTimeoutRef.current = null;
+          const activeGesture = voiceTapGestureRef.current;
+
+          if (
+            !activeGesture ||
+            activeGesture.pointerId !== pointerId ||
+            activeGesture.didMove ||
+            activeGesture.didTriggerLongPress
+          ) {
+            return;
+          }
+
+          activeGesture.didTriggerLongPress = true;
+          lastVoiceLongPressAtRef.current = Date.now();
+          logVoiceThreadProof('gesture-long-press-recognized', {
+            input: 'pointer',
+            messageId,
+            pointerType,
+          });
+          logVoiceThreadProof('gesture-popup-open-entered', {
+            messageId,
+            trigger: 'voice-long-press',
+          });
+          onRequestQuickActions?.('long-press');
+        }, MESSAGE_QUICK_ACTION_LONG_PRESS_MS);
 
         if (event.pointerType !== 'mouse') {
           event.preventDefault();
@@ -2223,7 +2342,7 @@ function ThreadVoiceMessageBubble({
       }
       event.stopPropagation();
     },
-    [],
+    [clearVoiceLongPress, messageId, onRequestQuickActions],
   );
 
   const handleVoiceSurfacePointerMove = useCallback(
@@ -2239,15 +2358,17 @@ function ThreadVoiceMessageBubble({
         Math.abs(event.clientY - activeGesture.startY) > 10
       ) {
         activeGesture.didMove = true;
+        clearVoiceLongPress();
       }
 
       event.stopPropagation();
     },
-    [],
+    [clearVoiceLongPress],
   );
 
   const handleVoiceSurfacePointerUp = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
+      clearVoiceLongPress();
       if (
         voiceTapGestureRef.current?.pointerId === event.pointerId
       ) {
@@ -2255,15 +2376,22 @@ function ThreadVoiceMessageBubble({
       }
       event.stopPropagation();
     },
-    [],
+    [clearVoiceLongPress],
   );
 
   const handleVoiceSurfaceContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
       event.stopPropagation();
+      clearVoiceLongPress();
+      lastVoiceLongPressAtRef.current = Date.now();
+      logVoiceThreadProof('gesture-popup-open-entered', {
+        messageId,
+        trigger: 'voice-contextmenu',
+      });
+      onRequestQuickActions?.('contextmenu');
     },
-    [],
+    [clearVoiceLongPress, messageId, onRequestQuickActions],
   );
 
   const activateVoiceFromPointer = useCallback(
@@ -2284,6 +2412,11 @@ function ThreadVoiceMessageBubble({
         messageId,
         pointerType: event.pointerType,
       });
+      logVoiceThreadProof('gesture-local-playback-entered', {
+        input: 'pointer',
+        messageId,
+        pointerType: event.pointerType,
+      });
       lastVoicePointerActivationAtRef.current = Date.now();
       void togglePlayback();
     },
@@ -2295,6 +2428,10 @@ function ThreadVoiceMessageBubble({
       event.preventDefault();
       event.stopPropagation();
 
+      if (Date.now() - lastVoiceLongPressAtRef.current < 420) {
+        return;
+      }
+
       if (Date.now() - lastVoicePointerActivationAtRef.current < 420) {
         return;
       }
@@ -2304,6 +2441,10 @@ function ThreadVoiceMessageBubble({
         messageId,
       });
       logVoiceThreadProof('tap-received', {
+        input: 'click',
+        messageId,
+      });
+      logVoiceThreadProof('gesture-local-playback-entered', {
         input: 'click',
         messageId,
       });
@@ -2332,16 +2473,27 @@ function ThreadVoiceMessageBubble({
         return;
       }
 
+      clearVoiceLongPress();
       voiceTapGestureRef.current = null;
+
+      if (activeGesture.didTriggerLongPress) {
+        event.stopPropagation();
+        return;
+      }
 
       if (activeGesture.didMove) {
         event.stopPropagation();
         return;
       }
 
+      logVoiceThreadProof('gesture-short-tap-recognized', {
+        input: 'pointer',
+        messageId,
+        pointerType: event.pointerType,
+      });
       activateVoiceFromPointer(event);
     },
-    [activateVoiceFromPointer],
+    [activateVoiceFromPointer, clearVoiceLongPress, messageId],
   );
 
   return (
@@ -2459,7 +2611,7 @@ function ThreadVoiceMessageBubble({
             claimedPlaybackOwnerVersionRef.current = null;
             event.currentTarget.currentTime = 0;
             setProgressMs(0);
-            setHasPendingPlaybackIntent(false);
+            clearPendingPlaybackIntent();
             setPlaybackState('ended');
           }}
           onError={(event) => {
@@ -2495,7 +2647,7 @@ function ThreadVoiceMessageBubble({
               return;
             }
 
-            setHasPendingPlaybackIntent(false);
+            clearPendingPlaybackIntent();
             setPlaybackFailed(true);
             setPlaybackState('failed');
           }}
@@ -2536,7 +2688,7 @@ function ThreadVoiceMessageBubble({
               claimedPlaybackOwnerVersionRef.current,
             );
             claimedPlaybackOwnerVersionRef.current = null;
-            setHasPendingPlaybackIntent(false);
+            clearPendingPlaybackIntent();
 
             if (event.currentTarget.ended) {
               return;
@@ -2559,7 +2711,7 @@ function ThreadVoiceMessageBubble({
               messageId,
               src: event.currentTarget.currentSrc || event.currentTarget.src || null,
             });
-            setHasPendingPlaybackIntent(false);
+            clearPendingPlaybackIntent();
             setPlaybackFailed(false);
             setPlaybackState('playing');
             const stablePlaybackSource =
@@ -2628,6 +2780,7 @@ const MemoizedThreadVoiceMessageBubble = memo(
     previous.isOwnMessage === next.isOwnMessage &&
     previous.language === next.language &&
     previous.messageId === next.messageId &&
+    previous.onRequestQuickActions === next.onRequestQuickActions &&
     previous.stageHint === next.stageHint &&
     areMessageAttachmentValuesEqual(previous.attachment, next.attachment),
 );
@@ -4107,6 +4260,7 @@ function ThreadMessageRowComponent({
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imagePreviewClickSuppressedUntilRef = useRef(0);
   const longPressPointerRef = useRef<{
+    isVoiceTarget: boolean;
     pointerId: number;
     startX: number;
     startY: number;
@@ -4265,6 +4419,17 @@ function ThreadMessageRowComponent({
     setIsQuickActionsOpen(false);
   }, []);
 
+  const openQuickActions = useCallback(() => {
+    if (!canShowQuickActions) {
+      return;
+    }
+
+    imagePreviewClickSuppressedUntilRef.current =
+      Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
+    clearLongPress();
+    setIsQuickActionsOpen(true);
+  }, [canShowQuickActions, clearLongPress]);
+
   useEffect(() => {
     if (canShowQuickActions) {
       return;
@@ -4410,28 +4575,53 @@ function ThreadMessageRowComponent({
 
   const handleBubblePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
+      const isVoiceTarget = isVoiceInteractiveMessageTarget(event.target);
+      const isInteractiveTarget =
+        isMessageQuickActionInteractiveTarget(event.target);
+
       if (
         !canShowQuickActions ||
         event.button !== 0 ||
-        isMessageQuickActionInteractiveTarget(event.target)
+        isInteractiveTarget
       ) {
+        if (isVoiceTarget) {
+          logVoiceThreadProof('gesture-shell-ignored-voice-target', {
+            interactiveTarget: isInteractiveTarget,
+            messageId: message.id,
+          });
+        }
         return;
       }
 
       clearLongPress();
       longPressPointerRef.current = {
+        isVoiceTarget,
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
       };
+      if (isVoiceTarget) {
+        logVoiceThreadProof('gesture-long-press-armed', {
+          messageId: message.id,
+          pointerId: event.pointerId,
+        });
+      }
       longPressTimeoutRef.current = setTimeout(() => {
-        imagePreviewClickSuppressedUntilRef.current =
-          Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
-        setIsQuickActionsOpen(true);
+        if (isVoiceTarget) {
+          logVoiceThreadProof('gesture-long-press-recognized', {
+            messageId: message.id,
+            pointerId: event.pointerId,
+          });
+          logVoiceThreadProof('gesture-popup-open-entered', {
+            messageId: message.id,
+            trigger: 'long-press',
+          });
+        }
         longPressTimeoutRef.current = null;
-      }, 280);
+        openQuickActions();
+      }, MESSAGE_QUICK_ACTION_LONG_PRESS_MS);
     },
-    [canShowQuickActions, clearLongPress],
+    [canShowQuickActions, clearLongPress, message.id, openQuickActions],
   );
 
   const handleBubblePointerMove = useCallback(
@@ -4467,6 +4657,8 @@ function ThreadMessageRowComponent({
 
   const handleBubbleContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
+      const isVoiceTarget = isVoiceInteractiveMessageTarget(event.target);
+
       if (
         !canShowQuickActions ||
         isMessageQuickActionInteractiveTarget(event.target)
@@ -4475,12 +4667,15 @@ function ThreadMessageRowComponent({
       }
 
       event.preventDefault();
-      imagePreviewClickSuppressedUntilRef.current =
-        Date.now() + IMAGE_PREVIEW_CLICK_SUPPRESSION_MS;
-      clearLongPress();
-      setIsQuickActionsOpen(true);
+      if (isVoiceTarget) {
+        logVoiceThreadProof('gesture-popup-open-entered', {
+          messageId: message.id,
+          trigger: 'contextmenu',
+        });
+      }
+      openQuickActions();
     },
-    [canShowQuickActions, clearLongPress],
+    [canShowQuickActions, message.id, openQuickActions],
   );
   const handleImageAttachmentPreview = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -5028,6 +5223,7 @@ function ThreadMessageRowComponent({
                 isOwnMessage={isOwnMessage}
                 language={language}
                 messageId={message.id}
+                onRequestQuickActions={openQuickActions}
               />
               {normalizedMessageBody ? (
                 <p className="message-body">{normalizedMessageBody}</p>
