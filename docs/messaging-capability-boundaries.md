@@ -82,7 +82,17 @@ Avoid for cross-product integrations unless there is no bounded seam yet:
 
 - `src/modules/messaging/data/server.ts`
 - `src/modules/messaging/data/conversation-thread-context.ts`
-- `src/modules/messaging/ui/**`
+- generic identity/profile helpers under `src/modules/messaging/ui/**`
+
+Shared profile identity, avatar, and status helpers now belong under:
+
+- `src/modules/profile/server.ts`
+- `src/modules/profile/types.ts`
+- `src/modules/profile/avatar.ts`
+- `src/modules/profile/ui/**`
+
+Messaging should only keep compatibility facades or message-specific identity
+rendering in its own module tree.
 
 Preferred KeepCozy consumption layer:
 

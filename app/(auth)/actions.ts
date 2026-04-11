@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getStoredProfileLanguage } from '@/modules/messaging/data/server';
+import { getStoredProfileLanguage } from '@/modules/profile/server';
 import { LANGUAGE_COOKIE_NAME } from '@/modules/i18n';
 import { resolveDefaultSpaceShellHrefForUser } from '@/modules/spaces/server';
 

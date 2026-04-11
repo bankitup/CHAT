@@ -8,11 +8,11 @@ import { loadMessengerThreadSettingsPageData } from '@/modules/messaging/server/
 import {
   GroupIdentityAvatar,
   IdentityAvatar,
-} from '@/modules/messaging/ui/identity';
+} from '@/modules/profile/ui/identity';
 import {
   IdentityStatusInline,
   hasIdentityStatus,
-} from '@/modules/messaging/ui/identity-status';
+} from '@/modules/profile/ui/identity-status';
 import { withSpaceParam } from '@/modules/spaces/url';
 import Link from 'next/link';
 import {

@@ -17,7 +17,7 @@ import {
   PROFILE_AVATAR_MAX_SIZE_BYTES,
   isSupportedProfileAvatarType,
   sanitizeProfileFileName,
-} from '@/modules/messaging/profile-avatar';
+} from '@/modules/profile/avatar';
 import type { ConversationNotificationLevel } from './server';
 
 const PROFILE_AVATAR_BUCKET =

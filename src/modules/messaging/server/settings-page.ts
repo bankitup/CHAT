@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
-import { getCurrentUserProfile } from '@/modules/messaging/data/server';
+import { getCurrentUserProfile } from '@/modules/profile/server';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,

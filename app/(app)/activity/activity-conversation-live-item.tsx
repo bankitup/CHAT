@@ -11,7 +11,7 @@ import {
 import {
   GroupIdentityAvatar,
   IdentityAvatar,
-} from '@/modules/messaging/ui/identity';
+} from '@/modules/profile/ui/identity';
 import { withSpaceParam } from '@/modules/spaces/url';
 
 type ActivityConversationLiveItemProps = {

@@ -33,7 +33,7 @@ import {
   type ThreadHistoryLiveMessagePayload,
   type ThreadHistorySyncRequestPayload,
 } from '@/modules/messaging/realtime/thread-history-sync-events';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
   useThreadMessagePatchedBody,

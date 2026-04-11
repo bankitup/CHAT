@@ -31,7 +31,7 @@ import {
   type InboxPrimaryFilter,
   type InboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import { InboxConversationLiveRow } from './inbox-conversation-live-row';
 import { NewChatSheet, type NewChatMode } from './new-chat-sheet';
 

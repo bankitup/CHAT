@@ -28,7 +28,7 @@ import {
   recordWarmNavServerRender,
 } from '@/modules/messaging/performance/warm-nav-server';
 import { resolveMessagingRouteSpaceContextForUser } from '@/modules/messaging/server/route-context';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,

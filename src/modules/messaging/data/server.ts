@@ -7,7 +7,9 @@ import {
 } from '@/lib/request-context/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
-import type { AppLanguage } from '@/modules/i18n';
+import type {
+  ProfileIdentityRecord,
+} from '@/modules/profile/types';
 import {
   buildAvatarDeliveryPath,
   isAbsoluteAvatarUrl,
@@ -458,41 +460,11 @@ export type MessageAttachment = {
 type MessageAssetsWriteClient =
   Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
-export type MessageSenderProfile = {
-  userId: string;
-  displayName: string | null;
-  username?: string | null;
-  email?: string | null;
-  emailLocalPart?: string | null;
-  avatarPath?: string | null;
-  statusEmoji?: string | null;
-  statusText?: string | null;
-  statusUpdatedAt?: string | null;
-};
+export type MessageSenderProfile = ProfileIdentityRecord;
 
-export type AvailableUser = {
-  userId: string;
-  displayName: string | null;
-  username?: string | null;
-  email?: string | null;
-  emailLocalPart?: string | null;
-  avatarPath?: string | null;
-  statusEmoji?: string | null;
-  statusText?: string | null;
-  statusUpdatedAt?: string | null;
-};
+export type AvailableUser = ProfileIdentityRecord;
 
-export type CurrentUserProfile = {
-  userId: string;
-  email: string | null;
-  displayName: string | null;
-  username: string | null;
-  avatarPath: string | null;
-  preferredLanguage: AppLanguage | null;
-  statusEmoji: string | null;
-  statusText: string | null;
-  statusUpdatedAt: string | null;
-};
+export type { CurrentUserProfile } from '@/modules/profile/types';
 
 export type ConversationReadState = {
   lastReadMessageSeq: number | null;

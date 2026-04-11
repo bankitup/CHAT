@@ -33,8 +33,8 @@ import {
   recordWarmNavServerRender,
 } from '@/modules/messaging/performance/warm-nav-server';
 import { resolveMessagingConversationRouteContextForUser } from '@/modules/messaging/server/route-context';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
-import { resolveIdentityStatusParts } from '@/modules/messaging/ui/identity-status';
+import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
+import { resolveIdentityStatusParts } from '@/modules/profile/ui/identity-status';
 import {
   getUserFacingErrorFallback,
   sanitizeUserFacingErrorMessage,

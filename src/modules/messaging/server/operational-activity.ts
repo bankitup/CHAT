@@ -11,7 +11,7 @@ import {
 } from '@/modules/messaging/data/server';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import type { InboxConversationLiveSummary } from '@/modules/messaging/realtime/inbox-summary-store';
-import { resolvePublicIdentityLabel } from '@/modules/messaging/ui/identity-label';
+import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 
 type MessagingOperationalParticipantIdentity = Awaited<
   ReturnType<typeof getConversationParticipantIdentities>

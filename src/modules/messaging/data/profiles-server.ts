@@ -10,15 +10,18 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { normalizeLanguage, type AppLanguage } from '@/modules/i18n';
 import {
-  buildAvatarDeliveryPath,
-  isAbsoluteAvatarUrl,
-} from '@/modules/messaging/avatar-delivery';
-import {
   PROFILE_AVATAR_MAX_SIZE_BYTES,
   isSupportedProfileAvatarType,
   sanitizeProfileFileName,
-} from '@/modules/messaging/profile-avatar';
-import type { CurrentUserProfile, MessageSenderProfile } from './server';
+} from '@/modules/profile/avatar';
+import type {
+  CurrentUserProfile,
+  ProfileIdentityRecord,
+} from '@/modules/profile/types';
+import {
+  buildAvatarDeliveryPath,
+  isAbsoluteAvatarUrl,
+} from '@/modules/messaging/avatar-delivery';
 
 const PROFILE_AVATAR_BUCKET =
   process.env.SUPABASE_AVATARS_BUCKET?.trim() || 'avatars';
@@ -175,7 +178,7 @@ export async function getProfileIdentities(
   const includeStatuses = options?.includeStatuses !== false;
 
   if (uniqueUserIds.length === 0) {
-    return [] as MessageSenderProfile[];
+    return [] as ProfileIdentityRecord[];
   }
 
   const supabase = await createSupabaseServerClient();
@@ -354,8 +357,8 @@ export async function getProfileIdentities(
   };
 
   const mergeIdentity = (
-    base: MessageSenderProfile | undefined,
-    fallback: MessageSenderProfile,
+    base: ProfileIdentityRecord | undefined,
+    fallback: ProfileIdentityRecord,
   ) => ({
     avatarPath: base?.avatarPath ?? fallback.avatarPath ?? null,
     displayName: base?.displayName ?? fallback.displayName ?? null,
@@ -387,7 +390,7 @@ export async function getProfileIdentities(
     }
   }
 
-  const orderedProfiles: MessageSenderProfile[] = [];
+  const orderedProfiles: ProfileIdentityRecord[] = [];
 
   for (const userId of uniqueUserIds) {
     const profile = profilesByUserId.get(userId);

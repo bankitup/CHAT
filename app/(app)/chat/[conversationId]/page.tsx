@@ -17,11 +17,11 @@ import { withSpaceParam } from '@/modules/spaces/url';
 import {
   GroupIdentityAvatar,
   IdentityAvatar,
-} from '@/modules/messaging/ui/identity';
+} from '@/modules/profile/ui/identity';
 import {
   IdentityStatusInline,
   hasIdentityStatus,
-} from '@/modules/messaging/ui/identity-status';
+} from '@/modules/profile/ui/identity-status';
 import Link from 'next/link';
 import {
   addGroupParticipantsAction,
