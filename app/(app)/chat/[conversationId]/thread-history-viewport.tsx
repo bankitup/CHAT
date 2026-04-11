@@ -64,7 +64,9 @@ import { ThreadReactionPicker } from './thread-reaction-picker';
 import { resolveThreadScrollTarget } from './thread-scroll';
 import {
   configureInlineAudioElement,
+  hasRecoverableThreadVoicePlaybackLocator,
   resolveLocalThreadVoicePlaybackSource,
+  resolveThreadVoiceTransportSourceUrl,
   resolveThreadVoicePlaybackSourceSnapshot,
   writeThreadVoicePlaybackCacheEntry,
   type ThreadVoicePlaybackCacheEntry,
@@ -621,40 +623,6 @@ function logVoiceThreadDiagnostic(
   }
 
   console.info('[voice-thread]', stage, details);
-}
-
-function hasRecoverableAttachmentLocator(
-  attachment:
-    | Pick<MessageAttachment, 'bucket' | 'id' | 'messageId' | 'objectPath'>
-    | null
-    | undefined,
-  expectedMessageId?: string | null,
-) {
-  const attachmentId =
-    typeof attachment?.id === 'string' ? attachment.id.trim() : '';
-  const attachmentMessageId =
-    typeof attachment?.messageId === 'string' ? attachment.messageId.trim() : '';
-  const bucket =
-    typeof attachment?.bucket === 'string' ? attachment.bucket.trim() : '';
-  const objectPath =
-    typeof attachment?.objectPath === 'string'
-      ? attachment.objectPath.trim()
-      : '';
-  const normalizedExpectedMessageId =
-    typeof expectedMessageId === 'string' ? expectedMessageId.trim() : '';
-
-  if (!attachmentId || !attachmentMessageId || !bucket || !objectPath) {
-    return false;
-  }
-
-  if (
-    normalizedExpectedMessageId &&
-    attachmentMessageId !== normalizedExpectedMessageId
-  ) {
-    return false;
-  }
-
-  return true;
 }
 
 function filterRenderableMessageAttachments(
@@ -1415,10 +1383,11 @@ function ThreadVoiceMessageBubble({
     startX: number;
     startY: number;
   } | null>(null);
-  const hasRecoverableAttachmentStorageLocator = hasRecoverableAttachmentLocator(
-    attachment,
-    messageId,
-  );
+  const hasRecoverableAttachmentStorageLocator =
+    hasRecoverableThreadVoicePlaybackLocator({
+      attachment,
+      expectedMessageId: messageId,
+    });
 
   const preferredTransportSourceUrl =
     resolvedTransportSourceUrl?.trim() ||
@@ -1429,8 +1398,10 @@ function ThreadVoiceMessageBubble({
   const voicePlaybackSourceSnapshot = resolveThreadVoicePlaybackSourceSnapshot({
     attachment: attachment
       ? {
+          bucket: attachment.bucket,
           durationMs: attachment.durationMs ?? null,
           id: attachment.id,
+          messageId: attachment.messageId,
           objectPath: attachment.objectPath,
         }
       : null,
@@ -1632,40 +1603,20 @@ function ThreadVoiceMessageBubble({
       setDidFailSignedUrlResolve(false);
 
       try {
-        const resolveUrl = buildAttachmentSignedUrlResolveUrl({
-          attachmentId,
-          conversationId,
-          messageId: attachmentMessageId,
-        });
-
-        if (!resolveUrl) {
-          logVoiceThreadDiagnostic('attachment-url-resolve-skipped-invalid-locator', {
+        const resolution = await resolveThreadVoiceTransportSourceUrl({
+          locator: {
             attachmentId,
             conversationId,
             messageId: attachmentMessageId,
-          });
-          return null;
-        }
-
-        const response = await fetch(
-          resolveUrl,
-          {
-            cache: 'no-store',
-            credentials: 'same-origin',
           },
-        );
+          onDiagnostic: logVoiceThreadDiagnostic,
+        });
 
-        if (!response.ok) {
-          throw new Error(
-            `Voice attachment URL resolve failed with status ${response.status}`,
-          );
+        if (resolution.status === 'failed') {
+          setDidFailSignedUrlResolve(true);
         }
 
-        const payload = (await response.json()) as { signedUrl?: string | null };
-        const nextSignedUrl =
-          typeof payload.signedUrl === 'string' && payload.signedUrl.trim()
-            ? payload.signedUrl
-            : null;
+        const nextSignedUrl = resolution.transportSourceUrl;
 
         if (nextSignedUrl) {
           setIgnoredAttachmentTransportSourceUrl(null);
@@ -1677,24 +1628,7 @@ function ThreadVoiceMessageBubble({
           });
         }
 
-        logVoiceThreadDiagnostic('attachment-url-resolved', {
-          attachmentId,
-          conversationId,
-          messageId: attachmentMessageId,
-          resolved: Boolean(nextSignedUrl),
-        });
-
         return nextSignedUrl;
-      } catch (error) {
-        setDidFailSignedUrlResolve(true);
-        logVoiceThreadDiagnostic('attachment-url-resolve-failed', {
-          attachmentId,
-          conversationId,
-          errorMessage: error instanceof Error ? error.message : String(error),
-          messageId: attachmentMessageId,
-        });
-
-        return null;
       } finally {
         setIsResolvingSignedUrl(false);
         resolveSignedUrlPromiseRef.current = null;
@@ -2711,24 +2645,6 @@ function buildHistoryPageUrl(input: {
   }
 
   return `/api/messaging/conversations/${input.conversationId}/history?${params.toString()}`;
-}
-
-function buildAttachmentSignedUrlResolveUrl(input: {
-  attachmentId: string;
-  conversationId: string;
-  messageId: string;
-}) {
-  if (
-    !looksLikeUuid(input.attachmentId) ||
-    !looksLikeUuid(input.conversationId) ||
-    !looksLikeUuid(input.messageId)
-  ) {
-    // Skip doomed recovery fetches when a stale runtime payload no longer has
-    // a trustworthy storage locator tuple.
-    return null;
-  }
-
-  return `/api/messaging/conversations/${input.conversationId}/messages/${input.messageId}/attachments/${input.attachmentId}/signed-url`;
 }
 
 function resolveHistoryFetchMode(input: {

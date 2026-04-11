@@ -223,6 +223,7 @@ The current safe evolution path is:
 - leave inbox/activity on summary projection
 - leave thread history on committed row snapshots
 - keep thread-side source-to-playable resolution behind [app/(app)/chat/[conversationId]/voice-playback-source.ts](/Users/danya/IOS%20-%20Apps/CHAT/app/%28app%29/chat/%5BconversationId%5D/voice-playback-source.ts) until broader media-module extraction is warranted
+- keep both committed transport-source lookup and local playable-source preparation behind that same file, so the thread UI does not own plaintext-vs-private media branching
 - move future recording/upload runtime into `src/modules/messaging/media`
 - treat `message_assets` + `message_asset_links` as the committed media layer
 - keep future call runtime in `src/modules/messaging/rtc`
