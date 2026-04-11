@@ -407,7 +407,7 @@ export async function sendMessageMutationAction(
     };
   }
 
-  if (conversation.kind === 'dm' && body && !attachment) {
+  if (conversation.kind === 'dm' && body) {
     if (
       !isDmE2eeEnabledForUser(user.id, user.email ?? null, {
         source: 'chat-send-mutation',
@@ -420,7 +420,9 @@ export async function sendMessageMutationAction(
     }
 
     return {
-      error: 'Direct-message text must use the encrypted client path.',
+      error: attachment
+        ? 'Direct-message text with attachments must use the encrypted client path.'
+        : 'Direct-message text must use the encrypted client path.',
       ok: false,
     };
   }
@@ -879,7 +881,7 @@ export async function sendMessageAction(formData: FormData) {
     redirectWithError(conversationId, 'This chat is no longer available.', spaceId);
   }
 
-  if (conversation.kind === 'dm' && body && !attachment) {
+  if (conversation.kind === 'dm' && body) {
     if (
       !isDmE2eeEnabledForUser(userId, user.email ?? null, {
         source: 'chat-send-action',
@@ -894,7 +896,9 @@ export async function sendMessageAction(formData: FormData) {
 
     redirectWithError(
       conversationId,
-      'Direct-message text must use the encrypted client path.',
+      attachment
+        ? 'Direct-message text with attachments must use the encrypted client path.'
+        : 'Direct-message text must use the encrypted client path.',
       spaceId,
     );
   }

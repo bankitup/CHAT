@@ -313,13 +313,13 @@ function normalizeComparableMessageSeq(value: unknown) {
   return null;
 }
 
-function isEncryptedDmTextMessage(value: {
+function isEncryptedDmMessage(value: {
   kind: string | null;
   content_mode?: string | null;
   deleted_at?: string | null;
 }) {
   return (
-    value.kind === 'text' &&
+    (value.kind === 'text' || value.kind === 'attachment') &&
     value.content_mode === 'dm_e2ee_v1' &&
     !value.deleted_at
   );
@@ -793,7 +793,7 @@ export default async function ChatPage({
   const firstMessage = messages[0] ?? null;
   const lastMessage = messages[messages.length - 1] ?? null;
   const encryptedMessageIds = messages
-    .filter((message) => isEncryptedDmTextMessage(message))
+    .filter((message) => isEncryptedDmMessage(message))
     .map((message) => message.id);
   const snapshotSenderProfiles = threadHistorySnapshot.senderProfiles;
   const snapshotSenderProfilesById = new Map(
@@ -1143,7 +1143,7 @@ export default async function ChatPage({
         body: activeReplyTarget.body,
         deletedAt: activeReplyTarget.deleted_at,
         id: activeReplyTarget.id,
-        isEncrypted: isEncryptedDmTextMessage(activeReplyTarget),
+        isEncrypted: isEncryptedDmMessage(activeReplyTarget),
         kind: activeReplyTarget.kind,
         senderId: activeReplyTarget.sender_id ?? null,
         senderLabel:

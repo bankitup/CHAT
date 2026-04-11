@@ -18,6 +18,7 @@ import {
   type EncryptedDmFailureKind,
   type EncryptedDmServerHistoryHint,
 } from '@/modules/messaging/e2ee/ui-policy';
+import { patchThreadMessageContent } from '@/modules/messaging/realtime/thread-message-patch-store';
 import { setDmThreadVisibleMessageState } from './dm-thread-visible-message-store';
 import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailable-state';
 
@@ -138,6 +139,11 @@ export function EncryptedDmMessageBody({
         messageId,
         plaintext: null,
       });
+      patchThreadMessageContent({
+        body: null,
+        conversationId,
+        messageId,
+      });
 
       if (!normalizedClientId) {
         if (diagnosticsEnabled) {
@@ -160,6 +166,11 @@ export function EncryptedDmMessageBody({
           diagnosticCode: 'malformed-envelope',
           messageId,
           plaintext: null,
+        });
+        patchThreadMessageContent({
+          body: null,
+          conversationId,
+          messageId,
         });
         return;
       }
@@ -202,6 +213,11 @@ export function EncryptedDmMessageBody({
           diagnosticCode: nextDiagnosticCode,
           messageId,
           plaintext: null,
+        });
+        patchThreadMessageContent({
+          body: null,
+          conversationId,
+          messageId,
         });
       };
 
@@ -357,6 +373,11 @@ export function EncryptedDmMessageBody({
           diagnosticCode: null,
           messageId,
           plaintext: nextPlaintext,
+        });
+        patchThreadMessageContent({
+          body: nextPlaintext,
+          conversationId,
+          messageId,
         });
 
         if (shouldCachePreview) {
