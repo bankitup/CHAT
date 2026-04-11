@@ -233,6 +233,8 @@ type VoiceMessageRenderState =
   | 'ready'
   | 'failed';
 
+type VoiceMessagePlayIconState = 'error' | 'loading' | 'pause' | 'play';
+
 type ThreadVoicePlaybackCacheEntry = {
   durationMs: number | null;
   playbackUrl: string | null;
@@ -1200,6 +1202,36 @@ function getVoiceMessageStateLabel(input: {
   }
 }
 
+function resolveVoiceMessagePlayIconState(input: {
+  playbackState: MessagingVoicePlaybackState;
+  voiceState: VoiceMessageRenderState;
+}) {
+  if (input.voiceState === 'failed') {
+    return 'error' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (
+    input.voiceState === 'uploading' ||
+    input.voiceState === 'processing'
+  ) {
+    return 'loading' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (input.voiceState === 'pending') {
+    return 'play' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (input.playbackState === 'buffering') {
+    return 'loading' satisfies VoiceMessagePlayIconState;
+  }
+
+  if (input.playbackState === 'playing') {
+    return 'pause' satisfies VoiceMessagePlayIconState;
+  }
+
+  return 'play' satisfies VoiceMessagePlayIconState;
+}
+
 function getMessageSeq(value: number | string) {
   return typeof value === 'number' ? value : Number(value);
 }
@@ -1618,16 +1650,10 @@ function ThreadVoiceMessageBubble({
           )}`
         : formatVoiceDuration(resolvedDurationMs)
       : '--:--';
-  const playIconState =
-    voiceState !== 'ready'
-      ? voiceState === 'failed'
-        ? 'error'
-        : 'loading'
-      : isBuffering
-        ? 'loading'
-        : isPlaying
-          ? 'pause'
-          : 'play';
+  const playIconState = resolveVoiceMessagePlayIconState({
+    playbackState,
+    voiceState,
+  });
 
   useEffect(() => {
     const audio = audioRef.current;
