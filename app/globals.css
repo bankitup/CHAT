@@ -8708,6 +8708,14 @@ main {
   background-size: cover;
 }
 
+.message-photo-card-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background-color: rgba(228, 235, 244, 0.7);
+  object-fit: cover;
+}
+
 .message-photo-card-visual-unavailable {
   background:
     linear-gradient(180deg, rgba(228, 235, 244, 0.84), rgba(214, 223, 234, 0.92));

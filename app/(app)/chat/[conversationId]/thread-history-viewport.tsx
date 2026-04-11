@@ -990,7 +990,19 @@ function shouldRetryThreadAttachmentResolution(reason: string | null) {
 }
 
 function hasRenderableCommittedAttachment(attachments: MessageAttachment[]) {
-  return attachments.length > 0;
+  if (!attachments.length) {
+    return false;
+  }
+
+  const imageAttachments = attachments.filter((attachment) => attachment.isImage);
+
+  if (imageAttachments.length === 0) {
+    return true;
+  }
+
+  return imageAttachments.some((attachment) =>
+    Boolean(normalizeAttachmentSignedUrl(attachment.signedUrl)),
+  );
 }
 
 function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
@@ -2187,12 +2199,15 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
               onClick={onImagePreviewClick}
               type="button"
             >
-              <span
-                aria-hidden="true"
-                className="message-photo-card-visual"
-                style={{
-                  backgroundImage: `url("${attachmentSignedUrl}")`,
-                }}
+              {/* Keep a plain img here so committed thread photos use the same
+                  authenticated attachment delivery path that preview already
+                  proves works in production. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={previewTitle}
+                className="message-photo-card-image"
+                loading="lazy"
+                src={attachmentSignedUrl}
               />
             </button>
           );
@@ -2540,7 +2555,7 @@ function isOwnAttachmentCommitTransitionPending(input: {
     input.message.sender_id === input.currentUserId &&
     Boolean(input.message.client_id?.trim()) &&
     !input.normalizedBody &&
-    input.attachments.length === 0
+    !hasRenderableCommittedAttachment(input.attachments)
   );
 }
 
