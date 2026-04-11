@@ -1973,6 +1973,21 @@ function ThreadVoiceMessageBubble({
     [],
   );
 
+  const handleVoiceSurfacePointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const handleVoiceSurfaceContextMenu = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+    },
+    [],
+  );
+
   const handleVoiceSurfaceClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
@@ -2008,14 +2023,22 @@ function ThreadVoiceMessageBubble({
       data-play-intent={hasPendingPlaybackIntent ? 'pending' : 'idle'}
       data-voice-state={voiceState}
       onClick={handleVoiceCardClick}
+      onContextMenu={handleVoiceSurfaceContextMenu}
+      onPointerCancelCapture={handleVoiceSurfacePointerUp}
       onPointerDown={handleVoiceSurfacePointerDown}
+      onPointerDownCapture={handleVoiceSurfacePointerDown}
+      onPointerUpCapture={handleVoiceSurfacePointerUp}
     >
       <button
         aria-label={playButtonLabel}
         className="message-voice-play"
         disabled={voiceState !== 'ready' && !canResolveSignedUrl}
         onClick={handleVoiceSurfaceClick}
+        onContextMenu={handleVoiceSurfaceContextMenu}
+        onPointerCancelCapture={handleVoiceSurfacePointerUp}
         onPointerDown={handleVoiceSurfacePointerDown}
+        onPointerDownCapture={handleVoiceSurfacePointerDown}
+        onPointerUpCapture={handleVoiceSurfacePointerUp}
         type="button"
       >
         <span

@@ -8364,6 +8364,9 @@ main {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
     0 1px 2px rgba(17, 24, 39, 0.03);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .message-voice-card-own {
@@ -8428,6 +8431,9 @@ main {
     background 160ms ease,
     box-shadow 160ms ease,
     transform 160ms ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .message-voice-play:disabled {
