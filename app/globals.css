@@ -8659,10 +8659,14 @@ main {
 }
 
 .message-photo-card {
+  --message-photo-card-max-width: min(100%, 8.75rem);
+  --message-photo-card-max-height: 10rem;
   display: grid;
+  justify-items: start;
   gap: 0;
   overflow: hidden;
-  width: min(100%, 14.75rem);
+  width: fit-content;
+  max-width: var(--message-photo-card-max-width);
   contain: paint;
   border: 1px solid rgba(221, 228, 238, 0.48);
   border-radius: 14px;
@@ -8701,8 +8705,10 @@ main {
 .message-photo-card-button {
   appearance: none;
   -webkit-appearance: none;
+  display: block;
   padding: 0;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   border: 0;
   background: transparent;
   font: inherit;
@@ -8727,7 +8733,8 @@ main {
 
 .message-photo-card-visual {
   display: block;
-  width: 100%;
+  width: var(--message-photo-card-max-width);
+  max-width: 100%;
   aspect-ratio: 4 / 5;
   background-color: rgba(228, 235, 244, 0.7);
   background-position: center;
@@ -8737,8 +8744,10 @@ main {
 
 .message-photo-card-image {
   display: block;
-  width: 100%;
-  aspect-ratio: 4 / 5;
+  width: auto;
+  max-width: var(--message-photo-card-max-width);
+  max-height: var(--message-photo-card-max-height);
+  height: auto;
   background-color: rgba(228, 235, 244, 0.7);
   object-fit: cover;
 }

@@ -227,11 +227,11 @@ type EncryptedUnavailableRunMeta = {
 };
 
 type VoiceMessageRenderState =
-  | 'ready'
+  | 'pending'
   | 'uploading'
   | 'processing'
-  | 'failed'
-  | 'unavailable';
+  | 'ready'
+  | 'failed';
 
 type ThreadVoicePlaybackCacheEntry = {
   durationMs: number | null;
@@ -687,20 +687,23 @@ function getThreadVoicePlaybackCacheKey(input: {
   attachment: MessageAttachment | null;
   messageId: string;
 }) {
-  const attachmentId =
-    typeof input.attachment?.id === 'string' ? input.attachment.id.trim() : '';
-
-  if (attachmentId) {
-    return attachmentId;
-  }
-
   const objectPath =
     typeof input.attachment?.objectPath === 'string'
       ? input.attachment.objectPath.trim()
       : '';
 
   if (objectPath) {
+    // Prefer the stable storage locator so the same committed voice keeps its
+    // warmed/session-ready cache across thread re-entry even if attachment row
+    // projection details shift.
     return `${input.messageId}:${objectPath}`;
+  }
+
+  const attachmentId =
+    typeof input.attachment?.id === 'string' ? input.attachment.id.trim() : '';
+
+  if (attachmentId) {
+    return attachmentId;
   }
 
   return input.messageId;
@@ -904,6 +907,8 @@ async function warmThreadVoicePlaybackSource(input: {
 
 function resolveVoiceMessageRenderState(input: {
   attachment: MessageAttachment | null;
+  didFailSignedUrlResolve?: boolean;
+  isResolvingSignedUrl?: boolean;
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
@@ -927,15 +932,25 @@ function resolveVoiceMessageRenderState(input: {
     return 'ready' satisfies VoiceMessageRenderState;
   }
 
-  if (hasRecoverableAttachmentLocator(input.attachment)) {
+  if (input.isResolvingSignedUrl) {
     return 'processing' satisfies VoiceMessageRenderState;
   }
 
-  return 'unavailable' satisfies VoiceMessageRenderState;
+  if (input.didFailSignedUrlResolve) {
+    return 'failed' satisfies VoiceMessageRenderState;
+  }
+
+  if (hasRecoverableAttachmentLocator(input.attachment)) {
+    return 'pending' satisfies VoiceMessageRenderState;
+  }
+
+  return 'failed' satisfies VoiceMessageRenderState;
 }
 
 function resolveVoiceMessageRenderReason(input: {
   attachment: MessageAttachment | null;
+  didFailSignedUrlResolve?: boolean;
+  isResolvingSignedUrl?: boolean;
   playbackFailed: boolean;
   stageHint?: 'uploading' | 'processing' | 'failed' | null;
 }) {
@@ -963,15 +978,23 @@ function resolveVoiceMessageRenderReason(input: {
     return 'signed-url-ready';
   }
 
+  if (input.isResolvingSignedUrl) {
+    return 'signed-url-resolving';
+  }
+
+  if (input.didFailSignedUrlResolve) {
+    return 'signed-url-resolve-failed';
+  }
+
   if (hasRecoverableAttachmentLocator(input.attachment)) {
-    return 'storage-locator-present-awaiting-url';
+    return 'storage-locator-present-pending-url';
   }
 
   if (input.attachment) {
-    return 'attachment-present-without-resolver';
+    return 'attachment-present-without-playback-path';
   }
 
-  return 'attachment-missing';
+  return 'attachment-missing-failed';
 }
 
 function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
@@ -1164,14 +1187,14 @@ function getVoiceMessageStateLabel(input: {
   t: ReturnType<typeof getTranslations>;
 }) {
   switch (input.state) {
+    case 'pending':
+      return input.t.chat.voiceMessagePending;
     case 'uploading':
       return input.t.chat.voiceMessageUploading;
     case 'processing':
       return input.t.chat.voiceMessageProcessing;
     case 'failed':
       return input.t.chat.voiceMessageFailed;
-    case 'unavailable':
-      return input.t.chat.voiceMessageUnavailable;
     default:
       return input.t.chat.voiceMessage;
   }
@@ -1450,6 +1473,10 @@ function isMessageQuickActionInteractiveTarget(target: EventTarget | null) {
     return false;
   }
 
+  if (target.closest('[data-message-voice-interactive="true"]')) {
+    return true;
+  }
+
   if (target.closest('[data-message-quick-actions-surface="true"]')) {
     return true;
   }
@@ -1534,9 +1561,6 @@ function ThreadVoiceMessageBubble({
   const canResolveSignedUrl =
     Boolean(conversationId && hasRecoverableAttachmentStorageLocator) &&
     !effectiveSignedUrl;
-  const effectiveStageHint =
-    stageHint ??
-    (isResolvingSignedUrl && !effectiveSignedUrl ? 'processing' : null);
   const voiceStateInput = {
     attachment:
       attachment === null
@@ -1545,8 +1569,10 @@ function ThreadVoiceMessageBubble({
             ...attachment,
             signedUrl: effectiveSignedUrl,
           },
+    didFailSignedUrlResolve,
+    isResolvingSignedUrl,
     playbackFailed,
-    stageHint: effectiveStageHint,
+    stageHint,
   } as const;
 
   const voiceState = resolveVoiceMessageRenderState(voiceStateInput);
@@ -1560,30 +1586,27 @@ function ThreadVoiceMessageBubble({
       : 0;
   const isPlaying = playbackState === 'playing';
   const isBuffering = playbackState === 'buffering';
-  const isPreparingPlayback = hasPendingPlaybackIntent && !isPlaying;
   const readyStateLabel =
-    playbackState === 'buffering' || isPreparingPlayback
+    playbackState === 'buffering'
       ? t.chat.voiceMessageLoading
       : t.chat.voiceMessage;
-  const isRecoveringVoiceMessage =
-    voiceState !== 'ready' &&
-    canResolveSignedUrl &&
-    (isResolvingSignedUrl ||
-      (ignoredAttachmentSignedUrl !== null && !didFailSignedUrlResolve));
   const stateLabel =
     voiceState === 'ready'
       ? readyStateLabel
-      : isRecoveringVoiceMessage
-        ? t.chat.voiceMessageRecovering
-        : getVoiceMessageStateLabel({ state: voiceState, t });
+      : getVoiceMessageStateLabel({ state: voiceState, t });
   const stateNote =
     voiceState === 'ready'
       ? null
-      : isRecoveringVoiceMessage
+      : voiceState === 'pending'
         ? t.chat.voiceMessagePendingHint
-        : canResolveSignedUrl && didFailSignedUrlResolve && !isResolvingSignedUrl
+        : voiceState === 'failed' &&
+            canResolveSignedUrl &&
+            didFailSignedUrlResolve &&
+            !isResolvingSignedUrl
           ? t.chat.voiceMessageRetryHint
-          : null;
+          : voiceState === 'failed' && !canResolveSignedUrl
+            ? t.chat.voiceMessageUnavailable
+            : null;
   const durationLabel =
     voiceState === 'ready'
       ? playbackState === 'playing' ||
@@ -1596,10 +1619,10 @@ function ThreadVoiceMessageBubble({
       : '--:--';
   const playIconState =
     voiceState !== 'ready'
-      ? voiceState === 'failed' || voiceState === 'unavailable'
+      ? voiceState === 'failed'
         ? 'error'
         : 'loading'
-      : isPreparingPlayback || isBuffering
+      : isBuffering
         ? 'loading'
         : isPlaying
           ? 'pause'
@@ -1773,7 +1796,7 @@ function ThreadVoiceMessageBubble({
   useEffect(() => {
     if (
       !canResolveSignedUrl ||
-      (voiceState !== 'unavailable' && voiceState !== 'processing')
+      (voiceState !== 'pending' && voiceState !== 'processing')
     ) {
       return;
     }
@@ -1805,6 +1828,7 @@ function ThreadVoiceMessageBubble({
 
       try {
         await audio.play();
+        setHasPendingPlaybackIntent(false);
         return true;
       } catch {
         releaseActiveThreadVoicePlayback(messageId, audio);
@@ -1900,7 +1924,7 @@ function ThreadVoiceMessageBubble({
     voiceState,
   ]);
 
-  const togglePlayback = async () => {
+  const togglePlayback = useCallback(async () => {
     if (voiceState !== 'ready') {
       if (canResolveSignedUrl) {
         setHasPendingPlaybackIntent(true);
@@ -1925,16 +1949,52 @@ function ThreadVoiceMessageBubble({
 
     setHasPendingPlaybackIntent(false);
     audio.pause();
-  };
+  }, [
+    canResolveSignedUrl,
+    isResolvingSignedUrl,
+    resolveSignedUrl,
+    startPlayback,
+    voiceState,
+  ]);
 
   const playButtonLabel =
     voiceState !== 'ready'
       ? stateLabel
-      : isPreparingPlayback || isBuffering
+      : isBuffering
         ? t.chat.voiceMessageLoading
         : isPlaying
         ? t.chat.voiceMessagePause
         : t.chat.voiceMessagePlay;
+
+  const handleVoiceSurfacePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const handleVoiceSurfaceClick = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void togglePlayback();
+    },
+    [togglePlayback],
+  );
+
+  const handleVoiceCardClick = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('.message-voice-play')
+      ) {
+        return;
+      }
+
+      handleVoiceSurfaceClick(event);
+    },
+    [handleVoiceSurfaceClick],
+  );
 
   return (
     <div
@@ -1943,17 +2003,19 @@ function ThreadVoiceMessageBubble({
           ? 'message-voice-card message-voice-card-own'
           : 'message-voice-card'
       }
+      data-message-voice-interactive="true"
       data-playback-state={voiceState === 'ready' ? playbackState : voiceState}
       data-play-intent={hasPendingPlaybackIntent ? 'pending' : 'idle'}
       data-voice-state={voiceState}
+      onClick={handleVoiceCardClick}
+      onPointerDown={handleVoiceSurfacePointerDown}
     >
       <button
         aria-label={playButtonLabel}
         className="message-voice-play"
         disabled={voiceState !== 'ready' && !canResolveSignedUrl}
-        onClick={() => {
-          void togglePlayback();
-        }}
+        onClick={handleVoiceSurfaceClick}
+        onPointerDown={handleVoiceSurfacePointerDown}
         type="button"
       >
         <span
