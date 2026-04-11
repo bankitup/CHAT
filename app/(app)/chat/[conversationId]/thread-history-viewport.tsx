@@ -2177,7 +2177,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
             return (
               <div
                 key={attachmentKey}
-                className="message-photo-card message-photo-card-unavailable"
+                className="message-photo-card message-photo-card-committed message-photo-card-unavailable"
               >
                 <span
                   aria-hidden="true"
@@ -2192,7 +2192,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
               key={attachmentKey}
               aria-haspopup="dialog"
               aria-label={t.chat.openPhotoPreviewAria(previewAccessibleLabel)}
-              className="message-photo-card message-photo-card-button"
+              className="message-photo-card message-photo-card-committed message-photo-card-button"
               data-message-image-preview="true"
               data-preview-caption={previewCaption ?? ''}
               data-preview-url={attachmentSignedUrl}

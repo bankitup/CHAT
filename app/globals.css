@@ -8661,6 +8661,14 @@ main {
     0 8px 18px rgba(17, 24, 39, 0.045);
 }
 
+.message-photo-card-committed {
+  --message-photo-card-committed-max-width: min(100%, 7.25rem);
+  --message-photo-card-committed-max-height: 9rem;
+  width: fit-content;
+  max-width: var(--message-photo-card-committed-max-width);
+  justify-items: start;
+}
+
 .message-photo-card-optimistic {
   width: min(100%, 13rem);
   border-color: rgba(221, 228, 238, 0.4);
@@ -8689,6 +8697,11 @@ main {
   touch-action: manipulation;
 }
 
+.message-photo-card-committed.message-photo-card-button {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .message-bubble-own .message-photo-card {
   border-color: rgba(31, 111, 235, 0.14);
   background: rgba(246, 249, 255, 0.8);
@@ -8714,6 +8727,14 @@ main {
   aspect-ratio: 4 / 5;
   background-color: rgba(228, 235, 244, 0.7);
   object-fit: cover;
+}
+
+.message-photo-card-committed .message-photo-card-image {
+  width: auto;
+  max-width: min(100%, var(--message-photo-card-committed-max-width));
+  max-height: var(--message-photo-card-committed-max-height);
+  height: auto;
+  aspect-ratio: auto;
 }
 
 .message-photo-card-visual-unavailable {
