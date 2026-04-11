@@ -1680,7 +1680,7 @@ function ThreadVoiceMessageBubble({
 
   const armPendingPlaybackIntent = useCallback(() => {
     const nextIntentVersion = invalidatePlaybackStartRequests();
-    logVoiceThreadProof('voice-playback-owner-requested', {
+    logVoiceThreadProof('voice-owner-requested', {
       intentVersion: nextIntentVersion,
       messageId,
       playbackState,
