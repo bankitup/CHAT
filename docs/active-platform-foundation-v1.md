@@ -23,7 +23,7 @@ Count something as active platform foundation v1 only if it is:
 | Area | Current paths | Why it qualifies now | Notes |
 | --- | --- | --- | --- |
 | Auth and session foundations | `src/lib/request-context/**`, `src/lib/supabase/**`, `app/(auth)/**` | Shared login, viewer resolution, and server/runtime auth wiring already serve the entire repo. | Clear platform base. |
-| Shared authenticated route frame | `app/(app)/layout.tsx`, `app/(app)/loading.tsx`, `app/(app)/error.tsx`, `app/(app)/actions.ts`, `app/(app)/guarded-server-action-form.tsx` | These are shared route mechanics, not Messenger-only or KeepCozy-only screens. | `app-shell-frame.tsx` is adjacent, but not fully clean foundation yet because it still owns product posture and Messenger runtime. |
+| Shared authenticated route frame | `app/(app)/layout.tsx`, `app/(app)/loading.tsx`, `app/(app)/error.tsx`, `app/(app)/actions.ts`, `app/(app)/guarded-server-action-form.tsx` | These are shared route mechanics, not Messenger-only or KeepCozy-only screens. | `app-shell-frame.tsx` is adjacent, but not fully clean foundation yet because it still owns product posture and product-facing shell behavior. |
 | Spaces, membership, governance, and access | `src/modules/spaces/access.ts`, `src/modules/spaces/governance.ts`, `src/modules/spaces/server.ts`, `src/modules/spaces/write-server.ts`, `src/modules/spaces/url.ts`, `app/(app)/spaces/**` | This is the clearest active shared access boundary across products. | `spaces/model.ts`, `spaces/posture.ts`, and `spaces/shell.ts` remain mixed and are not counted as clean v1 foundation. |
 | Shared i18n and locale handling | `src/modules/i18n/**` | Shared copy and language runtime already serve Messenger and KeepCozy. | Clear active foundation. |
 | Shared profile identity primitives | `src/modules/profile/types.ts`, `src/modules/profile/avatar.ts`, `src/modules/profile/ui/**`, `app/(app)/settings/profile-settings-form.tsx`, `app/(app)/settings/profile-status-form.tsx` | Shared profile vocabulary, avatar rules, and identity UI already exist beyond Messenger-only use. | `src/modules/profile/server.ts` is useful, but the backing persistence still drifts through messaging-owned code. |
@@ -39,7 +39,7 @@ as clean platform foundation v1 yet.
 | Area | Current paths | Why it is excluded from clean v1 |
 | --- | --- | --- |
 | Product posture encoded in `spaces` | `src/modules/spaces/model.ts`, `src/modules/spaces/posture.ts`, `src/modules/spaces/shell.ts` | Shared layer still encodes product-specific profiles and shell behavior. |
-| Shared shell with Messenger runtime | `app/(app)/app-shell-frame.tsx` | Still owns Messenger-specific client runtime and product nav posture. |
+| Shared shell with product posture drift | `app/(app)/app-shell-frame.tsx`, `app/(app)/messenger-surface-runtime-effects.tsx` | Messenger runtime effects now mount lower, but shell posture and Messenger route runtime ownership are still not clean foundation. |
 | Shared profile server persistence | `src/modules/profile/server.ts`, `src/modules/messaging/data/profiles-server.ts` | Intended shared ownership exists, but persistence still routes through messaging-backed code. |
 | Shared error/support helpers under messaging namespace | `src/modules/messaging/ui/user-facing-errors.ts` | Behavior is broader than Messenger, but ownership label is still misleading. |
 

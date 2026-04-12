@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getRequestViewer } from '@/lib/request-context/server';
 import { getRequestLanguage } from '@/modules/i18n/server';
-import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import {
   getUserSpaces,
   isSpaceMembersSchemaCacheErrorMessage,
@@ -40,10 +39,6 @@ export default async function AppLayout({
     }
   }
 
-  const dmE2eeEnabled = isDmE2eeEnabledForUser(user.id, user.email ?? null, {
-    source: 'app-layout',
-  });
-
   const appShellSpaces: AppShellSpaceSummary[] = spaces.map((space) => ({
     defaultShellRoute: space.defaultShellRoute,
     id: space.id,
@@ -55,12 +50,7 @@ export default async function AppLayout({
 
   return (
     <div className="app-route-shell-root">
-      <AppShellFrame
-        dmE2eeEnabled={dmE2eeEnabled}
-        language={language}
-        spaces={appShellSpaces}
-        userId={user.id}
-      >
+      <AppShellFrame language={language} spaces={appShellSpaces}>
         {children}
       </AppShellFrame>
     </div>

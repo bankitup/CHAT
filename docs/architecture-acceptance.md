@@ -33,8 +33,9 @@ The current acceptance bar focuses on these boundaries:
    code
 9. Voice playback source selection stays honest about original-vs-derived
    sources and unsupported-device behavior
-10. Messenger mobile startup boundaries stay in place across shell, chat, and
-    inbox surfaces
+10. Messenger mobile startup boundaries stay in place across route-local
+    Messenger surfaces while the shared shell stays free of direct Messenger
+    runtime mounts
 11. Voice playback lifecycle ownership stays isolated in the extracted
     controller seam
 12. CLS-sensitive shell, chat, and inbox layout reservations stay in place

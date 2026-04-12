@@ -54,6 +54,10 @@ test('shared platform and shell seams stay free of product-route and product-dom
     shellFrameSource,
     /from ['"]@\/modules\/messaging\/data\/server['"]/,
   );
+  assert.doesNotMatch(
+    shellFrameSource,
+    /DmE2eeAuthenticatedBoundary|ChatUnreadBadgeSync|PushSubscriptionPresenceSync|WarmNavRouteObserver|MessengerSurfaceRuntimeEffects/,
+  );
 });
 
 test('shared and mixed seams avoid broad messaging data facade imports when narrower seams or platform seams should lead', () => {
@@ -115,7 +119,7 @@ test('mixed routes stay composed through bounded module seams instead of product
 });
 
 test('key mixed ownership files stay within lean guard size caps until cleanup waves land', () => {
-  assert.ok(readWorkspaceLineCount('app/(app)/app-shell-frame.tsx') <= 340);
+  assert.ok(readWorkspaceLineCount('app/(app)/app-shell-frame.tsx') <= 220);
   assert.ok(readWorkspaceLineCount('app/(app)/home/page.tsx') <= 1100);
   assert.ok(readWorkspaceLineCount('app/(app)/activity/page.tsx') <= 1100);
   assert.ok(readWorkspaceLineCount('src/modules/spaces/model.ts') <= 175);

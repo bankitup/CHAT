@@ -26,7 +26,7 @@ Cleanup priority uses:
 | Rank | Drift item | Evidence paths | Severity | Why it matters | Cleanup priority |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Product posture is still encoded inside shared `spaces` foundation | `src/modules/spaces/model.ts`, `src/modules/spaces/posture.ts`, `src/modules/spaces/shell.ts`, `app/(app)/layout.tsx` | High | The platform space model still directly carries product profiles like `messenger_full` and `keepcozy_ops`, plus legacy `TEST` behavior and shell defaults. That makes platform membership/access seams carry product identity. | Now |
-| 2 | Shared shell still owns Messenger runtime and product nav behavior | `app/(app)/app-shell-frame.tsx`, `src/modules/spaces/shell.ts` | High | The shared shell still decides Messenger/KeepCozy nav posture and mounts Messenger-specific client runtime such as DM E2EE boundary, unread badge sync, presence sync, and warm-nav observer. Even with gating, ownership still sits too high. | Now |
+| 2 | Shared shell still owns product nav behavior and posture decisions | `app/(app)/app-shell-frame.tsx`, `src/modules/spaces/shell.ts` | High | Messenger runtime effects have moved lower into route-local seams, but the shared shell still decides Messenger/KeepCozy nav posture and product-facing shell behavior. Ownership still sits one layer too high. | Now |
 | 3 | `/home` and `/activity` remain mixed-product routes | `app/(app)/home/page.tsx`, `app/(app)/activity/page.tsx` | High | These routes still branch between product experiences or product posture inside a single surface. That makes refactors, metrics, and product ownership harder to reason about. | Now |
 | 4 | Shared settings/profile surface still routes through Messenger ownership | `app/(app)/settings/page.tsx`, `src/modules/messaging/server/settings-page.ts`, `src/modules/profile/server.ts`, `src/modules/messaging/data/profiles-server.ts` | High | Shared profile/settings behavior is active across products, but the loader and persistence chain still depend on Messenger/messaging ownership. This keeps profile foundation from becoming truly platform-owned. | Next |
 | 5 | Shared error/support behavior still lives under `messaging/ui` | `src/modules/messaging/ui/user-facing-errors.ts`, reused from `app/(app)/home/actions.ts`, `app/(app)/issues/actions.ts`, `app/(app)/tasks/actions.ts`, `app/(app)/spaces/actions.ts`, `app/(app)/inbox/actions.ts` | Medium | The behavior is already broader than Messenger, but the namespace still teaches the wrong ownership model. This encourages accidental Messenger gravity in shared and KeepCozy code. | Next |
@@ -95,17 +95,19 @@ Why it matters:
 
 Main evidence:
 
-- `app/(app)/app-shell-frame.tsx`
-- dynamic imports of `DmE2eeAuthenticatedBoundary`
-- `ChatUnreadBadgeSync`
-- `PushSubscriptionPresenceSync`
-- `WarmNavRouteObserver`
+- `app/(app)/messenger-surface-runtime-effects.tsx`
+- route-level mounting inside `app/(app)/inbox/page.tsx`
+- route-level mounting inside `app/(app)/chat/[conversationId]/thread-page-content.tsx`
+- route-level mounting inside `app/(app)/activity/page.tsx`
 
 Why it matters:
 
-- higher startup cost and higher conceptual coupling in shared shell code
-- harder to reason about what should mount on non-Messenger routes
-- easier for Messenger product behavior to creep upward again
+- Messenger runtime ownership is now lower, but still needs to stay off
+  non-Messenger routes by default
+- route-local seams are safer, but they still need guardrails against drifting
+  back into shared shell code
+- future cleanup should keep startup-sensitive effects near the product surfaces
+  that actually need them
 
 ### Overgrown monoliths that block clean ownership
 
@@ -161,6 +163,7 @@ Prioritize:
 Continue reducing product-specific runtime ownership in:
 
 - `app/(app)/app-shell-frame.tsx`
+- `app/(app)/messenger-surface-runtime-effects.tsx`
 
 The shell should remain a host, not a long-term product-runtime home.
 
