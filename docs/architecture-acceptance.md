@@ -42,6 +42,8 @@ The current acceptance bar focuses on these boundaries:
     territory instead of regrowing as the main read hub
 14. A broken conversation body stays contained behind a local rescue boundary
     instead of trapping the user inside a dead chat route
+15. Conversation-runtime failure modes stay locally contained instead of
+    invalidating the whole thread or collapsing the mobile viewer layout
 
 ## Shared Platform Seams Under Acceptance
 
@@ -132,6 +134,13 @@ Current acceptance tests:
   - thread history stays wrapped in a contained rescue boundary
   - the rescue state keeps retry, back-to-chats, and info escape paths local
     to the conversation body
+- [tests/e2ee/conversation-runtime-failure-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/conversation-runtime-failure-boundaries.test.ts)
+  verifies the recent production-sensitive conversation-runtime boundaries:
+  - broken history isolation leaves header/composer usable outside the rescue
+    seam
+  - voice playback runtime stays isolated from thread-wide sync and unrelated
+    attachment invalidation seams
+  - mobile image preview keeps a full-viewport sizing contract
 
 Run them with:
 
@@ -173,6 +182,9 @@ Examples:
   collapsing back into one oversized runtime file
 - if a mobile-performance boundary test fails, non-critical Messenger startup
   work may be drifting back into first paint on shared, inbox, or chat routes
+- if a conversation-runtime failure boundary test fails, a single bad
+  conversation row, voice interaction, or mobile attachment preview may be
+  widening back into a thread-wide failure
 
 ## Minimum Verification After Architecture Changes
 

@@ -15,6 +15,10 @@ Voice-specific cross-device verification lives in:
 
 - [voice-cross-device-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-cross-device-manual-matrix.md)
 
+Focused conversation-runtime recovery verification lives in:
+
+- [conversation-runtime-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/conversation-runtime-manual-matrix.md)
+
 ## Matrix
 
 | Area | Scenario | Steps | Expected result | Evidence to watch |
