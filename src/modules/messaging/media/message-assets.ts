@@ -115,6 +115,22 @@ export type MessagingVoicePlaybackSourceOption = {
   transportSourceUrl: string | null;
 };
 
+export type MessagingVoicePlaybackAttachmentSourceRecord = {
+  bucket?: string | null;
+  id?: string | null;
+  isAudio?: boolean;
+  isVoiceMessage?: boolean;
+  messageId?: string | null;
+  objectPath?: string | null;
+  signedUrl?: string | null;
+  voicePlaybackVariants?:
+    | readonly Pick<
+        MessagingVoicePlaybackVariantRecord,
+        'assetId' | 'storageBucket' | 'storageObjectPath' | 'transportSourceUrl'
+      >[]
+    | null;
+};
+
 export type MessagingMessageAssetCommitIntent = {
   assetId: string | null;
   clientUploadId: string | null;
@@ -152,6 +168,38 @@ function buildMessagingVoicePlaybackSourceId(input: {
     input.storageObjectPath ?? 'object-missing',
     input.transportSourceUrl ?? 'transport-missing',
   ].join(':');
+}
+
+function hasMessagingVoicePlaybackLocator(input: {
+  assetId?: string | null;
+  attachmentMessageId?: string | null;
+  expectedMessageId?: string | null;
+  storageBucket?: string | null;
+  storageObjectPath?: string | null;
+}) {
+  const assetId = normalizeMessagingVoicePlaybackSourceValue(input.assetId);
+  const attachmentMessageId = normalizeMessagingVoicePlaybackSourceValue(
+    input.attachmentMessageId,
+  );
+  const expectedMessageId = normalizeMessagingVoicePlaybackSourceValue(
+    input.expectedMessageId,
+  );
+  const storageBucket = normalizeMessagingVoicePlaybackSourceValue(
+    input.storageBucket,
+  );
+  const storageObjectPath = normalizeMessagingVoicePlaybackSourceValue(
+    input.storageObjectPath,
+  );
+
+  if (!assetId || !attachmentMessageId || !storageBucket || !storageObjectPath) {
+    return false;
+  }
+
+  if (expectedMessageId && attachmentMessageId !== expectedMessageId) {
+    return false;
+  }
+
+  return true;
 }
 
 export function resolveMessagingVoicePlaybackSourceOptions(input: {
@@ -246,6 +294,61 @@ export function resolveMessagingVoicePlaybackSourceOptions(input: {
   }
 
   return Array.from(dedupedCandidates.values());
+}
+
+export function hasMessagingVoiceLocallyRecoverableSource(input: {
+  attachment: MessagingVoicePlaybackAttachmentSourceRecord | null;
+  expectedMessageId?: string | null;
+}) {
+  const attachment = input.attachment;
+
+  if (!attachment) {
+    return false;
+  }
+
+  if (!attachment.isVoiceMessage && !attachment.isAudio) {
+    return false;
+  }
+
+  if (normalizeMessagingVoicePlaybackSourceValue(attachment.signedUrl)) {
+    return true;
+  }
+
+  const attachmentMessageId = normalizeMessagingVoicePlaybackSourceValue(
+    attachment.messageId,
+  );
+
+  if (
+    hasMessagingVoicePlaybackLocator({
+      assetId: attachment.id,
+      attachmentMessageId,
+      expectedMessageId: input.expectedMessageId,
+      storageBucket: attachment.bucket,
+      storageObjectPath: attachment.objectPath,
+    })
+  ) {
+    return true;
+  }
+
+  for (const variant of attachment.voicePlaybackVariants ?? []) {
+    if (normalizeMessagingVoicePlaybackSourceValue(variant.transportSourceUrl)) {
+      return true;
+    }
+
+    if (
+      hasMessagingVoicePlaybackLocator({
+        assetId: variant.assetId,
+        attachmentMessageId,
+        expectedMessageId: input.expectedMessageId,
+        storageBucket: variant.storageBucket,
+        storageObjectPath: variant.storageObjectPath,
+      })
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function resolveMessagingAssetPreviewMode(

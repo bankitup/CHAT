@@ -146,6 +146,12 @@ That lifecycle seam now also has lightweight regression coverage in
 [voice-playback-controller.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/voice-playback-controller.test.ts),
 so ownership logic is less likely to drift back into the bubble runtime.
 
+The thread viewport also no longer treats every recent voice row with a missing
+attachment `signedUrl` as a thread-level recovery case. If a voice row already
+has a local playback path through variant transport metadata or a committed
+recoverable locator, the viewport now leaves it alone instead of dispatching a
+by-id history sync that can make unrelated attachments appear to refresh.
+
 ## Next Narrow Step After Proof
 
 Once mobile logs confirm the failing stage:
