@@ -31,6 +31,10 @@ import {
   normalizeGroupConversationJoinPolicy,
 } from '@/modules/messaging/group-policy';
 import {
+  logBrokenThreadHistoryProof,
+  summarizeBrokenThreadHistorySnapshot,
+} from '@/modules/messaging/diagnostics/thread-history-proof';
+import {
   measureWarmNavServerLoad,
   recordWarmNavServerRender,
 } from '@/modules/messaging/performance/warm-nav-server';
@@ -670,6 +674,21 @@ export async function loadMessengerThreadPageData(input: {
     kind: conversation.kind,
     messageCount: messages.length,
     oldestMessageSeq: threadHistorySnapshot.oldestMessageSeq,
+  });
+  logBrokenThreadHistoryProof('server:snapshot-loaded', {
+    conversationId: input.conversationId,
+    details: {
+      ...threadDeploymentMarker,
+      debugRequestId: threadRenderRequestId,
+      hasMoreOlder,
+      kind: conversation.kind,
+      oldestMessageSeq: threadHistorySnapshot.oldestMessageSeq,
+      summary: summarizeBrokenThreadHistorySnapshot({
+        attachmentsByMessage: threadHistorySnapshot.attachmentsByMessage,
+        conversationId: input.conversationId,
+        messages: threadHistorySnapshot.messages,
+      }),
+    },
   });
 
   const availableUsers =

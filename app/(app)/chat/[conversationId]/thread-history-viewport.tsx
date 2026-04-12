@@ -25,6 +25,12 @@ import { ensureDmE2eeDeviceRegistered } from '@/modules/messaging/e2ee/device-re
 import { getLocalDmE2eeDeviceRecord } from '@/modules/messaging/e2ee/device-store';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import {
+  logBrokenThreadHistoryProof,
+  shouldLogBrokenThreadHistoryProof,
+  summarizeBrokenThreadHistorySnapshot,
+  summarizeBrokenThreadMessagePatches,
+} from '@/modules/messaging/diagnostics/thread-history-proof';
+import {
   emitThreadHistorySyncRequest,
   emitThreadHistoryVisibleMessageIds,
   LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
@@ -32,9 +38,11 @@ import {
   type ThreadHistoryLiveMessagePayload,
   type ThreadHistorySyncRequestPayload,
 } from '@/modules/messaging/realtime/thread-history-sync-events';
+import { getThreadLiveStateSnapshot } from '@/modules/messaging/realtime/thread-live-state-store';
 import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
+  readThreadMessagePatchSnapshot,
   useThreadMessagePatchedBody,
   useThreadMessagePatchedDeletedAt,
 } from '@/modules/messaging/realtime/thread-message-patch-store';
@@ -318,6 +326,7 @@ const threadShortDateWithYearFormatterByLanguage = new Map<
   Intl.DateTimeFormat
 >();
 const loggedThreadGuardDiagnosticKeys = new Set<string>();
+const loggedBrokenThreadRowIssueKeys = new Set<string>();
 
 function parseSafeDate(value: unknown) {
   if (typeof value !== 'string') {
@@ -537,6 +546,37 @@ function logThreadGuardDiagnostic(
 
   loggedThreadGuardDiagnosticKeys.add(key);
   console.info('[chat-thread-guards]', stage, details);
+}
+
+function logBrokenThreadRowIssue(
+  conversationId: string,
+  messageId: string,
+  issues: string[],
+  details: Record<string, unknown>,
+) {
+  if (
+    !issues.length ||
+    !shouldLogBrokenThreadHistoryProof(conversationId)
+  ) {
+    return;
+  }
+
+  const dedupeKey = `${conversationId}:${messageId}:${issues.join(',')}`;
+
+  if (loggedBrokenThreadRowIssueKeys.has(dedupeKey)) {
+    return;
+  }
+
+  loggedBrokenThreadRowIssueKeys.add(dedupeKey);
+  logBrokenThreadHistoryProof('client:message-row-issue', {
+    conversationId,
+    details: {
+      ...details,
+      issues,
+      messageId,
+    },
+    level: 'warn',
+  });
 }
 
 function filterRenderableMessageAttachments(
@@ -2632,11 +2672,12 @@ function ThreadMessageRowComponent({
     !isEncryptedDmMessage(message);
   const isMessageInDeleteMode =
     activeDeleteMessageId === message.id && isOwnMessage && !isDeletedMessage;
-  const messageAttachments =
-    filterRenderableMessageAttachments(
-      message.id,
-      attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS,
-    );
+  const rawMessageAttachments =
+    attachmentsByMessage.get(message.id) ?? EMPTY_MESSAGE_ATTACHMENTS;
+  const messageAttachments = filterRenderableMessageAttachments(
+    message.id,
+    rawMessageAttachments,
+  );
   const isPendingOwnAttachmentCommitTransition =
     isOwnAttachmentCommitTransitionPending({
       attachments: messageAttachments,
@@ -2721,6 +2762,86 @@ function ThreadMessageRowComponent({
     !isDeletedMessage &&
     !isMessageInEditMode &&
     !isMessageInDeleteMode;
+  const currentMessageReplyTargetAttachmentKind =
+    resolveReplyTargetAttachmentKind(messageAttachments);
+  const messageRowIssues: string[] = [];
+
+  if (message.id.trim().length !== message.id.length) {
+    messageRowIssues.push('message.id-untrimmed');
+  }
+
+  if (
+    typeof message.conversation_id === 'string' &&
+    message.conversation_id.trim().length > 0 &&
+    message.conversation_id.trim() !== conversationId
+  ) {
+    messageRowIssues.push('message.conversation-id-mismatch');
+  }
+
+  if (!Number.isFinite(messageSeq)) {
+    messageRowIssues.push('message.seq-invalid');
+  }
+
+  if (
+    patchedBody !== null &&
+    typeof patchedBody !== 'string'
+  ) {
+    messageRowIssues.push('patch.body-invalid');
+  }
+
+  if (
+    patchedDeletedAt !== null &&
+    typeof patchedDeletedAt !== 'string'
+  ) {
+    messageRowIssues.push('patch.deleted-at-invalid');
+  }
+
+  if (rawMessageAttachments.length !== messageAttachments.length) {
+    messageRowIssues.push('attachment.guard-drop');
+  }
+
+  if (
+    message.kind === 'voice' &&
+    primaryVoiceAttachment === null
+  ) {
+    messageRowIssues.push('voice.attachment-missing');
+  }
+
+  if (
+    message.kind === 'voice' &&
+    primaryVoiceAttachment &&
+    !normalizeAttachmentSignedUrl(primaryVoiceAttachment.signedUrl)
+  ) {
+    messageRowIssues.push('voice.signed-url-missing');
+  }
+
+  if (
+    primaryVoiceAttachment &&
+    primaryVoiceAttachment.voicePlaybackVariants !== undefined &&
+    primaryVoiceAttachment.voicePlaybackVariants !== null &&
+    !Array.isArray(primaryVoiceAttachment.voicePlaybackVariants)
+  ) {
+    messageRowIssues.push('voice.variant-metadata-invalid');
+  }
+
+  logBrokenThreadRowIssue(conversationId, message.id, messageRowIssues, {
+    attachmentCount: rawMessageAttachments.length,
+    contentMode: message.content_mode ?? null,
+    filteredAttachmentCount: messageAttachments.length,
+    hasVoiceAttachment: Boolean(primaryVoiceAttachment),
+    kind: message.kind,
+    patchedBodyType: patchedBody === null ? 'null' : typeof patchedBody,
+    patchedDeletedAtType:
+      patchedDeletedAt === null ? 'null' : typeof patchedDeletedAt,
+    seq: message.seq,
+    voiceAttachmentMimeType: primaryVoiceAttachment?.mimeType ?? null,
+    voiceAttachmentSignedUrl: Boolean(
+      normalizeAttachmentSignedUrl(primaryVoiceAttachment?.signedUrl ?? null),
+    ),
+    voiceVariantCount: Array.isArray(primaryVoiceAttachment?.voicePlaybackVariants)
+      ? primaryVoiceAttachment.voicePlaybackVariants.length
+      : null,
+  });
   const inlineEditLabels = useMemo(
     () => ({
       cancel: t.chat.cancel,
@@ -3050,37 +3171,25 @@ function ThreadMessageRowComponent({
     },
     [closeQuickActions, onOpenImagePreview],
   );
-  const handleReplyAction = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeQuickActions();
-      emitThreadLocalReplyTargetSelection({
-        conversationId,
-        target: {
-          attachmentKind: resolveReplyTargetAttachmentKind(messageAttachments),
-          body: patchedBody,
-          deletedAt: patchedDeletedAt,
-          id: message.id,
-          isEncrypted: isEncryptedDmMessage(message),
-          kind: message.kind,
-          senderId: message.sender_id ?? null,
-          senderLabel:
-            senderNames.get(message.sender_id ?? '') || t.chat.unknownUser,
-        },
-      });
-    },
-    [
-      closeQuickActions,
+  const handleReplyAction = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeQuickActions();
+    emitThreadLocalReplyTargetSelection({
       conversationId,
-      message,
-      messageAttachments,
-      patchedBody,
-      patchedDeletedAt,
-      senderNames,
-      t.chat.unknownUser,
-    ],
-  );
+      target: {
+        attachmentKind: currentMessageReplyTargetAttachmentKind,
+        body: patchedBody,
+        deletedAt: patchedDeletedAt,
+        id: message.id,
+        isEncrypted: isEncryptedDmMessage(message),
+        kind: message.kind,
+        senderId: message.sender_id ?? null,
+        senderLabel:
+          senderNames.get(message.sender_id ?? '') || t.chat.unknownUser,
+      },
+    });
+  };
 
   const canInlineMessageMeta =
     Boolean(normalizedMessageBody) &&
@@ -3696,6 +3805,7 @@ export function ThreadHistoryViewport({
   }
 
   const renderCountRef = useRef(0);
+  const lastBrokenHistoryProofSummaryRef = useRef<string | null>(null);
   const [historyState, setHistoryState] = useState<ThreadHistoryState>(() =>
     initialResolvedStateRef.current?.state ?? createThreadHistoryState(initialSnapshot),
   );
@@ -3830,6 +3940,31 @@ export function ThreadHistoryViewport({
     clientRuntimeDiagnosticsEnabled,
     conversationId,
     initialSnapshot.messages.length,
+  ]);
+
+  useEffect(() => {
+    if (!shouldLogBrokenThreadHistoryProof(conversationId)) {
+      return;
+    }
+
+    logBrokenThreadHistoryProof('client:initial-snapshot', {
+      conversationId,
+      details: {
+        debugRequestId: threadClientDiagnostics.debugRequestId ?? null,
+        restoredFromSessionCache:
+          initialResolvedStateRef.current?.usedSessionCache ?? false,
+        summary: summarizeBrokenThreadHistorySnapshot({
+          attachmentsByMessage: initialSnapshot.attachmentsByMessage,
+          conversationId,
+          messages: initialSnapshot.messages,
+        }),
+      },
+    });
+  }, [
+    conversationId,
+    initialSnapshot.attachmentsByMessage,
+    initialSnapshot.messages,
+    threadClientDiagnostics.debugRequestId,
   ]);
 
   useEffect(() => {
@@ -3979,6 +4114,66 @@ export function ThreadHistoryViewport({
     () => historyState.messages.map((message) => message.id),
     [historyState.messages],
   );
+  useEffect(() => {
+    if (!shouldLogBrokenThreadHistoryProof(conversationId)) {
+      return;
+    }
+
+    const historySummary = summarizeBrokenThreadHistorySnapshot({
+      attachmentsByMessage: Array.from(historyState.attachmentsByMessage.entries()).map(
+        ([messageId, attachments]) => ({
+          attachments,
+          messageId,
+        }),
+      ),
+      conversationId,
+      messages: historyState.messages,
+    });
+    const patchSummary = summarizeBrokenThreadMessagePatches(
+      readThreadMessagePatchSnapshot(conversationId),
+    );
+    const renderSummary = {
+      activeImagePreviewOpen: Boolean(activeImagePreview),
+      debugRequestId: threadClientDiagnostics.debugRequestId ?? null,
+      liveStateSnapshot: getThreadLiveStateSnapshot(conversationId),
+      patchSummary,
+      renderCount: renderCountRef.current,
+      renderedItemCount: timelineRenderItems.length,
+      renderedMessageCount: timelineRenderItems.filter(
+        (item) => item.type === 'message',
+      ).length,
+      summary: historySummary,
+    };
+    const nextSummaryKey = JSON.stringify(renderSummary);
+
+    if (lastBrokenHistoryProofSummaryRef.current === nextSummaryKey) {
+      return;
+    }
+
+    lastBrokenHistoryProofSummaryRef.current = nextSummaryKey;
+    logBrokenThreadHistoryProof('client:history-state', {
+      conversationId,
+      details: renderSummary,
+    });
+
+    if (
+      historySummary.messageCount > 0 &&
+      timelineRenderItems.every((item) => item.type !== 'message')
+    ) {
+      logBrokenThreadHistoryProof('client:message-list-dropped-before-render', {
+        conversationId,
+        details: renderSummary,
+        level: 'warn',
+      });
+    }
+  }, [
+    activeImagePreview,
+    conversationId,
+    historyState.attachmentsByMessage,
+    historyState.messages,
+    threadClientDiagnostics.debugRequestId,
+    timelineRenderItems,
+  ]);
   const recoverableEncryptedHistoryMessageIds = useMemo(
     () =>
       historyState.messages.flatMap((message) => {

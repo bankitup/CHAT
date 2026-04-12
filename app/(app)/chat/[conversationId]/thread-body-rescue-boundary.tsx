@@ -2,7 +2,12 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
+import {
+  logBrokenThreadHistoryProof,
+  summarizeBrokenThreadMessagePatches,
+} from '@/modules/messaging/diagnostics/thread-history-proof';
 import { getThreadLiveStateSnapshot } from '@/modules/messaging/realtime/thread-live-state-store';
+import { readThreadMessagePatchSnapshot } from '@/modules/messaging/realtime/thread-message-patch-store';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
   DmThreadClientSubtree,
@@ -38,16 +43,21 @@ function ThreadBodyRescueFallback({
     const lastClientSubtree = readLastDmThreadClientSubtree();
     const lastHydrationSnapshot = readLastDmThreadHydrationSnapshot();
     const liveStateSnapshot = getThreadLiveStateSnapshot(conversationId);
+    const patchSnapshot = readThreadMessagePatchSnapshot(conversationId);
 
-    console.error('[thread-body-rescue-boundary]', {
+    logBrokenThreadHistoryProof('rescue:fallback-mounted', {
       conversationId,
-      debugRequestId: threadClientDiagnostics.debugRequestId ?? null,
-      deploymentId: threadClientDiagnostics.deploymentId ?? null,
-      gitCommitSha: threadClientDiagnostics.gitCommitSha ?? null,
-      lastClientSubtree,
-      lastHydrationSnapshot,
-      liveStateSnapshot,
-      vercelUrl: threadClientDiagnostics.vercelUrl ?? null,
+      details: {
+        debugRequestId: threadClientDiagnostics.debugRequestId ?? null,
+        deploymentId: threadClientDiagnostics.deploymentId ?? null,
+        gitCommitSha: threadClientDiagnostics.gitCommitSha ?? null,
+        lastClientSubtree,
+        lastHydrationSnapshot,
+        liveStateSnapshot,
+        patchSummary: summarizeBrokenThreadMessagePatches(patchSnapshot),
+        vercelUrl: threadClientDiagnostics.vercelUrl ?? null,
+      },
+      level: 'error',
     });
   }, [conversationId, threadClientDiagnostics]);
 
@@ -119,6 +129,27 @@ export function ThreadBodyRescueBoundary({
         />
       }
       gitCommitSha={threadClientDiagnostics.gitCommitSha}
+      onError={({ componentStack, error, ...details }) => {
+        const lastClientSubtree = readLastDmThreadClientSubtree();
+        const lastHydrationSnapshot = readLastDmThreadHydrationSnapshot();
+        const liveStateSnapshot = getThreadLiveStateSnapshot(conversationId);
+        const patchSnapshot = readThreadMessagePatchSnapshot(conversationId);
+
+        logBrokenThreadHistoryProof('rescue:render-error-captured', {
+          conversationId,
+          details: {
+            ...details,
+            componentStack,
+            errorMessage: error.message,
+            errorName: error.name,
+            lastClientSubtree,
+            lastHydrationSnapshot,
+            liveStateSnapshot,
+            patchSummary: summarizeBrokenThreadMessagePatches(patchSnapshot),
+          },
+          level: 'error',
+        });
+      }}
       surface="thread-history-viewport"
       vercelUrl={threadClientDiagnostics.vercelUrl}
     >
