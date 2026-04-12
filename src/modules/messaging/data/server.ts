@@ -104,6 +104,29 @@ export function isDmE2eeOperationError(
   );
 }
 
+class ExistingDmConversationConflictError extends Error {
+  conversationId: string;
+
+  constructor(conversationId: string) {
+    super('Active direct chat already exists and must be resolved by the caller.');
+    this.conversationId = conversationId;
+  }
+}
+
+export function isExistingDmConversationConflictError(
+  error: unknown,
+): error is ExistingDmConversationConflictError {
+  return (
+    error instanceof Error &&
+    'conversationId' in error &&
+    typeof (error as { conversationId?: unknown }).conversationId === 'string'
+  );
+}
+
+function createExistingDmConversationConflictError(conversationId: string) {
+  return new ExistingDmConversationConflictError(conversationId);
+}
+
 function createDmE2eeOperationError(
   code: DmE2eeApiErrorCode,
   message: string,
@@ -3268,10 +3291,13 @@ export async function createConversationWithMembers(input: {
   participantUserIds: string[];
   title?: string | null;
   spaceId?: string | null;
+}, options?: {
+  existingDmBehavior?: 'reuse-existing' | 'throw-conflict';
 }) {
   const supabase = await getRequestSupabaseServerClient();
   const conversationId = crypto.randomUUID();
   const normalizedSpaceId = input.spaceId?.trim() || null;
+  const existingDmBehavior = options?.existingDmBehavior ?? 'reuse-existing';
 
   if (!input.creatorUserId) {
     throw new Error('Authenticated user is required to create a conversation.');
@@ -3317,6 +3343,9 @@ export async function createConversationWithMembers(input: {
     );
 
     if (existingConversationId) {
+      if (existingDmBehavior === 'throw-conflict') {
+        throw createExistingDmConversationConflictError(existingConversationId);
+      }
       return existingConversationId;
     }
   }
@@ -3421,6 +3450,9 @@ export async function createConversationWithMembers(input: {
       );
 
       if (existingConversationId) {
+        if (existingDmBehavior === 'throw-conflict') {
+          throw createExistingDmConversationConflictError(existingConversationId);
+        }
         return existingConversationId;
       }
 
@@ -3449,6 +3481,11 @@ export async function createConversationWithMembers(input: {
           );
 
           if (scopedExistingConversationId) {
+            if (existingDmBehavior === 'throw-conflict') {
+              throw createExistingDmConversationConflictError(
+                scopedExistingConversationId,
+              );
+            }
             return scopedExistingConversationId;
           }
 

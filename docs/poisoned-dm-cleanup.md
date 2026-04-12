@@ -74,11 +74,14 @@ There is now one more safety check on the restore path:
 - if the existing DM snapshot shows explicit broken-thread signals
 - or if the latest encrypted row payload is malformed enough to trip the known
   server-render guard
+- or if the low-level DM create helper races into an already-existing direct
+  chat during creation
 
 then `createDmAction(...)` does **not** auto-restore that conversation.
 
 Instead, the app stops with a controlled error so a poisoned conversation is
-not silently reopened as if it were healthy.
+not silently reopened as if it were healthy. The inbox action remains the only
+place allowed to decide whether an existing DM is healthy enough to reopen.
 
 ## Recommended Recovery Flow
 

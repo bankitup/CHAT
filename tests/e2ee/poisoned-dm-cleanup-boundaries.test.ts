@@ -183,6 +183,10 @@ test('DM recreation still reuses only an existing active conversation, so a dele
   );
   assert.match(
     inboxActionsSource,
+    /isExistingDmConversationConflictError,/,
+  );
+  assert.match(
+    inboxActionsSource,
     /getConversationAutoRestoreHealthForUser,/,
   );
   assert.match(
@@ -205,17 +209,29 @@ test('DM recreation still reuses only an existing active conversation, so a dele
     inboxActionsSource,
     /if \(existingConversationId\) \{[\s\S]*await resolveExistingDmAutoRestoreOrThrow\(/,
   );
+  assert.match(
+    createDmActionSource,
+    /const conversationId = await createConversationWithMembers\(\{[\s\S]*kind: 'dm'[\s\S]*\}, \{\s*existingDmBehavior: 'throw-conflict',\s*\}\);/,
+  );
+  assert.match(
+    createDmActionSource,
+    /if \(isExistingDmConversationConflictError\(error\)\) \{[\s\S]*await resolveExistingDmAutoRestoreOrThrow\(\{[\s\S]*conversationId: error\.conversationId,/,
+  );
   assert.doesNotMatch(
     createDmActionSource,
     /restoreConversationForUser\(/,
   );
   assert.match(
-    inboxActionsSource,
-    /const conversationId = await createConversationWithMembers\(\{[\s\S]*kind: 'dm'/,
+    dataSource,
+    /existingDmBehavior\?: 'reuse-existing' \| 'throw-conflict';/,
   );
   assert.match(
     dataSource,
-    /if \(existingConversationId\) \{\s*return existingConversationId;\s*\}/,
+    /if \(existingConversationId\) \{[\s\S]*if \(existingDmBehavior === 'throw-conflict'\) \{[\s\S]*throw createExistingDmConversationConflictError\(existingConversationId\);[\s\S]*\}[\s\S]*return existingConversationId;/,
+  );
+  assert.match(
+    dataSource,
+    /export function isExistingDmConversationConflictError\(/,
   );
   assert.match(
     threadReadServerSource,

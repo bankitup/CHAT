@@ -10,6 +10,7 @@ import {
   createConversationWithMembers,
   findExistingActiveDmConversation,
   getConversationAutoRestoreHealthForUser,
+  isExistingDmConversationConflictError,
   restoreConversationForUser,
   isUniqueConstraintErrorMessage,
 } from '@/modules/messaging/data/server';
@@ -179,6 +180,8 @@ export async function createDmAction(formData: FormData) {
       creatorUserId,
       participantUserIds: [participantUserId],
       spaceId: spaceId || null,
+    }, {
+      existingDmBehavior: 'throw-conflict',
     });
 
     redirect(withSpaceParam(`/chat/${conversationId}`, spaceId));
@@ -189,6 +192,15 @@ export async function createDmAction(formData: FormData) {
 
     const spaceId = readText(formData, 'spaceId');
     const participantUserId = readText(formData, 'participantUserId');
+
+    if (isExistingDmConversationConflictError(error)) {
+      const creatorUserId = await getAuthenticatedUserId();
+      await resolveExistingDmAutoRestoreOrThrow({
+        conversationId: error.conversationId,
+        creatorUserId,
+        spaceId,
+      });
+    }
 
     if (
       error instanceof Error &&
