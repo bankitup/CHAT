@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeApiErrorResponse,

@@ -3,7 +3,7 @@
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import type { MessagingVoiceCaptureState } from '@/modules/messaging/media/voice';
 import type { MessagingVoiceMessageDraftRecord } from '@/modules/messaging/media/voice';
 

@@ -3,7 +3,7 @@
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 

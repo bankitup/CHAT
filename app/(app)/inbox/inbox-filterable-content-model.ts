@@ -1,7 +1,7 @@
 import {
   getInboxClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-inbox';
 import { getSearchableConversationPreview } from '@/modules/messaging/e2ee/inbox-policy';
 import type {
   InboxPrimaryFilter,

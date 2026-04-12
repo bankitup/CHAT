@@ -6,7 +6,7 @@ import { type ReactNode } from 'react';
 import {
   getShellClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-shell';
 import {
   resolveActiveAppShellSpace,
   resolveAppShellState,

@@ -9,11 +9,13 @@ import {
   useState,
 } from 'react';
 import {
-  formatPersonFallbackLabel,
-  getLocaleForLanguage,
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
+import {
+  formatPersonFallbackLabel,
+  getLocaleForLanguage,
+} from '@/modules/i18n/client-shared';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import {

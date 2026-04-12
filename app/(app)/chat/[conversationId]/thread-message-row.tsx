@@ -14,9 +14,9 @@ import {
 } from 'react';
 import {
   getChatClientTranslations,
-  getLocaleForLanguage,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
+import { getLocaleForLanguage } from '@/modules/i18n/client-shared';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import {

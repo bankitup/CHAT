@@ -18,7 +18,7 @@ import {
 import {
   getZoomSwitcherClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-zoom';
 
 type HomeAppZoomControlProps = {
   compact?: boolean;

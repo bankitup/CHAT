@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getInboxClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-inbox';
 import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import type { NewChatMode } from './new-chat-sheet';
 
