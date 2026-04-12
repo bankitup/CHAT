@@ -1068,6 +1068,7 @@ main {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
+  min-width: 0;
   min-height: var(--app-bottom-nav-shell-min-height);
   padding: 7px;
   border: 1px solid rgba(221, 228, 238, 0.9);
@@ -1082,6 +1083,7 @@ main {
 .app-bottom-nav-shell-messenger {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  min-width: 0;
   min-height: var(--app-bottom-nav-shell-messenger-min-height);
   padding: 8px 10px;
   border-color: rgba(218, 226, 237, 0.82);
@@ -1099,6 +1101,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
   min-height: var(--app-bottom-nav-link-min-height);
   padding: var(--app-bottom-nav-link-pad-y) var(--app-bottom-nav-link-pad-x);
   border-radius: var(--app-bottom-nav-link-radius);
@@ -1130,9 +1133,14 @@ main {
 }
 
 .app-bottom-nav-label {
+  display: block;
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.05;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-bottom-nav-link-messenger .app-bottom-nav-label {
@@ -4142,6 +4150,7 @@ main {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .profile-status-form {
@@ -4265,6 +4274,7 @@ main {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+  min-width: 0;
 }
 
 .profile-inline-main {
@@ -4274,6 +4284,7 @@ main {
   gap: 14px;
   min-width: 0;
   flex: 1 1 auto;
+  width: 100%;
 }
 
 .profile-inline-avatar {
@@ -4305,6 +4316,18 @@ main {
   box-shadow:
     0 0 0 4px rgba(31, 111, 235, 0.08),
     0 14px 28px rgba(17, 24, 39, 0.08);
+}
+
+@media (max-width: 520px) {
+  .profile-inline-top-row,
+  .profile-status-top-row {
+    flex-wrap: wrap;
+  }
+
+  .profile-inline-actions-top-row {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 .profile-inline-avatar-badge {
