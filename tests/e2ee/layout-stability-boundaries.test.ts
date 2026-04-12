@@ -40,6 +40,22 @@ test('shared shell and messenger globals keep reserved layout space for CLS-sens
     globalsSource,
     /\.message-voice-card-loading/,
   );
+  assert.match(
+    globalsSource,
+    /\.chat-image-preview-shell\s*\{[\s\S]*overflow:\s*hidden/,
+  );
+  assert.match(
+    globalsSource,
+    /\.chat-image-preview-stage\s*\{[\s\S]*height:\s*100%[\s\S]*min-width:\s*0[\s\S]*min-height:\s*0/,
+  );
+  assert.match(
+    globalsSource,
+    /\.chat-image-preview-frame\s*\{[\s\S]*max-height:\s*100%[\s\S]*min-width:\s*0[\s\S]*min-height:\s*0/,
+  );
+  assert.match(
+    globalsSource,
+    /\.chat-image-preview-image\s*\{[\s\S]*width:\s*100%[\s\S]*max-width:\s*100%[\s\S]*height:\s*auto[\s\S]*object-fit:\s*contain/,
+  );
 });
 
 test('chat and inbox components keep explicit reserved-shell fallbacks instead of late zero-height settlement', () => {
