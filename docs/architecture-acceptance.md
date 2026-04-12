@@ -60,6 +60,8 @@ The current acceptance bar focuses on these boundaries:
     Messenger style tax
 22. Messenger realtime ownership stays route-scoped, catch-up stays
     authoritative, and presence/typing stay auxiliary to message truth
+23. Core Messenger mobile row/card layouts stay structurally intact across
+    inbox, chat, settings, and shell fit checks
 
 ## Shared Platform Seams Under Acceptance
 
@@ -139,6 +141,13 @@ Current acceptance tests:
   - shared shell nav space stays reserved
   - chat composer and voice loading shells keep stable footprints
   - inbox rows keep preview-line reservation during live settlement
+- [tests/e2ee/messenger-mobile-layout-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/messenger-mobile-layout-boundaries.test.ts)
+  verifies the current Messenger mobile layout structure:
+  - inbox rows keep avatar/content/title-meta/preview composition instead of
+    falling into broken stacking
+  - the chat route keeps header, message thread, and composer as distinct shell
+    layers
+  - settings keeps its stacked shell and editable top-row alignment seams
 - [tests/e2ee/messaging-data-facade-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/messaging-data-facade-boundaries.test.ts)
   verifies the current messaging data split:
   - `server.ts` stays under the current reduced size cap
@@ -237,6 +246,8 @@ Examples:
   collapsing back into one oversized runtime file
 - if a mobile-performance boundary test fails, non-critical Messenger startup
   work may be drifting back into first paint on shared, inbox, or chat routes
+- if a Messenger mobile layout boundary test fails, a cleanup pass may have
+  broken row/card composition or shell structure without changing data flow
 - if a global-weight boundary test fails, heavy routes may be regressing back
   toward broad shared i18n or global Messenger CSS tax
 - if a realtime-recovery boundary test fails, Messenger live ownership may be

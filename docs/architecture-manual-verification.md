@@ -69,7 +69,30 @@ Fast architecture-drift review checks for shared or mixed seams live in
   shell
 - Confirm no KeepCozy route is required for this flow.
 
-### 4a. Thread Runtime Sanity
+### 4a. Messenger Layout Sanity
+
+- On a narrow mobile-width viewport, open
+  [inbox/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/page.tsx)
+  and confirm each conversation item still reads as one coherent row/card:
+  - avatar area on the left
+  - primary copy in the center
+  - time/unread/meta aligned as a compact rail instead of dropping into block
+    stacking
+  - preview text staying inside the content column
+- Open
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/chat/[conversationId]/page.tsx)
+  and confirm the mobile shell still resolves into three clear layers:
+  - header card
+  - message body/thread
+  - composer area
+- Open
+  [settings/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/settings/page.tsx)
+  and confirm:
+  - profile top row stays aligned
+  - status top row stays aligned
+  - space-summary action button does not overlap or squeeze the content column
+
+### 4b. Thread Runtime Sanity
 
 - In an active Messenger thread:
   - scroll older history and confirm the viewport still loads older messages
@@ -78,7 +101,7 @@ Fast architecture-drift review checks for shared or mixed seams live in
   - if a voice message is already present in the environment, confirm the voice
     row still renders and local playback controls still appear where expected
 
-### 4b. Conversation Runtime Recovery
+### 4c. Conversation Runtime Recovery
 
 - Run the focused matrix in
   [conversation-runtime-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/conversation-runtime-manual-matrix.md)
@@ -87,7 +110,7 @@ Fast architecture-drift review checks for shared or mixed seams live in
   - voice playback runtime
   - image attachment preview
 
-### 4c. Realtime Recovery
+### 4d. Realtime Recovery
 
 - When the branch touches Messenger live ownership, reconnect behavior, or
   catch-up logic, run the focused realtime rows in
