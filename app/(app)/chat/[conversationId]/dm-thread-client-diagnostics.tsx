@@ -12,6 +12,18 @@ type DmThreadClientSubtreeProps = {
   fallback?: ReactNode;
   gitCommitSha?: string | null;
   messageId?: string | null;
+  onError?: (input: {
+    componentStack: string | null;
+    conversationId: string;
+    debugRequestId?: string | null;
+    deploymentId?: string | null;
+    error: Error;
+    fallbackUsed?: boolean;
+    gitCommitSha?: string | null;
+    messageId: string | null;
+    surface: string;
+    vercelUrl?: string | null;
+  }) => void;
   surface: string;
   vercelUrl?: string | null;
 };
@@ -105,6 +117,18 @@ class DmThreadClientErrorBoundary extends React.Component<
     };
 
     logClientSubtree('render:error', details);
+    this.props.onError?.({
+      componentStack: errorInfo.componentStack ?? null,
+      conversationId: this.props.conversationId,
+      debugRequestId: this.props.debugRequestId ?? null,
+      deploymentId: this.props.deploymentId ?? null,
+      error,
+      fallbackUsed: Boolean(this.props.fallback),
+      gitCommitSha: this.props.gitCommitSha ?? null,
+      messageId: this.props.messageId ?? null,
+      surface: this.props.surface,
+      vercelUrl: this.props.vercelUrl ?? null,
+    });
 
     if (this.props.fallback !== undefined) {
       logClientSubtree('render:fallback', details);
@@ -138,6 +162,21 @@ class DmThreadSilentErrorBoundary extends React.Component<
     };
   }
 
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    this.props.onError?.({
+      componentStack: errorInfo.componentStack ?? null,
+      conversationId: this.props.conversationId,
+      debugRequestId: this.props.debugRequestId ?? null,
+      deploymentId: this.props.deploymentId ?? null,
+      error,
+      fallbackUsed: Boolean(this.props.fallback),
+      gitCommitSha: this.props.gitCommitSha ?? null,
+      messageId: this.props.messageId ?? null,
+      surface: this.props.surface,
+      vercelUrl: this.props.vercelUrl ?? null,
+    });
+  }
+
   render() {
     if (this.state.error) {
       if (this.props.fallback !== undefined) {
@@ -159,6 +198,7 @@ export function DmThreadClientSubtree({
   fallback,
   gitCommitSha = null,
   messageId = null,
+  onError,
   surface,
   vercelUrl = null,
 }: DmThreadClientSubtreeProps) {
@@ -175,6 +215,7 @@ export function DmThreadClientSubtree({
         fallback={fallback}
         gitCommitSha={gitCommitSha}
         messageId={messageId}
+        onError={onError}
         surface={surface}
         vercelUrl={vercelUrl}
       >
@@ -203,6 +244,7 @@ export function DmThreadClientSubtree({
       fallback={fallback}
       gitCommitSha={gitCommitSha}
       messageId={messageId}
+      onError={onError}
       surface={surface}
       vercelUrl={vercelUrl}
     >

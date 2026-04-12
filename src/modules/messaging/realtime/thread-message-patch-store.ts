@@ -1,6 +1,11 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import {
+  logBrokenThreadHistoryProof,
+  shouldLogBrokenThreadHistoryProof,
+  summarizeBrokenThreadMessagePatches,
+} from '@/modules/messaging/diagnostics/thread-history-proof';
 
 type ThreadMessagePatch = {
   body?: string | null;
@@ -25,6 +30,17 @@ function emitThreadMessagePatchChange(conversationId: string) {
 
 function getThreadMessagePatchMap(conversationId: string) {
   return threadMessagePatchStore.get(conversationId) ?? new Map<string, ThreadMessagePatch>();
+}
+
+export function readThreadMessagePatchSnapshot(conversationId: string) {
+  return Array.from(getThreadMessagePatchMap(conversationId).entries()).map(
+    ([messageId, patch]) => ({
+      body: patch.body,
+      deletedAt: patch.deletedAt,
+      editedAt: patch.editedAt,
+      messageId,
+    }),
+  );
 }
 
 export function subscribeToThreadMessagePatches(
@@ -87,11 +103,42 @@ export function patchThreadMessageContent(input: {
     existingPatch?.deletedAt === nextPatch.deletedAt &&
     existingPatch?.editedAt === nextPatch.editedAt
   ) {
+    if (shouldLogBrokenThreadHistoryProof(normalizedConversationId)) {
+      logBrokenThreadHistoryProof('patch:noop', {
+        conversationId: normalizedConversationId,
+        details: {
+          bodyType:
+            nextPatch.body === null ? 'null' : typeof nextPatch.body,
+          deletedAtType:
+            nextPatch.deletedAt === null ? 'null' : typeof nextPatch.deletedAt,
+          editedAtType:
+            nextPatch.editedAt === null ? 'null' : typeof nextPatch.editedAt,
+          messageId: normalizedMessageId,
+        },
+      });
+    }
     return;
   }
 
   conversationPatches.set(normalizedMessageId, nextPatch);
   threadMessagePatchStore.set(normalizedConversationId, conversationPatches);
+  if (shouldLogBrokenThreadHistoryProof(normalizedConversationId)) {
+    const patchSnapshot = readThreadMessagePatchSnapshot(normalizedConversationId);
+
+    logBrokenThreadHistoryProof('patch:applied', {
+      conversationId: normalizedConversationId,
+      details: {
+        bodyType: nextPatch.body === null ? 'null' : typeof nextPatch.body,
+        deletedAtType:
+          nextPatch.deletedAt === null ? 'null' : typeof nextPatch.deletedAt,
+        editedAtType:
+          nextPatch.editedAt === null ? 'null' : typeof nextPatch.editedAt,
+        messageId: normalizedMessageId,
+        summary: summarizeBrokenThreadMessagePatches(patchSnapshot),
+      },
+      level: 'info',
+    });
+  }
   emitThreadMessagePatchChange(normalizedConversationId);
 }
 
