@@ -4,7 +4,7 @@ This repository is the current shared BWC platform codebase.
 
 Read it as:
 
-- BWC platform foundation
+- BWC platform and operating-company foundation
 - Messenger as one product
 - KeepCozy as another product
 - shared capabilities, including messaging, reused where justified
@@ -37,6 +37,9 @@ Key areas:
 
 Use these as the main architecture entry points:
 
+- [docs/bwc-platform-doctrine.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/bwc-platform-doctrine.md)
+- [docs/layer-ownership-rules.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/layer-ownership-rules.md)
+- [docs/new-product-admission-checklist.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/new-product-admission-checklist.md)
 - [docs/platform-architecture-current-state.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/platform-architecture-current-state.md)
 - [docs/platform-architecture-target-shape.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/platform-architecture-target-shape.md)
 - [docs/platform-foundation-vs-product-boundaries.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/platform-foundation-vs-product-boundaries.md)
