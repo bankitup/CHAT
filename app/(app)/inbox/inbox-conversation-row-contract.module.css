@@ -1,0 +1,145 @@
+.card {
+  display: block;
+  min-width: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+  min-width: 0;
+  min-height: 58px;
+}
+
+.rowDm {
+  gap: 15px;
+  min-height: 70px;
+}
+
+.rowWithAction {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowWithAction .link {
+  grid-column: 1 / 2;
+}
+
+.link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+  width: 100%;
+  min-width: 0;
+  grid-column: 1 / -1;
+  padding: 4px 0;
+  color: inherit;
+  position: relative;
+  z-index: 1;
+  touch-action: manipulation;
+}
+
+.linkDm {
+  gap: 15px;
+  padding: 6px 0;
+}
+
+.avatarSlot {
+  display: grid;
+  align-self: start;
+  flex: 0 0 auto;
+}
+
+.copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.copyDm {
+  gap: 7px;
+}
+
+.mainCopy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mainCopyDm {
+  gap: 5px;
+}
+
+.titleRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.titleRowDm {
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.recency {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.unreadBadge {
+  flex: 0 0 auto;
+}
+
+.preview {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewPlaceholder {
+  visibility: hidden;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.footerDm {
+  gap: 10px;
+}
+
+.footerMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 18px;
+  flex-wrap: wrap;
+}

@@ -10,6 +10,7 @@ import {
   type InboxConversationLiveSummary,
 } from '@/modules/messaging/realtime/inbox-summary-store';
 import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
+import styles from './inbox-conversation-row-contract.module.css';
 import {
   areInboxMetaLabelsEqual,
   areInboxParticipantListsEqual,
@@ -18,6 +19,7 @@ import {
   formatInboxUnreadBadgeCount,
   InboxConversationAvatarVisual,
   InboxConversationTitleVisual,
+  joinClassNames,
 } from './inbox-conversation-row-shared';
 
 type InboxConversationLiveRowProps = {
@@ -188,33 +190,39 @@ function InboxConversationLiveRowComponent({
 
   return (
     <article
-      className={
+      className={joinClassNames(
         hasUnread
           ? isPrimaryChatsView
             ? 'conversation-card conversation-card-unread conversation-card-minimal conversation-card-dm'
             : 'conversation-card conversation-card-unread conversation-card-minimal'
           : isPrimaryChatsView
             ? 'conversation-card conversation-card-minimal conversation-card-dm'
-            : 'conversation-card conversation-card-minimal'
-      }
+            : 'conversation-card conversation-card-minimal',
+        styles.card,
+      )}
     >
       <div
-        className={
+        className={joinClassNames(
           isArchivedView
             ? isPrimaryChatsView
               ? 'conversation-row conversation-row-with-action conversation-row-dm'
               : 'conversation-row conversation-row-with-action'
             : isPrimaryChatsView
               ? 'conversation-row conversation-row-dm'
-              : 'conversation-row'
-        }
+              : 'conversation-row',
+          styles.row,
+          isPrimaryChatsView ? styles.rowDm : null,
+          isArchivedView ? styles.rowWithAction : null,
+        )}
       >
         <Link
-          className={
+          className={joinClassNames(
             isPrimaryChatsView
               ? 'conversation-row-link conversation-row-link-dm'
-              : 'conversation-row-link'
-          }
+              : 'conversation-row-link',
+            styles.link,
+            isPrimaryChatsView ? styles.linkDm : null,
+          )}
           href={chatHref}
           onClick={(event) => {
             if (
@@ -242,54 +250,72 @@ function InboxConversationLiveRowComponent({
           }}
           prefetch={shouldPrefetch}
         >
-          <InboxConversationAvatarVisual
-            groupAvatarPath={item.groupAvatarPath}
-            isGroupConversation={item.isGroupConversation}
-            isPrimaryChatsView={isPrimaryChatsView}
-            participant={item.participants[0] ?? null}
-            title={item.title}
-          />
+          <div className={styles.avatarSlot}>
+            <InboxConversationAvatarVisual
+              groupAvatarPath={item.groupAvatarPath}
+              isGroupConversation={item.isGroupConversation}
+              isPrimaryChatsView={isPrimaryChatsView}
+              participant={item.participants[0] ?? null}
+              title={item.title}
+            />
+          </div>
 
           <div
-            className={
+            className={joinClassNames(
               isPrimaryChatsView
                 ? 'stack conversation-card-copy conversation-card-copy-dm'
-                : 'stack conversation-card-copy'
-            }
+                : 'stack conversation-card-copy',
+              styles.copy,
+              isPrimaryChatsView ? styles.copyDm : null,
+            )}
           >
             <div
-              className={
+              className={joinClassNames(
                 isPrimaryChatsView
                   ? 'stack conversation-main-copy conversation-main-copy-dm'
-                  : 'stack conversation-main-copy'
-              }
+                  : 'stack conversation-main-copy',
+                styles.mainCopy,
+                isPrimaryChatsView ? styles.mainCopyDm : null,
+              )}
             >
               <div
-                className={
+                className={joinClassNames(
                   isPrimaryChatsView
                     ? 'conversation-title-row conversation-title-row-dm'
-                    : 'conversation-title-row'
-                }
+                    : 'conversation-title-row',
+                  styles.titleRow,
+                  isPrimaryChatsView ? styles.titleRowDm : null,
+                )}
               >
                 <InboxConversationTitleVisual
+                  className={styles.title}
                   hasUnread={hasUnread}
                   isPrimaryChatsView={isPrimaryChatsView}
                   title={item.title}
                 />
-                <div className="conversation-title-meta">
+                <div
+                  className={joinClassNames(
+                    'conversation-title-meta',
+                    styles.titleMeta,
+                  )}
+                >
                   <span
-                    className={
+                    className={joinClassNames(
                       hasUnread
                         ? 'conversation-recency conversation-recency-unread'
-                        : 'conversation-recency'
-                    }
+                        : 'conversation-recency',
+                      styles.recency,
+                    )}
                     title={timestampLabel}
                   >
                     {recencyLabel}
                   </span>
                   {hasUnread && unreadBadgeCount ? (
                     <span
-                      className="conversation-unread-badge"
+                      className={joinClassNames(
+                        'conversation-unread-badge',
+                        styles.unreadBadge,
+                      )}
                       aria-label={labels.unreadAria}
                     >
                       {unreadBadgeCount}
@@ -299,7 +325,10 @@ function InboxConversationLiveRowComponent({
               </div>
               {preview ? (
                 <EncryptedDmInboxPreview
-                  className={previewClassName}
+                  className={joinClassNames(
+                    previewClassName,
+                    styles.preview,
+                  )}
                   conversationId={item.conversationId}
                   currentUserId={currentUserId}
                   fallbackPreview={preview}
@@ -310,7 +339,12 @@ function InboxConversationLiveRowComponent({
               ) : (
                 <p
                   aria-hidden="true"
-                  className={`${previewClassName} conversation-preview-placeholder`}
+                  className={joinClassNames(
+                    previewClassName,
+                    'conversation-preview-placeholder',
+                    styles.preview,
+                    styles.previewPlaceholder,
+                  )}
                 >
                   {'\u00a0'}
                 </p>
@@ -319,13 +353,20 @@ function InboxConversationLiveRowComponent({
 
             {item.metaLabels.length > 0 ? (
               <div
-                className={
+                className={joinClassNames(
                   isPrimaryChatsView
                     ? 'conversation-footer conversation-footer-dm'
-                    : 'conversation-footer'
-                }
+                    : 'conversation-footer',
+                  styles.footer,
+                  isPrimaryChatsView ? styles.footerDm : null,
+                )}
               >
-                <div className="conversation-footer-meta">
+                <div
+                  className={joinClassNames(
+                    'conversation-footer-meta',
+                    styles.footerMeta,
+                  )}
+                >
                   {item.metaLabels.map((metaLabel) => (
                     <span
                       key={metaLabel.label}
