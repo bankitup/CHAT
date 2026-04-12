@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { resolveConversationAttachmentContentTarget } from '@/modules/messaging/data/thread-read-server';
 import {
   assertConversationMembership,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/conversation-lifecycle-server';
 
 type ConversationAttachmentContentRouteContext = {
   params: Promise<{

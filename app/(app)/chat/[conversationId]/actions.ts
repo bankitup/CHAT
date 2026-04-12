@@ -9,33 +9,43 @@ import {
 import { getTranslations } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
-  addParticipantsToGroupConversation,
   assertConversationExists,
   assertConversationMembership,
-  getConversationForUser,
-  getConversationSummaryForUser,
   assertMessageInConversation,
   assertMessageOwnedByUser,
+  deleteDirectConversationForUser,
+  hideConversationForUser,
+  markConversationRead,
+} from '@/modules/messaging/data/conversation-lifecycle-server';
+import {
+  getConversationForUser,
+  getConversationSummaryForUser,
+  type InboxConversationSummarySnapshot,
+} from '@/modules/messaging/data/conversation-read-server';
+import {
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
-  deleteDirectConversationForUser,
-  editMessage,
-  hideConversationForUser,
   isSupportedChatAttachmentType,
   isSupportedVoiceAttachmentType,
+} from '@/modules/messaging/data/message-attachment-policy';
+import {
+  addParticipantsToGroupConversation,
   leaveGroupConversation,
-  markConversationRead,
   removeParticipantFromGroupConversation,
-  softDeleteMessage,
-  STARTER_REACTIONS,
-  sendMessageWithAttachment,
-  sendTextMessage,
   setConversationHistoryVisibleFromNextMessage,
-  toggleMessageReaction,
   updateConversationIdentity,
   updateConversationNotificationLevel,
   updateConversationTitle,
-  type InboxConversationSummarySnapshot,
+} from '@/modules/messaging/data/conversation-admin-server';
+import {
+  STARTER_REACTIONS,
+  toggleMessageReaction,
+} from '@/modules/messaging/data/reactions-server';
+import {
+  editMessage,
+  sendMessageWithAttachment,
+  sendTextMessage,
+  softDeleteMessage,
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';

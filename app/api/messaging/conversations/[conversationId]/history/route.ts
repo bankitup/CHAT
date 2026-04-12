@@ -2,7 +2,7 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getConversationHistorySnapshot } from '@/modules/messaging/data/thread-read-server';
 import {
   assertConversationMembership,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/conversation-lifecycle-server';
 import { NextResponse } from 'next/server';
 
 type ConversationHistoryRouteContext = {

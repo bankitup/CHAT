@@ -22,7 +22,7 @@ import {
   getMessageSenderProfiles,
   type MessageSenderProfile,
 } from '@/modules/messaging/data/thread-read-server';
-import { CHAT_ATTACHMENT_HELP_TEXT } from '@/modules/messaging/data/server';
+import { CHAT_ATTACHMENT_HELP_TEXT } from '@/modules/messaging/data/message-attachment-policy';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import {
   canAddParticipantsToGroupConversation,

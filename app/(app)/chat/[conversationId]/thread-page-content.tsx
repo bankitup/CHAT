@@ -8,7 +8,7 @@ import {
 import {
   CHAT_ATTACHMENT_ACCEPT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/message-attachment-policy';
 import { loadMessengerThreadPageData } from '@/modules/messaging/server/thread-page';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {

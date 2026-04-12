@@ -9,11 +9,13 @@ import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   createConversationWithMembers,
   findExistingActiveDmConversation,
-  getConversationAutoRestoreHealthForUser,
   isExistingDmConversationConflictError,
   restoreConversationForUser,
   isUniqueConstraintErrorMessage,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/conversation-lifecycle-server';
+import {
+  getConversationAutoRestoreHealthForUser,
+} from '@/modules/messaging/data/thread-read-server';
 import {
   normalizeInboxListDensity,
   normalizeInboxPreviewDisplayMode,
