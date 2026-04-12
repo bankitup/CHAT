@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -7,15 +8,46 @@ import {
   getShellClientTranslations,
   type AppLanguage,
 } from '@/modules/i18n/client';
-import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
-import { WarmNavRouteObserver } from '@/modules/messaging/performance/warm-nav-client';
-import { ChatUnreadBadgeSync } from '@/modules/messaging/push/chat-unread-badge-sync';
-import { PushSubscriptionPresenceSync } from '@/modules/messaging/push/presence-sync';
 import {
   resolveActiveAppShellSpace,
   resolveAppShellState,
   type AppShellSpaceSummary,
 } from '@/modules/spaces/shell';
+
+const DmE2eeAuthenticatedBoundary = dynamic(
+  () =>
+    import('@/modules/messaging/e2ee/local-state-boundary').then(
+      (module) => module.DmE2eeAuthenticatedBoundary,
+    ),
+  { ssr: false },
+);
+
+const ChatUnreadBadgeSync = dynamic(
+  () =>
+    import('@/modules/messaging/push/chat-unread-badge-sync').then(
+      (module) => module.ChatUnreadBadgeSync,
+    ),
+  { ssr: false },
+);
+
+const PushSubscriptionPresenceSync = dynamic(
+  () =>
+    import('@/modules/messaging/push/presence-sync').then(
+      (module) => module.PushSubscriptionPresenceSync,
+    ),
+  { ssr: false },
+);
+
+const WarmNavRouteObserver = dynamic(
+  () =>
+    import('@/modules/messaging/performance/warm-nav-client').then(
+      (module) => module.WarmNavRouteObserver,
+    ),
+  { ssr: false },
+);
+
+const WARM_NAV_CLIENT_DIAGNOSTICS_ENABLED =
+  process.env.NEXT_PUBLIC_CHAT_DEBUG_WARM_NAV === '1';
 
 type AppShellFrameProps = {
   children: ReactNode;
@@ -26,10 +58,14 @@ type AppShellFrameProps = {
 };
 
 function DeferredMessengerShellEffects({
+  includeChatUnreadBadgeSync,
   includePresenceSync,
+  includeWarmNavObserver,
   syncKey,
 }: {
+  includeChatUnreadBadgeSync: boolean;
   includePresenceSync: boolean;
+  includeWarmNavObserver: boolean;
   syncKey: string;
 }) {
   const [isReady, setIsReady] = useState(false);
@@ -90,9 +126,11 @@ function DeferredMessengerShellEffects({
 
   return (
     <>
-      <ChatUnreadBadgeSync syncKey={syncKey} />
+      {includeChatUnreadBadgeSync ? (
+        <ChatUnreadBadgeSync syncKey={syncKey} />
+      ) : null}
       {includePresenceSync ? <PushSubscriptionPresenceSync /> : null}
-      <WarmNavRouteObserver />
+      {includeWarmNavObserver ? <WarmNavRouteObserver /> : null}
     </>
   );
 }
@@ -109,8 +147,10 @@ export function AppShellFrame({
   const t = getShellClientTranslations(language);
   const isChatRoute = pathname.startsWith('/chat/');
   const isInboxRoute = pathname.startsWith('/inbox');
+  const isActivityRoute = pathname.startsWith('/activity');
   const isChatSettingsRoute =
     pathname.startsWith('/chat/') && pathname.endsWith('/settings');
+  const isThreadRoute = isChatRoute && !isChatSettingsRoute;
   const activeSpaceId = searchParams.get('space');
   const activeSpace = resolveActiveAppShellSpace({
     activeSpaceId,
@@ -123,10 +163,20 @@ export function AppShellFrame({
   const badgeSyncKey = `${pathname}?${searchParams.toString()}`;
   const isMessengerShell = shellState.bottomNavProductPosture === 'messenger';
   const isMessengerSurface = shellState.routeProductSurface === 'messenger';
+  const isMessengerCoreRuntimeSurface =
+    isMessengerSurface && (isThreadRoute || isInboxRoute || isActivityRoute);
   const shouldMountDmBoundary =
-    dmE2eeEnabled && (isChatRoute || isInboxRoute);
-  const shouldMountImmediatePresenceSync = isMessengerSurface && isChatRoute;
-  const shouldMountDeferredMessengerEffects = isMessengerSurface;
+    dmE2eeEnabled && (isThreadRoute || isInboxRoute);
+  const shouldMountImmediatePresenceSync = isMessengerSurface && isThreadRoute;
+  const shouldMountDeferredPresenceSync =
+    isMessengerSurface && !shouldMountImmediatePresenceSync && isInboxRoute;
+  const shouldMountUnreadBadgeSync = isMessengerCoreRuntimeSurface;
+  const shouldMountWarmNavObserver =
+    isMessengerCoreRuntimeSurface && WARM_NAV_CLIENT_DIAGNOSTICS_ENABLED;
+  const shouldMountDeferredMessengerEffects =
+    shouldMountUnreadBadgeSync ||
+    shouldMountDeferredPresenceSync ||
+    shouldMountWarmNavObserver;
   const getNavItemLabel = (key: (typeof shellState.navItems)[number]['key']) => {
     switch (key) {
       case 'activity':
@@ -197,7 +247,9 @@ export function AppShellFrame({
       {shouldMountImmediatePresenceSync ? <PushSubscriptionPresenceSync /> : null}
       {shouldMountDeferredMessengerEffects ? (
         <DeferredMessengerShellEffects
-          includePresenceSync={!shouldMountImmediatePresenceSync}
+          includeChatUnreadBadgeSync={shouldMountUnreadBadgeSync}
+          includePresenceSync={shouldMountDeferredPresenceSync}
+          includeWarmNavObserver={shouldMountWarmNavObserver}
           syncKey={badgeSyncKey}
         />
       ) : null}

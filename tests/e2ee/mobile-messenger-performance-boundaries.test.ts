@@ -14,19 +14,69 @@ test('shared authenticated shell gates Messenger-only startup effects behind rou
 
   assert.match(
     shellSource,
-    /const shouldMountDmBoundary =\s*dmE2eeEnabled && \(isChatRoute \|\| isInboxRoute\);/,
+    /const DmE2eeAuthenticatedBoundary = dynamic\(/,
   );
   assert.match(
     shellSource,
-    /const shouldMountImmediatePresenceSync = isMessengerSurface && isChatRoute;/,
+    /const ChatUnreadBadgeSync = dynamic\(/,
   );
   assert.match(
     shellSource,
-    /const shouldMountDeferredMessengerEffects = isMessengerSurface;/,
+    /const PushSubscriptionPresenceSync = dynamic\(/,
+  );
+  assert.match(
+    shellSource,
+    /const WarmNavRouteObserver = dynamic\(/,
+  );
+  assert.doesNotMatch(
+    shellSource,
+    /from ['"]@\/modules\/messaging\/e2ee\/local-state-boundary['"]|from ['"]@\/modules\/messaging\/push\/chat-unread-badge-sync['"]|from ['"]@\/modules\/messaging\/push\/presence-sync['"]|from ['"]@\/modules\/messaging\/performance\/warm-nav-client['"]/,
+  );
+  assert.match(
+    shellSource,
+    /const isThreadRoute = isChatRoute && !isChatSettingsRoute;/,
+  );
+  assert.match(
+    shellSource,
+    /const isMessengerCoreRuntimeSurface =\s*isMessengerSurface && \(isThreadRoute \|\| isInboxRoute \|\| isActivityRoute\);/,
+  );
+  assert.match(
+    shellSource,
+    /const shouldMountDmBoundary =\s*dmE2eeEnabled && \(isThreadRoute \|\| isInboxRoute\);/,
+  );
+  assert.match(
+    shellSource,
+    /const shouldMountImmediatePresenceSync = isMessengerSurface && isThreadRoute;/,
+  );
+  assert.match(
+    shellSource,
+    /const shouldMountDeferredPresenceSync =\s*isMessengerSurface && !shouldMountImmediatePresenceSync && isInboxRoute;/,
+  );
+  assert.match(
+    shellSource,
+    /const shouldMountUnreadBadgeSync = isMessengerCoreRuntimeSurface;/,
+  );
+  assert.match(
+    shellSource,
+    /const shouldMountWarmNavObserver =\s*isMessengerCoreRuntimeSurface && WARM_NAV_CLIENT_DIAGNOSTICS_ENABLED;/,
   );
   assert.match(shellSource, /function DeferredMessengerShellEffects\(/);
-  assert.match(shellSource, /<ChatUnreadBadgeSync syncKey=\{syncKey\} \/>/);
-  assert.match(shellSource, /<WarmNavRouteObserver \/>/);
+  assert.match(
+    shellSource,
+    /includeChatUnreadBadgeSync: boolean;/,
+  );
+  assert.match(
+    shellSource,
+    /includeWarmNavObserver: boolean;/,
+  );
+  assert.match(
+    shellSource,
+    /\{includeChatUnreadBadgeSync \? \(\s*<ChatUnreadBadgeSync syncKey=\{syncKey\} \/>/,
+  );
+  assert.match(
+    shellSource,
+    /\{includeWarmNavObserver \? <WarmNavRouteObserver \/> : null\}/,
+  );
 });
 
 test('chat route keeps heavy secondary interaction paths behind on-demand boundaries', () => {
