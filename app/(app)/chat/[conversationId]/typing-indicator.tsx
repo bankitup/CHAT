@@ -1,6 +1,9 @@
 'use client';
 
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -28,7 +31,7 @@ export function TypingIndicator({
   currentUserId,
   language,
 }: TypingIndicatorProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const [activeTypers, setActiveTypers] = useState<Record<string, ActiveTyper>>({});
   const expiryTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const channelName = useMemo(

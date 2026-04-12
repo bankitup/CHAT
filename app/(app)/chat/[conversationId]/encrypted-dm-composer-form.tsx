@@ -2,7 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import type {
   DmE2eeApiErrorCode,
   DmE2eeApiErrorResponse,
@@ -724,7 +727,7 @@ function getEncryptedDmDebugFailureDetails(
 
 function getEncryptedDmErrorMessage(
   error: unknown,
-  t: ReturnType<typeof getTranslations>,
+  t: ReturnType<typeof getChatClientTranslations>,
 ) {
   const code =
     error instanceof Error && 'code' in error
@@ -751,7 +754,7 @@ function getEncryptedDmErrorMessage(
 
 function getEncryptedComposerQueueErrorMessage(
   error: unknown,
-  t: ReturnType<typeof getTranslations>,
+  t: ReturnType<typeof getChatClientTranslations>,
 ) {
   if (error instanceof Error && error.message === 'dm_e2ee_unsupported_browser') {
     return t.chat.encryptionUnavailableHere;
@@ -840,7 +843,7 @@ export function EncryptedDmComposerForm({
 }: EncryptedDmComposerFormProps) {
   const router = useRouter();
   const [, startNavigationTransition] = useTransition();
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
   const lastVoiceEntryAttemptAtRef = useRef(0);
   const sendGuardTimeoutRef = useRef<number | null>(null);

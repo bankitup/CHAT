@@ -11,9 +11,9 @@ import {
   type TouchEvent,
 } from 'react';
 import {
-  getTranslations,
+  getInboxClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n';
+} from '@/modules/i18n/client';
 import {
   getInboxDisplayPreviewText,
   getSearchableConversationPreview,
@@ -262,7 +262,7 @@ function buildInboxHref({
 function buildFilterBucket(input: {
   items: ConversationListItem[];
   searchTerm: string;
-  t: ReturnType<typeof getTranslations>;
+  t: ReturnType<typeof getInboxClientTranslations>;
 }) {
   const itemsByFilter: Record<InboxFilter, ConversationListItem[]> = {
     all: [],
@@ -529,7 +529,7 @@ function buildOrganizedConversationSectionsByFilter(input: {
     InboxSectionPreferences,
     'showGroupsSeparately' | 'showPersonalChatsFirst'
   >;
-  t: ReturnType<typeof getTranslations>;
+  t: ReturnType<typeof getInboxClientTranslations>;
 }) {
   const sectionsByFilter: Record<InboxFilter, OrganizedConversationSection[]> = {
     all: [],
@@ -618,7 +618,7 @@ export function InboxFilterableContent({
   queryValue,
   restoreAction,
 }: InboxFilterableContentProps) {
-  const t = useMemo(() => getTranslations(language), [language]);
+  const t = useMemo(() => getInboxClientTranslations(language), [language]);
   const deriveConversationItemsMemoized = useMemo(
     () => createDerivedConversationItemsMemoizer(),
     [],

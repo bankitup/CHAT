@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
-  getTranslations,
+  getInboxClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n';
+} from '@/modules/i18n/client';
 import { IdentityAvatar } from '@/modules/profile/ui/identity';
 import { IdentityStatusInline } from '@/modules/profile/ui/identity-status';
 import { GuardedServerActionForm } from '../guarded-server-action-form';
@@ -72,7 +72,7 @@ export function NewChatSheet({
   manageMembersHref,
   spaceId,
 }: NewChatSheetProps) {
-  const t = getTranslations(language);
+  const t = getInboxClientTranslations(language);
   const [mode, setMode] = useState<NewChatMode>(initialMode);
   const [peopleSearch, setPeopleSearch] = useState('');
   const [selectedDmUserId, setSelectedDmUserId] = useState<string | null>(null);

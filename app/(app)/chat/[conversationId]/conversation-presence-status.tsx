@@ -1,6 +1,9 @@
 'use client';
 
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import { useIsOtherParticipantPresent } from './conversation-presence-provider';
 
 type ConversationPresenceStatusProps = {
@@ -10,7 +13,7 @@ type ConversationPresenceStatusProps = {
 export function ConversationPresenceStatus({
   language,
 }: ConversationPresenceStatusProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const isOtherParticipantPresent = useIsOtherParticipantPresent();
 
   if (!isOtherParticipantPresent) {

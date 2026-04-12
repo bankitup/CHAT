@@ -9,7 +9,10 @@ import {
 } from '@/modules/messaging/realtime/optimistic-thread';
 import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
@@ -118,7 +121,7 @@ export function PlaintextChatComposerForm({
   onReplyTargetConsumed,
   replyToMessageId,
 }: PlaintextChatComposerFormProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const formRef = useRef<HTMLFormElement | null>(null);
   const lastVoiceEntryAttemptAtRef = useRef(0);
   const sendGuardTimeoutRef = useRef<number | null>(null);

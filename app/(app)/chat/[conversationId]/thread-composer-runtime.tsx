@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import {
   DmReplyTargetSnippet,
   type ReplyTargetAttachmentKind,
@@ -77,7 +80,7 @@ export function ThreadComposerRuntime({
   recipientUserId,
   threadClientDiagnostics,
 }: ThreadComposerRuntimeProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const [activeReplyTarget, setActiveReplyTarget] =
     useState<ThreadLocalReplyTarget | null>(initialReplyTarget);
 

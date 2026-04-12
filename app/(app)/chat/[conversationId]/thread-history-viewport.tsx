@@ -16,9 +16,9 @@ import { createPortal } from 'react-dom';
 import {
   formatPersonFallbackLabel,
   getLocaleForLanguage,
-  getTranslations,
+  getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n';
+} from '@/modules/i18n/client';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import { persistCurrentDmE2eeDeviceCookie } from '@/modules/messaging/e2ee/current-device-cookie';
 import { ensureDmE2eeDeviceRegistered } from '@/modules/messaging/e2ee/device-registration';
@@ -1084,7 +1084,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
   language,
   onImagePreviewClick,
 }: ThreadMessageAttachmentsProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
 
   if (!attachments.length) {
     return null;
@@ -2546,7 +2546,7 @@ function ThreadMessageRowComponent({
   senderNames,
   threadClientDiagnostics,
 }: ThreadMessageRowProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const quickActionsContainerRef = useRef<HTMLDivElement | null>(null);
   const quickActionsSurfaceRef = useRef<HTMLDivElement | null>(null);
   const replyTargetHighlightTimeoutRef = useRef<ReturnType<
@@ -3721,7 +3721,7 @@ export function ThreadHistoryViewport({
   otherParticipantUserId,
   threadClientDiagnostics,
 }: ThreadHistoryViewportProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const clientRuntimeDiagnosticsEnabled =
     typeof window !== 'undefined' &&
     (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||
