@@ -44,9 +44,11 @@ Focused conversation-runtime recovery verification lives in:
 | Profile | Upload avatar | Select avatar, crop, apply, save | Crop/apply/save each show clear progress, final avatar updates across surfaces | same as above plus `/src/modules/messaging/data/server.ts#updateCurrentUserProfile` |
 | Group settings | Update group title/avatar/join policy | Change title and optional avatar/join policy, save | One save path, one result, no mixed stale values after return to thread | `/app/(app)/chat/[conversationId]/group-chat-settings-form.tsx`, `/src/modules/messaging/data/server.ts#updateConversationIdentity` |
 | Auth continuity | Session expires during write | Begin action in one tab, invalidate session elsewhere, finish action | Failure is explicit and recoverable, not silent | request viewer + server action paths |
-| Realtime | Inbox refresh after send from another tab | Open inbox in tab A, send from tab B | Inbox row updates without manual reload or clearly refreshes once | `/src/modules/messaging/realtime/inbox-sync.tsx` |
-| Realtime | Chat refresh after send from another tab | Open thread in tab A, send from tab B | Thread converges without duplicate rows or stale placeholders | `/src/modules/messaging/realtime/active-chat-sync.tsx` |
-| Realtime | Hidden tab reconnect | Background tab for >15 seconds, send updates elsewhere, foreground again | One clean recovery path, not a stale thread/inbox | realtime sync files and router refresh behavior |
+| Realtime | Thread live update arrival | Open thread in tab A, send from tab B | New row appears or converges in-place without leaving the route, duplicate rows, or stale optimistic placeholders | `/src/modules/messaging/realtime/active-chat-sync.tsx`, `/app/(app)/chat/[conversationId]/thread-page-deferred-effects.tsx` |
+| Realtime | Inbox summary live update arrival | Open inbox in tab A, send from tab B into an existing tracked conversation | The correct inbox row updates in place without broad list churn or manual reload | `/src/modules/messaging/realtime/inbox-sync.tsx`, `/src/modules/messaging/realtime/inbox-summary-store.ts` |
+| Realtime | Thread background -> foreground recovery | Open thread, background tab for >15 seconds, send updates elsewhere, foreground again | Mounted thread catches up in place through explicit recovery, not only after leaving and re-entering the route | `/src/modules/messaging/realtime/active-chat-sync.tsx`, `/app/(app)/chat/[conversationId]/use-thread-history-sync-runtime.ts` |
+| Realtime | Inbox background -> foreground recovery | Open inbox, background tab for >15 seconds, send updates elsewhere, foreground again | Tracked conversation summaries refresh in place and do not require route re-entry to look current | `/src/modules/messaging/realtime/inbox-sync.tsx` |
+| Realtime | Reconnect recovery | With inbox or thread open, force websocket disconnect/reconnect if possible, then send updates elsewhere | One explicit reconnect catch-up path runs; stale state heals without broad shell refresh or manual navigation | `/src/modules/messaging/realtime/active-chat-sync.tsx`, `/src/modules/messaging/realtime/inbox-sync.tsx`, `/docs/realtime-current-contract.md` |
 | Loading | Inbox initial load | Hard-refresh `/inbox` with active space selected | Stable list loads, no invalid-space loop, no empty-state flicker masking real failure | `/app/(app)/inbox/page.tsx`, `/src/modules/spaces/server.ts` |
 | Loading | Chat initial load | Hard-refresh `/chat/[conversationId]` with reply/edit/settings query params | Thread resolves correct window and settings state, no route confusion | `/app/(app)/chat/[conversationId]/page.tsx` |
 | Recovery | Poisoned DM cleanup | From DM settings, confirm ordinary hide-from-inbox still behaves as hide-only, then hard-delete a known-bad direct chat, then recreate it from inbox | Ordinary hide must not be mistaken for cleanup; the poisoned conversation should not be silently auto-restored, and recreation should land in a fresh DM instead of reviving the poisoned thread | `/app/(app)/chat/[conversationId]/actions.ts`, `/app/(app)/inbox/actions.ts`, `/docs/conversation-runtime-manual-matrix.md` |
@@ -65,7 +67,7 @@ Run in this order during stability:
 4. encrypted DM text and attachment flows
 5. group membership flows
 6. profile and avatar flows
-7. inbox/chat reload and reconnect flows
+7. inbox/chat reload, foreground, and reconnect flows
 8. push readiness and test send
 
 ## Failure Signatures To Record
