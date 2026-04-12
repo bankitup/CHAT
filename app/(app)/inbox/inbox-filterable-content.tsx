@@ -2,29 +2,20 @@
 
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type TouchEvent,
-} from 'react';
-import {
-  getInboxClientTranslations,
-  type AppLanguage,
-} from '@/modules/i18n/client';
-import { getSearchableConversationPreview } from '@/modules/messaging/e2ee/inbox-policy';
-import {
-  resolveInboxInitialFilter,
-  type InboxPrimaryFilter,
-  type InboxSectionPreferences,
-} from '@/modules/messaging/inbox/preferences';
-import { requestInboxManualRefresh } from '@/modules/messaging/realtime/inbox-manual-refresh';
-import type { InboxConversationLiveSummary } from '@/modules/messaging/realtime/inbox-summary-store';
-import type { NewChatMode } from './new-chat-sheet';
+import { useMemo } from 'react';
+import { getInboxClientTranslations } from '@/modules/i18n/client';
 import { InboxConversationSectionsStatic } from './inbox-conversation-sections-static';
+import {
+  buildFilterBucket,
+  buildInboxHref,
+  buildOrganizedConversationSectionsByFilter,
+  buildVisibleSummariesByConversationId,
+  normalizeSearchTerm,
+  type InboxFilterableContentProps,
+} from './inbox-filterable-content-model';
 import { useDeferredInboxRuntimeReady } from './use-deferred-inbox-runtime-ready';
+import { useInboxFilterableRouteState } from './use-inbox-filterable-route-state';
+import { useInboxPullRefresh } from './use-inbox-pull-refresh';
 
 const DeferredInboxConversationSectionsLive = dynamic(
   () =>
@@ -42,309 +33,20 @@ const DeferredInboxCreateSheetRuntime = dynamic(
   { ssr: false },
 );
 
-type InboxFilter = InboxPrimaryFilter;
-type InboxView = 'archived' | 'main';
-
-type ConversationListItem = {
-  conversationId: string;
-  groupAvatarPath: string | null;
-  hasUnread: boolean;
-  isGroupConversation: boolean;
-  latestMessageContentMode: string | null;
-  metaLabels: Array<{
-    label: string;
-    tone: 'default' | 'archived';
-  }>;
-  participants: Array<{
-    avatarPath?: string | null;
-    displayName: string | null;
-    userId: string;
-  }>;
-  participantLabels: string[];
-  preview: string | null;
-  title: string;
-};
-
-type AvailableUserEntry = {
-  avatarPath?: string | null;
-  displayName: string | null;
-  label: string;
-  statusEmoji?: string | null;
-  statusText?: string | null;
-  userId: string;
-};
-
-type FilterBucket = {
-  hasEncryptedDmSearchLimit: boolean;
-  itemsByFilter: Record<InboxFilter, ConversationListItem[]>;
-  totalByFilter: Record<InboxFilter, number>;
-  unreadByFilter: Record<InboxFilter, number>;
-};
-
-type OrganizedConversationSection = {
-  items: ConversationListItem[];
-  key: 'all' | 'dm' | 'groups';
-  label: string | null;
-};
-
-type InboxFilterableContentProps = {
-  activeSpaceId: string;
-  activeSpaceName: string | null;
-  archivedConversationItems: ConversationListItem[];
-  archivedSummaries: InboxConversationLiveSummary[];
-  availableDmUserEntries: AvailableUserEntry[];
-  availableUserEntries: AvailableUserEntry[];
-  canManageMembers: boolean;
-  createOpen: boolean;
-  createTargetsLoaded: boolean;
-  currentUserId: string;
-  initialCreateMode: NewChatMode;
-  initialFilter: InboxFilter;
-  initialView: InboxView;
-  isMessengerSpace: boolean;
-  language: AppLanguage;
-  mainConversationItems: ConversationListItem[];
-  mainSummaries: InboxConversationLiveSummary[];
-  preferences: InboxSectionPreferences;
-  queryValue: string;
-  restoreAction: ((formData: FormData) => void | Promise<void>) | null;
-};
-
-const INBOX_PULL_REFRESH_MAX_OFFSET = 92;
-const INBOX_PULL_REFRESH_HOLD_OFFSET = 58;
-const INBOX_PULL_REFRESH_THRESHOLD = 72;
-
-function normalizeSearchTerm(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function buildInboxHref({
-  create,
-  createMode,
-  filter,
-  query,
-  spaceId,
-  view,
-}: {
-  create?: boolean;
-  createMode?: NewChatMode;
-  filter: InboxFilter;
-  query?: string;
-  spaceId?: string | null;
-  view?: InboxView;
-}) {
-  const params = new URLSearchParams();
-
-  if (filter !== 'all') {
-    params.set('filter', filter);
-  }
-
-  if (query?.trim()) {
-    params.set('q', query.trim());
-  }
-
-  if (view === 'archived') {
-    params.set('view', 'archived');
-  }
-
-  if (spaceId?.trim()) {
-    params.set('space', spaceId.trim());
-  }
-
-  if (create) {
-    params.set('create', 'open');
-
-    if (createMode) {
-      params.set('createMode', createMode);
-    }
-  }
-
-  const href = params.toString();
-  return href ? `/inbox?${href}` : '/inbox';
-}
-
-function buildFilterBucket(input: {
-  items: ConversationListItem[];
-  searchTerm: string;
-  t: ReturnType<typeof getInboxClientTranslations>;
-}) {
-  const itemsByFilter: Record<InboxFilter, ConversationListItem[]> = {
-    all: [],
-    dm: [],
-    groups: [],
-  };
-  const totalByFilter: Record<InboxFilter, number> = {
-    all: 0,
-    dm: 0,
-    groups: 0,
-  };
-  const unreadByFilter: Record<InboxFilter, number> = {
-    all: 0,
-    dm: 0,
-    groups: 0,
-  };
-  let hasEncryptedDmSearchLimit = false;
-
-  for (const item of input.items) {
-    if (input.searchTerm) {
-      const searchablePreview = getSearchableConversationPreview({
-        latestMessageContentMode: item.latestMessageContentMode,
-        preview: item.preview,
-      });
-      const haystack = [
-        item.title,
-        searchablePreview,
-        ...item.participantLabels,
-        item.isGroupConversation ? input.t.inbox.metaGroup : input.t.chat.directChat,
-      ]
-        .join(' ')
-        .toLowerCase();
-
-      if (!haystack.includes(input.searchTerm)) {
-        continue;
-      }
-    }
-
-    itemsByFilter.all.push(item);
-    totalByFilter.all += 1;
-
-    if (item.hasUnread) {
-      unreadByFilter.all += 1;
-    }
-
-    if (item.isGroupConversation) {
-      itemsByFilter.groups.push(item);
-      totalByFilter.groups += 1;
-
-      if (item.hasUnread) {
-        unreadByFilter.groups += 1;
-      }
-    } else {
-      itemsByFilter.dm.push(item);
-      totalByFilter.dm += 1;
-
-      if (item.hasUnread) {
-        unreadByFilter.dm += 1;
-      }
-
-      if (input.searchTerm && item.latestMessageContentMode === 'dm_e2ee_v1') {
-        hasEncryptedDmSearchLimit = true;
-      }
-    }
-  }
-
-  return {
-    hasEncryptedDmSearchLimit,
-    itemsByFilter,
-    totalByFilter,
-    unreadByFilter,
-  } satisfies FilterBucket;
-}
-
-function partitionConversationItemsByKind(items: ConversationListItem[]) {
-  const directMessages: ConversationListItem[] = [];
-  const groups: ConversationListItem[] = [];
-
-  for (const item of items) {
-    if (item.isGroupConversation) {
-      groups.push(item);
-      continue;
-    }
-
-    directMessages.push(item);
-  }
-
-  return {
-    directMessages,
-    groups,
-  };
-}
-
-function buildOrganizedConversationSectionsByFilter(input: {
-  buckets: FilterBucket;
-  preferences: Pick<
-    InboxSectionPreferences,
-    'showGroupsSeparately' | 'showPersonalChatsFirst'
-  >;
-  t: ReturnType<typeof getInboxClientTranslations>;
-}) {
-  const sectionsByFilter: Record<InboxFilter, OrganizedConversationSection[]> = {
-    all: [],
-    dm: [],
-    groups: [],
-  };
-
-  for (const filter of ['all', 'dm', 'groups'] as const) {
-    const filteredConversationItems = input.buckets.itemsByFilter[filter];
-    const shouldGroupByKind =
-      input.preferences.showGroupsSeparately && filter === 'all';
-    const partitionedItems = partitionConversationItemsByKind(
-      filteredConversationItems,
-    );
-
-    if (!shouldGroupByKind) {
-      const orderedItems =
-        input.preferences.showPersonalChatsFirst && filter === 'all'
-          ? [...partitionedItems.directMessages, ...partitionedItems.groups]
-          : filteredConversationItems;
-
-      sectionsByFilter[filter] = [
-        {
-          items: orderedItems,
-          key: 'all',
-          label: null,
-        },
-      ];
-      continue;
-    }
-
-    const orderedSections: OrganizedConversationSection[] =
-      input.preferences.showPersonalChatsFirst
-        ? [
-            {
-              items: partitionedItems.directMessages,
-              key: 'dm',
-              label: input.t.inbox.filters.dm,
-            },
-            {
-              items: partitionedItems.groups,
-              key: 'groups',
-              label: input.t.inbox.filters.groups,
-            },
-          ]
-        : [
-            {
-              items: partitionedItems.groups,
-              key: 'groups',
-              label: input.t.inbox.filters.groups,
-            },
-            {
-              items: partitionedItems.directMessages,
-              key: 'dm',
-              label: input.t.inbox.filters.dm,
-            },
-          ];
-
-    sectionsByFilter[filter] = orderedSections.filter(
-      (section) => section.items.length > 0,
-    );
-  }
-
-  return sectionsByFilter;
-}
-
 export function InboxFilterableContent({
   activeSpaceId,
   activeSpaceName,
   archivedConversationItems,
   archivedSummaries,
-  availableDmUserEntries,
-  availableUserEntries,
+  availableDmUserCount,
+  availableUserCount,
   canManageMembers,
   createOpen,
   createTargetsLoaded,
   currentUserId,
+  initialCreateDmUserEntries,
   initialCreateMode,
+  initialCreateUserEntries,
   initialFilter,
   initialView,
   isMessengerSpace,
@@ -354,204 +56,55 @@ export function InboxFilterableContent({
   preferences,
   queryValue,
   restoreAction,
+  searchScopedAvailableUserCount,
 }: InboxFilterableContentProps) {
   const t = useMemo(() => getInboxClientTranslations(language), [language]);
   const isDeferredInboxRuntimeReady = useDeferredInboxRuntimeReady({
     fallbackDelayMs: 140,
     idleTimeoutMs: 1200,
   });
-  const searchTerm = normalizeSearchTerm(queryValue);
-  const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
-  const [activeView, setActiveView] = useState<InboxView>(initialView);
-  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(createOpen);
-  const [createSheetMode, setCreateSheetMode] =
-    useState<NewChatMode>(initialCreateMode);
-  const [pullRefreshOffset, setPullRefreshOffset] = useState(0);
-  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
-  const touchGestureRef = useRef<{
-    dragging: boolean;
-    pointerX: number;
-    pointerY: number;
-  } | null>(null);
-  const visibleFilters = useMemo(
-    () => preferences.visibleFilters,
-    [preferences.visibleFilters],
-  );
-  const resolvedInitialFilter = useMemo(
-    () => resolveInboxInitialFilter(initialFilter, preferences),
-    [initialFilter, preferences],
-  );
-
-  useEffect(() => {
-    setActiveFilter(resolvedInitialFilter);
-  }, [resolvedInitialFilter]);
-
-  useEffect(() => {
-    setActiveView(initialView);
-  }, [initialView]);
-
-  useEffect(() => {
-    setIsCreateSheetOpen(createOpen);
-  }, [createOpen]);
-
-  useEffect(() => {
-    setCreateSheetMode(initialCreateMode);
-  }, [initialCreateMode]);
-
-  useEffect(() => {
-    const resolvedFilter = resolveInboxInitialFilter(activeFilter, preferences);
-
-    if (resolvedFilter !== activeFilter) {
-      setActiveFilter(resolvedFilter);
-    }
-  }, [activeFilter, preferences]);
-
-  const openCreateSheet = useCallback((mode: NewChatMode) => {
-    setCreateSheetMode(mode);
-    setIsCreateSheetOpen(true);
-  }, []);
-
-  const closeCreateSheet = useCallback(() => {
-    setIsCreateSheetOpen(false);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const nextHref = buildInboxHref({
-      create: isCreateSheetOpen,
-      createMode: isCreateSheetOpen ? createSheetMode : undefined,
-      filter: activeFilter,
-      query: queryValue,
-      spaceId: activeSpaceId,
-      view: activeView,
-    });
-
-    if (window.location.pathname + window.location.search === nextHref) {
-      return;
-    }
-
-    window.history.replaceState(window.history.state, '', nextHref);
-  }, [
+  const {
     activeFilter,
-    activeSpaceId,
     activeView,
+    closeCreateSheet,
     createSheetMode,
     isCreateSheetOpen,
+    openCreateSheet,
+    setActiveFilter,
+    setActiveView,
+    setCreateSheetMode,
+    visibleFilters,
+  } = useInboxFilterableRouteState({
+    activeSpaceId,
+    createOpen,
+    initialCreateMode,
+    initialFilter,
+    initialView,
+    preferences,
     queryValue,
-  ]);
-
-  const getInboxScrollTop = () => {
-    if (typeof window === 'undefined') {
-      return 0;
-    }
-
-    return Math.max(
-      window.scrollY,
-      document.scrollingElement?.scrollTop ?? 0,
-      document.documentElement?.scrollTop ?? 0,
-      0,
-    );
-  };
-
-  const resetPullRefreshGesture = () => {
-    touchGestureRef.current = null;
-    setPullRefreshOffset(0);
-  };
-
-  const handlePullRefreshStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (
-      isCreateSheetOpen ||
-      isPullRefreshing ||
-      event.touches.length !== 1 ||
-      getInboxScrollTop() > 0
-    ) {
-      touchGestureRef.current = null;
-      return;
-    }
-
-    const touch = event.touches[0];
-    touchGestureRef.current = {
-      dragging: false,
-      pointerX: touch.clientX,
-      pointerY: touch.clientY,
-    };
-  };
-
-  const handlePullRefreshMove = (event: TouchEvent<HTMLDivElement>) => {
-    const gesture = touchGestureRef.current;
-
-    if (!gesture || isCreateSheetOpen || isPullRefreshing || event.touches.length !== 1) {
-      return;
-    }
-
-    const touch = event.touches[0];
-    const deltaX = touch.clientX - gesture.pointerX;
-    const deltaY = touch.clientY - gesture.pointerY;
-
-    if (deltaY <= 0) {
-      if (!gesture.dragging) {
-        touchGestureRef.current = null;
-      }
-      return;
-    }
-
-    if (Math.abs(deltaX) > deltaY * 0.8) {
-      return;
-    }
-
-    if (getInboxScrollTop() > 0) {
-      resetPullRefreshGesture();
-      return;
-    }
-
-    const resistedOffset = Math.min(
-      INBOX_PULL_REFRESH_MAX_OFFSET,
-      Math.round(Math.pow(deltaY, 0.92) * 0.52),
-    );
-
-    gesture.dragging = true;
-    event.preventDefault();
-    setPullRefreshOffset(resistedOffset);
-  };
-
-  const handlePullRefreshEnd = async () => {
-    const shouldRefresh =
-      touchGestureRef.current?.dragging &&
-      pullRefreshOffset >= INBOX_PULL_REFRESH_THRESHOLD;
-
-    touchGestureRef.current = null;
-
-    if (!shouldRefresh || isCreateSheetOpen || isPullRefreshing) {
-      setPullRefreshOffset(0);
-      return;
-    }
-
-    setIsPullRefreshing(true);
-    setPullRefreshOffset(INBOX_PULL_REFRESH_HOLD_OFFSET);
-
-    try {
-      await requestInboxManualRefresh();
-    } finally {
-      setIsPullRefreshing(false);
-      setPullRefreshOffset(0);
-    }
-  };
+  });
+  const isPullRefreshReady =
+    isDeferredInboxRuntimeReady && !isCreateSheetOpen;
+  const {
+    handlePullRefreshEnd,
+    handlePullRefreshMove,
+    handlePullRefreshStart,
+    isDragging,
+    isPullRefreshing,
+    pullRefreshOffset,
+    pullRefreshThreshold,
+    resetPullRefreshGesture,
+  } = useInboxPullRefresh({
+    enabled: isPullRefreshReady,
+  });
+  const searchTerm = normalizeSearchTerm(queryValue);
 
   const visibleConversationItems =
     activeView === 'archived' ? archivedConversationItems : mainConversationItems;
   const visibleConversationSummaries =
     activeView === 'archived' ? archivedSummaries : mainSummaries;
   const visibleSummariesByConversationId = useMemo(
-    () =>
-      new Map(
-        visibleConversationSummaries.map((summary) => [
-          summary.conversationId,
-          summary,
-        ] as const),
-      ),
+    () => buildVisibleSummariesByConversationId(visibleConversationSummaries),
     [visibleConversationSummaries],
   );
   const rowLabels = useMemo(
@@ -627,7 +180,7 @@ export function InboxFilterableContent({
     view: activeView,
   });
   const messengerFreshBody =
-    !createTargetsLoaded || availableUserEntries.length > 0
+    !createTargetsLoaded || availableUserCount > 0
       ? t.inbox.messengerFreshBody
       : canManageMembers
         ? t.inbox.messengerFreshAdminBody
@@ -636,18 +189,6 @@ export function InboxFilterableContent({
   const searchPlaceholder = isDmFilter
     ? t.inbox.searchDmPlaceholder
     : t.inbox.searchPlaceholder;
-  const searchScopedAvailableUserCount = useMemo(
-    () => {
-      if (!searchTerm) {
-        return availableUserEntries.length;
-      }
-
-      return availableUserEntries.filter((availableUser) =>
-        availableUser.label.toLowerCase().includes(searchTerm),
-      ).length;
-    },
-    [availableUserEntries, searchTerm],
-  );
   const searchScopeSummary = useMemo(() => {
     if (!searchTerm) {
       return null;
@@ -671,11 +212,11 @@ export function InboxFilterableContent({
   ]);
   const pullRefreshProgress = Math.min(
     1,
-    pullRefreshOffset / INBOX_PULL_REFRESH_THRESHOLD,
+    pullRefreshOffset / pullRefreshThreshold,
   );
   const pullRefreshLabel = isPullRefreshing
     ? t.inbox.refreshing
-    : pullRefreshOffset >= INBOX_PULL_REFRESH_THRESHOLD
+    : pullRefreshOffset >= pullRefreshThreshold
       ? t.inbox.releaseToRefresh
       : t.inbox.pullToRefresh;
 
@@ -709,16 +250,20 @@ export function InboxFilterableContent({
           isPrimaryChatsView ? 'stack inbox-screen-dm' : 'stack',
           'inbox-pull-surface',
           pullRefreshOffset > 0 ? 'inbox-pull-surface-active' : null,
-          touchGestureRef.current?.dragging ? 'inbox-pull-surface-dragging' : null,
+          isDragging ? 'inbox-pull-surface-dragging' : null,
         ]
           .filter(Boolean)
           .join(' ')}
-        onTouchCancel={resetPullRefreshGesture}
-        onTouchEnd={() => {
-          void handlePullRefreshEnd();
-        }}
-        onTouchMove={handlePullRefreshMove}
-        onTouchStart={handlePullRefreshStart}
+        onTouchCancel={isPullRefreshReady ? resetPullRefreshGesture : undefined}
+        onTouchEnd={
+          isPullRefreshReady
+            ? () => {
+                void handlePullRefreshEnd();
+              }
+            : undefined
+        }
+        onTouchMove={isPullRefreshReady ? handlePullRefreshMove : undefined}
+        onTouchStart={isPullRefreshReady ? handlePullRefreshStart : undefined}
         style={{
           transform:
             pullRefreshOffset > 0
@@ -951,7 +496,7 @@ export function InboxFilterableContent({
             </div>
 
             <div className="inbox-empty-actions">
-              {!createTargetsLoaded || availableDmUserEntries.length > 0 ? (
+              {!createTargetsLoaded || availableDmUserCount > 0 ? (
                 <button
                   className="button"
                   onClick={() => openCreateSheet('dm')}
@@ -960,7 +505,7 @@ export function InboxFilterableContent({
                   {t.inbox.create.createDm}
                 </button>
               ) : null}
-              {!createTargetsLoaded || availableUserEntries.length > 0 ? (
+              {!createTargetsLoaded || availableUserCount > 0 ? (
                 <button
                   className="button button-secondary"
                   onClick={() => openCreateSheet('group')}
@@ -1111,8 +656,8 @@ export function InboxFilterableContent({
         <DeferredInboxCreateSheetRuntime
           activeSpaceId={activeSpaceId}
           createTargetsLoaded={createTargetsLoaded}
-          initialAvailableDmUserEntries={availableDmUserEntries}
-          initialAvailableUserEntries={availableUserEntries}
+          initialAvailableDmUserEntries={initialCreateDmUserEntries}
+          initialAvailableUserEntries={initialCreateUserEntries}
           isOpen={isCreateSheetOpen}
           language={language}
           manageMembersHref={manageMembersHref}

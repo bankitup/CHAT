@@ -1,6 +1,4 @@
-import { withSpaceParam } from './url';
 import {
-  getDefaultShellRouteForSpaceProfile,
   normalizeSpaceProfile,
   normalizeSpaceTheme,
   type ResolvedSpaceProfile,
@@ -10,11 +8,11 @@ import {
 } from './model';
 
 /**
- * Shared platform posture helpers for `spaces`.
+ * Shared space-profile compatibility helpers.
  *
- * These helpers keep current runtime profile/theme compatibility in one place
- * without pushing Messenger or KeepCozy shell policy into membership and
- * access-loading code.
+ * These helpers normalize persisted profile/theme state and the legacy shared
+ * `TEST` space fallback. Product-facing shell defaults live outside the
+ * `spaces` foundation.
  */
 export const LEGACY_KEEP_COZY_TEST_SPACE_NAME = 'TEST';
 export const DEFAULT_NEW_SPACE_PROFILE: SpaceProfile = 'messenger_full';
@@ -35,7 +33,7 @@ export function isLegacyKeepCozyTestSpaceName(
 }
 
 /**
- * Platform-level space posture resolver.
+ * Shared space profile resolver.
  *
  * Current compatibility rule:
  *
@@ -57,7 +55,6 @@ export function resolveSpaceProfileForSpace(input: {
     return {
       profile: storedProfile,
       source: 'space_profile_column',
-      defaultShellRoute: getDefaultShellRouteForSpaceProfile(storedProfile),
     };
   }
 
@@ -65,16 +62,12 @@ export function resolveSpaceProfileForSpace(input: {
     return {
       profile: 'keepcozy_ops',
       source: 'space_name_test_default',
-      defaultShellRoute: getDefaultShellRouteForSpaceProfile('keepcozy_ops'),
     };
   }
 
   return {
     profile: DEFAULT_NEW_SPACE_PROFILE,
     source: 'fallback_messenger_default',
-    defaultShellRoute: getDefaultShellRouteForSpaceProfile(
-      DEFAULT_NEW_SPACE_PROFILE,
-    ),
   };
 }
 
@@ -94,14 +87,4 @@ export function resolveSpaceThemeForSpace(input: {
     source: 'default_dark',
     theme: DEFAULT_SPACE_THEME,
   };
-}
-
-export function resolveSpaceProfileShellHref(input: {
-  profile: SpaceProfile;
-  spaceId: string;
-}) {
-  return withSpaceParam(
-    getDefaultShellRouteForSpaceProfile(input.profile),
-    input.spaceId,
-  );
 }

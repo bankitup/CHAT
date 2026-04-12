@@ -83,42 +83,44 @@ test('ordinary hide action stays inbox-only and cannot drift into the poisoned-D
 });
 
 test('full poisoned-DM cleanup helper clears media metadata before deleting the conversation row', () => {
-  const dataSource = readWorkspaceFile('src/modules/messaging/data/server.ts');
+  const lifecycleSource = readWorkspaceFile(
+    'src/modules/messaging/data/conversation-lifecycle-server.ts',
+  );
 
   assert.match(
-    dataSource,
+    lifecycleSource,
     /export async function deleteDirectConversationForUser\(input: \{/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('message_reactions'\)\s*\.delete\(\)/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('message_attachments'\)\s*\.delete\(\)/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('message_e2ee_envelopes'\)\s*\.delete\(\)/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('message_asset_links'\)\s*\.delete\(\)/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('message_assets'\)\s*\.delete\(\)/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('messages'\)\s*\.delete\(\)/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('conversation_members'\)\s*\.delete\(\)/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /\.from\('conversations'\)\s*\.delete\(\)/,
   );
 });
@@ -169,6 +171,9 @@ test('DM settings keep ordinary hide-from-inbox behavior separate from explicit 
 test('DM recreation still reuses only an existing active conversation, so a deleted poisoned DM will recreate cleanly', () => {
   const inboxActionsSource = readWorkspaceFile('app/(app)/inbox/actions.ts');
   const dataSource = readWorkspaceFile('src/modules/messaging/data/server.ts');
+  const lifecycleSource = readWorkspaceFile(
+    'src/modules/messaging/data/conversation-lifecycle-server.ts',
+  );
   const threadReadServerSource = readWorkspaceFile(
     'src/modules/messaging/data/thread-read-server.ts',
   );
@@ -222,16 +227,20 @@ test('DM recreation still reuses only an existing active conversation, so a dele
     /restoreConversationForUser\(/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /existingDmBehavior\?: 'reuse-existing' \| 'throw-conflict';/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /if \(existingConversationId\) \{[\s\S]*if \(existingDmBehavior === 'throw-conflict'\) \{[\s\S]*throw createExistingDmConversationConflictError\(existingConversationId\);[\s\S]*\}[\s\S]*return existingConversationId;/,
   );
   assert.match(
-    dataSource,
+    lifecycleSource,
     /export function isExistingDmConversationConflictError\(/,
+  );
+  assert.match(
+    dataSource,
+    /export \{[\s\S]*isExistingDmConversationConflictError[\s\S]*\} from ['"]\.\/conversation-lifecycle-server['"]/,
   );
   assert.match(
     threadReadServerSource,

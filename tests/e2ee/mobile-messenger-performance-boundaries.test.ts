@@ -9,6 +9,10 @@ function readWorkspaceFile(relativePath: string) {
   return readFileSync(resolve(workspaceRoot, relativePath), 'utf8');
 }
 
+function readWorkspaceLineCount(relativePath: string) {
+  return readWorkspaceFile(relativePath).split('\n').length;
+}
+
 test('shared shell stays free of direct Messenger runtime while route-local Messenger surfaces own the effect mounting', () => {
   const shellSource = readWorkspaceFile('app/(app)/app-shell-frame.tsx');
   const layoutSource = readWorkspaceFile('app/(app)/layout.tsx');
@@ -109,8 +113,17 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
+  const messageListSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-history-message-list.tsx',
+  );
   const rowSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  );
+  const rowContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
+  );
+  const quickActionsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-quick-actions.tsx',
   );
   const composerSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-composer-runtime.tsx',
@@ -126,7 +139,7 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   assert.match(threadPageContentSource, /<ThreadPageDeferredEffects/);
   assert.match(
     viewportSource,
-    /from ['"]\.\/thread-message-row['"]/,
+    /from ['"]\.\/thread-history-message-list['"]/,
   );
   assert.match(
     viewportSource,
@@ -138,7 +151,7 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   );
   assert.match(
     viewportSource,
-    /from ['"]\.\/thread-history-render-list['"]/,
+    /from ['"]\.\/thread-viewport-deferred-effects['"]/,
   );
   assert.match(
     viewportSource,
@@ -146,15 +159,19 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   );
   assert.match(
     viewportSource,
-    /<ThreadHistoryRenderList/,
+    /<ThreadHistoryMessageList/,
+  );
+  assert.match(
+    messageListSource,
+    /from ['"]\.\/thread-history-render-list['"]/,
+  );
+  assert.match(
+    messageListSource,
+    /from ['"]\.\/thread-message-row['"]/,
   );
   assert.match(
     rowSource,
-    /const ThreadReactionPicker = dynamic\(/,
-  );
-  assert.match(
-    rowSource,
-    /const ThreadInlineEditForm = dynamic\(/,
+    /const ThreadMessageQuickActionsPanel = dynamic\(/,
   );
   assert.match(
     rowSource,
@@ -165,13 +182,23 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
     /const ThreadReactionGroups = dynamic\(/,
   );
   assert.match(
-    rowSource,
+    quickActionsSource,
+    /<ThreadReactionPicker/,
+  );
+  assert.match(
+    rowContentSource,
+    /const ThreadInlineEditForm = dynamic\(/,
+  );
+  assert.match(
+    rowContentSource,
     /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
     /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
+  assert.match(rowSource, /<ThreadMessageQuickActionsPanel/);
+  assert.match(rowContentSource, /<MemoizedThreadVoiceMessageBubble/);
   assert.match(
     composerSource,
     /const EncryptedDmComposerForm = dynamic\(/,
@@ -197,18 +224,54 @@ test('inbox route defers create flow, realtime startup, and warm-nav work until 
   const inboxContentSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-filterable-content.tsx',
   );
+  const inboxContentModelSource = readWorkspaceFile(
+    'app/(app)/inbox/inbox-filterable-content-model.ts',
+  );
   const inboxCreateRuntimeSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-create-sheet-runtime.tsx',
   );
   const inboxDeferredEffectsSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-page-deferred-effects.tsx',
   );
+  const inboxRouteStateSource = readWorkspaceFile(
+    'app/(app)/inbox/use-inbox-filterable-route-state.ts',
+  );
+  const inboxPullRefreshSource = readWorkspaceFile(
+    'app/(app)/inbox/use-inbox-pull-refresh.ts',
+  );
   const deferredRealtimeSource = readWorkspaceFile(
     'app/(app)/inbox/deferred-inbox-realtime-sync.tsx',
+  );
+  const inboxServerSource = readWorkspaceFile(
+    'src/modules/messaging/server/inbox-page.ts',
   );
 
   assert.match(inboxPageSource, /from ['"]\.\/inbox-page-deferred-effects['"]/);
   assert.match(inboxPageSource, /<InboxPageDeferredEffects/);
+  assert.match(
+    inboxPageSource,
+    /availableDmUserCount=\{data\.availableDmUserCount\}/,
+  );
+  assert.match(
+    inboxPageSource,
+    /availableUserCount=\{data\.availableUserCount\}/,
+  );
+  assert.match(
+    inboxPageSource,
+    /initialCreateDmUserEntries=\{data\.initialCreateDmUserEntries\}/,
+  );
+  assert.match(
+    inboxPageSource,
+    /initialCreateUserEntries=\{data\.initialCreateUserEntries\}/,
+  );
+  assert.match(
+    inboxPageSource,
+    /searchScopedAvailableUserCount=\{data\.searchScopedAvailableUserCount\}/,
+  );
+  assert.doesNotMatch(
+    inboxPageSource,
+    /availableDmUserEntries=\{data\.availableDmUserEntries\}|availableUserEntries=\{data\.availableUserEntries\}/,
+  );
 
   assert.match(
     inboxCreateRuntimeSource,
@@ -224,11 +287,31 @@ test('inbox route defers create flow, realtime startup, and warm-nav work until 
   );
   assert.match(
     inboxContentSource,
+    /from ['"]\.\/inbox-filterable-content-model['"]/,
+  );
+  assert.match(
+    inboxContentSource,
+    /from ['"]\.\/use-inbox-filterable-route-state['"]/,
+  );
+  assert.match(
+    inboxContentSource,
+    /from ['"]\.\/use-inbox-pull-refresh['"]/,
+  );
+  assert.match(
+    inboxContentSource,
     /from ['"]\.\/use-deferred-inbox-runtime-ready['"]/,
   );
   assert.match(
     inboxContentSource,
     /from ['"]\.\/inbox-conversation-sections-static['"]/,
+  );
+  assert.match(
+    inboxContentSource,
+    /useInboxFilterableRouteState\(/,
+  );
+  assert.match(
+    inboxContentSource,
+    /useInboxPullRefresh\(/,
   );
   assert.match(
     inboxContentSource,
@@ -248,11 +331,34 @@ test('inbox route defers create flow, realtime startup, and warm-nav work until 
   );
   assert.doesNotMatch(
     inboxContentSource,
+    /requestInboxManualRefresh|resolveInboxInitialFilter/,
+  );
+  assert.doesNotMatch(
+    inboxContentSource,
     /subscribeToInboxSummaryRevision|getInboxSummaryRevisionSnapshot|useSyncExternalStore/,
   );
   assert.doesNotMatch(
     inboxContentSource,
     /createDerivedConversationItemsMemoizer|deriveConversationItemFromLiveState/,
+  );
+  assert.match(inboxContentModelSource, /function buildInboxHref\(/);
+  assert.match(inboxContentModelSource, /function buildFilterBucket\(/);
+  assert.match(
+    inboxContentModelSource,
+    /function buildOrganizedConversationSectionsByFilter\(/,
+  );
+  assert.match(inboxContentModelSource, /function normalizeSearchTerm\(/);
+  assert.match(
+    inboxRouteStateSource,
+    /resolveInboxInitialFilter|window\.history\.replaceState|buildInboxHref/,
+  );
+  assert.match(
+    inboxPullRefreshSource,
+    /requestInboxManualRefresh|const INBOX_PULL_REFRESH_THRESHOLD = 72;/,
+  );
+  assert.match(
+    inboxPullRefreshSource,
+    /if \(!enabled\) \{/,
   );
   assert.match(
     inboxDeferredEffectsSource,
@@ -281,5 +387,29 @@ test('inbox route defers create flow, realtime startup, and warm-nav work until 
   assert.match(
     deferredRealtimeSource,
     /return <InboxRealtimeSync \{\.\.\.props\} \/>;/,
+  );
+  assert.match(
+    inboxServerSource,
+    /availableDmUserCount: availableDmUserEntries\.length/,
+  );
+  assert.match(
+    inboxServerSource,
+    /availableUserCount: availableUserEntries\.length/,
+  );
+  assert.match(
+    inboxServerSource,
+    /initialCreateDmUserEntries: isCreateOpen \? availableDmUserEntries : \[\]/,
+  );
+  assert.match(
+    inboxServerSource,
+    /initialCreateUserEntries: isCreateOpen \? availableUserEntries : \[\]/,
+  );
+  assert.match(
+    inboxServerSource,
+    /searchScopedAvailableUserCount/,
+  );
+  assert.ok(
+    readWorkspaceLineCount('app/(app)/inbox/inbox-filterable-content.tsx') <=
+      750,
   );
 });

@@ -3,7 +3,7 @@ import 'server-only';
 import {
   getConversationCompanionMetadataWithoutAccessCheck,
 } from '@/modules/messaging/data/conversation-companion-metadata';
-import { getConversationForUser } from '@/modules/messaging/data/server';
+import { getConversationForUser } from '@/modules/messaging/data/conversation-read-server';
 import type {
   KeepCozyOperationalObjectRef,
   KeepCozyThreadCompanionMetadata,

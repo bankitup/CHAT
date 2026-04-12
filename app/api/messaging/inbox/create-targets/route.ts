@@ -3,7 +3,7 @@ import { getRequestViewer } from '@/lib/request-context/server';
 import { getAvailableUsers } from '@/modules/messaging/data/conversation-read-server';
 import {
   getExistingActiveDmPartnerUserIdsForCandidates,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/conversation-lifecycle-server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';
 
 const CREATE_TARGETS_NO_STORE_HEADERS = {

@@ -88,8 +88,8 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
-  const rowSource = readWorkspaceFile(
-    'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  const rowContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
   );
   const staticInboxRowSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-conversation-static-row.tsx',
@@ -109,15 +109,21 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   assert.match(presenceSource, /aria-hidden=\{!isOtherParticipantPresent\}/);
 
   assert.match(
-    rowSource,
+    rowContentSource,
     /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
     /className="message-voice-card message-voice-card-loading"/,
   );
-  assert.match(rowSource, /loading:\s*ThreadVoiceMessageBubbleLoadingFallback/);
-  assert.match(viewportSource, /from ['"]\.\/thread-message-row['"]/);
+  assert.match(
+    rowContentSource,
+    /loading:\s*ThreadVoiceMessageBubbleLoadingFallback/,
+  );
+  assert.match(
+    viewportSource,
+    /from ['"]\.\/thread-history-message-list['"]/,
+  );
 
   assert.match(staticInboxRowSource, /conversation-preview-placeholder/);
   assert.match(liveInboxRowSource, /conversation-preview-placeholder/);
