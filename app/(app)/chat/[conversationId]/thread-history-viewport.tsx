@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   memo,
   useCallback,
@@ -54,17 +55,33 @@ import { MarkConversationRead } from './mark-conversation-read';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
 import { ProgressiveHistoryLoader } from './progressive-history-loader';
-import { ThreadDeleteMessageConfirm } from './thread-delete-message-confirm';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
-import { ThreadInlineEditForm } from './thread-inline-edit-form';
 import { emitThreadLocalReplyTargetSelection } from './thread-local-reply-target';
 import { ThreadReactionGroups } from './thread-reaction-groups';
-import { ThreadReactionPicker } from './thread-reaction-picker';
 import { resolveThreadScrollTarget } from './thread-scroll';
 import { logVoiceThreadProof } from './thread-voice-diagnostics';
-import { MemoizedThreadVoiceMessageBubble } from './thread-voice-message-bubble';
 import { configureInlineAudioElement } from './voice-playback-source';
 import type { MessagingVoicePlaybackVariantRecord } from '@/modules/messaging/media/message-assets';
+
+const ThreadReactionPicker = dynamic(() =>
+  import('./thread-reaction-picker').then((mod) => mod.ThreadReactionPicker),
+);
+
+const ThreadInlineEditForm = dynamic(() =>
+  import('./thread-inline-edit-form').then((mod) => mod.ThreadInlineEditForm),
+);
+
+const ThreadDeleteMessageConfirm = dynamic(() =>
+  import('./thread-delete-message-confirm').then(
+    (mod) => mod.ThreadDeleteMessageConfirm,
+  ),
+);
+
+const MemoizedThreadVoiceMessageBubble = dynamic(() =>
+  import('./thread-voice-message-bubble').then(
+    (mod) => mod.MemoizedThreadVoiceMessageBubble,
+  ),
+);
 
 type ConversationMessageRow = {
   body: string | null;

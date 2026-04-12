@@ -43,12 +43,9 @@ declare global {
   }
 }
 
-function isDiagnosticsEnabled() {
-  return (
-    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||
-    process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1'
-  );
-}
+const DM_THREAD_CLIENT_DIAGNOSTICS_ENABLED =
+  process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||
+  process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
 
 function writeLastClientSubtree(details: DmThreadClientDiagnosticDetails) {
   if (typeof window === 'undefined') {
@@ -70,7 +67,7 @@ function logClientSubtree(
   stage: string,
   details: DmThreadClientDiagnosticDetails & Record<string, unknown>,
 ) {
-  if (!isDiagnosticsEnabled() || typeof window === 'undefined') {
+  if (!DM_THREAD_CLIENT_DIAGNOSTICS_ENABLED || typeof window === 'undefined') {
     return;
   }
 
@@ -127,6 +124,33 @@ class DmThreadClientErrorBoundary extends React.Component<
   }
 }
 
+class DmThreadSilentErrorBoundary extends React.Component<
+  DmThreadClientSubtreeProps,
+  DmThreadClientBoundaryState
+> {
+  state: DmThreadClientBoundaryState = {
+    error: null,
+  };
+
+  static getDerivedStateFromError(error: Error) {
+    return {
+      error,
+    };
+  }
+
+  render() {
+    if (this.state.error) {
+      if (this.props.fallback !== undefined) {
+        return this.props.fallback;
+      }
+
+      throw this.state.error;
+    }
+
+    return this.props.children;
+  }
+}
+
 export function DmThreadClientSubtree({
   children,
   conversationId,
@@ -138,6 +162,27 @@ export function DmThreadClientSubtree({
   surface,
   vercelUrl = null,
 }: DmThreadClientSubtreeProps) {
+  if (!DM_THREAD_CLIENT_DIAGNOSTICS_ENABLED) {
+    if (fallback === undefined) {
+      return <>{children}</>;
+    }
+
+    return (
+      <DmThreadSilentErrorBoundary
+        conversationId={conversationId}
+        debugRequestId={debugRequestId}
+        deploymentId={deploymentId}
+        fallback={fallback}
+        gitCommitSha={gitCommitSha}
+        messageId={messageId}
+        surface={surface}
+        vercelUrl={vercelUrl}
+      >
+        {children}
+      </DmThreadSilentErrorBoundary>
+    );
+  }
+
   logClientSubtree('render:start', {
     conversationId,
     debugRequestId,
