@@ -1,9 +1,6 @@
-import {
-  WarmNavReadyProbe,
-} from '@/modules/messaging/performance/warm-nav-client';
-import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import { loadMessengerInboxPageData } from '@/modules/messaging/server/inbox-page';
 import { InboxFilterableContent } from './inbox-filterable-content';
+import { InboxPageDeferredEffects } from './inbox-page-deferred-effects';
 import {
   restoreConversationAction,
 } from './actions';
@@ -30,20 +27,14 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
   return (
     <section className="stack inbox-screen inbox-screen-minimal">
-      <InboxRealtimeSync
-        conversationIds={data.allConversationIds}
+      <InboxPageDeferredEffects
+        activeSpaceId={data.activeSpaceId}
+        allConversationIds={data.allConversationIds}
+        archivedConversationCount={data.archivedConversationItems.length}
         initialSummaries={[...data.mainSummaries, ...data.archivedSummaries]}
+        mainConversationCount={data.mainConversationItems.length}
         userId={data.userId}
-      />
-      <WarmNavReadyProbe
-        details={{
-          archivedCount: data.archivedConversationItems.length,
-          mainCount: data.mainConversationItems.length,
-          spaceId: data.activeSpaceId,
-        }}
-        routeKey={data.warmNavRouteKey}
-        routePath="/inbox"
-        surface="inbox"
+        warmNavRouteKey={data.warmNavRouteKey}
       />
 
       {data.visibleError ? <p className="notice notice-error">{data.visibleError}</p> : null}

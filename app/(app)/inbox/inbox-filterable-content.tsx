@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   useCallback,
   useEffect,
@@ -33,7 +34,25 @@ import {
 } from '@/modules/messaging/inbox/preferences';
 import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import { InboxConversationLiveRow } from './inbox-conversation-live-row';
-import { NewChatSheet, type NewChatMode } from './new-chat-sheet';
+import type { NewChatMode } from './new-chat-sheet';
+
+const NewChatSheet = dynamic(
+  () => import('./new-chat-sheet').then((mod) => mod.NewChatSheet),
+  {
+    loading: () => (
+      <section
+        aria-modal="true"
+        className="card stack inbox-create-sheet"
+        role="dialog"
+      >
+        <div aria-hidden="true" className="inbox-create-sheet-handle" />
+        <div className="stack inbox-create-loading-state" aria-live="polite">
+          <span aria-hidden="true" className="message-status-spinner" />
+        </div>
+      </section>
+    ),
+  },
+);
 
 type InboxFilter = InboxPrimaryFilter;
 type InboxView = 'main' | 'archived';
@@ -184,6 +203,64 @@ const INBOX_PULL_REFRESH_MAX_OFFSET = 92;
 const INBOX_PULL_REFRESH_HOLD_OFFSET = 58;
 const INBOX_PULL_REFRESH_THRESHOLD = 72;
 const HOT_CHAT_ROUTE_PREFETCH_LIMIT = 6;
+const EMPTY_CONVERSATION_SUMMARY_SUBSCRIBE = () => () => undefined;
+const INBOX_LIVE_SUMMARY_IDLE_TIMEOUT_MS = 1200;
+
+function useDeferredInboxLiveSummariesEnabled() {
+  const [isEnabled, setIsEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let frameId: number | null = null;
+    let idleId: number | null = null;
+    let timeoutId: number | null = null;
+    const idleWindow = window as Window & {
+      cancelIdleCallback?: (handle: number) => void;
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number;
+    };
+
+    const markReady = () => {
+      if (!cancelled) {
+        setIsEnabled(true);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(() => {
+      if (typeof idleWindow.requestIdleCallback === 'function') {
+        idleId = idleWindow.requestIdleCallback(markReady, {
+          timeout: INBOX_LIVE_SUMMARY_IDLE_TIMEOUT_MS,
+        });
+        return;
+      }
+
+      timeoutId = window.setTimeout(markReady, 180);
+    });
+
+    return () => {
+      cancelled = true;
+
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      if (
+        idleId !== null &&
+        typeof idleWindow.cancelIdleCallback === 'function'
+      ) {
+        idleWindow.cancelIdleCallback(idleId);
+      }
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  return isEnabled;
+}
 
 function normalizeSearchTerm(value: string) {
   return value.trim().toLowerCase();
@@ -619,6 +696,7 @@ export function InboxFilterableContent({
   restoreAction,
 }: InboxFilterableContentProps) {
   const t = useMemo(() => getInboxClientTranslations(language), [language]);
+  const areLiveSummariesEnabled = useDeferredInboxLiveSummariesEnabled();
   const deriveConversationItemsMemoized = useMemo(
     () => createDerivedConversationItemsMemoizer(),
     [],
@@ -998,26 +1076,30 @@ export function InboxFilterableContent({
 
   const availableDmUserEntriesFiltered = useMemo(
     () =>
-      createChatTargetsState.availableDmUserEntries.filter((availableUser) => {
-        if (!searchTerm) {
-          return true;
-        }
+      !isCreateSheetOpen
+        ? []
+        : createChatTargetsState.availableDmUserEntries.filter((availableUser) => {
+            if (!searchTerm) {
+              return true;
+            }
 
-        return availableUser.label.toLowerCase().includes(searchTerm);
-      }),
-    [createChatTargetsState.availableDmUserEntries, searchTerm],
+            return availableUser.label.toLowerCase().includes(searchTerm);
+          }),
+    [createChatTargetsState.availableDmUserEntries, isCreateSheetOpen, searchTerm],
   );
 
   const availableUserEntriesFiltered = useMemo(
     () =>
-      createChatTargetsState.availableUserEntries.filter((availableUser) => {
-        if (!searchTerm) {
-          return true;
-        }
+      !isCreateSheetOpen
+        ? []
+        : createChatTargetsState.availableUserEntries.filter((availableUser) => {
+            if (!searchTerm) {
+              return true;
+            }
 
-        return availableUser.label.toLowerCase().includes(searchTerm);
-      }),
-    [createChatTargetsState.availableUserEntries, searchTerm],
+            return availableUser.label.toLowerCase().includes(searchTerm);
+          }),
+    [createChatTargetsState.availableUserEntries, isCreateSheetOpen, searchTerm],
   );
   const visibleConversationItems =
     activeView === 'archived' ? archivedConversationItems : mainConversationItems;
@@ -1034,7 +1116,9 @@ export function InboxFilterableContent({
     [visibleConversationSummaries],
   );
   const inboxSummaryRevision = useSyncExternalStore(
-    subscribeToInboxSummaryRevision,
+    areLiveSummariesEnabled
+      ? subscribeToInboxSummaryRevision
+      : EMPTY_CONVERSATION_SUMMARY_SUBSCRIBE,
     getInboxSummaryRevisionSnapshot,
     getInboxSummaryRevisionSnapshot,
   );
@@ -1057,11 +1141,14 @@ export function InboxFilterableContent({
     [t],
   );
   const liveSummariesByConversationId = useMemo(() => {
+    if (!areLiveSummariesEnabled) {
+      return visibleSummariesByConversationId;
+    }
+
     // Tie the visible snapshot map to store revision changes without forcing
     // inactive archived/main lists to rebuild on every live inbox update.
     void inboxSummaryRevision;
     const nextMap = new Map<string, InboxConversationLiveSummary>();
-
     for (const [conversationId, fallbackSummary] of visibleSummariesByConversationId) {
       nextMap.set(
         conversationId,
@@ -1070,7 +1157,11 @@ export function InboxFilterableContent({
     }
 
     return nextMap;
-  }, [inboxSummaryRevision, visibleSummariesByConversationId]);
+  }, [
+    areLiveSummariesEnabled,
+    inboxSummaryRevision,
+    visibleSummariesByConversationId,
+  ]);
   const derivedConversationItems = useMemo(
     () =>
       deriveConversationItemsMemoized({
