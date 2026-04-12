@@ -84,6 +84,41 @@ test('voice playback runtime stays isolated from thread-wide sync and unrelated 
   );
 });
 
+test('voice playback runtime keeps scroll-stability-sensitive work outside the local playback seam', () => {
+  const voiceRuntimeSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-thread-voice-playback-runtime.ts',
+  );
+  const bubbleSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
+  );
+  const viewportSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
+  );
+  const globalsSource = readWorkspaceFile('app/globals.css');
+
+  assert.match(viewportSource, /from ['"]\.\/thread-scroll['"]/);
+  assert.doesNotMatch(
+    voiceRuntimeSource,
+    /from ['"]\.\/thread-scroll['"]|emitThreadHistoryVisibleMessageIds|LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT|emitThreadHistorySyncRequest/,
+  );
+  assert.doesNotMatch(
+    bubbleSource,
+    /from ['"]\.\/thread-scroll['"]|emitThreadHistoryVisibleMessageIds|LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT|emitThreadHistorySyncRequest/,
+  );
+  assert.doesNotMatch(
+    voiceRuntimeSource,
+    /scrollIntoView|scrollTop\s*=|scrollTo\(/,
+  );
+  assert.doesNotMatch(
+    bubbleSource,
+    /scrollIntoView|scrollTop\s*=|scrollTo\(/,
+  );
+  assert.match(
+    globalsSource,
+    /\.message-voice-card\s*\{[\s\S]*overflow-anchor:\s*none/,
+  );
+});
+
 test('mobile image preview keeps a full-viewport overlay contract instead of a strip-sized media box', () => {
   const imageOverlaySource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-image-preview-overlay.tsx',

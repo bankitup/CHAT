@@ -46,6 +46,8 @@ The current acceptance bar focuses on these boundaries:
     enough that recreate flows do not reopen the same broken conversation
 16. Conversation-runtime failure modes stay locally contained instead of
     invalidating the whole thread or collapsing the mobile viewer layout
+17. Unavailable encrypted-history states stay truthful and local instead of
+    degrading into misleading recovery UI
 
 ## Shared Platform Seams Under Acceptance
 
@@ -136,6 +138,11 @@ Current acceptance tests:
   - thread history stays wrapped in a contained rescue boundary
   - the rescue state keeps retry, back-to-chats, and info escape paths local
     to the conversation body
+- [tests/e2ee/ui-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/ui-boundaries.test.ts)
+  verifies current encrypted-DM truthfulness boundaries:
+  - unavailable encrypted history stays explicitly unavailable or
+    policy-blocked instead of drifting into generic recovery UI
+  - send-side encrypted composer failures still map to user-safe messaging
 - [tests/e2ee/poisoned-dm-cleanup-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/poisoned-dm-cleanup-boundaries.test.ts)
   verifies the current poisoned-DM operational cleanup seam:
   - direct-chat delete runs through the full delete helper instead of hide-only
@@ -148,6 +155,8 @@ Current acceptance tests:
     seam
   - voice playback runtime stays isolated from thread-wide sync and unrelated
     attachment invalidation seams
+  - voice playback keeps scroll-stability-sensitive work out of the local
+    playback runtime seam
   - mobile image preview keeps a full-viewport sizing contract
 
 Run them with:
