@@ -21,7 +21,7 @@ import {
 } from './live-refresh';
 import { subscribeToInboxManualRefresh } from './inbox-manual-refresh';
 
-type InboxRealtimeSyncProps = {
+export type InboxRealtimeSyncProps = {
   conversationIds: string[];
   initialSummaries: InboxConversationLiveSummary[];
   userId: string;
