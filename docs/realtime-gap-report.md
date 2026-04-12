@@ -17,6 +17,7 @@ It is intentionally narrow:
 **Why it matters**
 
 Inbox now has explicit reconnect recovery, which is a real improvement. But its recovery model is still a route-local summary refetch loop rather than a more unified reconciliation contract across inbox, thread, and unread.
+Recent cleanup has reduced some thread-to-inbox over-refresh by suppressing summary refetch when the inbox store already reflects the latest local projection, but the overall contract is still summary-refetch driven.
 
 **Evidence**
 - `src/modules/messaging/realtime/active-chat-sync.tsx`
@@ -138,7 +139,7 @@ Later, mostly as discipline and documentation.
 
 **Likely fix direction**
 
-Keep these channels explicitly classified as hints in docs and architecture acceptance rules.
+Keep these channels explicitly classified as hints in docs and architecture acceptance rules, and keep them cleared on disconnect/background so stale auxiliary state does not masquerade as message truth.
 
 ### P2. Realtime Documentation In The Module Itself Is Out Of Date
 

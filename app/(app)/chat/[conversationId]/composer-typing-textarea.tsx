@@ -87,15 +87,16 @@ export function ComposerTypingTextarea({
     const channel = supabase.channel(channelName);
     channelRef.current = channel;
 
-    channel.subscribe((status) => {
-      isSubscribedRef.current = status === 'SUBSCRIBED';
-    });
-
-    return () => {
+    const stopTypingLocally = () => {
       if (stopTimerRef.current) {
         clearTimeout(stopTimerRef.current);
+        stopTimerRef.current = null;
       }
 
+      isTypingRef.current = false;
+    };
+
+    const stopTypingBroadcast = () => {
       if (isTypingRef.current && isSubscribedRef.current) {
         void channel.send({
           type: 'broadcast',
@@ -108,6 +109,39 @@ export function ComposerTypingTextarea({
           },
         });
       }
+
+      stopTypingLocally();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        stopTypingBroadcast();
+      }
+    };
+
+    const handlePageHide = () => {
+      stopTypingBroadcast();
+    };
+
+    channel.subscribe((status) => {
+      isSubscribedRef.current = status === 'SUBSCRIBED';
+
+      if (
+        status === 'CHANNEL_ERROR' ||
+        status === 'TIMED_OUT' ||
+        status === 'CLOSED'
+      ) {
+        stopTypingLocally();
+      }
+    });
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
+      stopTypingBroadcast();
 
       isSubscribedRef.current = false;
       channelRef.current = null;
@@ -147,7 +181,12 @@ export function ComposerTypingTextarea({
   const broadcastTypingState = (isTyping: boolean) => {
     const channel = channelRef.current;
 
-    if (!channel || !isSubscribedRef.current) {
+    if (
+      !channel ||
+      !isSubscribedRef.current ||
+      typeof document === 'undefined' ||
+      document.visibilityState !== 'visible'
+    ) {
       return;
     }
 

@@ -1,6 +1,5 @@
 'use client';
 
-import { useIsOtherParticipantPresent } from './conversation-presence-provider';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { useThreadOtherParticipantReadSeq } from '@/modules/messaging/realtime/thread-live-state-store';
 
@@ -33,7 +32,6 @@ export function LiveOutgoingMessageStatus({
   otherParticipantReadSeq,
   status,
 }: LiveOutgoingMessageStatusProps) {
-  const isOtherParticipantPresent = useIsOtherParticipantPresent();
   const liveOtherParticipantReadSeq = useThreadOtherParticipantReadSeq(
     conversationId,
     otherParticipantReadSeq,
@@ -51,12 +49,7 @@ export function LiveOutgoingMessageStatus({
     Number.isFinite(comparableMessageSeq) &&
     liveOtherParticipantReadSeq !== null &&
     comparableMessageSeq <= liveOtherParticipantReadSeq;
-  const baseStatus = seenByReadState ? 'seen' : normalizedStatus;
-
-  const effectiveStatus =
-    baseStatus === 'sent' && isOtherParticipantPresent
-      ? 'delivered'
-      : baseStatus;
+  const effectiveStatus = seenByReadState ? 'seen' : normalizedStatus;
   const label =
     effectiveStatus === 'seen'
       ? labels.seen

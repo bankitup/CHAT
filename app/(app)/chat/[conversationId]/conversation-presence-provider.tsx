@@ -61,8 +61,26 @@ export function ConversationPresenceProvider({
     });
 
     const syncPresenceState = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        setIsOtherParticipantPresent(false);
+        return;
+      }
+
       const presenceState = channel.presenceState<PresenceStateEntry>();
       setIsOtherParticipantPresent(hasTrackedUser(presenceState, otherUserId));
+    };
+
+    const clearPresenceState = () => {
+      setIsOtherParticipantPresent(false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        clearPresenceState();
+        return;
+      }
+
+      syncPresenceState();
     };
 
     if (diagnosticsEnabled && typeof window !== 'undefined') {
@@ -85,6 +103,15 @@ export function ConversationPresenceProvider({
       .on('presence', { event: 'join' }, syncPresenceState)
       .on('presence', { event: 'leave' }, syncPresenceState)
       .subscribe(async (status) => {
+        if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          clearPresenceState();
+          return;
+        }
+
         if (status !== 'SUBSCRIBED') {
           return;
         }
@@ -95,6 +122,8 @@ export function ConversationPresenceProvider({
           joinedAt: new Date().toISOString(),
         });
       });
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (diagnosticsEnabled && typeof window !== 'undefined') {
@@ -112,6 +141,8 @@ export function ConversationPresenceProvider({
         });
       }
 
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearPresenceState();
       void channel.untrack();
       void supabase.removeChannel(channel);
     };

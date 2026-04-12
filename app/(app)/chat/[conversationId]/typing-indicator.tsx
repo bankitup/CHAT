@@ -42,6 +42,16 @@ export function TypingIndicator({
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const expiryTimeouts = expiryTimeoutsRef.current;
+    const clearActiveTypers = () => {
+      expiryTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
+      expiryTimeouts.clear();
+      setActiveTypers({});
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        clearActiveTypers();
+      }
+    };
     const channel = supabase
       .channel(channelName)
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
@@ -75,7 +85,7 @@ export function TypingIndicator({
           return;
         }
 
-          setActiveTypers((current) => ({
+        setActiveTypers((current) => ({
           ...current,
           [nextPayload.userId as string]: {
             label: nextPayload.label?.trim() || t.chat.someone,
@@ -93,11 +103,21 @@ export function TypingIndicator({
 
         expiryTimeoutsRef.current.set(nextPayload.userId, nextTimeoutId);
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          clearActiveTypers();
+        }
+      });
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      expiryTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
-      expiryTimeouts.clear();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearActiveTypers();
       void supabase.removeChannel(channel);
     };
   }, [channelName, conversationId, currentUserId, language, t.chat.someone]);

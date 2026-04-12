@@ -9,6 +9,10 @@ import { noteWarmNavRouterRefresh } from '@/modules/messaging/performance/warm-n
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useTransition } from 'react';
 import {
+  doesInboxConversationSummaryReflectConversationRecord,
+  doesInboxConversationSummaryReflectLatestMessageRecord,
+  doesInboxConversationSummaryReflectMembershipRecord,
+  doesInboxConversationSummaryReflectMessageId,
   hydrateInboxConversationSummaries,
   markInboxConversationRemoved,
   patchInboxConversationSummary,
@@ -30,6 +34,43 @@ export type InboxRealtimeSyncProps = {
 const INBOX_REFRESH_DEBOUNCE_MS = 220;
 const INBOX_REFRESH_MIN_INTERVAL_MS = 1200;
 const INBOX_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
+const INBOX_MEMBERSHIP_SUMMARY_ONLY_KEYS = new Set([
+  'hidden_at',
+  'last_read_at',
+  'last_read_message_seq',
+]);
+const INBOX_CONVERSATION_SUMMARY_ONLY_KEYS = new Set([
+  'last_message_at',
+  'last_message_body',
+  'last_message_content_mode',
+  'last_message_deleted_at',
+  'last_message_id',
+  'last_message_kind',
+  'last_message_sender_id',
+  'last_message_seq',
+  'updated_at',
+]);
+
+function getChangedRealtimeRecordKeys(
+  nextRow: Record<string, unknown> | null,
+  previousRow: Record<string, unknown> | null,
+) {
+  const keys = new Set([
+    ...Object.keys(nextRow ?? {}),
+    ...Object.keys(previousRow ?? {}),
+  ]);
+
+  return Array.from(keys).filter((key) => {
+    const nextValue = nextRow?.[key];
+    const previousValue = previousRow?.[key];
+
+    if (Array.isArray(nextValue) || Array.isArray(previousValue)) {
+      return JSON.stringify(nextValue) !== JSON.stringify(previousValue);
+    }
+
+    return nextValue !== previousValue;
+  });
+}
 
 export function InboxRealtimeSync({
   conversationIds,
@@ -494,6 +535,7 @@ export function InboxRealtimeSync({
     };
 
     const scheduleMessageRefresh = (payload: {
+      eventType: 'INSERT' | 'UPDATE' | 'DELETE';
       new?: { conversation_id?: string | null } | null;
       old?: { conversation_id?: string | null } | null;
     }) => {
@@ -501,6 +543,48 @@ export function InboxRealtimeSync({
         payload.new?.conversation_id ?? payload.old?.conversation_id ?? null;
 
       if (!conversationId || !trackedConversationIds.has(conversationId)) {
+        return;
+      }
+
+      const nextRow =
+        payload.new && typeof payload.new === 'object'
+          ? (payload.new as Record<string, unknown>)
+          : null;
+      const previousRow =
+        payload.old && typeof payload.old === 'object'
+          ? (payload.old as Record<string, unknown>)
+          : null;
+      const messageId =
+        typeof nextRow?.id === 'string'
+          ? nextRow.id
+          : typeof previousRow?.id === 'string'
+            ? previousRow.id
+            : null;
+
+      if (
+        payload.eventType !== 'DELETE' &&
+        doesInboxConversationSummaryReflectLatestMessageRecord({
+          conversationId,
+          row: nextRow ?? previousRow,
+        })
+      ) {
+        logDiagnostics('summary-refresh-suppressed:message-already-projected', {
+          conversationId,
+          eventType: payload.eventType,
+          messageId,
+        });
+        return;
+      }
+
+      if (
+        payload.eventType === 'UPDATE' &&
+        messageId &&
+        !doesInboxConversationSummaryReflectMessageId(conversationId, messageId)
+      ) {
+        logDiagnostics('summary-refresh-suppressed:message-update-nonlatest', {
+          conversationId,
+          messageId,
+        });
         return;
       }
 
@@ -516,6 +600,19 @@ export function InboxRealtimeSync({
         return;
       }
 
+      if (
+        doesInboxConversationSummaryReflectMessageId(
+          payload.conversationId,
+          payload.messageId,
+        )
+      ) {
+        logDiagnostics('summary-refresh-suppressed:broadcast-already-projected', {
+          conversationId: payload.conversationId,
+          messageId: payload.messageId ?? null,
+        });
+        return;
+      }
+
       void syncConversationSummary('message-broadcast', payload.conversationId);
     };
 
@@ -523,6 +620,20 @@ export function InboxRealtimeSync({
       const detail = (event as CustomEvent<MessageCommittedPayload>).detail;
 
       if (!detail?.conversationId || !trackedConversationIds.has(detail.conversationId)) {
+        return;
+      }
+
+      if (
+        doesInboxConversationSummaryReflectMessageId(
+          detail.conversationId,
+          detail.messageId,
+        )
+      ) {
+        logDiagnostics('summary-refresh-suppressed:local-already-projected', {
+          conversationId: detail.conversationId,
+          messageId: detail.messageId ?? null,
+          source: detail.source ?? null,
+        });
         return;
       }
 
@@ -557,6 +668,34 @@ export function InboxRealtimeSync({
           return;
         }
 
+        const normalizedNextRow =
+          payload.new && typeof payload.new === 'object'
+            ? (payload.new as Record<string, unknown>)
+            : null;
+        const normalizedPreviousRow =
+          payload.old && typeof payload.old === 'object'
+            ? (payload.old as Record<string, unknown>)
+            : null;
+        const changedKeys = getChangedRealtimeRecordKeys(
+          normalizedNextRow,
+          normalizedPreviousRow,
+        );
+
+        if (
+          changedKeys.length > 0 &&
+          changedKeys.every((key) => INBOX_MEMBERSHIP_SUMMARY_ONLY_KEYS.has(key)) &&
+          doesInboxConversationSummaryReflectMembershipRecord({
+            conversationId,
+            row: normalizedNextRow ?? normalizedPreviousRow,
+          })
+        ) {
+          logDiagnostics('summary-refresh-suppressed:membership-already-projected', {
+            changedKeys,
+            conversationId,
+          });
+          return;
+        }
+
         void syncConversationSummary('membership-postgres', conversationId);
       },
     );
@@ -570,7 +709,34 @@ export function InboxRealtimeSync({
           table: 'conversations',
           filter: `id=eq.${conversationId}`,
         },
-        () => {
+        (payload) => {
+          const nextRow =
+            payload.new && typeof payload.new === 'object'
+              ? (payload.new as Record<string, unknown>)
+              : null;
+          const previousRow =
+            payload.old && typeof payload.old === 'object'
+              ? (payload.old as Record<string, unknown>)
+              : null;
+          const changedKeys = getChangedRealtimeRecordKeys(nextRow, previousRow);
+
+          if (
+            changedKeys.length > 0 &&
+            changedKeys.every((key) =>
+              INBOX_CONVERSATION_SUMMARY_ONLY_KEYS.has(key),
+            ) &&
+            doesInboxConversationSummaryReflectConversationRecord({
+              conversationId,
+              row: nextRow ?? previousRow,
+            })
+          ) {
+            logDiagnostics('summary-refresh-suppressed:conversation-already-projected', {
+              changedKeys,
+              conversationId,
+            });
+            return;
+          }
+
           void syncConversationSummary('conversation-postgres', conversationId);
         },
       );
@@ -583,7 +749,12 @@ export function InboxRealtimeSync({
         schema: 'public',
         table: 'messages',
       },
-      scheduleMessageRefresh,
+      (payload) =>
+        scheduleMessageRefresh({
+          eventType: payload.eventType,
+          new: payload.new,
+          old: payload.old,
+        }),
     );
 
     channel.subscribe((status) => {

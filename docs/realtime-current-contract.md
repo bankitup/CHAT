@@ -70,6 +70,7 @@ than:
 - The inbox store is a hydrated cache plus patch layer.
 - Realtime does not deliver authoritative full inbox summaries.
 - Instead, realtime events trigger summary refetches for affected conversations.
+- Thread-originated local projections may patch inbox summary state directly, and inbox sync now suppresses redundant refetch when the current summary already reflects the latest message or read-state projection.
 
 ### Unread State
 
@@ -101,6 +102,7 @@ than:
 **Current contract**
 - Presence and typing are live hints only.
 - They are not durable truth and should not be treated as authoritative state.
+- They should not promote message delivery status, drive inbox summary truth, or trigger authoritative catch-up.
 
 ## What Mounts Where
 

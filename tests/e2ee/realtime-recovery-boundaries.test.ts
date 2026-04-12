@@ -87,3 +87,127 @@ test('inbox reconnect recovery adds explicit resubscribe catch-up', () => {
     /void syncTrackedConversationSummaries\('realtime-resubscribe'\);/,
   );
 });
+
+test('thread and inbox live surfaces keep summary catch-up narrower and more independent', () => {
+  const inboxSyncSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/inbox-sync.tsx',
+  );
+  const inboxSummaryStoreSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/inbox-summary-store.ts',
+  );
+  const activeChatSyncSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/active-chat-sync.tsx',
+  );
+
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectMessageId\(/,
+  );
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectLatestMessageRecord\(/,
+  );
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectMembershipRecord\(/,
+  );
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectConversationRecord\(/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:local-already-projected/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:broadcast-already-projected/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:message-update-nonlatest/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:membership-already-projected/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:conversation-already-projected/,
+  );
+  assert.doesNotMatch(
+    activeChatSyncSource,
+    /inbox-summary-store/,
+  );
+});
+
+test('presence and typing stay auxiliary and do not drive message truth or catch-up', () => {
+  const presenceProviderSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/conversation-presence-provider.tsx',
+  );
+  const typingTextareaSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/composer-typing-textarea.tsx',
+  );
+  const typingIndicatorSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/typing-indicator.tsx',
+  );
+  const liveOutgoingStatusSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/live-outgoing-message-status.tsx',
+  );
+
+  assert.doesNotMatch(
+    presenceProviderSource,
+    /emitThreadHistorySyncRequest|patchInboxConversationSummary|router\.refresh|syncConversationSummary/,
+  );
+  assert.match(
+    presenceProviderSource,
+    /document\.visibilityState !== 'visible'/,
+  );
+  assert.match(
+    presenceProviderSource,
+    /status === 'CHANNEL_ERROR'[\s\S]*status === 'TIMED_OUT'[\s\S]*status === 'CLOSED'/,
+  );
+
+  assert.doesNotMatch(
+    typingTextareaSource,
+    /emitThreadHistorySyncRequest|patchInboxConversationSummary|router\.refresh|syncConversationSummary/,
+  );
+  assert.match(
+    typingTextareaSource,
+    /document\.visibilityState !== 'visible'/,
+  );
+  assert.match(
+    typingTextareaSource,
+    /window\.addEventListener\('pagehide', handlePageHide\)/,
+  );
+  assert.match(
+    typingTextareaSource,
+    /status === 'CHANNEL_ERROR'[\s\S]*status === 'TIMED_OUT'[\s\S]*status === 'CLOSED'/,
+  );
+
+  assert.doesNotMatch(
+    typingIndicatorSource,
+    /emitThreadHistorySyncRequest|patchInboxConversationSummary|router\.refresh|syncConversationSummary/,
+  );
+  assert.match(
+    typingIndicatorSource,
+    /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/,
+  );
+  assert.match(
+    typingIndicatorSource,
+    /status === 'CHANNEL_ERROR'[\s\S]*status === 'TIMED_OUT'[\s\S]*status === 'CLOSED'/,
+  );
+
+  assert.doesNotMatch(
+    liveOutgoingStatusSource,
+    /conversation-presence-provider/,
+  );
+  assert.doesNotMatch(
+    liveOutgoingStatusSource,
+    /baseStatus === 'sent' && isOtherParticipantPresent/,
+  );
+  assert.match(
+    liveOutgoingStatusSource,
+    /const effectiveStatus = seenByReadState \? 'seen' : normalizedStatus;/,
+  );
+});

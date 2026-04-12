@@ -28,6 +28,53 @@ const inboxSummaryListeners = new Map<string, Set<() => void>>();
 const inboxSummaryRevisionListeners = new Set<() => void>();
 let inboxSummaryRevision = 0;
 
+function normalizeInboxSummaryRealtimeString(
+  row: Record<string, unknown> | null,
+  key: string,
+) {
+  if (!row || !Object.prototype.hasOwnProperty.call(row, key)) {
+    return undefined;
+  }
+
+  const value = row[key];
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  return undefined;
+}
+
+function normalizeInboxSummaryRealtimeNumber(
+  row: Record<string, unknown> | null,
+  key: string,
+) {
+  if (!row || !Object.prototype.hasOwnProperty.call(row, key)) {
+    return undefined;
+  }
+
+  const value = row[key];
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  return undefined;
+}
+
 function emitInboxSummaryRevisionChange() {
   inboxSummaryRevision += 1;
 
@@ -80,6 +127,180 @@ function emitInboxConversationSummaryChange(conversationId: string) {
 
     emitInboxSummaryRevisionChange();
   }
+}
+
+export function readInboxConversationLiveSummary(
+  conversationId: string,
+): InboxConversationLiveSummary | null {
+  const normalizedConversationId = conversationId.trim();
+
+  if (!normalizedConversationId) {
+    return null;
+  }
+
+  return (
+    inboxSummaryStore.get(normalizedConversationId) ??
+    inboxSummaryFallbackStore.get(normalizedConversationId) ??
+    null
+  );
+}
+
+export function doesInboxConversationSummaryReflectMessageId(
+  conversationId: string,
+  messageId: string | null | undefined,
+) {
+  const normalizedMessageId = messageId?.trim() ?? '';
+
+  if (!normalizedMessageId) {
+    return false;
+  }
+
+  const summary = readInboxConversationLiveSummary(conversationId);
+
+  return Boolean(summary && !summary.removed && summary.latestMessageId === normalizedMessageId);
+}
+
+export function doesInboxConversationSummaryReflectLatestMessageRecord(input: {
+  conversationId: string;
+  row: Record<string, unknown> | null;
+}) {
+  const summary = readInboxConversationLiveSummary(input.conversationId);
+
+  if (!summary || summary.removed) {
+    return false;
+  }
+
+  const messageId = normalizeInboxSummaryRealtimeString(input.row, 'id');
+
+  if (!messageId || summary.latestMessageId !== messageId.trim()) {
+    return false;
+  }
+
+  const body = normalizeInboxSummaryRealtimeString(input.row, 'body');
+  const contentMode = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'content_mode',
+  );
+  const deletedAt = normalizeInboxSummaryRealtimeString(input.row, 'deleted_at');
+  const kind = normalizeInboxSummaryRealtimeString(input.row, 'kind');
+  const senderId = normalizeInboxSummaryRealtimeString(input.row, 'sender_id');
+  const seq = normalizeInboxSummaryRealtimeNumber(input.row, 'seq');
+
+  return (
+    (body === undefined || summary.latestMessageBody === body) &&
+    (contentMode === undefined ||
+      summary.latestMessageContentMode === contentMode) &&
+    (deletedAt === undefined || summary.latestMessageDeletedAt === deletedAt) &&
+    (kind === undefined || summary.latestMessageKind === kind) &&
+    (senderId === undefined || summary.latestMessageSenderId === senderId) &&
+    (seq === undefined || summary.latestMessageSeq === seq)
+  );
+}
+
+export function doesInboxConversationSummaryReflectMembershipRecord(input: {
+  conversationId: string;
+  row: Record<string, unknown> | null;
+}) {
+  const summary = readInboxConversationLiveSummary(input.conversationId);
+
+  if (!summary || summary.removed) {
+    return false;
+  }
+
+  const hiddenAt = normalizeInboxSummaryRealtimeString(input.row, 'hidden_at');
+  const lastReadAt = normalizeInboxSummaryRealtimeString(input.row, 'last_read_at');
+  const lastReadMessageSeq = normalizeInboxSummaryRealtimeNumber(
+    input.row,
+    'last_read_message_seq',
+  );
+  const hasComparableField =
+    hiddenAt !== undefined ||
+    lastReadAt !== undefined ||
+    lastReadMessageSeq !== undefined;
+
+  if (!hasComparableField) {
+    return false;
+  }
+
+  return (
+    (hiddenAt === undefined || summary.hiddenAt === hiddenAt) &&
+    (lastReadAt === undefined || summary.lastReadAt === lastReadAt) &&
+    (lastReadMessageSeq === undefined ||
+      summary.lastReadMessageSeq === lastReadMessageSeq)
+  );
+}
+
+export function doesInboxConversationSummaryReflectConversationRecord(input: {
+  conversationId: string;
+  row: Record<string, unknown> | null;
+}) {
+  const summary = readInboxConversationLiveSummary(input.conversationId);
+
+  if (!summary || summary.removed) {
+    return false;
+  }
+
+  const lastMessageAt = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'last_message_at',
+  );
+  const lastMessageBody = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'last_message_body',
+  );
+  const lastMessageContentMode = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'last_message_content_mode',
+  );
+  const lastMessageDeletedAt = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'last_message_deleted_at',
+  );
+  const lastMessageId = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'last_message_id',
+  );
+  const lastMessageKind = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'last_message_kind',
+  );
+  const lastMessageSenderId = normalizeInboxSummaryRealtimeString(
+    input.row,
+    'last_message_sender_id',
+  );
+  const lastMessageSeq = normalizeInboxSummaryRealtimeNumber(
+    input.row,
+    'last_message_seq',
+  );
+  const hasComparableField =
+    lastMessageAt !== undefined ||
+    lastMessageBody !== undefined ||
+    lastMessageContentMode !== undefined ||
+    lastMessageDeletedAt !== undefined ||
+    lastMessageId !== undefined ||
+    lastMessageKind !== undefined ||
+    lastMessageSenderId !== undefined ||
+    lastMessageSeq !== undefined;
+
+  if (!hasComparableField) {
+    return false;
+  }
+
+  return (
+    (lastMessageAt === undefined || summary.lastMessageAt === lastMessageAt) &&
+    (lastMessageBody === undefined ||
+      summary.latestMessageBody === lastMessageBody) &&
+    (lastMessageContentMode === undefined ||
+      summary.latestMessageContentMode === lastMessageContentMode) &&
+    (lastMessageDeletedAt === undefined ||
+      summary.latestMessageDeletedAt === lastMessageDeletedAt) &&
+    (lastMessageId === undefined || summary.latestMessageId === lastMessageId) &&
+    (lastMessageKind === undefined ||
+      summary.latestMessageKind === lastMessageKind) &&
+    (lastMessageSenderId === undefined ||
+      summary.latestMessageSenderId === lastMessageSenderId) &&
+    (lastMessageSeq === undefined || summary.latestMessageSeq === lastMessageSeq)
+  );
 }
 
 function resolveEffectiveUnreadCount(summary: InboxConversationLiveSummary | null) {
