@@ -31,6 +31,7 @@ type ActiveChatRealtimeSyncProps = {
 const THREAD_REFRESH_DEBOUNCE_MS = 180;
 const THREAD_REFRESH_MIN_INTERVAL_MS = 900;
 const THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
+const THREAD_RECENT_HINTED_MESSAGE_SUPPRESSION_MS = 5000;
 const THREAD_REALTIME_RESUBSCRIBE_RECOVERY_REASON = 'realtime-resubscribe';
 const THREAD_AUTHORITATIVE_LATEST_WINDOW_RECOVERY_REASON =
   'realtime-authoritative-latest-window';
@@ -240,6 +241,7 @@ export function ActiveChatRealtimeSync({
   const lastRefreshAtRef = useRef(0);
   const hiddenAtRef = useRef<number | null>(null);
   const trackedMessageIdsRef = useRef(new Set(normalizedMessageIds));
+  const recentHintedMessageIdsRef = useRef(new Map<string, number>());
   const hasSeenSubscribedStatusRef = useRef(false);
   const isRealtimeChannelSubscribedRef = useRef(false);
   const diagnosticsEnabled =
@@ -249,6 +251,7 @@ export function ActiveChatRealtimeSync({
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     trackedMessageIdsRef.current = new Set(normalizedMessageIds);
+    const recentHintedMessageIds = recentHintedMessageIdsRef.current;
 
     const logDiagnostics = (stage: string, details?: Record<string, unknown>) => {
       if (!diagnosticsEnabled) {
@@ -261,6 +264,48 @@ export function ActiveChatRealtimeSync({
       }
 
       console.info('[chat-live-sync]', stage);
+    };
+
+    const pruneRecentHintedMessageIds = (now = Date.now()) => {
+      for (const [messageId, markedAt] of recentHintedMessageIds.entries()) {
+        if (now - markedAt > THREAD_RECENT_HINTED_MESSAGE_SUPPRESSION_MS) {
+          recentHintedMessageIds.delete(messageId);
+        }
+      }
+    };
+
+    const markRecentHintedMessageId = (
+      messageId: string | null | undefined,
+      source: string,
+    ) => {
+      const normalizedMessageId = messageId?.trim() ?? '';
+
+      if (!normalizedMessageId) {
+        return;
+      }
+
+      const now = Date.now();
+      pruneRecentHintedMessageIds(now);
+      recentHintedMessageIds.set(normalizedMessageId, now);
+      logDiagnostics('topology-sync:hinted-message-marked', {
+        conversationId,
+        messageId: normalizedMessageId,
+        source,
+      });
+    };
+
+    const wasRecentlyHintedMessageId = (messageId: string | null | undefined) => {
+      const normalizedMessageId = messageId?.trim() ?? '';
+
+      if (!normalizedMessageId) {
+        return false;
+      }
+
+      const now = Date.now();
+      pruneRecentHintedMessageIds(now);
+      const markedAt = recentHintedMessageIds.get(normalizedMessageId) ?? null;
+
+      return markedAt !== null && now - markedAt <= THREAD_RECENT_HINTED_MESSAGE_SUPPRESSION_MS;
     };
 
     const scheduleRefresh = (
@@ -377,6 +422,8 @@ export function ActiveChatRealtimeSync({
         return;
       }
 
+      markRecentHintedMessageId(payload.messageId, 'message-broadcast');
+
       requestTopologySync({
         messageIds: payload.messageId ? [payload.messageId] : null,
         newerThanLatest: !payload.messageId,
@@ -390,6 +437,11 @@ export function ActiveChatRealtimeSync({
       if (!detail || detail.conversationId !== conversationId) {
         return;
       }
+
+      markRecentHintedMessageId(
+        detail.messageId,
+        detail.source ?? 'message-local-committed',
+      );
 
       if (
         detail.source &&
@@ -499,6 +551,19 @@ export function ActiveChatRealtimeSync({
               messageId,
             });
           }
+        }
+
+        if (
+          payload.eventType === 'INSERT' &&
+          messageId &&
+          wasRecentlyHintedMessageId(messageId)
+        ) {
+          logDiagnostics('message-postgres:insert-topology-sync-suppressed-by-hint', {
+            changedKeys,
+            conversationId,
+            messageId,
+          });
+          return;
         }
 
         requestTopologySync({
@@ -709,6 +774,7 @@ export function ActiveChatRealtimeSync({
         LOCAL_THREAD_HISTORY_VISIBLE_MESSAGE_IDS_EVENT,
         handleVisibleMessageIds as EventListener,
       );
+      recentHintedMessageIds.clear();
       void supabase.removeChannel(channel);
     };
   }, [

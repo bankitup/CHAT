@@ -64,6 +64,33 @@ test('thread reconnect recovery requests both after-seq catch-up and authoritati
   );
 });
 
+test('thread hot-path message inserts prefer local or broadcast hints before duplicate postgres insert sync', () => {
+  const activeChatSyncSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/active-chat-sync.tsx',
+  );
+
+  assert.match(
+    activeChatSyncSource,
+    /const THREAD_RECENT_HINTED_MESSAGE_SUPPRESSION_MS = 5000;/,
+  );
+  assert.match(
+    activeChatSyncSource,
+    /const recentHintedMessageIdsRef = useRef\(new Map<string, number>\(\)\);/,
+  );
+  assert.match(
+    activeChatSyncSource,
+    /markRecentHintedMessageId\(payload\.messageId, 'message-broadcast'\);/,
+  );
+  assert.match(
+    activeChatSyncSource,
+    /markRecentHintedMessageId\(\s*detail\.messageId,\s*detail\.source \?\? 'message-local-committed',\s*\);/,
+  );
+  assert.match(
+    activeChatSyncSource,
+    /payload\.eventType === 'INSERT'[\s\S]*wasRecentlyHintedMessageId\(messageId\)[\s\S]*message-postgres:insert-topology-sync-suppressed-by-hint/,
+  );
+});
+
 test('inbox reconnect recovery adds explicit resubscribe catch-up', () => {
   const inboxSyncSource = readWorkspaceFile(
     'src/modules/messaging/realtime/inbox-sync.tsx',
