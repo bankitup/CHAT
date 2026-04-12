@@ -96,7 +96,9 @@ Why it matters:
 
 Main evidence:
 
-- `app/(app)/messenger-surface-runtime-effects.tsx`
+- `app/(app)/chat/[conversationId]/thread-route-runtime-effects.tsx`
+- `app/(app)/inbox/inbox-route-runtime-effects.tsx`
+- `app/(app)/activity/activity-route-runtime-effects.tsx`
 - route-level mounting inside `app/(app)/inbox/page.tsx`
 - route-level mounting inside `app/(app)/chat/[conversationId]/thread-page-content.tsx`
 - route-level mounting inside `app/(app)/activity/page.tsx`
@@ -165,7 +167,9 @@ Prioritize:
 Continue reducing product-specific runtime ownership in:
 
 - `app/(app)/app-shell-frame.tsx`
-- `app/(app)/messenger-surface-runtime-effects.tsx`
+- Messenger route runtime seams under `app/(app)/chat/[conversationId]/**`
+- Messenger route runtime seams under `app/(app)/inbox/**`
+- Messenger route runtime seams under `app/(app)/activity/**`
 
 The shell should remain a host, not a long-term product-runtime home.
 

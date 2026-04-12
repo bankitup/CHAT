@@ -6,7 +6,6 @@ import {
   type KeepCozyMessagingActivityItem,
 } from '@/modules/keepcozy/messaging-adapter';
 import { isPushTestSendEnabledForUser } from '@/modules/messaging/push/server';
-import { InboxRealtimeSync } from '@/modules/messaging/realtime/inbox-sync';
 import {
   getKeepCozyPrimaryTestFlowHints,
   getKeepCozyActivityData,
@@ -15,7 +14,7 @@ import {
 import { resolveSpaceProductPosture } from '@/modules/app-shell/space-posture';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
-import { MessengerSurfaceRuntimeEffects } from '../messenger-surface-runtime-effects';
+import { ActivityRouteRuntimeEffects } from './activity-route-runtime-effects';
 
 type ActivityPageProps = {
   searchParams: Promise<{
@@ -199,13 +198,10 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   if (activeProductPosture === 'messenger') {
     return (
       <section className="stack settings-screen settings-shell activity-screen messenger-activity-screen">
-        <MessengerSurfaceRuntimeEffects
+        <ActivityRouteRuntimeEffects
+          conversationIds={conversationIds}
           includeUnreadBadgeSync
           includeWarmNavObserver
-        />
-
-        <InboxRealtimeSync
-          conversationIds={conversationIds}
           initialSummaries={initialSummaries}
           userId={user.id}
         />
@@ -474,7 +470,7 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
 
   return (
     <section className="stack settings-screen settings-shell activity-screen">
-      <InboxRealtimeSync
+      <ActivityRouteRuntimeEffects
         conversationIds={conversationIds}
         initialSummaries={initialSummaries}
         userId={user.id}

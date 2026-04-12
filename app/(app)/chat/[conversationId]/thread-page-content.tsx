@@ -39,9 +39,9 @@ import { GroupChatSettingsForm } from './group-chat-settings-form';
 import { ThreadPageDeferredEffects } from './thread-page-deferred-effects';
 import { ThreadComposerRuntime } from './thread-composer-runtime';
 import { ThreadHistoryViewport } from './thread-history-viewport';
+import { ThreadRouteRuntimeEffects } from './thread-route-runtime-effects';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
-import { MessengerSurfaceRuntimeEffects } from '../../messenger-surface-runtime-effects';
 
 type MessengerThreadPageData = Awaited<
   ReturnType<typeof loadMessengerThreadPageData>
@@ -193,12 +193,8 @@ export function ThreadPageContent({
 
   return (
     <section className="stack chat-screen">
-      <MessengerSurfaceRuntimeEffects
+      <ThreadRouteRuntimeEffects
         dmE2eeEnabled={encryptedDmEnabled}
-        includeDmBoundary
-        includeImmediatePresenceSync
-        includeUnreadBadgeSync
-        includeWarmNavObserver
         userId={currentUserId}
       />
 

@@ -16,8 +16,17 @@ function readWorkspaceLineCount(relativePath: string) {
 test('shared shell stays free of direct Messenger runtime while route-local Messenger surfaces own the effect mounting', () => {
   const shellSource = readWorkspaceFile('app/(app)/app-shell-frame.tsx');
   const layoutSource = readWorkspaceFile('app/(app)/layout.tsx');
-  const routeRuntimeSource = readWorkspaceFile(
-    'app/(app)/messenger-surface-runtime-effects.tsx',
+  const sharedRouteRuntimeSource = readWorkspaceFile(
+    'app/(app)/messenger-route-runtime-shared.ts',
+  );
+  const inboxRouteRuntimeSource = readWorkspaceFile(
+    'app/(app)/inbox/inbox-route-runtime-effects.tsx',
+  );
+  const threadRouteRuntimeSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-route-runtime-effects.tsx',
+  );
+  const activityRouteRuntimeSource = readWorkspaceFile(
+    'app/(app)/activity/activity-route-runtime-effects.tsx',
   );
   const inboxPageSource = readWorkspaceFile('app/(app)/inbox/page.tsx');
   const threadPageContentSource = readWorkspaceFile(
@@ -40,69 +49,120 @@ test('shared shell stays free of direct Messenger runtime while route-local Mess
   );
 
   assert.match(
-    routeRuntimeSource,
-    /const DmE2eeAuthenticatedBoundary = dynamic\(/,
+    sharedRouteRuntimeSource,
+    /export const WARM_NAV_CLIENT_DIAGNOSTICS_ENABLED =/,
   );
   assert.match(
-    routeRuntimeSource,
-    /const ChatUnreadBadgeSync = dynamic\(/,
+    sharedRouteRuntimeSource,
+    /export function useDeferredMessengerRouteEffectsReady\(/,
   );
   assert.match(
-    routeRuntimeSource,
-    /const PushSubscriptionPresenceSync = dynamic\(/,
-  );
-  assert.match(
-    routeRuntimeSource,
-    /const WarmNavRouteObserver = dynamic\(/,
-  );
-  assert.match(
-    routeRuntimeSource,
-    /function useDeferredMessengerSurfaceEffectsReady\(/,
-  );
-  assert.match(
-    routeRuntimeSource,
+    sharedRouteRuntimeSource,
     /window\.requestAnimationFrame/,
   );
   assert.match(
-    routeRuntimeSource,
+    sharedRouteRuntimeSource,
     /requestIdleCallback/,
   );
+
   assert.match(
-    routeRuntimeSource,
-    /const shouldMountDmBoundary = includeDmBoundary && dmE2eeEnabled && Boolean\(userId\);/,
+    inboxRouteRuntimeSource,
+    /const DmE2eeAuthenticatedBoundary = dynamic\(/,
   );
   assert.match(
-    routeRuntimeSource,
-    /const shouldMountWarmNavObserver =\s*deferredReady &&\s*includeWarmNavObserver &&\s*WARM_NAV_CLIENT_DIAGNOSTICS_ENABLED;/,
+    inboxRouteRuntimeSource,
+    /const ChatUnreadBadgeSync = dynamic\(/,
   );
   assert.match(
-    routeRuntimeSource,
+    inboxRouteRuntimeSource,
+    /const PushSubscriptionPresenceSync = dynamic\(/,
+  );
+  assert.match(
+    inboxRouteRuntimeSource,
+    /const WarmNavRouteObserver = dynamic\(/,
+  );
+  assert.match(
+    inboxRouteRuntimeSource,
+    /const shouldMountPresenceSync = deferredReady;/,
+  );
+  assert.match(
+    inboxRouteRuntimeSource,
+    /const shouldMountWarmNavObserver =\s*deferredReady && WARM_NAV_CLIENT_DIAGNOSTICS_ENABLED;/,
+  );
+  assert.match(
+    inboxRouteRuntimeSource,
+    /<ChatUnreadBadgeSync syncKey=\{syncKey\} \/>/,
+  );
+
+  assert.match(
+    threadRouteRuntimeSource,
+    /const DmE2eeAuthenticatedBoundary = dynamic\(/,
+  );
+  assert.match(
+    threadRouteRuntimeSource,
+    /const PushSubscriptionPresenceSync = dynamic\(/,
+  );
+  assert.match(
+    threadRouteRuntimeSource,
+    /const shouldMountDmBoundary = dmE2eeEnabled && Boolean\(userId\);/,
+  );
+  assert.match(
+    threadRouteRuntimeSource,
+    /<PushSubscriptionPresenceSync \/>/,
+  );
+  assert.match(
+    threadRouteRuntimeSource,
+    /<ChatUnreadBadgeSync syncKey=\{syncKey\} \/>/,
+  );
+
+  assert.match(
+    activityRouteRuntimeSource,
+    /from ['"]@\/modules\/messaging\/realtime\/inbox-sync['"]/,
+  );
+  assert.match(
+    activityRouteRuntimeSource,
+    /const ChatUnreadBadgeSync = dynamic\(/,
+  );
+  assert.match(
+    activityRouteRuntimeSource,
+    /const WarmNavRouteObserver = dynamic\(/,
+  );
+  assert.match(
+    activityRouteRuntimeSource,
+    /<InboxRealtimeSync/,
+  );
+  assert.match(
+    activityRouteRuntimeSource,
     /<ChatUnreadBadgeSync syncKey=\{syncKey\} \/>/,
   );
 
   assert.match(
     inboxPageSource,
-    /from ['"]\.\.\/messenger-surface-runtime-effects['"]/,
+    /from ['"]\.\/inbox-route-runtime-effects['"]/,
   );
   assert.match(
     inboxPageSource,
-    /<MessengerSurfaceRuntimeEffects[\s\S]*includeDeferredPresenceSync[\s\S]*includeDmBoundary[\s\S]*includeUnreadBadgeSync[\s\S]*includeWarmNavObserver[\s\S]*userId=\{data\.userId\}/,
+    /<InboxRouteRuntimeEffects[\s\S]*dmE2eeEnabled=\{data\.dmE2eeEnabled\}[\s\S]*userId=\{data\.userId\}/,
   );
   assert.match(
     threadPageContentSource,
-    /from ['"]\.\.\/\.\.\/messenger-surface-runtime-effects['"]/,
+    /from ['"]\.\/thread-route-runtime-effects['"]/,
   );
   assert.match(
     threadPageContentSource,
-    /<MessengerSurfaceRuntimeEffects[\s\S]*includeDmBoundary[\s\S]*includeImmediatePresenceSync[\s\S]*includeUnreadBadgeSync[\s\S]*includeWarmNavObserver[\s\S]*userId=\{currentUserId\}/,
+    /<ThreadRouteRuntimeEffects[\s\S]*dmE2eeEnabled=\{encryptedDmEnabled\}[\s\S]*userId=\{currentUserId\}/,
   );
   assert.match(
     activityPageSource,
-    /from ['"]\.\.\/messenger-surface-runtime-effects['"]/,
+    /from ['"]\.\/activity-route-runtime-effects['"]/,
   );
   assert.match(
     activityPageSource,
-    /<MessengerSurfaceRuntimeEffects[\s\S]*includeUnreadBadgeSync[\s\S]*includeWarmNavObserver/,
+    /<ActivityRouteRuntimeEffects[\s\S]*conversationIds=\{conversationIds\}[\s\S]*initialSummaries=\{initialSummaries\}[\s\S]*userId=\{user\.id\}/,
+  );
+  assert.doesNotMatch(
+    activityPageSource,
+    /from ['"]@\/modules\/messaging\/realtime\/inbox-sync['"]|from ['"]\.\.\/messenger-surface-runtime-effects['"]/,
   );
 });
 
