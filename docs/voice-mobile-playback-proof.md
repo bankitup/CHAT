@@ -99,7 +99,30 @@ Inference from the current code:
 - mobile failure affects at least some messages, while desktop works
 - delivery routes already support authenticated content resolution and warmed blob playback
 
+The current repo also had one more risky behavior in the playback path:
+
+- `voice-playback-source.ts` preferred warmed local `blob:` playback URLs when one
+  was available
+- on WebKit-mobile environments, WebM/Opus-like voice payloads can be more
+  failure-prone through that blob/object-URL path than through direct transport
+  playback
+
+That means the mobile failure was not just "cache confusion". The warmed
+blob/object-URL path itself was part of the likely failure surface for risky
+platform/media combinations.
+
 So codec/container incompatibility is the most likely primary cause until the new logs prove otherwise.
+
+## Current Hotfix
+
+The current runtime now bypasses blob warming for risky combinations:
+
+- WebKit-mobile environment
+- WebM/Opus-like committed voice payload
+
+For that path, the player now prefers direct transport playback first instead
+of defaulting to a warmed `blob:` URL. Desktop and other non-risky browser/media
+combinations still keep the existing warmed playback path.
 
 ## Next Narrow Step After Proof
 

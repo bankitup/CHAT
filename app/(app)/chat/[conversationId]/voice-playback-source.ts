@@ -4,6 +4,7 @@ import {
 } from '@/modules/messaging/media/message-assets';
 import {
   classifyMessagingVoiceDevicePlaybackSupport,
+  resolveMessagingVoiceBlobPlaybackRisk,
   resolveMessagingVoicePlaybackSourcePreference,
 } from '@/modules/messaging/media/voice';
 
@@ -460,8 +461,33 @@ function readThreadVoicePlaybackCacheEntry(key: string | null) {
 
 function resolvePreferredLocalThreadVoicePlaybackUrl(input: {
   cacheEntry: ThreadVoicePlaybackCacheEntry | null;
+  playbackSource: MessagingVoicePlaybackSourceOption | null;
   transportSourceUrl: string | null;
 }) {
+  const normalizedPlaybackMimeType = input.playbackSource
+    ? resolveMessagingAttachmentMimeType({
+        fileName: input.playbackSource.fileName,
+        mimeType: input.playbackSource.mimeType,
+      })
+    : null;
+  const blobPlaybackRisk = resolveMessagingVoiceBlobPlaybackRisk({
+    fileName: input.playbackSource?.fileName ?? null,
+    maxTouchPoints:
+      typeof navigator !== 'undefined' ? navigator.maxTouchPoints : null,
+    mimeType: normalizedPlaybackMimeType,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    vendor: typeof navigator !== 'undefined' ? navigator.vendor : null,
+  });
+
+  if (blobPlaybackRisk.bypassLocalBlobPlayback) {
+    return (
+      input.transportSourceUrl ??
+      (input.cacheEntry?.playbackUrl?.startsWith('blob:')
+        ? null
+        : input.cacheEntry?.playbackUrl ?? null)
+    );
+  }
+
   if (
     input.cacheEntry?.warmed &&
     input.cacheEntry.playbackUrl?.startsWith('blob:')
@@ -530,6 +556,7 @@ export function resolveThreadVoicePlaybackSourceSnapshot(input: {
       : cacheTransportSourceUrl;
   const localPlaybackUrl = resolvePreferredLocalThreadVoicePlaybackUrl({
     cacheEntry,
+    playbackSource: selectedPlaybackSource,
     transportSourceUrl,
   });
 
@@ -782,6 +809,7 @@ export async function prepareThreadVoicePlaybackSource(input: {
       const playbackSourceUrl = await resolveLocalThreadVoicePlaybackSource({
         cacheKey: sourceCacheKey,
         onDiagnostic: input.onDiagnostic,
+        playbackSource,
         resolveTransportSource: input.resolveTransportSource,
         transportSourceUrl,
       });
@@ -832,6 +860,7 @@ export async function prepareThreadVoicePlaybackSource(input: {
   const playbackSourceUrl = await resolveLocalThreadVoicePlaybackSource({
     cacheKey: input.cacheKey,
     onDiagnostic: input.onDiagnostic,
+    playbackSource: null,
     resolveTransportSource: input.resolveTransportSource,
     transportSourceUrl,
   });
@@ -847,6 +876,7 @@ export async function prepareThreadVoicePlaybackSource(input: {
 export async function resolveLocalThreadVoicePlaybackSource(input: {
   cacheKey: string | null;
   onDiagnostic?: ThreadVoiceSourceDiagnosticLogger;
+  playbackSource: MessagingVoicePlaybackSourceOption | null;
   resolveTransportSource?: ThreadVoiceTransportSourceResolver;
   transportSourceUrl: string | null;
 }) {
@@ -876,6 +906,45 @@ export async function resolveLocalThreadVoicePlaybackSource(input: {
   const cacheKey = input.cacheKey;
   const transportSourceUrl = input.transportSourceUrl;
   const currentEntry = threadVoicePlaybackCache.get(cacheKey);
+  const resolvedPlaybackMimeType = input.playbackSource
+    ? resolveMessagingAttachmentMimeType({
+        fileName: input.playbackSource.fileName,
+        mimeType: input.playbackSource.mimeType,
+      })
+    : null;
+  const blobPlaybackRisk = resolveMessagingVoiceBlobPlaybackRisk({
+    fileName: input.playbackSource?.fileName ?? null,
+    maxTouchPoints:
+      typeof navigator !== 'undefined' ? navigator.maxTouchPoints : null,
+    mimeType: resolvedPlaybackMimeType,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+    vendor: typeof navigator !== 'undefined' ? navigator.vendor : null,
+  });
+
+  if (blobPlaybackRisk.bypassLocalBlobPlayback) {
+    writeThreadVoicePlaybackCacheEntry(cacheKey, {
+      playbackUrl: transportSourceUrl,
+      sessionReady: currentEntry?.sessionReady ?? false,
+      sourceUrl: transportSourceUrl,
+      warmed: false,
+    });
+    input.onDiagnostic?.('local-playable-source-risk-bypass', {
+      blobPlaybackBypassReason: blobPlaybackRisk.reason,
+      cacheKey,
+      fileExtension: blobPlaybackRisk.fileExtension,
+      platform: blobPlaybackRisk.platform,
+      transportSourceUrl,
+    });
+    input.onDiagnostic?.('proof-source-prepared', {
+      blobPlaybackBypassReason: blobPlaybackRisk.reason,
+      cacheKey,
+      mode: 'risk-bypass',
+      playbackSourceKind: 'transport',
+      resolvedMimeType: resolvedPlaybackMimeType,
+      transportSourceUrl,
+    });
+    return transportSourceUrl;
+  }
 
   if (
     currentEntry?.warmed &&

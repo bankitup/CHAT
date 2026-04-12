@@ -27,6 +27,13 @@ export type MessagingVoiceDevicePlaybackSupportStatus =
   | 'unknown'
   | 'unsupported';
 
+export type MessagingVoiceBlobPlaybackRisk = {
+  bypassLocalBlobPlayback: boolean;
+  fileExtension: string | null;
+  platform: 'other' | 'webkit-mobile';
+  reason: 'webkit-mobile-opus-container' | null;
+};
+
 export type MessagingVoiceMessageDraftRecord = {
   blobUrl: string | null;
   clientDraftId: string;
@@ -126,6 +133,69 @@ export function resolveMessagingVoicePlaybackSourcePreference(input: {
   return {
     sourcePriority,
     supportPriority,
+  };
+}
+
+function resolveMessagingVoiceFileExtension(fileName: string | null | undefined) {
+  const normalizedFileName = fileName?.trim().toLowerCase() || '';
+
+  if (!normalizedFileName) {
+    return null;
+  }
+
+  const extensionIndex = normalizedFileName.lastIndexOf('.');
+
+  if (
+    extensionIndex < 0 ||
+    extensionIndex === normalizedFileName.length - 1
+  ) {
+    return null;
+  }
+
+  return normalizedFileName.slice(extensionIndex);
+}
+
+export function resolveMessagingVoiceBlobPlaybackRisk(input: {
+  fileName: string | null;
+  maxTouchPoints?: number | null;
+  mimeType: string | null;
+  userAgent?: string | null;
+  vendor?: string | null;
+}): MessagingVoiceBlobPlaybackRisk {
+  const normalizedMimeType = input.mimeType?.trim().toLowerCase() || null;
+  const normalizedUserAgent = input.userAgent?.trim().toLowerCase() || '';
+  const normalizedVendor = input.vendor?.trim().toLowerCase() || '';
+  const fileExtension = resolveMessagingVoiceFileExtension(input.fileName);
+  const maxTouchPoints =
+    typeof input.maxTouchPoints === 'number' ? input.maxTouchPoints : 0;
+
+  const looksLikeAppleMobileBrowser =
+    /iphone|ipad|ipod/.test(normalizedUserAgent) ||
+    (/macintosh/.test(normalizedUserAgent) &&
+      normalizedVendor.includes('apple') &&
+      maxTouchPoints > 1);
+  const looksLikeWebKit = normalizedUserAgent.includes('applewebkit');
+  const platform =
+    looksLikeAppleMobileBrowser && looksLikeWebKit
+      ? 'webkit-mobile'
+      : 'other';
+  const looksLikeRiskyOpusContainer = Boolean(
+    normalizedMimeType &&
+      (normalizedMimeType.includes('webm') ||
+        normalizedMimeType.includes('opus')),
+  );
+  const looksLikeRiskyExtension =
+    fileExtension === '.webm' || fileExtension === '.opus';
+  const bypassLocalBlobPlayback = Boolean(
+    platform === 'webkit-mobile' &&
+      (looksLikeRiskyOpusContainer || looksLikeRiskyExtension),
+  );
+
+  return {
+    bypassLocalBlobPlayback,
+    fileExtension,
+    platform,
+    reason: bypassLocalBlobPlayback ? 'webkit-mobile-opus-container' : null,
   };
 }
 
