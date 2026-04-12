@@ -74,6 +74,7 @@ export {
   getInboxConversationsStable,
 } from './conversation-read-server';
 export {
+  getConversationAutoRestoreHealthForUser,
   getConversationHistorySnapshot,
   getConversationHistoryWindowSizeForMessageTargets,
   getConversationMessages,

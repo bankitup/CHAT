@@ -69,6 +69,17 @@ That means:
 
 This distinction is intentional.
 
+There is now one more safety check on the restore path:
+
+- if the existing DM snapshot shows explicit broken-thread signals
+- or if the latest encrypted row payload is malformed enough to trip the known
+  server-render guard
+
+then `createDmAction(...)` does **not** auto-restore that conversation.
+
+Instead, the app stops with a controlled error so a poisoned conversation is
+not silently reopened as if it were healthy.
+
 ## Recommended Recovery Flow
 
 1. Open the poisoned direct chat settings.

@@ -220,6 +220,9 @@ Important:
 - the inbox create-DM flow restores an existing active DM when one still exists
 - a full direct-chat delete is what prevents the old conversation id and its
   history from being revived on the next DM open
+- create-DM now also performs a narrow snapshot health check before
+  auto-restoring an existing DM, so obviously broken conversations are blocked
+  from silent revival
 
 See
 [poisoned-dm-cleanup.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/poisoned-dm-cleanup.md)

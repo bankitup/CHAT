@@ -7,6 +7,10 @@ import type { ProfileIdentityRecord } from '@/modules/profile/types';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import { DM_E2EE_CURRENT_DEVICE_COOKIE } from '@/modules/messaging/e2ee/current-device-cookie';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
+import {
+  logBrokenThreadHistoryProof,
+  summarizeBrokenThreadHistorySnapshot,
+} from '@/modules/messaging/diagnostics/thread-history-proof';
 import type { MessagingVoicePlaybackVariantRecord } from '@/modules/messaging/media/message-assets';
 import { getProfileIdentities } from './profiles-server';
 import { getConversationMemberHistoryBoundary } from './conversation-read-server';
@@ -107,6 +111,23 @@ export type ConversationHistoryPageSnapshot = {
   senderProfiles: MessageSenderProfile[];
 };
 
+export type ConversationAutoRestoreHealth =
+  | {
+      reason: null;
+      status: 'safe';
+    }
+  | {
+      reason:
+        | 'attachment-message-mismatch'
+        | 'encrypted-render-input'
+        | 'invalid-attachment-shape'
+        | 'invalid-conversation-message'
+        | 'invalid-message-shape'
+        | 'invalid-message-seq';
+      sampleMessageIds: string[];
+      status: 'blocked';
+    };
+
 type MessageReactionRow = {
   id: string;
   message_id: string;
@@ -132,6 +153,233 @@ type MessageAssetsWriteClient =
   Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 const CHAT_ATTACHMENT_BUCKET = 'message-media';
+
+function normalizeOptionalThreadString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getEncryptedDmServerRenderInputIssues(input: {
+  envelope: StoredDmE2eeEnvelope | null;
+  historyHint: EncryptedDmServerHistoryHint | null;
+  message: ConversationMessage;
+}) {
+  const issues: string[] = [];
+
+  if (typeof input.message.id !== 'string' || !input.message.id.trim()) {
+    issues.push('message.id');
+  }
+
+  if (input.message.kind !== 'text' && input.message.kind !== 'attachment') {
+    issues.push('message.kind');
+  }
+
+  if (input.message.content_mode !== 'dm_e2ee_v1') {
+    issues.push('message.content_mode');
+  }
+
+  if (
+    input.message.client_id !== null &&
+    typeof input.message.client_id !== 'string'
+  ) {
+    issues.push('message.client_id');
+  }
+
+  if (
+    input.message.sender_id !== null &&
+    typeof input.message.sender_id !== 'string'
+  ) {
+    issues.push('message.sender_id');
+  }
+
+  if (input.message.body !== null && typeof input.message.body !== 'string') {
+    issues.push('message.body');
+  }
+
+  if (!input.historyHint) {
+    issues.push('historyHint.missing');
+  } else {
+    if (
+      typeof input.historyHint.code !== 'string' ||
+      typeof input.historyHint.committedHistoryState !== 'string' ||
+      typeof input.historyHint.currentDeviceAvailability !== 'string' ||
+      typeof input.historyHint.recoveryDisposition !== 'string'
+    ) {
+      issues.push('historyHint.shape');
+    }
+
+    if (
+      input.historyHint.activeDeviceRecordId !== null &&
+      typeof input.historyHint.activeDeviceRecordId !== 'string'
+    ) {
+      issues.push('historyHint.activeDeviceRecordId');
+    }
+
+    if (
+      input.historyHint.messageCreatedAt !== null &&
+      typeof input.historyHint.messageCreatedAt !== 'string'
+    ) {
+      issues.push('historyHint.messageCreatedAt');
+    }
+
+    if (
+      input.historyHint.viewerJoinedAt !== null &&
+      typeof input.historyHint.viewerJoinedAt !== 'string'
+    ) {
+      issues.push('historyHint.viewerJoinedAt');
+    }
+  }
+
+  if (input.envelope) {
+    if (
+      typeof input.envelope.messageId !== 'string' ||
+      input.envelope.messageId !== input.message.id
+    ) {
+      issues.push('envelope.messageId');
+    }
+
+    if (
+      typeof input.envelope.senderDeviceRecordId !== 'string' ||
+      !input.envelope.senderDeviceRecordId.trim()
+    ) {
+      issues.push('envelope.senderDeviceRecordId');
+    }
+
+    if (
+      typeof input.envelope.recipientDeviceRecordId !== 'string' ||
+      !input.envelope.recipientDeviceRecordId.trim()
+    ) {
+      issues.push('envelope.recipientDeviceRecordId');
+    }
+
+    if (
+      typeof input.envelope.ciphertext !== 'string' ||
+      !input.envelope.ciphertext.trim()
+    ) {
+      issues.push('envelope.ciphertext');
+    }
+  }
+
+  return issues;
+}
+
+export async function getConversationAutoRestoreHealthForUser(input: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationAutoRestoreHealth> {
+  const snapshot = await getConversationHistorySnapshot({
+    conversationId: input.conversationId,
+    debugRequestId: 'dm-auto-restore-health-check',
+    limit: 26,
+    userId: input.userId,
+  });
+  const summary = summarizeBrokenThreadHistorySnapshot({
+    attachmentsByMessage: snapshot.attachmentsByMessage,
+    conversationId: input.conversationId,
+    messages: snapshot.messages,
+  });
+
+  const blockedBySummary =
+    summary.invalidMessageShapeCount > 0
+      ? {
+          reason: 'invalid-message-shape' as const,
+          sampleMessageIds: summary.malformedMessageIds,
+        }
+      : summary.invalidConversationMessageCount > 0
+        ? {
+            reason: 'invalid-conversation-message' as const,
+            sampleMessageIds: summary.malformedMessageIds,
+          }
+        : summary.invalidMessageSeqCount > 0
+          ? {
+              reason: 'invalid-message-seq' as const,
+              sampleMessageIds: summary.malformedMessageIds,
+            }
+          : summary.invalidAttachmentShapeCount > 0
+            ? {
+                reason: 'invalid-attachment-shape' as const,
+                sampleMessageIds: summary.malformedAttachmentIds,
+              }
+            : summary.attachmentMessageMismatchCount > 0
+              ? {
+                  reason: 'attachment-message-mismatch' as const,
+                  sampleMessageIds: summary.mismatchedAttachmentIds,
+                }
+              : null;
+
+  if (blockedBySummary) {
+    logBrokenThreadHistoryProof('server:auto-restore-blocked', {
+      conversationId: input.conversationId,
+      details: {
+        reason: blockedBySummary.reason,
+        sampleMessageIds: blockedBySummary.sampleMessageIds,
+        summary,
+        userId: input.userId,
+      },
+      level: 'warn',
+    });
+
+    return {
+      reason: blockedBySummary.reason,
+      sampleMessageIds: blockedBySummary.sampleMessageIds,
+      status: 'blocked',
+    };
+  }
+
+  const envelopeByMessageId = new Map(
+    (snapshot.dmE2ee?.envelopesByMessage ?? []).map((entry) => [
+      entry.messageId,
+      entry.envelope,
+    ]),
+  );
+  const historyHintByMessageId = new Map(
+    (snapshot.dmE2ee?.historyHintsByMessage ?? []).map((entry) => [
+      entry.messageId,
+      entry.hint,
+    ]),
+  );
+  const encryptedRenderIssueMessageIds = snapshot.messages
+    .filter(
+      (message) =>
+        (message.kind === 'text' || message.kind === 'attachment') &&
+        message.content_mode === 'dm_e2ee_v1',
+    )
+    .map((message) => ({
+      issues: getEncryptedDmServerRenderInputIssues({
+        envelope: envelopeByMessageId.get(message.id) ?? null,
+        historyHint: historyHintByMessageId.get(message.id) ?? null,
+        message,
+      }),
+      messageId: normalizeOptionalThreadString(message.id),
+    }))
+    .filter((entry) => entry.issues.length > 0)
+    .map((entry) => entry.messageId)
+    .filter(Boolean)
+    .slice(0, 4);
+
+  if (encryptedRenderIssueMessageIds.length > 0) {
+    logBrokenThreadHistoryProof('server:auto-restore-blocked', {
+      conversationId: input.conversationId,
+      details: {
+        encryptedRenderIssueMessageIds,
+        reason: 'encrypted-render-input',
+        summary,
+        userId: input.userId,
+      },
+      level: 'warn',
+    });
+
+    return {
+      reason: 'encrypted-render-input',
+      sampleMessageIds: encryptedRenderIssueMessageIds,
+      status: 'blocked',
+    };
+  }
+
+  return {
+    reason: null,
+    status: 'safe',
+  };
+}
 
 function getSupabaseErrorDiagnostics(error: unknown) {
   if (!error || typeof error !== 'object') {

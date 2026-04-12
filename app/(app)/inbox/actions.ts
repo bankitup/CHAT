@@ -9,6 +9,7 @@ import { getRequestLanguage } from '@/modules/i18n/server';
 import {
   createConversationWithMembers,
   findExistingActiveDmConversation,
+  getConversationAutoRestoreHealthForUser,
   restoreConversationForUser,
   isUniqueConstraintErrorMessage,
 } from '@/modules/messaging/data/server';
@@ -100,6 +101,25 @@ async function redirectToExistingDmConversation(input: {
   redirect(withSpaceParam(`/chat/${input.conversationId}`, input.spaceId));
 }
 
+async function resolveExistingDmAutoRestoreOrThrow(input: {
+  conversationId: string;
+  creatorUserId: string;
+  spaceId: string;
+}) {
+  const autoRestoreHealth = await getConversationAutoRestoreHealthForUser({
+    conversationId: input.conversationId,
+    userId: input.creatorUserId,
+  });
+
+  if (autoRestoreHealth.status === 'blocked') {
+    throw new Error(
+      'This direct chat needs explicit recovery before it can be reopened automatically. Use the current chat cleanup/delete flow to retire it and then create a clean replacement.',
+    );
+  }
+
+  await redirectToExistingDmConversation(input);
+}
+
 function redirectToInboxSettings(
   spaceId?: string | null,
   options?: {
@@ -147,7 +167,7 @@ export async function createDmAction(formData: FormData) {
     );
 
     if (existingConversationId) {
-      await redirectToExistingDmConversation({
+      await resolveExistingDmAutoRestoreOrThrow({
         conversationId: existingConversationId,
         creatorUserId,
         spaceId,
@@ -186,7 +206,7 @@ export async function createDmAction(formData: FormData) {
         );
 
         if (existingConversationId) {
-          await redirectToExistingDmConversation({
+          await resolveExistingDmAutoRestoreOrThrow({
             conversationId: existingConversationId,
             creatorUserId,
             spaceId,

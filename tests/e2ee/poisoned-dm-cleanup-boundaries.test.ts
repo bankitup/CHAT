@@ -134,6 +134,9 @@ test('DM settings keep ordinary hide-from-inbox behavior separate from explicit 
 test('DM recreation still reuses only an existing active conversation, so a deleted poisoned DM will recreate cleanly', () => {
   const inboxActionsSource = readWorkspaceFile('app/(app)/inbox/actions.ts');
   const dataSource = readWorkspaceFile('src/modules/messaging/data/server.ts');
+  const threadReadServerSource = readWorkspaceFile(
+    'src/modules/messaging/data/thread-read-server.ts',
+  );
 
   assert.match(
     inboxActionsSource,
@@ -141,7 +144,23 @@ test('DM recreation still reuses only an existing active conversation, so a dele
   );
   assert.match(
     inboxActionsSource,
-    /if \(existingConversationId\) \{[\s\S]*redirectToExistingDmConversation/,
+    /getConversationAutoRestoreHealthForUser,/,
+  );
+  assert.match(
+    inboxActionsSource,
+    /async function resolveExistingDmAutoRestoreOrThrow\(input: \{/,
+  );
+  assert.match(
+    inboxActionsSource,
+    /const autoRestoreHealth = await getConversationAutoRestoreHealthForUser\(/,
+  );
+  assert.match(
+    inboxActionsSource,
+    /if \(autoRestoreHealth\.status === 'blocked'\) \{[\s\S]*explicit recovery before it can be reopened automatically/,
+  );
+  assert.match(
+    inboxActionsSource,
+    /if \(existingConversationId\) \{[\s\S]*await resolveExistingDmAutoRestoreOrThrow\(/,
   );
   assert.match(
     inboxActionsSource,
@@ -150,5 +169,21 @@ test('DM recreation still reuses only an existing active conversation, so a dele
   assert.match(
     dataSource,
     /if \(existingConversationId\) \{\s*return existingConversationId;\s*\}/,
+  );
+  assert.match(
+    threadReadServerSource,
+    /export async function getConversationAutoRestoreHealthForUser\(input: \{/,
+  );
+  assert.match(
+    threadReadServerSource,
+    /summarizeBrokenThreadHistorySnapshot\(/,
+  );
+  assert.match(
+    threadReadServerSource,
+    /logBrokenThreadHistoryProof\('server:auto-restore-blocked'/,
+  );
+  assert.match(
+    threadReadServerSource,
+    /reason:\s*'encrypted-render-input'/,
   );
 });
