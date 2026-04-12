@@ -292,6 +292,7 @@ Encrypted DMs in this closed-user product must keep these guardrails:
 Operational checklist:
 
 - use [dm-e2ee-rollout-checklist.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/dm-e2ee-rollout-checklist.md) before enabling selected testers
+- use [security/dm-e2ee-mvp-decision.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/dm-e2ee-mvp-decision.md) for the product-stage decision on whether current strict device-bound history should stay in the MVP default path
 
 For MVP rollout, the honest fallback is:
 

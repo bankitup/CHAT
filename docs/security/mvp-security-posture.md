@@ -13,6 +13,8 @@ For the longer-term target model, see
 [mvp-security-target.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/mvp-security-target.md).
 For runtime schema expectations, see
 [schema-assumptions.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/schema-assumptions.md).
+For the product decision on current DM E2EE rollout strictness, see
+[dm-e2ee-mvp-decision.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/dm-e2ee-mvp-decision.md).
 
 ## Current posture summary
 
