@@ -9,6 +9,18 @@ function readWorkspaceFile(relativePath: string) {
   return readFileSync(resolve(workspaceRoot, relativePath), 'utf8');
 }
 
+function extractFunctionBlock(source: string, functionName: string) {
+  const match = source.match(
+    new RegExp(
+      `export async function ${functionName}\\(formData: FormData\\) \\{[\\s\\S]*?\\n\\}`,
+    ),
+  );
+
+  assert.ok(match, `Expected to find ${functionName} in source.`);
+
+  return match[0];
+}
+
 test('direct-chat delete action uses the full poisoned-DM cleanup helper instead of hide-only inbox removal', () => {
   const actionsSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/actions.ts',
@@ -44,6 +56,29 @@ test('direct-chat delete action uses the full poisoned-DM cleanup helper instead
   assert.match(
     deleteConfirmFormSource,
     /<input name="deleteMode" type="hidden" value="hard-delete-direct-chat" \/>/,
+  );
+});
+
+test('ordinary hide action stays inbox-only and cannot drift into the poisoned-DM hard-delete path', () => {
+  const actionsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/actions.ts',
+  );
+  const hideConversationActionSource = extractFunctionBlock(
+    actionsSource,
+    'hideConversationAction',
+  );
+
+  assert.match(
+    hideConversationActionSource,
+    /await hideConversationForUser\(\{/,
+  );
+  assert.doesNotMatch(
+    hideConversationActionSource,
+    /deleteDirectConversationForUser\(\{/,
+  );
+  assert.doesNotMatch(
+    hideConversationActionSource,
+    /deleteMode/,
   );
 });
 
@@ -137,6 +172,10 @@ test('DM recreation still reuses only an existing active conversation, so a dele
   const threadReadServerSource = readWorkspaceFile(
     'src/modules/messaging/data/thread-read-server.ts',
   );
+  const createDmActionSource = extractFunctionBlock(
+    inboxActionsSource,
+    'createDmAction',
+  );
 
   assert.match(
     inboxActionsSource,
@@ -152,6 +191,10 @@ test('DM recreation still reuses only an existing active conversation, so a dele
   );
   assert.match(
     inboxActionsSource,
+    /async function redirectToExistingDmConversation\(input: \{[\s\S]*await restoreConversationForUser\(\{/,
+  );
+  assert.match(
+    inboxActionsSource,
     /const autoRestoreHealth = await getConversationAutoRestoreHealthForUser\(/,
   );
   assert.match(
@@ -161,6 +204,10 @@ test('DM recreation still reuses only an existing active conversation, so a dele
   assert.match(
     inboxActionsSource,
     /if \(existingConversationId\) \{[\s\S]*await resolveExistingDmAutoRestoreOrThrow\(/,
+  );
+  assert.doesNotMatch(
+    createDmActionSource,
+    /restoreConversationForUser\(/,
   );
   assert.match(
     inboxActionsSource,

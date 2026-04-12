@@ -38,11 +38,20 @@ test('thread body rescue boundary keeps retry and escape paths local to the conv
   assert.match(rescueBoundarySource, /surface="thread-history-viewport"/);
   assert.match(
     rescueBoundarySource,
+    /key=\{boundaryNonce\}/,
+  );
+  assert.match(
+    rescueBoundarySource,
     /readLastDmThreadHydrationSnapshot|readLastDmThreadClientSubtree/,
   );
   assert.match(rescueBoundarySource, /getThreadLiveStateSnapshot/);
+  assert.match(rescueBoundarySource, /readThreadMessagePatchSnapshot/);
+  assert.match(rescueBoundarySource, /rescue:fallback-mounted/);
+  assert.match(rescueBoundarySource, /rescue:render-error-captured/);
+  assert.match(rescueBoundarySource, /patchSummary:/);
   assert.match(rescueBoundarySource, /Retry history/);
   assert.match(rescueBoundarySource, /Back to Chats/);
   assert.match(rescueBoundarySource, /Open info/);
   assert.match(rescueBoundarySource, /withSpaceParam\('\/inbox', activeSpaceId\)/);
+  assert.match(rescueBoundarySource, /prefetch=\{false\}/);
 });
