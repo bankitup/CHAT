@@ -162,11 +162,10 @@ Live rows upgrade after the initial static SSR list.
 
 **Thread**
 - Thread has an explicit reconnect contract.
-- `src/modules/messaging/realtime/active-chat-sync.tsx` detects resubscribe and requests recovery sync with reason `realtime-resubscribe`.
+- `src/modules/messaging/realtime/active-chat-sync.tsx` detects resubscribe and requests both newer-than-latest catch-up and an authoritative latest-window reconciliation pass.
 
 **Inbox**
-- Inbox sync has visibility-based refresh and event-driven refetch.
-- It does **not** currently expose the same explicit reconnect catch-up contract as thread.
+- Inbox sync has visibility-based refresh, event-driven refetch, and an explicit resubscribe summary catch-up path.
 
 ### Route Transition
 
@@ -214,7 +213,7 @@ Both routes use server truth plus local stores plus live hints, but they do not 
 
 ### 2. Inbox Reconnect Recovery Is Weaker Than Thread
 
-Thread has explicit resubscribe catch-up. Inbox mostly depends on event flow, visibility return, local refresh triggers, or route re-entry.
+Both routes now have explicit reconnect recovery, but thread still has a stronger authoritative latest-window reconciliation path than inbox.
 
 ### 3. Route Re-Entry Is Stronger Than In-Place Healing
 

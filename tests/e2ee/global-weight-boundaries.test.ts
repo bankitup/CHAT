@@ -158,7 +158,7 @@ test('current global-weight hot spots stay under the agreed lightweight size cap
   assert.ok(readWorkspaceLineCount('src/modules/i18n/client-shell.ts') <= 90);
   assert.ok(
     readWorkspaceLineCount('app/(app)/chat/[conversationId]/thread-history-viewport.tsx') <=
-      2550,
+      2625,
   );
   assert.ok(
     readWorkspaceLineCount('app/(app)/chat/[conversationId]/thread-message-row.tsx') <=

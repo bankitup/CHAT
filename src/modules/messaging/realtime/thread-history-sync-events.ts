@@ -8,6 +8,7 @@ export const LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT =
   'chat:thread-history-live-message';
 
 export type ThreadHistorySyncRequestPayload = {
+  authoritativeLatestWindow?: boolean;
   conversationId: string;
   messageIds?: string[] | null;
   newerThanLatest?: boolean;
@@ -90,14 +91,20 @@ export function emitThreadHistorySyncRequest(
     (messageId) => !looksLikeUuid(messageId),
   );
   const hasMessageIds = normalizedMessageIds.length > 0;
+  const authoritativeLatestWindow = hasMessageIds
+    ? false
+    : Boolean(payload.authoritativeLatestWindow);
   const newerThanLatest = hasMessageIds ? false : Boolean(payload.newerThanLatest);
   const chosenMode = hasMessageIds
     ? 'by-id'
+    : authoritativeLatestWindow
+      ? 'authoritative-latest-window'
     : newerThanLatest
       ? 'after-seq'
       : 'noop';
 
   const normalizedPayload = {
+    authoritativeLatestWindow,
     conversationId: payload.conversationId,
     messageIds: normalizedMessageIds,
     newerThanLatest,

@@ -142,6 +142,74 @@ export function patchThreadMessageContent(input: {
   emitThreadMessagePatchChange(normalizedConversationId);
 }
 
+export function reconcileThreadMessagePatchesWithAuthoritativeMessages(input: {
+  conversationId: string;
+  messages: Array<{
+    body?: string | null;
+    content_mode?: string | null;
+    deleted_at?: string | null;
+    edited_at?: string | null;
+    id: string;
+  }>;
+}) {
+  const normalizedConversationId = input.conversationId.trim();
+
+  if (!normalizedConversationId) {
+    return;
+  }
+
+  const currentPatches = getThreadMessagePatchMap(normalizedConversationId);
+
+  if (currentPatches.size === 0) {
+    return;
+  }
+
+  const nextPatches = new Map(currentPatches);
+  let didChange = false;
+
+  for (const message of input.messages) {
+    const normalizedMessageId = message.id.trim();
+
+    if (!normalizedMessageId || !nextPatches.has(normalizedMessageId)) {
+      continue;
+    }
+
+    const existingPatch = nextPatches.get(normalizedMessageId) ?? null;
+    const shouldPreserveLocalEncryptedBody =
+      message.content_mode === 'dm_e2ee_v1' && existingPatch?.body !== undefined;
+
+    if (!shouldPreserveLocalEncryptedBody) {
+      nextPatches.delete(normalizedMessageId);
+      didChange = true;
+      continue;
+    }
+
+    const nextPatch: ThreadMessagePatch = {
+      body: existingPatch?.body,
+      deletedAt: message.deleted_at ?? null,
+      editedAt: message.edited_at ?? null,
+    };
+
+    if (
+      existingPatch?.body === nextPatch.body &&
+      existingPatch?.deletedAt === nextPatch.deletedAt &&
+      existingPatch?.editedAt === nextPatch.editedAt
+    ) {
+      continue;
+    }
+
+    nextPatches.set(normalizedMessageId, nextPatch);
+    didChange = true;
+  }
+
+  if (!didChange) {
+    return;
+  }
+
+  threadMessagePatchStore.set(normalizedConversationId, nextPatches);
+  emitThreadMessagePatchChange(normalizedConversationId);
+}
+
 export function useThreadMessagePatchedBody(
   conversationId: string,
   messageId: string,

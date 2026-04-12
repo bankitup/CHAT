@@ -12,11 +12,11 @@ It is intentionally narrow:
 
 ## Ranked Gaps
 
-### P0. Inbox Has No Explicit Reconnect Catch-Up Contract
+### P1. Inbox Reconnect Recovery Still Uses Summary Refetch, Not A More Unified Catch-Up Contract
 
 **Why it matters**
 
-The thread route has a clear resubscribe recovery path. The inbox route does not. That means websocket reconnects can leave inbox state stale until another trigger happens, such as visibility return, route re-entry, manual refresh, or a later event.
+Inbox now has explicit reconnect recovery, which is a real improvement. But its recovery model is still a route-local summary refetch loop rather than a more unified reconciliation contract across inbox, thread, and unread.
 
 **Evidence**
 - `src/modules/messaging/realtime/active-chat-sync.tsx`
@@ -24,14 +24,14 @@ The thread route has a clear resubscribe recovery path. The inbox route does not
 
 **Recommended cleanup priority**
 
-First.
+Second wave.
 
 **Likely fix direction**
 
-Give inbox the same explicit reconnect catch-up contract that thread already has:
-- detect resubscribe/reconnect
-- refetch tracked summaries immediately
-- avoid waiting for visibility or user navigation
+Keep the reconnect hook, but tighten the follow-through:
+- make inbox catch-up semantics explicit
+- define when summary refetch is enough
+- keep inbox, unread, and thread consistency aligned after reconnect
 
 ### P0. Route Re-Entry Is A Stronger Recovery Path Than Staying Mounted
 
@@ -155,25 +155,18 @@ Later, after the contract is clarified.
 
 ## Highest-Priority Fix Shortlist
 
-### 1. Add Explicit Inbox Reconnect Recovery
-
-Bring inbox up to the same reconnect standard as thread:
-- detect resubscribe
-- immediately refetch tracked summaries
-- avoid relying on visibility return or route re-entry
-
-### 2. Make In-Place Catch-Up Stronger Than Route Re-Entry
+### 1. Make In-Place Catch-Up Stronger Than Route Re-Entry
 
 Users should not need navigation as a recovery mechanism. Mounted routes need a clear authoritative refresh path.
 
-### 3. Define One Written Reconciliation Contract Across Thread, Inbox, And Unread
+### 2. Define One Written Reconciliation Contract Across Thread, Inbox, And Unread
 
 Before more runtime work lands, the repo needs a shared rulebook for:
 - local optimistic patches
 - server catch-up triggers
 - cross-surface consistency
 
-### 4. Consolidate Thread Recovery Triggers
+### 3. Consolidate Thread Recovery Triggers
 
 The current thread repair behavior works through many local triggers. That should be reduced to a smaller, easier-to-audit contract.
 

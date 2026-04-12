@@ -54,6 +54,8 @@ export function InboxRealtimeSync({
   const manualRefreshPromiseRef = useRef<Promise<void> | null>(null);
   const lastRefreshAtRef = useRef(0);
   const hiddenAtRef = useRef<number | null>(null);
+  const hasSeenSubscribedStatusRef = useRef(false);
+  const isRealtimeChannelSubscribedRef = useRef(false);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_LIVE_REFRESH === '1';
@@ -584,7 +586,36 @@ export function InboxRealtimeSync({
       scheduleMessageRefresh,
     );
 
-    channel.subscribe();
+    channel.subscribe((status) => {
+      logDiagnostics('channel:status', {
+        status,
+        trackedConversationCount: normalizedConversationIds.length,
+      });
+
+      if (status === 'SUBSCRIBED') {
+        const isReconnect =
+          hasSeenSubscribedStatusRef.current &&
+          !isRealtimeChannelSubscribedRef.current;
+
+        isRealtimeChannelSubscribedRef.current = true;
+        hasSeenSubscribedStatusRef.current = true;
+
+        if (!isReconnect) {
+          return;
+        }
+
+        void syncTrackedConversationSummaries('realtime-resubscribe');
+        return;
+      }
+
+      if (
+        status === 'CHANNEL_ERROR' ||
+        status === 'TIMED_OUT' ||
+        status === 'CLOSED'
+      ) {
+        isRealtimeChannelSubscribedRef.current = false;
+      }
+    });
     const broadcastChannels = normalizedConversationIds.map((conversationId) =>
       supabase
         .channel(`chat-sync:${conversationId}`)
