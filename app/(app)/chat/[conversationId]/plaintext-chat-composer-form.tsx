@@ -12,7 +12,7 @@ import { patchThreadConversationReadState } from '@/modules/messaging/realtime/t
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { ComposerAttachmentPicker } from './composer-attachment-picker';

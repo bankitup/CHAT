@@ -1,6 +1,6 @@
 'use client';
 
-import type { AppLanguage } from '@/modules/i18n/client';
+import type { AppLanguage } from '@/modules/i18n/client-shared';
 import { ThreadHistoryRenderList } from './thread-history-render-list';
 import {
   ThreadMessageRow,

@@ -6,7 +6,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import { configureInlineAudioElement } from './voice-playback-source';
 import type {
   ConversationMessageRow,

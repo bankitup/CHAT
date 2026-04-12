@@ -3,7 +3,7 @@
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { useEffect, useMemo, useRef, useState } from 'react';
 

@@ -3,7 +3,7 @@
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import { useIsOtherParticipantPresent } from './conversation-presence-provider';
 
 type ConversationPresenceStatusProps = {

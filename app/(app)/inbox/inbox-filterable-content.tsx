@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
-import { getInboxClientTranslations } from '@/modules/i18n/client';
+import { getInboxClientTranslations } from '@/modules/i18n/client-inbox';
 import { InboxConversationSectionsStatic } from './inbox-conversation-sections-static';
 import {
   buildFilterBucket,

@@ -5,7 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   getInboxClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-inbox';
 import { IdentityAvatar } from '@/modules/profile/ui/identity';
 import { IdentityStatusInline } from '@/modules/profile/ui/identity-status';
 import { GuardedServerActionForm } from '../guarded-server-action-form';

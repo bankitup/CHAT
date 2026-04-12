@@ -3,7 +3,7 @@
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import type { MessagingVoicePlaybackVariantRecord } from '@/modules/messaging/media/message-assets';
-import type { AppLanguage } from '@/modules/i18n/client';
+import type { AppLanguage } from '@/modules/i18n/client-shared';
 
 export type ConversationMessageRow = {
   body: string | null;

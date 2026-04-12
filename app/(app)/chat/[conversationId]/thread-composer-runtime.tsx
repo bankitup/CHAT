@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n/client';
+} from '@/modules/i18n/client-chat';
 import {
   DmReplyTargetSnippet,
   type ReplyTargetAttachmentKind,
