@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   classifyEncryptedDmFailure,
   getEncryptedDmBodyRenderState,
   getEncryptedDmComposerErrorMessage,
 } from '../../src/modules/messaging/e2ee/ui-policy.ts';
+
+const workspaceRoot = resolve(import.meta.dirname, '..', '..');
+
+function readWorkspaceFile(relativePath: string) {
+  return readFileSync(resolve(workspaceRoot, relativePath), 'utf8');
+}
 
 test('decrypt failure with missing local key material is classified as unavailable history on this device', () => {
   const failureKind = classifyEncryptedDmFailure(
@@ -30,6 +38,75 @@ test('encrypted DM body keeps old unavailable history truthful without recovery 
     'Encrypted message is not available on this device',
   );
   assert.equal(state.showRetryAction, false);
+});
+
+test('encrypted DM history gaps stay explicitly unavailable on this device instead of surfacing a misleading retry path', () => {
+  const state = getEncryptedDmBodyRenderState({
+    plaintext: null,
+    isUnavailable: true,
+    failureKind: 'unavailable',
+    diagnosticCode: 'device-retired-or-mismatched',
+    fallbackLabel: 'Encrypted message',
+    setupUnavailableLabel: 'Encrypted setup needs attention',
+    unavailableLabel: 'Earlier encrypted message unavailable on this device',
+  });
+
+  assert.equal(state.kind, 'unavailable');
+  assert.equal(
+    state.currentDeviceAccessState,
+    'history-unavailable-on-this-device',
+  );
+  assert.equal(state.unavailableNoteKind, 'history-unavailable');
+  assert.equal(state.showRetryAction, false);
+  assert.equal(
+    state.text,
+    'Earlier encrypted message unavailable on this device',
+  );
+  assert.equal(state.debugBucket, 'missing-envelope');
+});
+
+test('encrypted DM policy-blocked history stays distinct from generic unavailable history', () => {
+  const state = getEncryptedDmBodyRenderState({
+    plaintext: null,
+    isUnavailable: true,
+    failureKind: 'unavailable',
+    diagnosticCode: 'policy-blocked-history',
+    fallbackLabel: 'Encrypted message',
+    setupUnavailableLabel: 'Encrypted setup needs attention',
+    unavailableLabel: 'Earlier encrypted message unavailable on this device',
+  });
+
+  assert.equal(state.kind, 'unavailable');
+  assert.equal(state.currentDeviceAccessState, 'policy-blocked');
+  assert.equal(state.unavailableNoteKind, 'policy-blocked');
+  assert.equal(state.showRetryAction, false);
+  assert.equal(state.debugBucket, 'policy-blocked-history');
+});
+
+test('encrypted DM body renders dedicated historical-unavailable UI instead of falling back to generic body text', () => {
+  const encryptedBodySource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/encrypted-dm-message-body.tsx',
+  );
+
+  assert.match(encryptedBodySource, /if \(renderState\.kind === 'unavailable'\)/);
+  assert.match(
+    encryptedBodySource,
+    /const isHistoricalUnavailable =[\s\S]*'history-unavailable-on-this-device'[\s\S]*'policy-blocked'/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /const shouldRenderCompactHistoricalUnavailable =[\s\S]*compactHistoricalUnavailable && isHistoricalUnavailable/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /renderState\.unavailableNoteKind === 'history-unavailable'/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /renderState\.unavailableNoteKind === 'policy-blocked'/,
+  );
+  assert.match(encryptedBodySource, /<EncryptedHistoryUnavailableState/);
+  assert.match(encryptedBodySource, /\{renderState\.showRetryAction \? \(/);
 });
 
 test('encrypted send surfaces recipient readiness problems as explicit blocked state', () => {

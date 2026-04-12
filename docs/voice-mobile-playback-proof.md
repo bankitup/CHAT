@@ -159,6 +159,17 @@ has a local playback path through variant transport metadata or a committed
 recoverable locator, the viewport now leaves it alone instead of dispatching a
 by-id history sync that can make unrelated attachments appear to refresh.
 
+The current regression bar also treats scroll stability as part of voice
+runtime correctness:
+
+- voice play/pause/progress should stay local to the active voice row
+- starting playback should not cause a visible thread jump on mobile
+- scroll/viewport coordination should stay in thread viewport seams, not drift
+  back into local voice runtime files
+
+Manual verification for that path lives in
+[conversation-runtime-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/conversation-runtime-manual-matrix.md).
+
 ## Next Narrow Step After Proof
 
 Once mobile logs confirm the failing stage:
