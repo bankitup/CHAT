@@ -104,7 +104,9 @@ test('voice playback runtime keeps scroll-stability-sensitive work outside the l
   const rowContentSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
   );
-  const globalsSource = readWorkspaceFile('app/globals.css');
+  const messengerRouteCssSource = readWorkspaceFile(
+    'app/(app)/messenger-route.css',
+  );
 
   assert.match(viewportSource, /from ['"]\.\/thread-scroll['"]/);
   assert.doesNotMatch(
@@ -140,7 +142,7 @@ test('voice playback runtime keeps scroll-stability-sensitive work outside the l
     /className="message-voice-card message-voice-card-loading"/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.message-voice-card\s*\{[\s\S]*overflow-anchor:\s*none/,
   );
 });
@@ -149,7 +151,9 @@ test('mobile image preview keeps a full-viewport overlay contract instead of a s
   const imageOverlaySource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-image-preview-overlay.tsx',
   );
-  const globalsSource = readWorkspaceFile('app/globals.css');
+  const messengerRouteCssSource = readWorkspaceFile(
+    'app/(app)/messenger-route.css',
+  );
 
   assert.match(imageOverlaySource, /createPortal\(/);
   assert.match(imageOverlaySource, /document\.body/);
@@ -160,23 +164,23 @@ test('mobile image preview keeps a full-viewport overlay contract instead of a s
   assert.match(imageOverlaySource, /className="chat-image-preview-image"/);
 
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-overlay\s*\{[\s\S]*min-height:\s*100dvh/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-shell\s*\{[\s\S]*min-height:\s*100dvh[\s\S]*overflow:\s*hidden/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-stage\s*\{[\s\S]*height:\s*100%[\s\S]*min-width:\s*0[\s\S]*min-height:\s*0/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-frame\s*\{[\s\S]*width:\s*100%[\s\S]*max-height:\s*100%/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-image\s*\{[\s\S]*width:\s*100%[\s\S]*max-width:\s*100%[\s\S]*height:\s*auto[\s\S]*max-height:\s*calc\(100dvh - 9rem[\s\S]*object-fit:\s*contain/,
   );
 });

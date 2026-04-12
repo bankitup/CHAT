@@ -55,6 +55,9 @@ The current acceptance bar focuses on these boundaries:
     early instead of silently becoming the default place for new logic
 20. Future branches have a lightweight architecture-drift checklist before they
     widen shared seams or monolith imports
+21. Route-scoped Messenger i18n and CSS boundaries stay in place so heavy
+    client routes do not drift back to broad shared dictionaries or global
+    Messenger style tax
 
 ## Shared Platform Seams Under Acceptance
 
@@ -175,6 +178,14 @@ Current acceptance tests:
     reach-through
   - key mixed-ownership files stay within lean size caps so drift is visible
     early
+- [tests/e2ee/global-weight-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/global-weight-boundaries.test.ts)
+  verifies the current global-weight boundaries:
+  - heavy Messenger client surfaces stay on route-scoped i18n seams instead of
+    broad shared dictionaries
+  - Messenger route styling stays mounted through route-local CSS instead of
+    regrowing inside `app/globals.css`
+  - current hot files stay under lightweight size caps so performance and
+    ownership cleanup does not silently erode
 
 Run them with:
 
@@ -216,6 +227,8 @@ Examples:
   collapsing back into one oversized runtime file
 - if a mobile-performance boundary test fails, non-critical Messenger startup
   work may be drifting back into first paint on shared, inbox, or chat routes
+- if a global-weight boundary test fails, heavy routes may be regressing back
+  toward broad shared i18n or global Messenger CSS tax
 - if a conversation-runtime failure boundary test fails, a single bad
   conversation row, voice interaction, or mobile attachment preview may be
   widening back into a thread-wide failure
