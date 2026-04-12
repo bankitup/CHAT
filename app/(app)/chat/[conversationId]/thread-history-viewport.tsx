@@ -13,7 +13,6 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { createPortal } from 'react-dom';
 import {
   formatPersonFallbackLabel,
   getLocaleForLanguage,
@@ -39,7 +38,6 @@ import {
   useThreadMessagePatchedBody,
   useThreadMessagePatchedDeletedAt,
 } from '@/modules/messaging/realtime/thread-message-patch-store';
-import { AutoScrollToLatest } from './auto-scroll-to-latest';
 import {
   DmThreadClientSubtree,
   type DmThreadClientDiagnostics,
@@ -51,15 +49,13 @@ import {
 import { EncryptedDmMessageBody } from './encrypted-dm-message-body';
 import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailable-state';
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
-import { MarkConversationRead } from './mark-conversation-read';
 import { MessageStatusIndicator } from './message-status-indicator';
-import { OptimisticThreadMessages } from './optimistic-thread-messages';
-import { ProgressiveHistoryLoader } from './progressive-history-loader';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
+import { ThreadHistoryRenderList } from './thread-history-render-list';
 import { emitThreadLocalReplyTargetSelection } from './thread-local-reply-target';
-import { ThreadReactionGroups } from './thread-reaction-groups';
 import { resolveThreadScrollTarget } from './thread-scroll';
 import { logVoiceThreadProof } from './thread-voice-diagnostics';
+import { ThreadViewportDeferredEffects } from './thread-viewport-deferred-effects';
 import { configureInlineAudioElement } from './voice-playback-source';
 import type { MessagingVoicePlaybackVariantRecord } from '@/modules/messaging/media/message-assets';
 
@@ -80,6 +76,16 @@ const ThreadDeleteMessageConfirm = dynamic(() =>
 const MemoizedThreadVoiceMessageBubble = dynamic(() =>
   import('./thread-voice-message-bubble').then(
     (mod) => mod.MemoizedThreadVoiceMessageBubble,
+  ),
+);
+
+const ThreadReactionGroups = dynamic(() =>
+  import('./thread-reaction-groups').then((mod) => mod.ThreadReactionGroups),
+);
+
+const ThreadImagePreviewOverlay = dynamic(() =>
+  import('./thread-image-preview-overlay').then(
+    (mod) => mod.ThreadImagePreviewOverlay,
   ),
 );
 
@@ -3629,100 +3635,6 @@ const ThreadMessageRow = memo(
 
 ThreadMessageRow.displayName = 'ThreadMessageRow';
 
-type ThreadImagePreviewOverlayProps = {
-  closeLabel: string;
-  fallbackTitle: string;
-  onClose: () => void;
-  preview: ActiveImagePreview | null;
-};
-
-function ThreadImagePreviewOverlay({
-  closeLabel,
-  fallbackTitle,
-  onClose,
-  preview,
-}: ThreadImagePreviewOverlayProps) {
-  const portalRoot = typeof document !== 'undefined' ? document.body : null;
-  const previewCaption = preview
-    ? normalizeMessageBodyText(preview.caption)
-    : null;
-  const previewTitle = previewCaption ?? fallbackTitle;
-  const previewSignedUrl = preview
-    ? normalizeAttachmentSignedUrl(preview.signedUrl)
-    : null;
-
-  useEffect(() => {
-    if (!preview || !previewSignedUrl) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onClose, preview, previewSignedUrl]);
-
-  if (!preview || !previewSignedUrl || !portalRoot) {
-    return null;
-  }
-
-  return createPortal(
-    <div
-      aria-label={previewTitle}
-      aria-modal="true"
-      className="chat-image-preview-overlay"
-      data-state="open"
-      onClick={onClose}
-      role="dialog"
-    >
-      <div
-        className="chat-image-preview-shell"
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
-      >
-        <button
-          aria-label={closeLabel}
-          className="chat-image-preview-close"
-          onClick={onClose}
-          type="button"
-        >
-          <span aria-hidden="true">×</span>
-        </button>
-
-        <div className="chat-image-preview-stage">
-          <figure className="chat-image-preview-frame">
-            {/* Keep a plain img here so the authenticated attachment route stays cookie-backed. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              alt={previewTitle}
-              className="chat-image-preview-image"
-              src={previewSignedUrl}
-            />
-            {previewCaption ? (
-              <figcaption className="chat-image-preview-caption">
-                {previewCaption}
-              </figcaption>
-            ) : null}
-          </figure>
-        </div>
-      </div>
-    </div>,
-    portalRoot,
-  );
-}
-
 export function ThreadHistoryViewport({
   activeDeleteMessageId,
   activeEditMessageId,
@@ -5306,197 +5218,81 @@ export function ThreadHistoryViewport({
 
   return (
     <>
-      {conversationKind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          surface="progressive-history-loader"
-        >
-          <ProgressiveHistoryLoader
-            conversationId={conversationId}
-            hasMoreOlder={hasMoreOlder}
-            idleLabel={t.chat.olderMessagesAutoLoad}
-            isLoadingOlder={isLoadingOlder}
-            loadingLabel={t.chat.loadingOlderMessages}
-            onRequestOlder={requestOlderMessages}
-            targetId="message-thread-scroll"
-          />
-        </DmThreadClientSubtree>
-      ) : (
-        <ProgressiveHistoryLoader
-          conversationId={conversationId}
-          hasMoreOlder={hasMoreOlder}
-          idleLabel={t.chat.olderMessagesAutoLoad}
-          isLoadingOlder={isLoadingOlder}
-          loadingLabel={t.chat.loadingOlderMessages}
-          onRequestOlder={requestOlderMessages}
-          targetId="message-thread-scroll"
-        />
-      )}
-      {conversationKind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          surface="auto-scroll-to-latest"
-        >
-          <AutoScrollToLatest
-            bottomSentinelId="message-thread-bottom-sentinel"
-            conversationId={conversationId}
-            latestVisibleMessageSeq={latestCommittedMessageSeq}
-            targetId="message-thread-scroll"
-          />
-        </DmThreadClientSubtree>
-      ) : (
-        <AutoScrollToLatest
-          bottomSentinelId="message-thread-bottom-sentinel"
-          conversationId={conversationId}
-          latestVisibleMessageSeq={latestCommittedMessageSeq}
-          targetId="message-thread-scroll"
-        />
-      )}
-      {historyState.messages.length === 0 ? (
-        <div className="chat-empty-state" aria-label={t.chat.noMessagesYet}>
-          <span className="chat-empty-state-label">{t.chat.noMessagesYet}</span>
-        </div>
-      ) : (
-        timelineRenderItems.map((item) => {
-          if (item.type === 'separator') {
-            return (
-              <div
-                key={item.key}
-                className="message-day-separator"
-                aria-label={item.label}
-              >
-                <span className="message-day-label">{item.label}</span>
-              </div>
-            );
-          }
+      <ThreadViewportDeferredEffects
+        confirmedClientIds={resolvedConfirmedClientIds}
+        conversationId={conversationId}
+        conversationKind={conversationKind}
+        currentReadMessageSeq={currentReadMessageSeq}
+        hasMoreOlder={hasMoreOlder}
+        isLoadingOlder={isLoadingOlder}
+        labels={optimisticMessageLabels}
+        latestVisibleMessageSeq={latestCommittedMessageSeq}
+        loadingOlderLabel={t.chat.loadingOlderMessages}
+        noOlderLabel={t.chat.olderMessagesAutoLoad}
+        onRequestOlder={requestOlderMessages}
+        threadClientDiagnostics={threadClientDiagnostics}
+      />
+      <ThreadHistoryRenderList
+        emptyLabel={t.chat.noMessagesYet}
+        items={timelineRenderItems}
+        renderMessage={(item) => {
+          const encryptedEnvelope =
+            historyState.encryptedEnvelopesByMessage.get(item.message.id) ?? null;
+          const encryptedHistoryHint = getEncryptedHistoryHintForMessage({
+            envelope: encryptedEnvelope,
+            hint:
+              historyState.encryptedHistoryHintsByMessage.get(item.message.id) ??
+              null,
+            message: item.message,
+          });
 
-          if (item.type === 'unread') {
-            return (
-              <div
-                key={item.key}
-                className="message-unread-separator"
-                aria-label={item.label}
-              >
-                <span className="message-unread-label">{item.label}</span>
-              </div>
-            );
-          }
-
-          if (item.type === 'message') {
-            const encryptedEnvelope =
-              historyState.encryptedEnvelopesByMessage.get(item.message.id) ?? null;
-            const encryptedHistoryHint = getEncryptedHistoryHintForMessage({
-              envelope: encryptedEnvelope,
-              hint:
-                historyState.encryptedHistoryHintsByMessage.get(item.message.id) ??
-                null,
-              message: item.message,
-            });
-
-            return (
-              <ThreadMessageRow
-                key={item.message.id}
-                activeDeleteMessageId={activeDeleteMessageId}
-                activeEditMessageId={activeEditMessageId}
-                activeSpaceId={activeSpaceId}
-                attachmentsByMessage={historyState.attachmentsByMessage}
-                compactHistoricalUnavailable={item.compactHistoricalUnavailable}
-                conversationId={conversationId}
-                conversationKind={conversationKind}
-                currentUserId={currentUserId}
-                encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
-                encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
-                historicalUnavailableContinuationCount={
-                  item.historicalUnavailableContinuationCount
-                }
-                isPendingEncryptedCommitTransition={shouldRenderPendingOwnEncryptedCommitTransition(
-                  {
-                    currentUserId,
-                    envelope: encryptedEnvelope,
-                    historyHint: encryptedHistoryHint,
-                    message: item.message,
-                    pendingMessageIds: pendingEncryptedCommitTransitionMessageIds,
-                  },
-                )}
-                isClusteredWithNext={item.isClusteredWithNext}
-                isClusteredWithPrevious={item.isClusteredWithPrevious}
-                language={language}
-                latestVisibleMessageSeq={latestCommittedMessageSeq}
-                message={item.message}
-                messagesById={historyState.messagesById}
-                onOpenImagePreview={openImagePreview}
-                otherParticipantReadSeq={otherParticipantReadSeq}
-                otherParticipantUserId={otherParticipantUserId}
-                reactionsByMessage={historyState.reactionsByMessage}
-                senderNames={senderNames}
-                threadClientDiagnostics={threadClientDiagnostics}
-              />
-            );
-          }
-
-          return null;
-        })
-      )}
+          return (
+            <ThreadMessageRow
+              key={item.message.id}
+              activeDeleteMessageId={activeDeleteMessageId}
+              activeEditMessageId={activeEditMessageId}
+              activeSpaceId={activeSpaceId}
+              attachmentsByMessage={historyState.attachmentsByMessage}
+              compactHistoricalUnavailable={item.compactHistoricalUnavailable}
+              conversationId={conversationId}
+              conversationKind={conversationKind}
+              currentUserId={currentUserId}
+              encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
+              encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
+              historicalUnavailableContinuationCount={
+                item.historicalUnavailableContinuationCount
+              }
+              isPendingEncryptedCommitTransition={shouldRenderPendingOwnEncryptedCommitTransition(
+                {
+                  currentUserId,
+                  envelope: encryptedEnvelope,
+                  historyHint: encryptedHistoryHint,
+                  message: item.message,
+                  pendingMessageIds: pendingEncryptedCommitTransitionMessageIds,
+                },
+              )}
+              isClusteredWithNext={item.isClusteredWithNext}
+              isClusteredWithPrevious={item.isClusteredWithPrevious}
+              language={language}
+              latestVisibleMessageSeq={latestCommittedMessageSeq}
+              message={item.message}
+              messagesById={historyState.messagesById}
+              onOpenImagePreview={openImagePreview}
+              otherParticipantReadSeq={otherParticipantReadSeq}
+              otherParticipantUserId={otherParticipantUserId}
+              reactionsByMessage={historyState.reactionsByMessage}
+              senderNames={senderNames}
+              threadClientDiagnostics={threadClientDiagnostics}
+            />
+          );
+        }}
+      />
       <ThreadImagePreviewOverlay
         closeLabel={t.chat.closePhotoPreview}
         fallbackTitle={t.chat.photo}
         onClose={closeImagePreview}
         preview={activeImagePreview}
       />
-      {conversationKind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          surface="optimistic-thread-messages"
-        >
-          <OptimisticThreadMessages
-            confirmedClientIds={resolvedConfirmedClientIds}
-            conversationId={conversationId}
-            labels={optimisticMessageLabels}
-          />
-        </DmThreadClientSubtree>
-      ) : (
-        <OptimisticThreadMessages
-          confirmedClientIds={resolvedConfirmedClientIds}
-          conversationId={conversationId}
-          labels={optimisticMessageLabels}
-        />
-      )}
-      {conversationKind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          surface="mark-conversation-read"
-        >
-          <MarkConversationRead
-            bottomSentinelId="message-thread-bottom-sentinel"
-            conversationId={conversationId}
-            currentReadMessageSeq={currentReadMessageSeq}
-            key={`mark-read-${conversationId}-${currentReadMessageSeq ?? 'none'}-${latestCommittedMessageSeq ?? 'none'}`}
-            latestVisibleMessageSeq={
-              latestCommittedMessageSeq !== null &&
-              Number.isFinite(latestCommittedMessageSeq)
-                ? latestCommittedMessageSeq
-                : null
-            }
-          />
-        </DmThreadClientSubtree>
-      ) : (
-        <MarkConversationRead
-          bottomSentinelId="message-thread-bottom-sentinel"
-          conversationId={conversationId}
-          currentReadMessageSeq={currentReadMessageSeq}
-          key={`mark-read-${conversationId}-${currentReadMessageSeq ?? 'none'}-${latestCommittedMessageSeq ?? 'none'}`}
-          latestVisibleMessageSeq={
-            latestCommittedMessageSeq !== null &&
-            Number.isFinite(latestCommittedMessageSeq)
-              ? latestCommittedMessageSeq
-              : null
-          }
-        />
-      )}
     </>
   );
 }

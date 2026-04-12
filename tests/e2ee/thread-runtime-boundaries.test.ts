@@ -36,6 +36,21 @@ test('thread viewport delegates voice runtime to the extracted voice bubble seam
   assert.match(viewportSource, /<MemoizedThreadVoiceMessageBubble/);
   assert.match(
     viewportSource,
+    /from ['"]\.\/thread-viewport-deferred-effects['"]/,
+  );
+  assert.match(viewportSource, /<ThreadViewportDeferredEffects/);
+  assert.match(
+    viewportSource,
+    /from ['"]\.\/thread-history-render-list['"]/,
+  );
+  assert.match(viewportSource, /<ThreadHistoryRenderList/);
+  assert.match(
+    viewportSource,
+    /const ThreadImagePreviewOverlay = dynamic\(\(\) =>\s*import\('\.\/thread-image-preview-overlay'\)/,
+  );
+  assert.match(viewportSource, /<ThreadImagePreviewOverlay/);
+  assert.match(
+    viewportSource,
     /import \{ configureInlineAudioElement \} from ['"]\.\/voice-playback-source['"]/,
   );
   assert.doesNotMatch(
@@ -78,8 +93,8 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
   );
 
   assert.ok(chatPageSource.split('\n').length <= 80);
-  assert.ok(threadPageContentSource.split('\n').length <= 1200);
-  assert.ok(viewportSource.split('\n').length <= 5800);
+  assert.ok(threadPageContentSource.split('\n').length <= 1000);
+  assert.ok(viewportSource.split('\n').length <= 5400);
   assert.ok(voiceBubbleSource.split('\n').length <= 2400);
 });
 
@@ -90,6 +105,11 @@ test('thread page content remains the composition layer for thread UI pieces', (
 
   assert.match(threadPageContentSource, /from ['"]\.\/thread-history-viewport['"]/);
   assert.match(threadPageContentSource, /from ['"]\.\/thread-composer-runtime['"]/);
+  assert.match(
+    threadPageContentSource,
+    /from ['"]\.\/thread-page-deferred-effects['"]/,
+  );
   assert.match(threadPageContentSource, /<ThreadHistoryViewport/);
   assert.match(threadPageContentSource, /<ThreadComposerRuntime/);
+  assert.match(threadPageContentSource, /<ThreadPageDeferredEffects/);
 });
