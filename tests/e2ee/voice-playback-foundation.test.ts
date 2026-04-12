@@ -329,22 +329,37 @@ test('voice bubble keeps unsupported-device playback distinct from ordinary load
   const bubbleSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
   );
+  const runtimeSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-thread-voice-playback-runtime.ts',
+  );
 
   assert.match(
     bubbleSource,
+    /useThreadVoicePlaybackRuntime/,
+  );
+  assert.match(
+    runtimeSource,
     /resolveMessagingVoicePlaybackSourceOptions\(/,
   );
   assert.match(
-    bubbleSource,
+    runtimeSource,
     /resolveThreadVoicePreferredPlaybackSource\(/,
   );
   assert.match(
-    bubbleSource,
-    /reason === 'device-playback-unsupported'/,
+    runtimeSource,
+    /input\.devicePlaybackSupportStatus === 'unsupported'/,
   );
   assert.match(
-    bubbleSource,
-    /interactionAvailability =\s*reason === 'device-playback-unsupported'\s*\?\s*'disabled'/,
+    runtimeSource,
+    /reason = 'device-playback-unsupported'/,
+  );
+  assert.match(
+    runtimeSource,
+    /case 'failed':/,
+  );
+  assert.match(
+    runtimeSource,
+    /'disabled'/,
   );
   assert.match(
     bubbleSource,

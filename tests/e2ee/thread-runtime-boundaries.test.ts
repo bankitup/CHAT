@@ -63,25 +63,42 @@ test('thread viewport delegates voice runtime to the extracted voice bubble seam
   );
 });
 
-test('extracted voice bubble owns playback-source wiring and voice diagnostics', () => {
+test('extracted voice bubble stays render-focused while the runtime hook owns playback wiring', () => {
   const voiceBubbleSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
+  );
+  const voiceRuntimeHookSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-thread-voice-playback-runtime.ts',
   );
 
   assert.match(
     voiceBubbleSource,
-    /from ['"]\.\/voice-playback-source['"]/,
+    /from ['"]\.\/use-thread-voice-playback-runtime['"]/,
   );
   assert.match(
     voiceBubbleSource,
     /from ['"]\.\/thread-voice-diagnostics['"]/,
   );
-  assert.match(
-    voiceBubbleSource,
-    /from ['"]\.\/thread-voice-playback-controller['"]/,
-  );
   assert.match(voiceBubbleSource, /export const MemoizedThreadVoiceMessageBubble = memo\(/);
   assert.doesNotMatch(voiceBubbleSource, /const activeThreadVoicePlayback:/);
+  assert.doesNotMatch(voiceBubbleSource, /prepareThreadVoicePlaybackSource\(/);
+  assert.doesNotMatch(
+    voiceBubbleSource,
+    /resolveActiveThreadVoicePlaybackOwnership\(/,
+  );
+
+  assert.match(
+    voiceRuntimeHookSource,
+    /from ['"]\.\/thread-voice-playback-controller['"]/,
+  );
+  assert.match(
+    voiceRuntimeHookSource,
+    /from ['"]\.\/voice-playback-source['"]/,
+  );
+  assert.match(
+    voiceRuntimeHookSource,
+    /export function useThreadVoicePlaybackRuntime\(/,
+  );
 });
 
 test('thread runtime split stays within the first-pass size boundaries', () => {
@@ -95,11 +112,15 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
   const voiceBubbleSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
   );
+  const voiceRuntimeHookSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-thread-voice-playback-runtime.ts',
+  );
 
   assert.ok(chatPageSource.split('\n').length <= 80);
   assert.ok(threadPageContentSource.split('\n').length <= 1000);
   assert.ok(viewportSource.split('\n').length <= 5550);
-  assert.ok(voiceBubbleSource.split('\n').length <= 2400);
+  assert.ok(voiceBubbleSource.split('\n').length <= 800);
+  assert.ok(voiceRuntimeHookSource.split('\n').length <= 1900);
 });
 
 test('thread page content remains the composition layer for thread UI pieces', () => {

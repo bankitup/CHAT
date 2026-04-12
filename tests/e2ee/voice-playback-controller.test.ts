@@ -157,6 +157,9 @@ test('voice playback lifecycle ownership stays isolated in the extracted control
   const controllerSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-voice-playback-controller.ts',
   );
+  const runtimeHookSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-thread-voice-playback-runtime.ts',
+  );
   const bubbleSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
   );
@@ -173,12 +176,34 @@ test('voice playback lifecycle ownership stays isolated in the extracted control
   assert.match(controllerSource, /export function runActiveThreadVoicePlaybackTransition/);
   assert.match(controllerSource, /export function shouldIgnoreActiveThreadVoicePlaybackPause/);
 
+  assert.ok(
+    runtimeHookSource.split('\n').length <= 1900,
+  );
+  assert.match(
+    runtimeHookSource,
+    /export function useThreadVoicePlaybackRuntime\(/,
+  );
+  assert.match(
+    runtimeHookSource,
+    /from ['"]\.\/thread-voice-playback-controller['"]/,
+  );
+  assert.match(
+    runtimeHookSource,
+    /from ['"]\.\/voice-playback-source['"]/,
+  );
+  assert.match(runtimeHookSource, /const handleAudioPlaying = useCallback\(/);
+  assert.match(runtimeHookSource, /const togglePlaybackUnsafe = useCallback\(/);
+
   assert.match(
     bubbleSource,
-    /from ['"]\.\/thread-voice-playback-controller['"]/,
+    /from ['"]\.\/use-thread-voice-playback-runtime['"]/,
   );
   assert.doesNotMatch(bubbleSource, /const activeThreadVoicePlayback:/);
   assert.doesNotMatch(bubbleSource, /transitionPromise:\s*Promise<unknown> \| null/);
+  assert.doesNotMatch(
+    bubbleSource,
+    /from ['"]\.\/thread-voice-playback-controller['"]/,
+  );
 
   assert.doesNotMatch(
     playbackSourceResolverSource,
