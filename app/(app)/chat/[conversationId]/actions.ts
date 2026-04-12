@@ -1344,13 +1344,8 @@ export async function hideConversationAction(formData: FormData) {
     spaceId,
   });
 
-  if (!conversation || conversation.kind !== 'dm') {
-    redirectWithSettingsError(
-      conversationId,
-      'Delete chat from your side is available for direct chats only.',
-      spaceId,
-      settingsReturnTarget,
-    );
+  if (!conversation) {
+    redirectToInbox(spaceId);
   }
 
   try {
@@ -1383,11 +1378,21 @@ export async function deleteDirectConversationAction(formData: FormData) {
   const conversationId = String(formData.get('conversationId') ?? '').trim();
   const spaceId = readSpaceId(formData);
   const settingsReturnTarget = readSettingsReturnTarget(formData);
+  const deleteMode = String(formData.get('deleteMode') ?? '').trim();
   const confirmationMode = String(formData.get('confirmationMode') ?? '').trim();
   const confirmationText = String(formData.get('confirmationText') ?? '').trim();
 
   if (!conversationId) {
     redirectToInbox(spaceId);
+  }
+
+  if (deleteMode !== 'hard-delete-direct-chat') {
+    redirectWithSettingsError(
+      conversationId,
+      'Use the explicit poisoned-DM cleanup path to retire this chat.',
+      spaceId,
+      settingsReturnTarget,
+    );
   }
 
   if (confirmationMode === 'typed-delete-ru' && confirmationText !== 'Удалить') {

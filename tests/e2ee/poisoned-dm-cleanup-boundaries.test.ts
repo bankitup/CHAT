@@ -13,6 +13,9 @@ test('direct-chat delete action uses the full poisoned-DM cleanup helper instead
   const actionsSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/actions.ts',
   );
+  const deleteConfirmFormSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/dm-chat-delete-confirm-form.tsx',
+  );
 
   assert.match(
     actionsSource,
@@ -26,9 +29,21 @@ test('direct-chat delete action uses the full poisoned-DM cleanup helper instead
     actionsSource,
     /export async function deleteDirectConversationAction\(formData: FormData\) \{[\s\S]*await deleteDirectConversationForUser\(\{/,
   );
+  assert.match(
+    actionsSource,
+    /const deleteMode = String\(formData\.get\('deleteMode'\) \?\? ''\)\.trim\(\);/,
+  );
+  assert.match(
+    actionsSource,
+    /if \(deleteMode !== 'hard-delete-direct-chat'\)/,
+  );
   assert.doesNotMatch(
     actionsSource,
     /export async function deleteDirectConversationAction\(formData: FormData\) \{[\s\S]*await hideConversationForUser\(\{/,
+  );
+  assert.match(
+    deleteConfirmFormSource,
+    /<input name="deleteMode" type="hidden" value="hard-delete-direct-chat" \/>/,
   );
 });
 
@@ -70,6 +85,49 @@ test('full poisoned-DM cleanup helper clears media metadata before deleting the 
   assert.match(
     dataSource,
     /\.from\('conversations'\)\s*\.delete\(\)/,
+  );
+});
+
+test('DM settings keep ordinary hide-from-inbox behavior separate from explicit poisoned-DM hard delete', () => {
+  const overlaySettingsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-page-content.tsx',
+  );
+  const routeSettingsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/settings/page.tsx',
+  );
+
+  assert.match(
+    overlaySettingsSource,
+    /<GuardedServerActionForm action=\{hideConversationAction\}>[\s\S]*\{t\.chat\.hideFromInbox\}/,
+  );
+  assert.match(
+    overlaySettingsSource,
+    /<DmChatDeleteConfirmForm[\s\S]*confirmButtonLabel=\{t\.chat\.deleteChatConfirmButton\}/,
+  );
+  assert.match(
+    overlaySettingsSource,
+    /t\.chat\.inboxNote/,
+  );
+  assert.match(
+    overlaySettingsSource,
+    /t\.chat\.deleteChatCurrentUserOnlyNote/,
+  );
+
+  assert.match(
+    routeSettingsSource,
+    /<GuardedServerActionForm action=\{hideConversationAction\}>[\s\S]*\{data\.t\.chat\.hideFromInbox\}/,
+  );
+  assert.match(
+    routeSettingsSource,
+    /<DmChatDeleteConfirmForm[\s\S]*confirmButtonLabel=\{data\.t\.chat\.deleteChatConfirmButton\}/,
+  );
+  assert.match(
+    routeSettingsSource,
+    /data\.t\.chat\.inboxNote/,
+  );
+  assert.match(
+    routeSettingsSource,
+    /data\.t\.chat\.deleteChatCurrentUserOnlyNote/,
   );
 });
 
