@@ -43,6 +43,21 @@ test('thread viewport delegates row rendering and secondary runtime to extracted
   assert.match(viewportSource, /<ThreadViewportDeferredEffects/);
   assert.match(
     viewportSource,
+    /from ['"]\.\/use-thread-history-recovery['"]/,
+  );
+  assert.match(viewportSource, /useThreadHistoryRecovery\(/);
+  assert.match(
+    viewportSource,
+    /from ['"]\.\/use-thread-history-sync-runtime['"]/,
+  );
+  assert.match(viewportSource, /useThreadHistorySyncRuntime\(/);
+  assert.match(
+    viewportSource,
+    /from ['"]\.\/use-thread-history-prepend-scroll-restore['"]/,
+  );
+  assert.match(viewportSource, /useThreadHistoryPrependScrollRestore\(/);
+  assert.match(
+    viewportSource,
     /from ['"]\.\/thread-history-render-list['"]/,
   );
   assert.match(viewportSource, /<ThreadHistoryRenderList/);
@@ -142,7 +157,7 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
 
   assert.ok(chatPageSource.split('\n').length <= 80);
   assert.ok(threadPageContentSource.split('\n').length <= 1000);
-  assert.ok(viewportSource.split('\n').length <= 3600);
+  assert.ok(viewportSource.split('\n').length <= 3000);
   assert.ok(rowSource.split('\n').length <= 2700);
   assert.ok(voiceBubbleSource.split('\n').length <= 800);
   assert.ok(voiceRuntimeHookSource.split('\n').length <= 1900);

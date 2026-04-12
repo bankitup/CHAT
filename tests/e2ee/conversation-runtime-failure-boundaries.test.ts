@@ -53,6 +53,9 @@ test('voice playback runtime stays isolated from thread-wide sync and unrelated 
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
+  const recoveryHookSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-thread-history-recovery.ts',
+  );
 
   assert.doesNotMatch(
     voiceRuntimeSource,
@@ -72,7 +75,11 @@ test('voice playback runtime stays isolated from thread-wide sync and unrelated 
   );
   assert.match(
     viewportSource,
-    /reason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON/,
+    /voiceReopenRecoveryReason:\s*VOICE_MESSAGE_REOPEN_RECOVERY_REASON/,
+  );
+  assert.match(
+    recoveryHookSource,
+    /reason:\s*voiceReopenRecoveryReason/,
   );
   assert.match(
     viewportSource,
