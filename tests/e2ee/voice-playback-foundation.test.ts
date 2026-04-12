@@ -89,6 +89,66 @@ test('voice source helper keeps derived playback candidates additive ahead of th
   assert.equal(sources[1]?.role, 'original-capture');
 });
 
+test('voice recovery helper treats transport variants and committed locators as locally recoverable', async () => {
+  const { hasMessagingVoiceLocallyRecoverableSource } = await importWorkspaceModule(
+    'src/modules/messaging/media/message-assets.ts',
+  );
+
+  assert.equal(
+    hasMessagingVoiceLocallyRecoverableSource({
+      attachment: {
+        id: 'voice-asset',
+        isVoiceMessage: true,
+        messageId: 'message-1',
+        signedUrl: null,
+        voicePlaybackVariants: [
+          {
+            assetId: 'voice-variant',
+            role: 'playback-normalized',
+            storageBucket: 'chat-attachments',
+            storageObjectPath: 'spaces/demo/voice/voice-variant.m4a',
+            transportSourceUrl: '/api/messaging/voice-variant',
+          },
+        ],
+      },
+      expectedMessageId: 'message-1',
+    }),
+    true,
+  );
+
+  assert.equal(
+    hasMessagingVoiceLocallyRecoverableSource({
+      attachment: {
+        bucket: 'chat-attachments',
+        id: 'voice-asset',
+        isVoiceMessage: true,
+        messageId: 'message-2',
+        objectPath: 'spaces/demo/voice/voice-asset.webm',
+        signedUrl: null,
+        voicePlaybackVariants: null,
+      },
+      expectedMessageId: 'message-2',
+    }),
+    true,
+  );
+
+  assert.equal(
+    hasMessagingVoiceLocallyRecoverableSource({
+      attachment: {
+        bucket: 'chat-attachments',
+        id: 'voice-asset',
+        isVoiceMessage: true,
+        messageId: 'other-message',
+        objectPath: 'spaces/demo/voice/voice-asset.webm',
+        signedUrl: null,
+        voicePlaybackVariants: null,
+      },
+      expectedMessageId: 'message-3',
+    }),
+    false,
+  );
+});
+
 test('voice device playback classification stays truthful across supported, unknown, and unsupported cases', async () => {
   const {
     classifyMessagingVoiceDevicePlaybackSupport,
@@ -289,5 +349,28 @@ test('voice bubble keeps unsupported-device playback distinct from ordinary load
   assert.match(
     bubbleSource,
     /voiceMessageUnsupported/,
+  );
+});
+
+test('thread viewport only escalates voice recovery when the row has no local playback path', () => {
+  const viewportSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
+  );
+
+  assert.match(
+    viewportSource,
+    /hasMessagingVoiceLocallyRecoverableSource\(/,
+  );
+  assert.match(
+    viewportSource,
+    /function hasPlaybackReadyVoiceAttachment\(\s*messageId: string,\s*attachments: MessageAttachment\[\],\s*\)/,
+  );
+  assert.match(
+    viewportSource,
+    /!hasPlaybackReadyVoiceAttachment\(\s*messageId,\s*filterRenderableMessageAttachments\(/,
+  );
+  assert.match(
+    viewportSource,
+    /!hasPlaybackReadyVoiceAttachment\(\s*message\.id,\s*filterRenderableMessageAttachments\(/,
   );
 });

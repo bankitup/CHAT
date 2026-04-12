@@ -65,7 +65,10 @@ import { resolveThreadScrollTarget } from './thread-scroll';
 import { logVoiceThreadProof } from './thread-voice-diagnostics';
 import { ThreadViewportDeferredEffects } from './thread-viewport-deferred-effects';
 import { configureInlineAudioElement } from './voice-playback-source';
-import type { MessagingVoicePlaybackVariantRecord } from '@/modules/messaging/media/message-assets';
+import {
+  hasMessagingVoiceLocallyRecoverableSource,
+  type MessagingVoicePlaybackVariantRecord,
+} from '@/modules/messaging/media/message-assets';
 
 const ThreadReactionPicker = dynamic(() =>
   import('./thread-reaction-picker').then((mod) => mod.ThreadReactionPicker),
@@ -686,11 +689,16 @@ function hasRenderableCommittedAttachment(attachments: MessageAttachment[]) {
   );
 }
 
-function hasPlaybackReadyVoiceAttachment(attachments: MessageAttachment[]) {
+function hasPlaybackReadyVoiceAttachment(
+  messageId: string,
+  attachments: MessageAttachment[],
+) {
   return attachments.some(
     (attachment) =>
-      Boolean(normalizeAttachmentSignedUrl(attachment.signedUrl)) &&
-      (Boolean(attachment.isVoiceMessage) || attachment.isAudio),
+      hasMessagingVoiceLocallyRecoverableSource({
+        attachment,
+        expectedMessageId: messageId,
+      }),
   );
 }
 
@@ -720,6 +728,7 @@ function resolveVoiceMessageIdsNeedingAttachmentRecovery(input: {
       }
 
       return !hasPlaybackReadyVoiceAttachment(
+        messageId,
         filterRenderableMessageAttachments(
           messageId,
           attachmentsByMessageId.get(messageId) ?? [],
@@ -758,6 +767,7 @@ function resolveRecentVoiceMessageIdsNeedingRecovery(input: {
     .filter(
       (message) =>
         !hasPlaybackReadyVoiceAttachment(
+          message.id,
           filterRenderableMessageAttachments(
             message.id,
             input.attachmentsByMessage.get(message.id) ?? [],

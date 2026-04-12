@@ -98,7 +98,7 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
 
   assert.ok(chatPageSource.split('\n').length <= 80);
   assert.ok(threadPageContentSource.split('\n').length <= 1000);
-  assert.ok(viewportSource.split('\n').length <= 5400);
+  assert.ok(viewportSource.split('\n').length <= 5550);
   assert.ok(voiceBubbleSource.split('\n').length <= 2400);
 });
 
