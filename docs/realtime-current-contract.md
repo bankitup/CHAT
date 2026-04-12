@@ -109,7 +109,9 @@ than:
 The shared authenticated shell no longer owns broad Messenger realtime directly.
 
 Messenger runtime is mounted through route-local seams such as:
-- `app/(app)/messenger-surface-runtime-effects.tsx`
+- `app/(app)/chat/[conversationId]/thread-route-runtime-effects.tsx`
+- `app/(app)/inbox/inbox-route-runtime-effects.tsx`
+- `app/(app)/activity/activity-route-runtime-effects.tsx`
 
 This keeps non-Messenger authenticated routes from paying the same base realtime cost.
 

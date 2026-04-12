@@ -39,7 +39,7 @@ as clean platform foundation v1 yet.
 | Area | Current paths | Why it is excluded from clean v1 |
 | --- | --- | --- |
 | Product posture encoded in shared profile compatibility and shell seams | `src/modules/spaces/model.ts`, `src/modules/spaces/posture.ts`, `src/modules/app-shell/state.ts`, `src/modules/app-shell/space-posture.ts` | Shared profile compatibility still encodes product-specific profiles, and the shared shell still owns product-facing nav/posture behavior. |
-| Shared shell with product posture drift | `app/(app)/app-shell-frame.tsx`, `app/(app)/messenger-surface-runtime-effects.tsx` | Messenger runtime effects now mount lower, but shell posture and Messenger route runtime ownership are still not clean foundation. |
+| Shared shell with product posture drift | `app/(app)/app-shell-frame.tsx`, Messenger route runtime seams under `app/(app)/chat/[conversationId]/**`, `app/(app)/inbox/**`, and `app/(app)/activity/**` | Messenger runtime effects now mount lower, but shell posture and Messenger route runtime ownership are still not clean foundation. |
 | Shared profile server persistence | `src/modules/profile/server.ts`, `src/modules/messaging/data/profiles-server.ts` | Intended shared ownership exists, but persistence still routes through messaging-backed code. |
 | Shared error/support helpers under messaging namespace | `src/modules/messaging/ui/user-facing-errors.ts` | Behavior is broader than Messenger, but ownership label is still misleading. |
 

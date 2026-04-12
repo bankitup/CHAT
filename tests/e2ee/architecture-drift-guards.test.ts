@@ -62,7 +62,7 @@ test('shared platform and shell seams stay free of product-route and product-dom
   );
   assert.doesNotMatch(
     shellFrameSource,
-    /DmE2eeAuthenticatedBoundary|ChatUnreadBadgeSync|PushSubscriptionPresenceSync|WarmNavRouteObserver|MessengerSurfaceRuntimeEffects/,
+    /DmE2eeAuthenticatedBoundary|ChatUnreadBadgeSync|PushSubscriptionPresenceSync|WarmNavRouteObserver|MessengerSurfaceRuntimeEffects|ThreadRouteRuntimeEffects|InboxRouteRuntimeEffects|ActivityRouteRuntimeEffects/,
   );
 });
 
