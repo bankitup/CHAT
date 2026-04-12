@@ -23,7 +23,12 @@ export type PendingAfterSeqThreadHistorySyncRequest = {
   reason: string | null;
 };
 
+export type PendingAuthoritativeLatestWindowThreadHistorySyncRequest = {
+  reason: string | null;
+};
+
 type NormalizedThreadHistorySyncRequest = {
+  authoritativeLatestWindow: boolean;
   messageIds: string[];
   newerThanLatest: boolean;
   reason: string | null;
@@ -46,13 +51,18 @@ type UseThreadHistorySyncRuntimeInput = {
   isSyncingRef: MutableRefObject<boolean>;
   mergeSyncRequest: (nextRequest: ThreadHistorySyncRequestPayload) => void;
   normalizeSyncRequest: (input: {
+    authoritativeLatestWindow?: boolean | null;
     messageIds?: string[] | null;
     newerThanLatest?: boolean | null;
     reason?: string | null;
   }) => NormalizedThreadHistorySyncRequest;
-  onApplySyncSnapshot: (snapshot: ThreadHistoryPageSnapshot) => void;
+  onApplySyncSnapshot: (input: {
+    mode: 'authoritative-latest-window' | 'sync-topology';
+    snapshot: ThreadHistoryPageSnapshot;
+  }) => void;
   onLiveMessage: (payload: ThreadHistoryLiveMessagePayload) => void;
   pageSize: number;
+  pendingAuthoritativeLatestWindowSyncRequestRef: MutableRefObject<PendingAuthoritativeLatestWindowThreadHistorySyncRequest | null>;
   pendingAfterSeqSyncRequestRef: MutableRefObject<PendingAfterSeqThreadHistorySyncRequest | null>;
   pendingByIdSyncRequestRef: MutableRefObject<PendingByIdThreadHistorySyncRequest | null>;
   performSyncFetch: (input: {
@@ -105,6 +115,7 @@ export function useThreadHistorySyncRuntime({
   onApplySyncSnapshot,
   onLiveMessage,
   pageSize,
+  pendingAuthoritativeLatestWindowSyncRequestRef,
   pendingAfterSeqSyncRequestRef,
   pendingByIdSyncRequestRef,
   performSyncFetch,
@@ -165,110 +176,167 @@ export function useThreadHistorySyncRuntime({
         return;
       }
 
-      const pendingByIdRequest = pendingByIdSyncRequestRef.current;
-      const pendingAfterSeqRequest = pendingAfterSeqSyncRequestRef.current;
-
-      if (!pendingByIdRequest && !pendingAfterSeqRequest) {
+      if (
+        !pendingByIdSyncRequestRef.current &&
+        !pendingAfterSeqSyncRequestRef.current &&
+        !pendingAuthoritativeLatestWindowSyncRequestRef.current
+      ) {
         return;
-      }
-
-      const request = pendingByIdRequest
-        ? {
-            messageIds: pendingByIdRequest.messageIds,
-            mode: 'by-id' as const,
-            newerThanLatest: false,
-            reason: pendingByIdRequest.reason,
-          }
-        : {
-            messageIds: [] as string[],
-            mode: 'after-seq' as const,
-            newerThanLatest: true,
-            reason: pendingAfterSeqRequest?.reason ?? null,
-          };
-
-      if (request.mode === 'by-id') {
-        pendingByIdSyncRequestRef.current = null;
-      } else {
-        pendingAfterSeqSyncRequestRef.current = null;
       }
 
       isSyncingRef.current = true;
 
       try {
-        if (historySyncDiagnosticsEnabled) {
-          console.info('[chat-history]', 'topology-sync:flush', {
-            afterSeqRequested: request.mode === 'after-seq',
-            chosenMode: request.mode,
-            conversationId,
-            messageIds: request.messageIds,
-            reason: request.reason,
-          });
-        }
+        while (!isDisposed) {
+          const pendingByIdRequest = pendingByIdSyncRequestRef.current;
 
-        if (request.mode === 'by-id') {
-          const snapshot = await performSyncFetch({
-            messageIds: request.messageIds,
-            reason: request.reason,
-          });
+          if (pendingByIdRequest) {
+            pendingByIdSyncRequestRef.current = null;
 
-          if (isDisposed || !snapshot) {
-            return;
-          }
+            if (historySyncDiagnosticsEnabled) {
+              console.info('[chat-history]', 'topology-sync:flush', {
+                afterSeqRequested: false,
+                authoritativeLatestWindowRequested: false,
+                chosenMode: 'by-id',
+                conversationId,
+                messageIds: pendingByIdRequest.messageIds,
+                reason: pendingByIdRequest.reason,
+              });
+            }
 
-          scheduleMissingEncryptedDmEnvelopeRecovery({
-            reason: request.reason,
-            requestedMessageIds: request.messageIds,
-            snapshot,
-          });
-          scheduleVoiceAttachmentRecovery({
-            reason: request.reason,
-            requestedMessageIds: request.messageIds,
-            snapshot,
-          });
-          scheduleAttachmentRecovery({
-            reason: request.reason,
-            requestedMessageIds: request.messageIds,
-            snapshot,
-          });
-
-          onApplySyncSnapshot(snapshot);
-        }
-
-        if (request.mode === 'after-seq') {
-          while (true) {
-            const latestLoadedSeq = getLatestLoadedSeq();
             const snapshot = await performSyncFetch({
-              allowLatest: latestLoadedSeq === null,
-              afterSeq: latestLoadedSeq,
-              reason: request.reason,
+              messageIds: pendingByIdRequest.messageIds,
+              reason: pendingByIdRequest.reason,
             });
 
             if (isDisposed || !snapshot) {
               return;
             }
 
-            onApplySyncSnapshot(snapshot);
+            scheduleMissingEncryptedDmEnvelopeRecovery({
+              reason: pendingByIdRequest.reason,
+              requestedMessageIds: pendingByIdRequest.messageIds,
+              snapshot,
+            });
+            scheduleVoiceAttachmentRecovery({
+              reason: pendingByIdRequest.reason,
+              requestedMessageIds: pendingByIdRequest.messageIds,
+              snapshot,
+            });
+            scheduleAttachmentRecovery({
+              reason: pendingByIdRequest.reason,
+              requestedMessageIds: pendingByIdRequest.messageIds,
+              snapshot,
+            });
 
-            if (latestLoadedSeq === null || snapshot.messages.length < pageSize) {
-              break;
-            }
+            onApplySyncSnapshot({
+              mode: 'sync-topology',
+              snapshot,
+            });
+            continue;
           }
+
+          const pendingAfterSeqRequest = pendingAfterSeqSyncRequestRef.current;
+
+          if (pendingAfterSeqRequest) {
+            pendingAfterSeqSyncRequestRef.current = null;
+
+            if (historySyncDiagnosticsEnabled) {
+              console.info('[chat-history]', 'topology-sync:flush', {
+                afterSeqRequested: true,
+                authoritativeLatestWindowRequested: false,
+                chosenMode: 'after-seq',
+                conversationId,
+                messageIds: [],
+                reason: pendingAfterSeqRequest.reason,
+              });
+            }
+
+            while (true) {
+              const latestLoadedSeq = getLatestLoadedSeq();
+              const snapshot = await performSyncFetch({
+                allowLatest: latestLoadedSeq === null,
+                afterSeq: latestLoadedSeq,
+                reason: pendingAfterSeqRequest.reason,
+              });
+
+              if (isDisposed || !snapshot) {
+                return;
+              }
+
+              onApplySyncSnapshot({
+                mode: 'sync-topology',
+                snapshot,
+              });
+
+              if (latestLoadedSeq === null || snapshot.messages.length < pageSize) {
+                break;
+              }
+            }
+
+            continue;
+          }
+
+          const pendingAuthoritativeLatestWindowRequest =
+            pendingAuthoritativeLatestWindowSyncRequestRef.current;
+
+          if (pendingAuthoritativeLatestWindowRequest) {
+            pendingAuthoritativeLatestWindowSyncRequestRef.current = null;
+
+            if (historySyncDiagnosticsEnabled) {
+              console.info('[chat-history]', 'topology-sync:flush', {
+                afterSeqRequested: false,
+                authoritativeLatestWindowRequested: true,
+                chosenMode: 'authoritative-latest-window',
+                conversationId,
+                messageIds: [],
+                reason: pendingAuthoritativeLatestWindowRequest.reason,
+              });
+            }
+
+            const snapshot = await performSyncFetch({
+              allowLatest: true,
+              reason: pendingAuthoritativeLatestWindowRequest.reason,
+            });
+
+            if (isDisposed || !snapshot) {
+              return;
+            }
+
+            onApplySyncSnapshot({
+              mode: 'authoritative-latest-window',
+              snapshot,
+            });
+            continue;
+          }
+
+          break;
         }
       } catch (error) {
         console.error('[chat-history]', 'topology-sync-failed', {
           conversationId,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          messageIds: request.messageIds,
-          newerThanLatest: request.newerThanLatest,
+          messageIds: pendingByIdSyncRequestRef.current?.messageIds ?? [],
+          newerThanLatest: Boolean(pendingAfterSeqSyncRequestRef.current),
           preservedMessageCount: historyStateRef.current.messages.length,
-          reason: request.reason,
+          reason:
+            pendingByIdSyncRequestRef.current?.reason ??
+            pendingAfterSeqSyncRequestRef.current?.reason ??
+            pendingAuthoritativeLatestWindowSyncRequestRef.current?.reason ??
+            null,
         });
 
         if (!isDisposed && historySyncDiagnosticsEnabled) {
+          const pendingReason =
+            pendingByIdSyncRequestRef.current?.reason ??
+            pendingAfterSeqSyncRequestRef.current?.reason ??
+            pendingAuthoritativeLatestWindowSyncRequestRef.current?.reason ??
+            null;
+
           console.info('[chat-history]', 'topology-sync:degraded-preserving-thread', {
             conversationId,
             preservedMessageCount: historyStateRef.current.messages.length,
-            reason: request.reason,
+            reason: pendingReason,
           });
         }
       } finally {
@@ -276,7 +344,11 @@ export function useThreadHistorySyncRuntime({
 
         if (
           !isDisposed &&
-          (pendingByIdSyncRequestRef.current || pendingAfterSeqSyncRequestRef.current)
+          (
+            pendingByIdSyncRequestRef.current ||
+            pendingAfterSeqSyncRequestRef.current ||
+            pendingAuthoritativeLatestWindowSyncRequestRef.current
+          )
         ) {
           syncTimeoutRef.current = setTimeout(() => {
             syncTimeoutRef.current = null;
@@ -344,6 +416,7 @@ export function useThreadHistorySyncRuntime({
 
       pendingByIdSyncRequestRef.current = null;
       pendingAfterSeqSyncRequestRef.current = null;
+      pendingAuthoritativeLatestWindowSyncRequestRef.current = null;
       encryptedDmRecoveryAttempts.clear();
       encryptedDmRecoveryTimeouts.clear();
       voiceAttachmentRecoveryAttempts.clear();
@@ -369,6 +442,7 @@ export function useThreadHistorySyncRuntime({
     mergeSyncRequest,
     normalizeSyncRequest,
     onApplySyncSnapshot,
+    pendingAuthoritativeLatestWindowSyncRequestRef,
     pendingAfterSeqSyncRequestRef,
     pendingByIdSyncRequestRef,
     pageSize,

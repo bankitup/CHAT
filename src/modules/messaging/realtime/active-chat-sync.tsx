@@ -32,6 +32,8 @@ const THREAD_REFRESH_DEBOUNCE_MS = 180;
 const THREAD_REFRESH_MIN_INTERVAL_MS = 900;
 const THREAD_VISIBILITY_REFRESH_MIN_HIDDEN_MS = 15000;
 const THREAD_REALTIME_RESUBSCRIBE_RECOVERY_REASON = 'realtime-resubscribe';
+const THREAD_AUTHORITATIVE_LATEST_WINDOW_RECOVERY_REASON =
+  'realtime-authoritative-latest-window';
 const SUPPRESSED_COMMITTED_TOPOLOGY_SYNC_SOURCES = new Set([
   'plaintext-chat-send',
   'voice-message-send',
@@ -297,21 +299,31 @@ export function ActiveChatRealtimeSync({
     };
 
     const requestTopologySync = (input: {
+      authoritativeLatestWindow?: boolean;
       messageIds?: string[] | null;
       newerThanLatest?: boolean;
       reason: string;
     }) => {
       emitThreadHistorySyncRequest({
+        authoritativeLatestWindow: Boolean(input.authoritativeLatestWindow),
         conversationId,
         messageIds: input.messageIds ?? null,
         newerThanLatest: input.newerThanLatest,
         reason: input.reason,
       });
       logDiagnostics('topology-sync:requested', {
+        authoritativeLatestWindow: Boolean(input.authoritativeLatestWindow),
         conversationId,
         messageIds: input.messageIds ?? null,
         newerThanLatest: Boolean(input.newerThanLatest),
         reason: input.reason,
+      });
+    };
+
+    const requestAuthoritativeLatestWindowSync = (reason: string) => {
+      requestTopologySync({
+        authoritativeLatestWindow: true,
+        reason,
       });
     };
 
@@ -332,6 +344,7 @@ export function ActiveChatRealtimeSync({
           newerThanLatest: true,
           reason: 'visibility-visible',
         });
+        requestAuthoritativeLatestWindowSync('visibility-visible');
       }
     };
 
@@ -657,6 +670,9 @@ export function ActiveChatRealtimeSync({
             newerThanLatest: true,
             reason: THREAD_REALTIME_RESUBSCRIBE_RECOVERY_REASON,
           });
+          requestAuthoritativeLatestWindowSync(
+            THREAD_AUTHORITATIVE_LATEST_WINDOW_RECOVERY_REASON,
+          );
           return;
         }
 

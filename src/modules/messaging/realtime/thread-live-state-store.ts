@@ -57,6 +57,32 @@ function normalizeReactionGroups(reactions: MessageReactionGroup[]) {
     .slice(0, 5);
 }
 
+function areReactionGroupsEqual(
+  left: MessageReactionGroup[] | null | undefined,
+  right: MessageReactionGroup[] | null | undefined,
+) {
+  const normalizedLeft = normalizeReactionGroups(left ?? []);
+  const normalizedRight = normalizeReactionGroups(right ?? []);
+
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return false;
+  }
+
+  return normalizedLeft.every((reaction, index) => {
+    const nextReaction = normalizedRight[index];
+
+    if (!nextReaction) {
+      return false;
+    }
+
+    return (
+      reaction.emoji === nextReaction.emoji &&
+      reaction.count === nextReaction.count &&
+      reaction.selectedByCurrentUser === nextReaction.selectedByCurrentUser
+    );
+  });
+}
+
 function buildThreadReactionSuppressionKey(input: {
   conversationId: string;
   direction: 'increment' | 'decrement';
@@ -231,6 +257,62 @@ export function patchThreadConversationReadState(input: {
   }
 
   threadLiveStateStore.set(normalizedConversationId, nextState);
+  emitThreadLiveStateChange(normalizedConversationId);
+}
+
+export function reconcileThreadLiveReactionSnapshot(input: {
+  conversationId: string;
+  reactionsByMessage: Array<{
+    messageId: string;
+    reactions: MessageReactionGroup[];
+  }>;
+  snapshotMessageIds: string[];
+}) {
+  const normalizedConversationId = input.conversationId.trim();
+
+  if (!normalizedConversationId) {
+    return;
+  }
+
+  const currentState = getThreadConversationLiveState(normalizedConversationId);
+  const nextReactionsByMessage = {
+    ...currentState.reactionsByMessage,
+  };
+  const reactionEntriesByMessageId = new Map(
+    input.reactionsByMessage.map((entry) => [
+      entry.messageId.trim(),
+      normalizeReactionGroups(entry.reactions),
+    ] as const),
+  );
+  let didChange = false;
+
+  for (const messageId of Array.from(
+    new Set(input.snapshotMessageIds.map((value) => value.trim()).filter(Boolean)),
+  )) {
+    const nextGroups = reactionEntriesByMessageId.get(messageId) ?? [];
+    const currentGroups = nextReactionsByMessage[messageId] ?? [];
+
+    if (areReactionGroupsEqual(currentGroups, nextGroups)) {
+      continue;
+    }
+
+    if (nextGroups.length === 0) {
+      delete nextReactionsByMessage[messageId];
+    } else {
+      nextReactionsByMessage[messageId] = nextGroups;
+    }
+
+    didChange = true;
+  }
+
+  if (!didChange) {
+    return;
+  }
+
+  threadLiveStateStore.set(normalizedConversationId, {
+    ...currentState,
+    reactionsByMessage: nextReactionsByMessage,
+  });
   emitThreadLiveStateChange(normalizedConversationId);
 }
 

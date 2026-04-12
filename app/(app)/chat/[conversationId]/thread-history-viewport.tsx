@@ -29,9 +29,15 @@ import {
   type ThreadHistoryLiveMessagePayload,
   type ThreadHistorySyncRequestPayload,
 } from '@/modules/messaging/realtime/thread-history-sync-events';
-import { getThreadLiveStateSnapshot } from '@/modules/messaging/realtime/thread-live-state-store';
+import {
+  getThreadLiveStateSnapshot,
+  reconcileThreadLiveReactionSnapshot,
+} from '@/modules/messaging/realtime/thread-live-state-store';
 import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
-import { readThreadMessagePatchSnapshot } from '@/modules/messaging/realtime/thread-message-patch-store';
+import {
+  readThreadMessagePatchSnapshot,
+  reconcileThreadMessagePatchesWithAuthoritativeMessages,
+} from '@/modules/messaging/realtime/thread-message-patch-store';
 import { ThreadHistoryMessageList } from './thread-history-message-list';
 import {
   filterRenderableMessageAttachments,
@@ -60,6 +66,7 @@ import {
 } from './use-thread-history-prepend-scroll-restore';
 import { useThreadHistoryRecovery } from './use-thread-history-recovery';
 import {
+  type PendingAuthoritativeLatestWindowThreadHistorySyncRequest,
   useThreadHistorySyncRuntime,
   type PendingAfterSeqThreadHistorySyncRequest,
   type PendingByIdThreadHistorySyncRequest,
@@ -548,6 +555,7 @@ function resolveHistoryFetchMode(input: {
 }
 
 function normalizeThreadHistorySyncRequestState(input: {
+  authoritativeLatestWindow?: boolean | null;
   messageIds?: string[] | null;
   newerThanLatest?: boolean | null;
   reason?: string | null;
@@ -562,6 +570,9 @@ function normalizeThreadHistorySyncRequestState(input: {
   const hasMessageIds = messageIds.length > 0;
 
   return {
+    authoritativeLatestWindow: hasMessageIds
+      ? false
+      : Boolean(input.authoritativeLatestWindow),
     messageIds,
     newerThanLatest: hasMessageIds ? false : Boolean(input.newerThanLatest),
     reason: input.reason?.trim() || null,
@@ -1368,6 +1379,10 @@ export function ThreadHistoryViewport({
     useRef<PendingByIdThreadHistorySyncRequest | null>(null);
   const pendingAfterSeqSyncRequestRef =
     useRef<PendingAfterSeqThreadHistorySyncRequest | null>(null);
+  const pendingAuthoritativeLatestWindowSyncRequestRef =
+    useRef<PendingAuthoritativeLatestWindowThreadHistorySyncRequest | null>(
+      null,
+    );
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const encryptedDmRecoveryAttemptsRef = useRef(new Map<string, number>());
   const encryptedDmRecoveryTimeoutsRef = useRef(
@@ -1545,6 +1560,7 @@ export function ThreadHistoryViewport({
       pendingRestoreRef.current = null;
       pendingByIdSyncRequestRef.current = null;
       pendingAfterSeqSyncRequestRef.current = null;
+      pendingAuthoritativeLatestWindowSyncRequestRef.current = null;
       return;
     }
 
@@ -1869,6 +1885,8 @@ export function ThreadHistoryViewport({
       );
       const currentByIdRequest = pendingByIdSyncRequestRef.current;
       const currentAfterSeqRequest = pendingAfterSeqSyncRequestRef.current;
+      const currentAuthoritativeLatestWindowRequest =
+        pendingAuthoritativeLatestWindowSyncRequestRef.current;
 
       if (normalizedNextRequest.messageIds.length > 0) {
         const mergedMessageIds = Array.from(
@@ -1899,23 +1917,48 @@ export function ThreadHistoryViewport({
         return;
       }
 
-      if (!normalizedNextRequest.newerThanLatest) {
+      if (normalizedNextRequest.newerThanLatest) {
+        pendingAfterSeqSyncRequestRef.current = {
+          reason:
+            normalizedNextRequest.reason || currentAfterSeqRequest?.reason || null,
+        };
+
+        if (historySyncDiagnosticsEnabled && currentByIdRequest) {
+          console.info('[chat-history]', 'topology-sync:mode-separated', {
+            conversationId,
+            currentQueuedByIdMessageIds: currentByIdRequest.messageIds,
+            nextMode: 'after-seq',
+            queuedModes: ['by-id', 'after-seq'],
+            reason:
+              normalizedNextRequest.reason || currentAfterSeqRequest?.reason || null,
+          });
+        }
+      }
+
+      if (!normalizedNextRequest.authoritativeLatestWindow) {
         return;
       }
 
-      pendingAfterSeqSyncRequestRef.current = {
+      pendingAuthoritativeLatestWindowSyncRequestRef.current = {
         reason:
-          normalizedNextRequest.reason || currentAfterSeqRequest?.reason || null,
+          normalizedNextRequest.reason ||
+          currentAuthoritativeLatestWindowRequest?.reason ||
+          currentAfterSeqRequest?.reason ||
+          null,
       };
 
-      if (historySyncDiagnosticsEnabled && currentByIdRequest) {
+      if (historySyncDiagnosticsEnabled && (currentByIdRequest || currentAfterSeqRequest)) {
         console.info('[chat-history]', 'topology-sync:mode-separated', {
           conversationId,
-          currentQueuedByIdMessageIds: currentByIdRequest.messageIds,
-          nextMode: 'after-seq',
-          queuedModes: ['by-id', 'after-seq'],
+          currentQueuedByIdMessageIds: currentByIdRequest?.messageIds ?? null,
+          currentQueuedAfterSeqReason: currentAfterSeqRequest?.reason ?? null,
+          nextMode: 'authoritative-latest-window',
+          queuedModes: ['by-id', 'after-seq', 'authoritative-latest-window'],
           reason:
-            normalizedNextRequest.reason || currentAfterSeqRequest?.reason || null,
+            normalizedNextRequest.reason ||
+            currentAuthoritativeLatestWindowRequest?.reason ||
+            currentAfterSeqRequest?.reason ||
+            null,
         });
       }
     },
@@ -2354,17 +2397,43 @@ export function ThreadHistoryViewport({
     [],
   );
 
-  const applySyncSnapshot = useCallback((snapshot: ThreadHistoryPageSnapshot) => {
-    setHistoryState((currentState) => {
-      const nextState = mergeThreadHistoryState({
-        mode: 'sync-topology',
-        snapshot,
-        state: currentState,
-      }).nextState;
-      historyStateRef.current = nextState;
-      return nextState;
-    });
-  }, []);
+  const applySyncSnapshot = useCallback(
+    (input: {
+      mode: 'authoritative-latest-window' | 'sync-topology';
+      snapshot: ThreadHistoryPageSnapshot;
+    }) => {
+      setHistoryState((currentState) => {
+        const nextState = mergeThreadHistoryState({
+          mode:
+            input.mode === 'authoritative-latest-window'
+              ? 'refresh-base'
+              : 'sync-topology',
+          snapshot: input.snapshot,
+          state: currentState,
+        }).nextState;
+        historyStateRef.current = nextState;
+        return nextState;
+      });
+
+      historyFetchActiveDeviceIdRef.current =
+        input.snapshot.dmE2ee?.activeDeviceRecordId ??
+        historyFetchActiveDeviceIdRef.current;
+
+      reconcileThreadLiveReactionSnapshot({
+        conversationId,
+        reactionsByMessage: input.snapshot.reactionsByMessage,
+        snapshotMessageIds: input.snapshot.messages.map((message) => message.id),
+      });
+
+      if (input.mode === 'authoritative-latest-window') {
+        reconcileThreadMessagePatchesWithAuthoritativeMessages({
+          conversationId,
+          messages: input.snapshot.messages,
+        });
+      }
+    },
+    [conversationId],
+  );
 
   const getLatestLoadedSeqFromCurrentState = useCallback(
     () => resolveLatestLoadedSeq(historyStateRef.current.messages, null),
@@ -2387,6 +2456,7 @@ export function ThreadHistoryViewport({
     onApplySyncSnapshot: applySyncSnapshot,
     onLiveMessage: handleLiveMessage,
     pageSize: THREAD_HISTORY_PAGE_SIZE,
+    pendingAuthoritativeLatestWindowSyncRequestRef,
     pendingAfterSeqSyncRequestRef,
     pendingByIdSyncRequestRef,
     performSyncFetch,
