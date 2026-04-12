@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic';
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -16,9 +15,6 @@ import {
   type AppLanguage,
 } from '@/modules/i18n/client';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
-import { persistCurrentDmE2eeDeviceCookie } from '@/modules/messaging/e2ee/current-device-cookie';
-import { ensureDmE2eeDeviceRegistered } from '@/modules/messaging/e2ee/device-registration';
-import { getLocalDmE2eeDeviceRecord } from '@/modules/messaging/e2ee/device-store';
 import type { EncryptedDmServerHistoryHint } from '@/modules/messaging/e2ee/ui-policy';
 import {
   logBrokenThreadHistoryProof,
@@ -28,9 +24,6 @@ import {
 } from '@/modules/messaging/diagnostics/thread-history-proof';
 import {
   emitThreadHistorySyncRequest,
-  emitThreadHistoryVisibleMessageIds,
-  LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
-  LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
   type ThreadHistoryLiveMessagePayload,
   type ThreadHistorySyncRequestPayload,
 } from '@/modules/messaging/realtime/thread-history-sync-events';
@@ -38,8 +31,8 @@ import { getThreadLiveStateSnapshot } from '@/modules/messaging/realtime/thread-
 import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import { readThreadMessagePatchSnapshot } from '@/modules/messaging/realtime/thread-message-patch-store';
 import { ThreadHistoryRenderList } from './thread-history-render-list';
-import { resolveThreadScrollTarget } from './thread-scroll';
 import { ThreadMessageRow } from './thread-message-row';
+import { resolveThreadScrollTarget } from './thread-scroll';
 import type {
   ActiveImagePreview,
   ConversationMessageRow,
@@ -53,6 +46,16 @@ import type {
   TimelineLabels,
   TimelineRenderItem,
 } from './thread-history-types';
+import {
+  useThreadHistoryPrependScrollRestore,
+  type PendingScrollRestore,
+} from './use-thread-history-prepend-scroll-restore';
+import { useThreadHistoryRecovery } from './use-thread-history-recovery';
+import {
+  useThreadHistorySyncRuntime,
+  type PendingAfterSeqThreadHistorySyncRequest,
+  type PendingByIdThreadHistorySyncRequest,
+} from './use-thread-history-sync-runtime';
 import { ThreadViewportDeferredEffects } from './thread-viewport-deferred-effects';
 import {
   hasMessagingVoiceLocallyRecoverableSource,
@@ -63,26 +66,6 @@ const ThreadImagePreviewOverlay = dynamic(() =>
     (mod) => mod.ThreadImagePreviewOverlay,
   ),
 );
-
-type PendingScrollRestore = {
-  previousScrollHeight: number;
-  previousScrollTop: number;
-};
-
-type ThreadHistorySyncRequestState = {
-  messageIds: string[];
-  newerThanLatest: boolean;
-  reason: string | null;
-};
-
-type PendingByIdThreadHistorySyncRequest = {
-  messageIds: string[];
-  reason: string | null;
-};
-
-type PendingAfterSeqThreadHistorySyncRequest = {
-  reason: string | null;
-};
 
 const THREAD_HISTORY_PAGE_SIZE = 26;
 const PREPEND_SCROLL_RESTORE_IDLE_MS = 72;
@@ -669,7 +652,7 @@ function normalizeThreadHistorySyncRequestState(input: {
     messageIds,
     newerThanLatest: hasMessageIds ? false : Boolean(input.newerThanLatest),
     reason: input.reason?.trim() || null,
-  } satisfies ThreadHistorySyncRequestState;
+  };
 }
 
 function shouldRetryLocalEncryptedDmMissingEnvelope(reason: string | null) {
@@ -1967,226 +1950,25 @@ export function ThreadHistoryViewport({
     [historyState.attachmentsByMessage, historyState.messages],
   );
 
-  useEffect(() => {
-    const requestedRecoveries = voiceReopenRecoveryRequestedRef.current;
-    const activeRecoveryIds = new Set(recentVoiceMessageIdsNeedingRecovery);
-
-    for (const messageId of Array.from(requestedRecoveries)) {
-      if (!activeRecoveryIds.has(messageId)) {
-        requestedRecoveries.delete(messageId);
-      }
-    }
-
-    for (const messageId of recentVoiceMessageIdsNeedingRecovery) {
-      if (requestedRecoveries.has(messageId)) {
-        continue;
-      }
-
-      requestedRecoveries.add(messageId);
-
-      if (historySyncDiagnosticsEnabled) {
-        console.info('[chat-history]', 'voice-reopen-recovery:requested', {
-          conversationId,
-          messageId,
-          reason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON,
-        });
-      }
-
-      emitThreadHistorySyncRequest({
-        conversationId,
-        messageIds: [messageId],
-        reason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON,
-      });
-    }
-  }, [
-    conversationId,
-    historySyncDiagnosticsEnabled,
-    recentVoiceMessageIdsNeedingRecovery,
-  ]);
-
-  useEffect(() => {
-    const requestedRecoveries = attachmentReopenRecoveryRequestedRef.current;
-    const activeRecoveryIds = new Set(recentAttachmentMessageIdsNeedingRecovery);
-
-    for (const messageId of Array.from(requestedRecoveries)) {
-      if (!activeRecoveryIds.has(messageId)) {
-        requestedRecoveries.delete(messageId);
-      }
-    }
-
-    for (const messageId of recentAttachmentMessageIdsNeedingRecovery) {
-      if (requestedRecoveries.has(messageId)) {
-        continue;
-      }
-
-      requestedRecoveries.add(messageId);
-
-      if (historySyncDiagnosticsEnabled) {
-        console.info('[chat-history]', 'attachment-reopen-recovery:requested', {
-          conversationId,
-          messageId,
-          reason: ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON,
-        });
-      }
-
-      emitThreadHistorySyncRequest({
-        conversationId,
-        messageIds: [messageId],
-        reason: ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON,
-      });
-    }
-  }, [
-    conversationId,
-    historySyncDiagnosticsEnabled,
-    recentAttachmentMessageIdsNeedingRecovery,
-  ]);
-
-  useEffect(() => {
-    if (
-      conversationKind !== 'dm' ||
-      recoverableEncryptedHistoryMessageIds.length === 0
-    ) {
-      return;
-    }
-
-    const attemptedMessageIds =
-      encryptedHistoryBootstrapRecoveryAttemptedMessageIdsRef.current;
-    const inFlightMessageIds =
-      encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef.current;
-    const nextMessageIds = recoverableEncryptedHistoryMessageIds.filter(
-      (messageId) =>
-        !attemptedMessageIds.has(messageId) && !inFlightMessageIds.has(messageId),
-    );
-
-    if (nextMessageIds.length === 0) {
-      return;
-    }
-
-    nextMessageIds.forEach((messageId) => {
-      inFlightMessageIds.add(messageId);
-    });
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const localRecord = await getLocalDmE2eeDeviceRecord(currentUserId);
-        const localServerDeviceRecordId =
-          localRecord?.serverDeviceRecordId?.trim() || null;
-        const selectedActiveDeviceRecordId =
-          historyFetchActiveDeviceIdRef.current?.trim() || null;
-
-        if (
-          localServerDeviceRecordId &&
-          localServerDeviceRecordId !== selectedActiveDeviceRecordId
-        ) {
-          historyFetchActiveDeviceIdRef.current = localServerDeviceRecordId;
-          persistCurrentDmE2eeDeviceCookie(localServerDeviceRecordId);
-          nextMessageIds.forEach((messageId) => {
-            inFlightMessageIds.delete(messageId);
-          });
-
-          if (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
-            console.info(
-              '[chat-history]',
-              'dm-e2ee-history-current-device-resync:dispatch',
-              {
-                conversationId,
-                localServerDeviceRecordId,
-                messageIds: nextMessageIds,
-                selectedActiveDeviceRecordId,
-              },
-            );
-          }
-
-          emitThreadHistorySyncRequest({
-            conversationId,
-            messageIds: nextMessageIds,
-            reason: ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON,
-          });
-          return;
-        }
-      } catch (error) {
-        if (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
-          console.info(
-            '[chat-history]',
-            'dm-e2ee-history-current-device-resync:local-record-lookup-failed',
-            {
-              conversationId,
-              errorMessage: error instanceof Error ? error.message : String(error),
-              messageIds: nextMessageIds,
-            },
-          );
-        }
-      }
-
-      const bootstrap = await ensureDmE2eeDeviceRegistered(currentUserId, {
-        forcePublish: false,
-        triggerReason: 'bootstrap-component',
-      });
-
-      if (cancelled || bootstrap.status !== 'registered') {
-        nextMessageIds.forEach((messageId) => {
-          inFlightMessageIds.delete(messageId);
-        });
-        return;
-      }
-
-      const resolvedActiveDeviceId =
-        bootstrap.result?.deviceRecordId?.trim() || null;
-
-      if (resolvedActiveDeviceId) {
-        historyFetchActiveDeviceIdRef.current = resolvedActiveDeviceId;
-      }
-
-      nextMessageIds.forEach((messageId) => {
-        inFlightMessageIds.delete(messageId);
-        attemptedMessageIds.add(messageId);
-      });
-
-      if (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1') {
-        console.info(
-          '[chat-history]',
-          'dm-e2ee-history-continuity-recovery:dispatch',
-          {
-            conversationId,
-            messageIds: nextMessageIds,
-            resultKind: bootstrap.result?.resultKind ?? null,
-            serverDeviceRecordId: bootstrap.result?.deviceRecordId ?? null,
-          },
-        );
-      }
-
-      emitThreadHistorySyncRequest({
-        conversationId,
-        messageIds: nextMessageIds,
-        reason: ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON,
-      });
-    })().catch((error) => {
-      nextMessageIds.forEach((messageId) => {
-        inFlightMessageIds.delete(messageId);
-      });
-
-      if (cancelled) {
-        return;
-      }
-
-      console.error('[chat-history]', 'dm-e2ee-history-continuity-recovery-failed', {
-        conversationId,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        messageIds: nextMessageIds,
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
+  useThreadHistoryRecovery({
+    attachmentReopenRecoveryReason: ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON,
+    attachmentReopenRecoveryRequestedRef,
     conversationId,
     conversationKind,
+    currentDeviceResyncReason: ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON,
     currentUserId,
+    encryptedHistoryBootstrapRecoveryAttemptedMessageIdsRef,
+    encryptedHistoryBootstrapRecoveryInFlightMessageIdsRef,
+    historyContinuityRecoveryReason:
+      ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON,
+    historyFetchActiveDeviceIdRef,
+    historySyncDiagnosticsEnabled,
+    recentAttachmentMessageIdsNeedingRecovery,
+    recentVoiceMessageIdsNeedingRecovery,
     recoverableEncryptedHistoryMessageIds,
-  ]);
+    voiceReopenRecoveryReason: VOICE_MESSAGE_REOPEN_RECOVERY_REASON,
+    voiceReopenRecoveryRequestedRef,
+  });
 
   const loadOlderMessages = useCallback(async () => {
     if (isLoadingOlder || !hasMoreOlder || oldestLoadedSeq === null) {
@@ -2269,44 +2051,6 @@ export function ThreadHistoryViewport({
       setIsLoadingOlder(false);
     }
   }, [conversationId, hasMoreOlder, isLoadingOlder, oldestLoadedSeq]);
-
-  useEffect(() => {
-    emitThreadHistoryVisibleMessageIds({
-      conversationId,
-      messageIds: historyMessageIds,
-    });
-  }, [conversationId, historyMessageIds]);
-
-  useEffect(() => {
-    const handleLiveMessage = (event: Event) => {
-      const detail = (event as CustomEvent<ThreadHistoryLiveMessagePayload>).detail;
-
-      if (!detail || detail.conversationId !== conversationId) {
-        return;
-      }
-
-      setHistoryState((currentState) => {
-        const nextState = upsertLiveThreadMessage({
-          message: detail.message,
-          state: currentState,
-        });
-        historyStateRef.current = nextState;
-        return nextState;
-      });
-    };
-
-    window.addEventListener(
-      LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
-      handleLiveMessage as EventListener,
-    );
-
-    return () => {
-      window.removeEventListener(
-        LOCAL_THREAD_HISTORY_LIVE_MESSAGE_EVENT,
-        handleLiveMessage as EventListener,
-      );
-    };
-  }, [conversationId]);
 
   const mergeSyncRequest = useCallback(
     (nextRequest: ThreadHistorySyncRequestPayload) => {
@@ -2786,340 +2530,75 @@ export function ThreadHistoryViewport({
     [conversationId, historySyncDiagnosticsEnabled],
   );
 
-  useEffect(() => {
-    let isDisposed = false;
-    const encryptedDmRecoveryAttempts = encryptedDmRecoveryAttemptsRef.current;
-    const encryptedDmRecoveryTimeouts = encryptedDmRecoveryTimeoutsRef.current;
-    const voiceAttachmentRecoveryAttempts =
-      voiceAttachmentRecoveryAttemptsRef.current;
-    const voiceAttachmentRecoveryTimeouts =
-      voiceAttachmentRecoveryTimeoutsRef.current;
-    const attachmentRecoveryAttempts = attachmentRecoveryAttemptsRef.current;
-    const attachmentRecoveryTimeouts = attachmentRecoveryTimeoutsRef.current;
-
-    const flushPendingSyncRequest = async () => {
-      if (isDisposed || isSyncingRef.current) {
-        return;
-      }
-
-      const pendingByIdRequest = pendingByIdSyncRequestRef.current;
-      const pendingAfterSeqRequest = pendingAfterSeqSyncRequestRef.current;
-
-      if (!pendingByIdRequest && !pendingAfterSeqRequest) {
-        return;
-      }
-
-      const request = pendingByIdRequest
-        ? {
-            messageIds: pendingByIdRequest.messageIds,
-            mode: 'by-id' as const,
-            newerThanLatest: false,
-            reason: pendingByIdRequest.reason,
-          }
-        : {
-            messageIds: [] as string[],
-            mode: 'after-seq' as const,
-            newerThanLatest: true,
-            reason: pendingAfterSeqRequest?.reason ?? null,
-          };
-
-      if (request.mode === 'by-id') {
-        pendingByIdSyncRequestRef.current = null;
-      } else {
-        pendingAfterSeqSyncRequestRef.current = null;
-      }
-
-      isSyncingRef.current = true;
-
-      try {
-        if (historySyncDiagnosticsEnabled) {
-          console.info('[chat-history]', 'topology-sync:flush', {
-            afterSeqRequested: request.mode === 'after-seq',
-            chosenMode: request.mode,
-            conversationId,
-            messageIds: request.messageIds,
-            reason: request.reason,
-          });
-        }
-
-        if (request.mode === 'by-id') {
-          const snapshot = await performSyncFetch({
-            messageIds: request.messageIds,
-            reason: request.reason,
-          });
-
-          if (isDisposed || !snapshot) {
-            return;
-          }
-
-          scheduleMissingEncryptedDmEnvelopeRecovery({
-            reason: request.reason,
-            requestedMessageIds: request.messageIds,
-            snapshot,
-          });
-          scheduleVoiceAttachmentRecovery({
-            reason: request.reason,
-            requestedMessageIds: request.messageIds,
-            snapshot,
-          });
-          scheduleAttachmentRecovery({
-            reason: request.reason,
-            requestedMessageIds: request.messageIds,
-            snapshot,
-          });
-
-          setHistoryState((currentState) => {
-            const nextState = mergeThreadHistoryState({
-              mode: 'sync-topology',
-              snapshot,
-              state: currentState,
-            }).nextState;
-            historyStateRef.current = nextState;
-            return nextState;
-          });
-        }
-
-        if (request.mode === 'after-seq') {
-          while (true) {
-            const latestLoadedSeq = resolveLatestLoadedSeq(
-              historyStateRef.current.messages,
-              null,
-            );
-
-            const snapshot = await performSyncFetch({
-              allowLatest: latestLoadedSeq === null,
-              afterSeq: latestLoadedSeq,
-              reason: request.reason,
-            });
-
-            if (isDisposed || !snapshot) {
-              return;
-            }
-
-            setHistoryState((currentState) => {
-              const nextState = mergeThreadHistoryState({
-                mode: 'sync-topology',
-                snapshot,
-                state: currentState,
-              }).nextState;
-              historyStateRef.current = nextState;
-              return nextState;
-            });
-
-            if (
-              latestLoadedSeq === null ||
-              snapshot.messages.length < THREAD_HISTORY_PAGE_SIZE
-            ) {
-              break;
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[chat-history]', 'topology-sync-failed', {
-          conversationId,
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          preservedMessageCount: historyStateRef.current.messages.length,
-          messageIds: request.messageIds,
-          newerThanLatest: request.newerThanLatest,
-          reason: request.reason,
+  const handleLiveMessage = useCallback(
+    (detail: ThreadHistoryLiveMessagePayload) => {
+      setHistoryState((currentState) => {
+        const nextState = upsertLiveThreadMessage({
+          message: detail.message,
+          state: currentState,
         });
+        historyStateRef.current = nextState;
+        return nextState;
+      });
+    },
+    [],
+  );
 
-        if (!isDisposed && historySyncDiagnosticsEnabled) {
-          console.info('[chat-history]', 'topology-sync:degraded-preserving-thread', {
-            conversationId,
-            preservedMessageCount: historyStateRef.current.messages.length,
-            reason: request.reason,
-          });
-        }
-      } finally {
-        isSyncingRef.current = false;
+  const applySyncSnapshot = useCallback((snapshot: ThreadHistoryPageSnapshot) => {
+    setHistoryState((currentState) => {
+      const nextState = mergeThreadHistoryState({
+        mode: 'sync-topology',
+        snapshot,
+        state: currentState,
+      }).nextState;
+      historyStateRef.current = nextState;
+      return nextState;
+    });
+  }, []);
 
-        if (
-          !isDisposed &&
-          (pendingByIdSyncRequestRef.current || pendingAfterSeqSyncRequestRef.current)
-        ) {
-          syncTimeoutRef.current = setTimeout(() => {
-            syncTimeoutRef.current = null;
-            void flushPendingSyncRequest();
-          }, 0);
-        }
-      }
-    };
+  const getLatestLoadedSeqFromCurrentState = useCallback(
+    () => resolveLatestLoadedSeq(historyStateRef.current.messages, null),
+    [],
+  );
 
-    const schedulePendingSyncRequest = () => {
-      if (syncTimeoutRef.current) {
-        return;
-      }
-
-      syncTimeoutRef.current = setTimeout(() => {
-        syncTimeoutRef.current = null;
-        void flushPendingSyncRequest();
-      }, 70);
-    };
-
-    const handleSyncRequest = (event: Event) => {
-      const detail = (event as CustomEvent<ThreadHistorySyncRequestPayload>).detail;
-
-      if (!detail || detail.conversationId !== conversationId) {
-        return;
-      }
-
-      const normalizedSyncRequest = normalizeThreadHistorySyncRequestState(detail);
-
-      if (
-        shouldRetryLocalEncryptedDmMissingEnvelope(normalizedSyncRequest.reason) &&
-        normalizedSyncRequest.messageIds.length > 0
-      ) {
-        updatePendingEncryptedCommitTransitionMessageIds({
-          add: normalizedSyncRequest.messageIds,
-        });
-      }
-
-      mergeSyncRequest(detail);
-      schedulePendingSyncRequest();
-    };
-
-    window.addEventListener(
-      LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
-      handleSyncRequest as EventListener,
-    );
-
-    return () => {
-      isDisposed = true;
-
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-        syncTimeoutRef.current = null;
-      }
-
-      for (const timeoutId of encryptedDmRecoveryTimeouts.values()) {
-        clearTimeout(timeoutId);
-      }
-      for (const timeoutId of voiceAttachmentRecoveryTimeouts.values()) {
-        clearTimeout(timeoutId);
-      }
-      for (const timeoutId of attachmentRecoveryTimeouts.values()) {
-        clearTimeout(timeoutId);
-      }
-      pendingByIdSyncRequestRef.current = null;
-      pendingAfterSeqSyncRequestRef.current = null;
-      encryptedDmRecoveryAttempts.clear();
-      encryptedDmRecoveryTimeouts.clear();
-      voiceAttachmentRecoveryAttempts.clear();
-      voiceAttachmentRecoveryTimeouts.clear();
-      attachmentRecoveryAttempts.clear();
-      attachmentRecoveryTimeouts.clear();
-
-      window.removeEventListener(
-        LOCAL_THREAD_HISTORY_SYNC_REQUEST_EVENT,
-        handleSyncRequest as EventListener,
-      );
-    };
-  }, [
+  useThreadHistorySyncRuntime({
+    attachmentRecoveryAttemptsRef,
+    attachmentRecoveryTimeoutsRef,
     conversationId,
+    encryptedDmRecoveryAttemptsRef,
+    encryptedDmRecoveryTimeoutsRef,
+    getLatestLoadedSeq: getLatestLoadedSeqFromCurrentState,
+    historyMessageIds,
+    historyStateRef,
     historySyncDiagnosticsEnabled,
+    isSyncingRef,
     mergeSyncRequest,
+    normalizeSyncRequest: normalizeThreadHistorySyncRequestState,
+    onApplySyncSnapshot: applySyncSnapshot,
+    onLiveMessage: handleLiveMessage,
+    pageSize: THREAD_HISTORY_PAGE_SIZE,
+    pendingAfterSeqSyncRequestRef,
+    pendingByIdSyncRequestRef,
     performSyncFetch,
     scheduleAttachmentRecovery,
     scheduleMissingEncryptedDmEnvelopeRecovery,
     scheduleVoiceAttachmentRecovery,
+    shouldTrackPendingEncryptedCommitTransition:
+      shouldRetryLocalEncryptedDmMissingEnvelope,
+    syncTimeoutRef,
+    threadMountRecoveryReason: THREAD_MOUNT_RECOVERY_REASON,
     updatePendingEncryptedCommitTransitionMessageIds,
-  ]);
+    voiceAttachmentRecoveryAttemptsRef,
+    voiceAttachmentRecoveryTimeoutsRef,
+  });
 
-  useEffect(() => {
-    if (historySyncDiagnosticsEnabled) {
-      console.info('[chat-history]', 'topology-sync:mount-recovery-requested', {
-        conversationId,
-        latestLoadedSeq: resolveLatestLoadedSeq(historyStateRef.current.messages, null),
-        reason: THREAD_MOUNT_RECOVERY_REASON,
-      });
-    }
-
-    emitThreadHistorySyncRequest({
-      conversationId,
-      newerThanLatest: true,
-      reason: THREAD_MOUNT_RECOVERY_REASON,
-    });
-  }, [conversationId, historySyncDiagnosticsEnabled]);
-
-  useLayoutEffect(() => {
-    const pendingRestore = pendingRestoreRef.current;
-
-    if (!pendingRestore) {
-      return;
-    }
-
-    const target = resolveThreadScrollTarget('message-thread-scroll');
-
-    if (!target) {
-      pendingRestoreRef.current = null;
-      return;
-    }
-
-    let frameId: number | null = null;
-    let isDisposed = false;
-    let lastMeasuredScrollHeight = -1;
-    let lastHeightChangeAt = performance.now();
-    const startedAt = lastHeightChangeAt;
-
-    const applyPendingRestore = () => {
-      const activeRestore = pendingRestoreRef.current;
-
-      if (!activeRestore) {
-        return false;
-      }
-
-      const nextScrollHeight = target.scrollHeight;
-
-      if (nextScrollHeight !== lastMeasuredScrollHeight) {
-        lastMeasuredScrollHeight = nextScrollHeight;
-        lastHeightChangeAt = performance.now();
-      }
-
-      const scrollHeightDelta =
-        nextScrollHeight - activeRestore.previousScrollHeight;
-      const nextScrollTop =
-        activeRestore.previousScrollTop + scrollHeightDelta;
-
-      if (Math.abs(target.scrollTop - nextScrollTop) > 1) {
-        target.scrollTop = nextScrollTop;
-      }
-
-      const now = performance.now();
-      const isSettled =
-        now - lastHeightChangeAt >= PREPEND_SCROLL_RESTORE_IDLE_MS ||
-        now - startedAt >= PREPEND_SCROLL_RESTORE_MAX_MS;
-
-      if (isSettled) {
-        pendingRestoreRef.current = null;
-      }
-
-      return !isSettled;
-    };
-
-    const continueRestore = () => {
-      if (isDisposed) {
-        return;
-      }
-
-      const shouldContinue = applyPendingRestore();
-
-      if (shouldContinue) {
-        frameId = requestAnimationFrame(continueRestore);
-      }
-    };
-
-    applyPendingRestore();
-    frameId = requestAnimationFrame(continueRestore);
-
-    return () => {
-      isDisposed = true;
-
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
-      }
-    };
-  }, [historyState.messages]);
+  useThreadHistoryPrependScrollRestore({
+    idleMs: PREPEND_SCROLL_RESTORE_IDLE_MS,
+    maxMs: PREPEND_SCROLL_RESTORE_MAX_MS,
+    messages: historyState.messages,
+    pendingRestoreRef,
+    targetId: 'message-thread-scroll',
+  });
 
   const openImagePreview = useCallback((preview: ActiveImagePreview) => {
     const signedUrl = normalizeAttachmentSignedUrl(preview.signedUrl);
