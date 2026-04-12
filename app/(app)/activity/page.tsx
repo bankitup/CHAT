@@ -15,6 +15,7 @@ import {
 import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
+import { MessengerSurfaceRuntimeEffects } from '../messenger-surface-runtime-effects';
 
 type ActivityPageProps = {
   searchParams: Promise<{
@@ -198,6 +199,11 @@ export default async function ActivityPage({ searchParams }: ActivityPageProps) 
   if (activeProductPosture === 'messenger') {
     return (
       <section className="stack settings-screen settings-shell activity-screen messenger-activity-screen">
+        <MessengerSurfaceRuntimeEffects
+          includeUnreadBadgeSync
+          includeWarmNavObserver
+        />
+
         <InboxRealtimeSync
           conversationIds={conversationIds}
           initialSummaries={initialSummaries}

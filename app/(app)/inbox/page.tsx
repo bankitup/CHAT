@@ -1,4 +1,5 @@
 import { loadMessengerInboxPageData } from '@/modules/messaging/server/inbox-page';
+import { MessengerSurfaceRuntimeEffects } from '../messenger-surface-runtime-effects';
 import { InboxFilterableContent } from './inbox-filterable-content';
 import { InboxPageDeferredEffects } from './inbox-page-deferred-effects';
 import {
@@ -27,6 +28,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
 
   return (
     <section className="stack inbox-screen inbox-screen-minimal">
+      <MessengerSurfaceRuntimeEffects
+        dmE2eeEnabled={data.dmE2eeEnabled}
+        includeDeferredPresenceSync
+        includeDmBoundary
+        includeUnreadBadgeSync
+        includeWarmNavObserver
+        userId={data.userId}
+      />
+
       <InboxPageDeferredEffects
         activeSpaceId={data.activeSpaceId}
         allConversationIds={data.allConversationIds}

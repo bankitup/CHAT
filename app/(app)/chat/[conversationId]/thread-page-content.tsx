@@ -41,6 +41,7 @@ import { ThreadComposerRuntime } from './thread-composer-runtime';
 import { ThreadHistoryViewport } from './thread-history-viewport';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
+import { MessengerSurfaceRuntimeEffects } from '../../messenger-surface-runtime-effects';
 
 type MessengerThreadPageData = Awaited<
   ReturnType<typeof loadMessengerThreadPageData>
@@ -192,6 +193,15 @@ export function ThreadPageContent({
 
   return (
     <section className="stack chat-screen">
+      <MessengerSurfaceRuntimeEffects
+        dmE2eeEnabled={encryptedDmEnabled}
+        includeDmBoundary
+        includeImmediatePresenceSync
+        includeUnreadBadgeSync
+        includeWarmNavObserver
+        userId={currentUserId}
+      />
+
       {conversation.kind === 'dm' ? (
         <DmThreadHydrationProbe
           conversationId={conversationId}

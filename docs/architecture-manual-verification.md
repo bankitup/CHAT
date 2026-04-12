@@ -11,6 +11,9 @@ This is a manual sanity checklist, not a feature-expansion script.
 Focused conversation-runtime recovery checks also live in
 [conversation-runtime-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/conversation-runtime-manual-matrix.md).
 
+Fast architecture-drift review checks for shared or mixed seams live in
+[architecture-drift-pr-checklist.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/architecture-drift-pr-checklist.md).
+
 ## Preconditions
 
 - valid login credentials exist

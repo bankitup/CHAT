@@ -17,6 +17,7 @@ import {
   loadArchivedConversationsForSsr,
   loadInboxConversationsForSsr,
 } from '@/modules/messaging/data/inbox-ssr-stability';
+import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { getInboxDisplayPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   resolveInboxInitialFilter,
@@ -115,6 +116,10 @@ export async function loadMessengerInboxPageData(query: MessengerInboxPageQuery)
   }
 
   logDiagnostics('auth-ok');
+
+  const dmE2eeEnabled = isDmE2eeEnabledForUser(user.id, user.email ?? null, {
+    source: 'inbox-page',
+  });
 
   const spaceContext = await resolveMessagingRouteSpaceContextForUser({
     requestedSpaceId: query.space,
@@ -432,6 +437,7 @@ export async function loadMessengerInboxPageData(query: MessengerInboxPageQuery)
     availableDmUserEntries,
     availableUserEntries,
     canManageMembers,
+    dmE2eeEnabled,
     initialCreateMode,
     inboxPreferences: inboxPreferences as InboxSectionPreferences,
     isCreateOpen,

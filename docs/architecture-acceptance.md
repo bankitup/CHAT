@@ -33,8 +33,9 @@ The current acceptance bar focuses on these boundaries:
    code
 9. Voice playback source selection stays honest about original-vs-derived
    sources and unsupported-device behavior
-10. Messenger mobile startup boundaries stay in place across shell, chat, and
-    inbox surfaces
+10. Messenger mobile startup boundaries stay in place across route-local
+    Messenger surfaces while the shared shell stays free of direct Messenger
+    runtime mounts
 11. Voice playback lifecycle ownership stays isolated in the extracted
     controller seam
 12. CLS-sensitive shell, chat, and inbox layout reservations stay in place
@@ -48,6 +49,12 @@ The current acceptance bar focuses on these boundaries:
     invalidating the whole thread or collapsing the mobile viewer layout
 17. Unavailable encrypted-history states stay truthful and local instead of
     degrading into misleading recovery UI
+18. Shared shell and `spaces` foundation seams stay free of product-route
+    reach-through and broad product-module ownership drift
+19. High-risk mixed-ownership files stay small enough that regrowth is visible
+    early instead of silently becoming the default place for new logic
+20. Future branches have a lightweight architecture-drift checklist before they
+    widen shared seams or monolith imports
 
 ## Shared Platform Seams Under Acceptance
 
@@ -158,6 +165,16 @@ Current acceptance tests:
   - voice playback keeps scroll-stability-sensitive work out of the local
     playback runtime seam
   - mobile image preview keeps a full-viewport sizing contract
+- [tests/e2ee/architecture-drift-guards.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/architecture-drift-guards.test.ts)
+  verifies lightweight BWC doctrine guardrails:
+  - shared shell and `spaces` seams do not start importing product routes or
+    product domain modules directly
+  - shared and mixed seams do not fall back to the broad messaging data facade
+    when narrower entry points already exist
+  - mixed routes stay composed through bounded module seams instead of route
+    reach-through
+  - key mixed-ownership files stay within lean size caps so drift is visible
+    early
 
 Run them with:
 
@@ -216,7 +233,9 @@ After changing platform/product boundaries, run at least:
 
 Then use the manual checklist in
 [architecture-manual-verification.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/architecture-manual-verification.md)
-for human sanity checks.
+for human sanity checks, and the PR drift checklist in
+[architecture-drift-pr-checklist.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/architecture-drift-pr-checklist.md)
+when a branch touches shared or mixed-ownership seams.
 
 ## Non-Goals
 
