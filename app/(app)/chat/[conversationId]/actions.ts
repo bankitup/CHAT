@@ -18,6 +18,7 @@ import {
   assertMessageOwnedByUser,
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
+  deleteDirectConversationForUser,
   editMessage,
   hideConversationForUser,
   isSupportedChatAttachmentType,
@@ -1392,7 +1393,7 @@ export async function deleteDirectConversationAction(formData: FormData) {
   if (confirmationMode === 'typed-delete-ru' && confirmationText !== 'Удалить') {
     redirectWithSettingsError(
       conversationId,
-      'Type "Удалить" to confirm deleting this chat from your side.',
+      'Type "Удалить" to confirm deleting this chat for both participants.',
       spaceId,
       settingsReturnTarget,
     );
@@ -1428,14 +1429,14 @@ export async function deleteDirectConversationAction(formData: FormData) {
   }
 
   try {
-    await hideConversationForUser({
+    await deleteDirectConversationForUser({
       conversationId,
       userId: user.id,
     });
   } catch (error) {
     const message = getFriendlyChatActionErrorMessage(
       error,
-      'Unable to remove this chat from your inbox right now.',
+      'Unable to retire this direct chat right now.',
       'chat:delete-direct-conversation',
     );
 

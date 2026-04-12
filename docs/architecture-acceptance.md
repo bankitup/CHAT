@@ -42,7 +42,9 @@ The current acceptance bar focuses on these boundaries:
     territory instead of regrowing as the main read hub
 14. A broken conversation body stays contained behind a local rescue boundary
     instead of trapping the user inside a dead chat route
-15. Conversation-runtime failure modes stay locally contained instead of
+15. Poisoned direct-conversation cleanup stays able to retire a bad DM fully
+    enough that recreate flows do not reopen the same broken conversation
+16. Conversation-runtime failure modes stay locally contained instead of
     invalidating the whole thread or collapsing the mobile viewer layout
 
 ## Shared Platform Seams Under Acceptance
@@ -134,6 +136,12 @@ Current acceptance tests:
   - thread history stays wrapped in a contained rescue boundary
   - the rescue state keeps retry, back-to-chats, and info escape paths local
     to the conversation body
+- [tests/e2ee/poisoned-dm-cleanup-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/poisoned-dm-cleanup-boundaries.test.ts)
+  verifies the current poisoned-DM operational cleanup seam:
+  - direct-chat delete runs through the full delete helper instead of hide-only
+    inbox removal
+  - message/media metadata cleanup stays attached to the full delete path
+  - DM recreation still reuses only an actually existing active conversation
 - [tests/e2ee/conversation-runtime-failure-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/conversation-runtime-failure-boundaries.test.ts)
   verifies the recent production-sensitive conversation-runtime boundaries:
   - broken history isolation leaves header/composer usable outside the rescue
@@ -185,6 +193,8 @@ Examples:
 - if a conversation-runtime failure boundary test fails, a single bad
   conversation row, voice interaction, or mobile attachment preview may be
   widening back into a thread-wide failure
+- if a poisoned-DM cleanup boundary test fails, a broken direct chat may remain
+  revivable even after the user tries to retire and recreate it
 
 ## Minimum Verification After Architecture Changes
 

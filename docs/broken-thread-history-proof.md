@@ -203,3 +203,20 @@ This pass does not:
 - attempt a broad render refactor
 
 It only makes the failing stage provable.
+
+## Operational Cleanup Path
+
+If one direct conversation is poisoned badly enough that recovery proof and
+local rescue are not sufficient, the supported short-term cleanup path is now:
+
+1. open the DM settings
+2. use the direct-chat delete confirmation flow
+3. let the app retire the current DM for both participants
+4. recreate the DM from inbox when needed
+
+Important:
+
+- hide/archive-only behavior is not enough for this poisoned-DM case
+- the inbox create-DM flow restores an existing active DM when one still exists
+- a full direct-chat delete is what prevents the old conversation id and its
+  history from being revived on the next DM open

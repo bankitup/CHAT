@@ -10,6 +10,7 @@ Status categories:
 Use this as a quick status snapshot.
 
 Use [e2ee-security-model.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/e2ee-security-model.md) for the full security source of truth.
+Use [dm-e2ee-mvp-decision.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/security/dm-e2ee-mvp-decision.md) for the product-stage decision on whether the current strict history behavior belongs in the MVP default path.
 
 ## Current matrix
 
