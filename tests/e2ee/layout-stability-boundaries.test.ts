@@ -24,6 +24,14 @@ test('shared shell and messenger globals keep reserved layout space for CLS-sens
     /\.app-bottom-nav-shell-messenger\s*\{[\s\S]*min-height:\s*var\(--app-bottom-nav-shell-messenger-min-height\)/,
   );
   assert.match(
+    globalsSource,
+    /\.app-bottom-nav-link\s*\{[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    globalsSource,
+    /\.app-bottom-nav-label\s*\{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
+  );
+  assert.match(
     messengerRouteCssSource,
     /\.composer-runtime-shell\s*\{[\s\S]*min-height:\s*var\(--app-composer-runtime-min-height\)/,
   );
@@ -82,6 +90,7 @@ test('shared shell and messenger globals keep reserved layout space for CLS-sens
 });
 
 test('chat and inbox components keep explicit reserved-shell fallbacks instead of late zero-height settlement', () => {
+  const globalsSource = readWorkspaceFile('app/globals.css');
   const composerRuntimeSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-composer-runtime.tsx',
   );
@@ -93,6 +102,9 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   );
   const rowContentSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
+  );
+  const messengerRouteCssSource = readWorkspaceFile(
+    'app/(app)/messenger-route.css',
   );
   const staticInboxRowSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-conversation-static-row.tsx',
@@ -164,5 +176,21 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   assert.match(
     inboxRowContractCssSource,
     /\.preview\s*\{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.chat-screen\s*\{[\s\S]*min-width:\s*0[\s\S]*width:\s*100%/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.chat-header-shell\s*\{[\s\S]*min-width:\s*0[\s\S]*width:\s*100%/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.composer-card\s*\{[\s\S]*min-width:\s*0[\s\S]*width:\s*100%/,
+  );
+  assert.match(
+    globalsSource,
+    /@media \(max-width:\s*520px\)\s*\{[\s\S]*\.profile-inline-top-row,[\s\S]*\.profile-status-top-row[\s\S]*flex-wrap:\s*wrap/,
   );
 });
