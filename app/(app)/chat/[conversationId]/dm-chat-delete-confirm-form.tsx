@@ -82,6 +82,7 @@ export function DmChatDeleteConfirmForm({
               action={deleteDirectConversationAction}
               className="stack"
             >
+              <input name="deleteMode" type="hidden" value="hard-delete-direct-chat" />
               <input name="confirmationMode" type="hidden" value="typed-delete-ru" />
               <input name="conversationId" type="hidden" value={conversationId} />
               <input name="returnTo" type="hidden" value={returnTo} />

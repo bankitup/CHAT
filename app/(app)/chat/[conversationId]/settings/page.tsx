@@ -557,6 +557,28 @@ export default async function ChatSettingsPage({
           </GuardedServerActionForm>
         </section>
 
+        <section className="conversation-settings-panel stack">
+          <div className="stack conversation-settings-panel-copy">
+            <h3 className="card-title">{data.t.chat.inbox}</h3>
+            <p className="muted conversation-settings-note">
+              {data.t.chat.inboxNote}
+            </p>
+          </div>
+
+          <div className="conversation-manage-actions">
+            <GuardedServerActionForm action={hideConversationAction}>
+              <input name="conversationId" type="hidden" value={conversationId} />
+              <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
+              <PendingSubmitButton
+                className="button button-compact button-secondary"
+                type="submit"
+              >
+                {data.t.chat.hideFromInbox}
+              </PendingSubmitButton>
+            </GuardedServerActionForm>
+          </div>
+        </section>
+
         {data.canDeleteDirectConversation ? (
           <section className="conversation-settings-panel stack">
             <div className="stack conversation-settings-panel-copy">
@@ -581,28 +603,6 @@ export default async function ChatSettingsPage({
               />
             </div>
           </section>
-        ) : data.conversation.kind === 'group' ? (
-          <section className="conversation-settings-panel stack">
-            <div className="stack conversation-settings-panel-copy">
-              <h3 className="card-title">{data.t.chat.inbox}</h3>
-              <p className="muted conversation-settings-note">
-                {data.t.chat.inboxNote}
-              </p>
-            </div>
-
-            <div className="conversation-manage-actions">
-              <GuardedServerActionForm action={hideConversationAction}>
-                <input name="conversationId" type="hidden" value={conversationId} />
-                <input name="spaceId" type="hidden" value={data.activeSpaceId ?? ''} />
-                <PendingSubmitButton
-                  className="button button-compact button-secondary"
-                  type="submit"
-                >
-                  {data.t.chat.hideFromInbox}
-                </PendingSubmitButton>
-              </GuardedServerActionForm>
-                </div>
-              </section>
         ) : null}
       </section>
     </section>
