@@ -243,6 +243,26 @@ test('voice playback resolver stays selection-aware and reports the chosen sourc
     resolverSource,
     /local-playable-source-risk-bypass/,
   );
+  assert.match(
+    resolverSource,
+    /if \(blobPlaybackRisk\.bypassLocalBlobPlayback\)/,
+  );
+  assert.match(
+    resolverSource,
+    /playbackUrl: transportSourceUrl/,
+  );
+  assert.match(
+    resolverSource,
+    /warmed: false/,
+  );
+  assert.match(
+    resolverSource,
+    /mode: 'risk-bypass'/,
+  );
+  assert.match(
+    resolverSource,
+    /playbackSourceKind: 'transport'/,
+  );
 });
 
 test('voice bubble keeps unsupported-device playback distinct from ordinary loading', () => {

@@ -11,6 +11,8 @@ Use it to verify:
 - unsupported-device handling stays explicit and honest
 - desktop/mobile playback failures are classified as codec/playability vs
   transport/runtime
+- risky mobile playback paths prefer direct transport over warmed `blob:` URLs
+  when the current hotfix says they should
 
 Related documents:
 
@@ -77,6 +79,17 @@ For each matrix row:
 7. If it does not play, verify the bubble lands in explicit unsupported or failed
    state, not generic loading.
 
+## Minimum Release Subset
+
+Before shipping voice changes, run at least these three rows:
+
+- desktop Chrome record -> iPhone Safari play
+- iPhone Safari record -> desktop Chrome play
+- iPhone Safari record -> iPhone Safari play
+
+If Android Chrome is part of the active QA device pool, add Android Chrome
+record/play as a fourth row.
+
 ## Expected Truth Rules
 
 - If the device can likely decode the format, the bubble should move to normal
@@ -87,6 +100,8 @@ For each matrix row:
   source preparation rather than pretending the problem is codec support.
 - When only one source exists, source selection should still choose that
   original source cleanly.
+- On risky WebKit-mobile plus WebM/Opus-like cases, the chosen playback source
+  kind should prefer `transport` over warmed `blob` playback.
 
 ## Failure Signatures
 

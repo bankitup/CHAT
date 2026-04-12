@@ -206,6 +206,18 @@ Bottom line:
 
 - inbox is lighter than chat, but it is still a large client island for a route that should feel instant on mobile
 
+## Manual Verification Matrix
+
+Use these as the minimum human checks after mobile-performance changes:
+
+| Surface | Scenario | Steps | Expected result | Evidence to capture |
+| --- | --- | --- | --- | --- |
+| `/chat/[conversationId]` | Mobile first load | Hard-refresh a real mobile thread route and do not interact for the first second | Header, thread body, and composer settle without obvious late layout jumps; secondary features like reactions, edit/delete, diagnostics, and voice runtime do not need to block first paint | First visual paint timing, whether the bottom nav/header shifts, whether any late overlay/runtime mounts are visible |
+| `/inbox` | Mobile first load | Hard-refresh inbox on a real mobile device with several rows present | The list appears from SSR quickly, new-chat sheet code is not needed until opened, and realtime/warm-nav work does not visibly block first render | Time to first visible list, whether the create sheet opens only on demand, whether the list jumps when live sync attaches |
+
+For the broader stability matrix, see
+[manual-test-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/stability/manual-test-matrix.md).
+
 ## Likely CLS Sources
 
 ### 1. Chat header presence and status settlement
