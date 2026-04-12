@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import type { MessageReactionGroup } from '@/modules/messaging/data/server';
+import type { MessageReactionGroup } from '@/modules/messaging/data/thread-read-server';
 import type { DmThreadClientDiagnostics } from './dm-thread-client-diagnostics';
 import {
   DmThreadClientSubtree,

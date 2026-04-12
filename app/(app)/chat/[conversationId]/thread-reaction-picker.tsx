@@ -7,7 +7,7 @@ import {
   rollbackThreadReactionOptimisticMutation,
   useThreadLiveReactionGroups,
 } from '@/modules/messaging/realtime/thread-live-state-store';
-import type { MessageReactionGroup } from '@/modules/messaging/data/server';
+import type { MessageReactionGroup } from '@/modules/messaging/data/thread-read-server';
 import { toggleReactionMutationAction } from './actions';
 
 type ThreadReactionPickerProps = {
