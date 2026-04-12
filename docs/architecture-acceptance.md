@@ -35,6 +35,11 @@ The current acceptance bar focuses on these boundaries:
    sources and unsupported-device behavior
 10. Messenger mobile startup boundaries stay in place across shell, chat, and
     inbox surfaces
+11. Voice playback lifecycle ownership stays isolated in the extracted
+    controller seam
+12. CLS-sensitive shell, chat, and inbox layout reservations stay in place
+13. `src/modules/messaging/data/server.ts` stays in compatibility-facade
+    territory instead of regrowing as the main read hub
 
 ## Shared Platform Seams Under Acceptance
 
@@ -103,6 +108,23 @@ Current acceptance tests:
   - Messenger-only shell effects stay route/posture-gated
   - chat-only secondary interactions remain dynamically loaded
   - inbox create and realtime startup paths remain deferred
+- [tests/e2ee/voice-playback-controller.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/voice-playback-controller.test.ts)
+  verifies the current voice playback lifecycle seam:
+  - the extracted controller remains the ownership home for one-at-a-time
+    playback state
+  - the bubble keeps consuming that controller instead of reintroducing inline
+    ownership globals
+- [tests/e2ee/layout-stability-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/layout-stability-boundaries.test.ts)
+  verifies the current CLS-sensitive layout reservations:
+  - shared shell nav space stays reserved
+  - chat composer and voice loading shells keep stable footprints
+  - inbox rows keep preview-line reservation during live settlement
+- [tests/e2ee/messaging-data-facade-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/messaging-data-facade-boundaries.test.ts)
+  verifies the current messaging data split:
+  - `server.ts` stays under the current reduced size cap
+  - the facade continues re-exporting narrowed read seams
+  - product/server loaders keep preferring `conversation-read-server.ts` and
+    `thread-read-server.ts` for reads
 
 Run them with:
 

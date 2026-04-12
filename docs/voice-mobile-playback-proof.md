@@ -142,6 +142,10 @@ The current playback controller also now treats a newly claimed owner as
 where transient pause events during source assignment or `load()` could tear
 down ownership before the audio element reached a stable playing state.
 
+That lifecycle seam now also has lightweight regression coverage in
+[voice-playback-controller.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/voice-playback-controller.test.ts),
+so ownership logic is less likely to drift back into the bubble runtime.
+
 ## Next Narrow Step After Proof
 
 Once mobile logs confirm the failing stage:

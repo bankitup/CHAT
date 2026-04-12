@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const workspaceRoot = resolve(import.meta.dirname, '..', '..');
+
+function readWorkspaceFile(relativePath: string) {
+  return readFileSync(resolve(workspaceRoot, relativePath), 'utf8');
+}
 
 async function importWorkspaceModule(relativePath: string) {
   return import(pathToFileURL(resolve(workspaceRoot, relativePath)).href);
@@ -145,5 +150,38 @@ test('voice playback controller pauses the previous audio when a new owner is cl
     'message-two',
     secondAudio,
     secondOwnerVersion,
+  );
+});
+
+test('voice playback lifecycle ownership stays isolated in the extracted controller seam', () => {
+  const controllerSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-voice-playback-controller.ts',
+  );
+  const bubbleSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
+  );
+  const playbackSourceResolverSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/voice-playback-source.ts',
+  );
+
+  assert.ok(
+    controllerSource.split('\n').length <= 260,
+  );
+  assert.match(controllerSource, /const activeThreadVoicePlayback:/);
+  assert.match(controllerSource, /phase:\s*'idle'/);
+  assert.match(controllerSource, /transitionPromise:\s*null/);
+  assert.match(controllerSource, /export function runActiveThreadVoicePlaybackTransition/);
+  assert.match(controllerSource, /export function shouldIgnoreActiveThreadVoicePlaybackPause/);
+
+  assert.match(
+    bubbleSource,
+    /from ['"]\.\/thread-voice-playback-controller['"]/,
+  );
+  assert.doesNotMatch(bubbleSource, /const activeThreadVoicePlayback:/);
+  assert.doesNotMatch(bubbleSource, /transitionPromise:\s*Promise<unknown> \| null/);
+
+  assert.doesNotMatch(
+    playbackSourceResolverSource,
+    /thread-voice-playback-controller/,
   );
 });
