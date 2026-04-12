@@ -30,8 +30,14 @@ import {
 import { getThreadLiveStateSnapshot } from '@/modules/messaging/realtime/thread-live-state-store';
 import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
 import { readThreadMessagePatchSnapshot } from '@/modules/messaging/realtime/thread-message-patch-store';
-import { ThreadHistoryRenderList } from './thread-history-render-list';
-import { ThreadMessageRow } from './thread-message-row';
+import { ThreadHistoryMessageList } from './thread-history-message-list';
+import {
+  filterRenderableMessageAttachments,
+  getEncryptedHistoryHintForMessage,
+  isOwnAttachmentCommitTransitionPending,
+  normalizeAttachmentSignedUrl,
+  normalizeMessageBodyText,
+} from './thread-message-row';
 import { resolveThreadScrollTarget } from './thread-scroll';
 import type {
   ActiveImagePreview,
@@ -77,7 +83,6 @@ const ENCRYPTED_DM_HISTORY_CONTINUITY_RECOVERY_REASON =
 const ENCRYPTED_DM_CURRENT_DEVICE_RESYNC_REASON =
   'dm-e2ee-history:current-device-resync';
 const ENCRYPTED_DM_MISSING_ENVELOPE_RETRY_DELAYS_MS = [220, 900] as const;
-const ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS = 2400;
 const ATTACHMENT_MESSAGE_REOPEN_RECOVERY_REASON =
   'attachment-reopen:retry-attachment-resolution';
 const ATTACHMENT_MESSAGE_RECOVERY_REASON =
@@ -203,24 +208,6 @@ function getThreadShortDateWithYearFormatter(language: AppLanguage) {
   return formatter;
 }
 
-function normalizeMessageBodyText(value: unknown) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-
-function normalizeAttachmentSignedUrl(value: unknown) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed || null;
-}
-
 function shouldLogThreadGuardDiagnostics() {
   return (
     typeof window !== 'undefined' &&
@@ -245,82 +232,6 @@ function logThreadGuardDiagnostic(
 
   loggedThreadGuardDiagnosticKeys.add(key);
   console.info('[chat-thread-guards]', stage, details);
-}
-
-function filterRenderableMessageAttachments(
-  messageId: string,
-  attachments: MessageAttachment[],
-) {
-  if (!attachments.length) {
-    return attachments;
-  }
-
-  let filteredAttachments: MessageAttachment[] | null = null;
-  const droppedAttachmentIds: string[] = [];
-
-  for (const [index, attachment] of attachments.entries()) {
-    const attachmentMessageId =
-      typeof attachment.messageId === 'string'
-        ? attachment.messageId.trim()
-        : '';
-
-    if (!attachmentMessageId || attachmentMessageId === messageId) {
-      if (filteredAttachments) {
-        filteredAttachments.push(attachment);
-      }
-      continue;
-    }
-
-    if (!filteredAttachments) {
-      // Preserve the original array reference when nothing is filtered out so
-      // row-level memoization can still short-circuit on unrelated updates.
-      filteredAttachments = attachments.slice(0, index);
-    }
-
-    if (droppedAttachmentIds.length < 3) {
-      droppedAttachmentIds.push(getRenderableAttachmentKey(attachment, index));
-    }
-  }
-
-  if (!filteredAttachments) {
-    return attachments;
-  }
-
-  logThreadGuardDiagnostic(
-    'attachment-mismatch-dropped',
-    `${messageId}:${droppedAttachmentIds.join(',')}`,
-    {
-      droppedAttachmentIds,
-      droppedCount: attachments.length - filteredAttachments.length,
-      messageId,
-      totalAttachmentCount: attachments.length,
-    },
-  );
-
-  return filteredAttachments;
-}
-
-function getRenderableAttachmentKey(
-  attachment: MessageAttachment,
-  index: number,
-) {
-  const normalizedId =
-    typeof attachment.id === 'string' ? attachment.id.trim() : '';
-
-  if (normalizedId) {
-    return normalizedId;
-  }
-
-  const fallbackKey = [
-    typeof attachment.messageId === 'string' ? attachment.messageId.trim() : '',
-    typeof attachment.objectPath === 'string' ? attachment.objectPath.trim() : '',
-    typeof attachment.fileName === 'string' ? attachment.fileName.trim() : '',
-    typeof attachment.createdAt === 'string' ? attachment.createdAt.trim() : '',
-  ]
-    .filter(Boolean)
-    .join(':');
-
-  return fallbackKey || `attachment-${index}`;
 }
 
 function shouldRetryLocalVoiceAttachmentResolution(reason: string | null) {
@@ -721,71 +632,6 @@ function resolveMissingOwnEncryptedMessageIdsForRetry(input: {
     missingRequestedMessageIds: Array.from(missingRequestedMessageIdSet),
     presentRequestedMessageIds: Array.from(presentRequestedMessageIdSet),
   };
-}
-
-function shouldRenderPendingOwnEncryptedCommitTransition(input: {
-  currentUserId: string;
-  message: ConversationMessageRow;
-  envelope: StoredDmE2eeEnvelope | null;
-  historyHint: EncryptedDmServerHistoryHint;
-  pendingMessageIds: Set<string>;
-}) {
-  if (!isEncryptedDmMessage(input.message)) {
-    return false;
-  }
-
-  if (input.message.sender_id !== input.currentUserId) {
-    return false;
-  }
-
-  const normalizedClientId = input.message.client_id?.trim() || '';
-
-  if (!normalizedClientId) {
-    return false;
-  }
-
-  if (
-    input.envelope ||
-    input.historyHint.code === 'envelope-present' ||
-    input.historyHint.code === 'policy-blocked-history'
-  ) {
-    return false;
-  }
-
-  if (input.pendingMessageIds.has(input.message.id)) {
-    return true;
-  }
-
-  const createdAt = parseSafeDate(input.message.created_at);
-
-  if (!createdAt) {
-    return false;
-  }
-
-  // Keep the first render after a remount calm while the targeted by-id
-  // recovery fetch repopulates the local envelope for a just-sent message.
-  return (
-    Date.now() - createdAt.getTime() <=
-    ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS
-  );
-}
-
-function isOwnAttachmentCommitTransitionPending(input: {
-  attachments: MessageAttachment[];
-  currentUserId: string;
-  message: ConversationMessageRow;
-  normalizedBody: string | null;
-}) {
-  // Keep a just-sent local attachment on its optimistic shell until the
-  // committed row has its own renderable attachment data, instead of letting
-  // a still-empty committed shell replace a valid pending image/file bubble.
-  return (
-    input.message.kind === 'attachment' &&
-    input.message.sender_id === input.currentUserId &&
-    Boolean(input.message.client_id?.trim()) &&
-    !input.normalizedBody &&
-    !hasRenderableCommittedAttachment(input.attachments)
-  );
 }
 
 function buildTimelineItems(input: {
@@ -1323,44 +1169,6 @@ function upsertLiveThreadMessage(input: {
       input.state.oldestLoadedSeq,
     ),
   } satisfies ThreadHistoryState;
-}
-
-function getEncryptedHistoryHintForMessage(input: {
-  envelope: StoredDmE2eeEnvelope | null;
-  hint: EncryptedDmServerHistoryHint | null;
-  message: ConversationMessageRow;
-}): EncryptedDmServerHistoryHint {
-  if (input.envelope) {
-    const baseHint: EncryptedDmServerHistoryHint =
-      input.hint ?? {
-        code: 'envelope-present',
-        committedHistoryState: 'present',
-        currentDeviceAvailability: 'envelope-present',
-        recoveryDisposition: 'already-readable',
-        activeDeviceRecordId: null,
-        messageCreatedAt: input.message.created_at ?? null,
-        viewerJoinedAt: null,
-      };
-
-    return {
-      ...baseHint,
-      code: 'envelope-present',
-      currentDeviceAvailability: 'envelope-present',
-      recoveryDisposition: 'already-readable',
-    };
-  }
-
-  return (
-    input.hint ?? {
-      code: 'missing-envelope',
-      committedHistoryState: 'present',
-      currentDeviceAvailability: 'missing-envelope',
-      recoveryDisposition: 'not-supported-v1',
-      activeDeviceRecordId: null,
-      messageCreatedAt: input.message.created_at ?? null,
-      viewerJoinedAt: null,
-    }
-  );
 }
 
 function getUnavailableEncryptedHistoryRunKey(input: {
@@ -2680,60 +2488,26 @@ export function ThreadHistoryViewport({
         onRequestOlder={requestOlderMessages}
         threadClientDiagnostics={threadClientDiagnostics}
       />
-      <ThreadHistoryRenderList
+      <ThreadHistoryMessageList
+        activeDeleteMessageId={activeDeleteMessageId}
+        activeEditMessageId={activeEditMessageId}
+        activeSpaceId={activeSpaceId}
+        conversationId={conversationId}
+        conversationKind={conversationKind}
+        currentUserId={currentUserId}
         emptyLabel={t.chat.noMessagesYet}
-        items={timelineRenderItems}
-        renderMessage={(item) => {
-          const encryptedEnvelope =
-            historyState.encryptedEnvelopesByMessage.get(item.message.id) ?? null;
-          const encryptedHistoryHint = getEncryptedHistoryHintForMessage({
-            envelope: encryptedEnvelope,
-            hint:
-              historyState.encryptedHistoryHintsByMessage.get(item.message.id) ??
-              null,
-            message: item.message,
-          });
-
-          return (
-            <ThreadMessageRow
-              key={item.message.id}
-              activeDeleteMessageId={activeDeleteMessageId}
-              activeEditMessageId={activeEditMessageId}
-              activeSpaceId={activeSpaceId}
-              attachmentsByMessage={historyState.attachmentsByMessage}
-              compactHistoricalUnavailable={item.compactHistoricalUnavailable}
-              conversationId={conversationId}
-              conversationKind={conversationKind}
-              currentUserId={currentUserId}
-              encryptedEnvelopesByMessage={historyState.encryptedEnvelopesByMessage}
-              encryptedHistoryHintsByMessage={historyState.encryptedHistoryHintsByMessage}
-              historicalUnavailableContinuationCount={
-                item.historicalUnavailableContinuationCount
-              }
-              isPendingEncryptedCommitTransition={shouldRenderPendingOwnEncryptedCommitTransition(
-                {
-                  currentUserId,
-                  envelope: encryptedEnvelope,
-                  historyHint: encryptedHistoryHint,
-                  message: item.message,
-                  pendingMessageIds: pendingEncryptedCommitTransitionMessageIds,
-                },
-              )}
-              isClusteredWithNext={item.isClusteredWithNext}
-              isClusteredWithPrevious={item.isClusteredWithPrevious}
-              language={language}
-              latestVisibleMessageSeq={latestCommittedMessageSeq}
-              message={item.message}
-              messagesById={historyState.messagesById}
-              onOpenImagePreview={openImagePreview}
-              otherParticipantReadSeq={otherParticipantReadSeq}
-              otherParticipantUserId={otherParticipantUserId}
-              reactionsByMessage={historyState.reactionsByMessage}
-              senderNames={senderNames}
-              threadClientDiagnostics={threadClientDiagnostics}
-            />
-          );
-        }}
+        historyState={historyState}
+        language={language}
+        latestVisibleMessageSeq={latestCommittedMessageSeq}
+        onOpenImagePreview={openImagePreview}
+        otherParticipantReadSeq={otherParticipantReadSeq}
+        otherParticipantUserId={otherParticipantUserId}
+        pendingEncryptedCommitTransitionMessageIds={
+          pendingEncryptedCommitTransitionMessageIds
+        }
+        senderNames={senderNames}
+        threadClientDiagnostics={threadClientDiagnostics}
+        timelineRenderItems={timelineRenderItems}
       />
       <ThreadImagePreviewOverlay
         closeLabel={t.chat.closePhotoPreview}

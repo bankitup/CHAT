@@ -28,13 +28,22 @@ test('thread viewport delegates row rendering and secondary runtime to extracted
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
+  const messageListSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-history-message-list.tsx',
+  );
   const rowSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  );
+  const rowContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
+  );
+  const quickActionsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-quick-actions.tsx',
   );
 
   assert.match(
     viewportSource,
-    /from ['"]\.\/thread-message-row['"]/,
+    /from ['"]\.\/thread-history-message-list['"]/,
   );
   assert.match(
     viewportSource,
@@ -58,9 +67,17 @@ test('thread viewport delegates row rendering and secondary runtime to extracted
   assert.match(viewportSource, /useThreadHistoryPrependScrollRestore\(/);
   assert.match(
     viewportSource,
+    /from ['"]\.\/thread-history-message-list['"]/,
+  );
+  assert.match(viewportSource, /<ThreadHistoryMessageList/);
+  assert.match(
+    messageListSource,
     /from ['"]\.\/thread-history-render-list['"]/,
   );
-  assert.match(viewportSource, /<ThreadHistoryRenderList/);
+  assert.match(
+    messageListSource,
+    /from ['"]\.\/thread-message-row['"]/,
+  );
   assert.match(
     viewportSource,
     /const ThreadImagePreviewOverlay = dynamic\(/,
@@ -68,11 +85,11 @@ test('thread viewport delegates row rendering and secondary runtime to extracted
   assert.match(viewportSource, /<ThreadImagePreviewOverlay/);
   assert.match(
     rowSource,
-    /const ThreadReactionPicker = dynamic\(/,
+    /const ThreadMessageQuickActionsPanel = dynamic\(/,
   );
   assert.match(
-    rowSource,
-    /const ThreadInlineEditForm = dynamic\(/,
+    quickActionsSource,
+    /<ThreadReactionPicker/,
   );
   assert.match(
     rowSource,
@@ -83,14 +100,18 @@ test('thread viewport delegates row rendering and secondary runtime to extracted
     /const ThreadReactionGroups = dynamic\(/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
+    /const ThreadInlineEditForm = dynamic\(/,
+  );
+  assert.match(
+    rowContentSource,
     /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
     /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
-  assert.match(rowSource, /<MemoizedThreadVoiceMessageBubble/);
+  assert.match(rowContentSource, /<MemoizedThreadVoiceMessageBubble/);
   assert.match(rowSource, /surface="thread-message-row"/);
   assert.match(rowSource, /data-thread-message-row-fallback="true"/);
   assert.doesNotMatch(
@@ -148,6 +169,9 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
   const rowSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row.tsx',
   );
+  const rowContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
+  );
   const voiceBubbleSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
   );
@@ -157,8 +181,9 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
 
   assert.ok(chatPageSource.split('\n').length <= 80);
   assert.ok(threadPageContentSource.split('\n').length <= 1000);
-  assert.ok(viewportSource.split('\n').length <= 3000);
-  assert.ok(rowSource.split('\n').length <= 2700);
+  assert.ok(viewportSource.split('\n').length <= 2600);
+  assert.ok(rowSource.split('\n').length <= 2300);
+  assert.ok(rowContentSource.split('\n').length <= 450);
   assert.ok(voiceBubbleSource.split('\n').length <= 800);
   assert.ok(voiceRuntimeHookSource.split('\n').length <= 1900);
 });

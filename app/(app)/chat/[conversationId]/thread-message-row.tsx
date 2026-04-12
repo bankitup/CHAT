@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import {
   memo,
@@ -42,23 +41,15 @@ import { EncryptedHistoryUnavailableState } from './encrypted-history-unavailabl
 import { LiveOutgoingMessageStatus } from './live-outgoing-message-status';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
+import { ThreadMessageRowContent } from './thread-message-row-content';
 import { emitThreadLocalReplyTargetSelection } from './thread-local-reply-target';
 import { logVoiceThreadProof } from './thread-voice-diagnostics';
-import { configureInlineAudioElement } from './voice-playback-source';
 import type {
   ActiveImagePreview,
   ConversationMessageRow,
   MessageAttachment,
   MessageReactionGroup,
 } from './thread-history-types';
-
-const ThreadReactionPicker = dynamic(() =>
-  import('./thread-reaction-picker').then((mod) => mod.ThreadReactionPicker),
-);
-
-const ThreadInlineEditForm = dynamic(() =>
-  import('./thread-inline-edit-form').then((mod) => mod.ThreadInlineEditForm),
-);
 
 const ThreadDeleteMessageConfirm = dynamic(() =>
   import('./thread-delete-message-confirm').then(
@@ -69,36 +60,11 @@ const ThreadDeleteMessageConfirm = dynamic(() =>
 const ThreadReactionGroups = dynamic(() =>
   import('./thread-reaction-groups').then((mod) => mod.ThreadReactionGroups),
 );
-
-function ThreadVoiceMessageBubbleLoadingFallback() {
-  return (
-    <div
-      aria-hidden="true"
-      className="message-voice-card message-voice-card-loading"
-      data-message-voice-interactive="false"
-    >
-      <span className="message-voice-loading-play" />
-      <div className="message-voice-copy">
-        <div className="message-voice-head">
-          <span className="message-voice-loading-line message-voice-loading-line-title" />
-          <span className="message-voice-loading-line message-voice-loading-line-duration" />
-        </div>
-        <div className="message-voice-progress message-voice-progress-loading-shell">
-          <span className="message-voice-progress-bar message-voice-progress-bar-loading" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const MemoizedThreadVoiceMessageBubble = dynamic(
+const ThreadMessageQuickActionsPanel = dynamic(
   () =>
-    import('./thread-voice-message-bubble').then(
-      (mod) => mod.MemoizedThreadVoiceMessageBubble,
+    import('./thread-message-quick-actions').then(
+      (mod) => mod.ThreadMessageQuickActions,
     ),
-  {
-    loading: ThreadVoiceMessageBubbleLoadingFallback,
-  },
 );
 
 type ThreadMessageRowProps = {
@@ -128,16 +94,8 @@ type ThreadMessageRowProps = {
   threadClientDiagnostics: DmThreadClientDiagnostics;
 };
 
-type ThreadMessageAttachmentsProps = {
-  attachments: MessageAttachment[];
-  imagePreviewCaption: string | null;
-  language: AppLanguage;
-  onImagePreviewClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-};
-
 const IMAGE_PREVIEW_CLICK_SUPPRESSION_MS = 420;
 const MESSAGE_QUICK_ACTION_LONG_PRESS_MS = 280;
-const MESSAGE_QUICK_REACTIONS = ['❤️', '👍', '😂', '😮', '🎉'] as const;
 const ENCRYPTED_DM_PENDING_COMMIT_TRANSITION_GRACE_MS = 2400;
 const EMPTY_MESSAGE_ATTACHMENTS: MessageAttachment[] = [];
 const EMPTY_MESSAGE_REACTIONS: MessageReactionGroup[] = [];
@@ -263,18 +221,6 @@ export function normalizeMessageBodyText(value: unknown) {
   return trimmed || null;
 }
 
-function formatAttachmentSize(value: number | null) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    return null;
-  }
-
-  if (value >= 1024 * 1024) {
-    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  return `${Math.max(1, Math.round(value / 1024))} KB`;
-}
-
 export function normalizeAttachmentSignedUrl(value: unknown) {
   if (typeof value !== 'string') {
     return null;
@@ -282,14 +228,6 @@ export function normalizeAttachmentSignedUrl(value: unknown) {
 
   const trimmed = value.trim();
   return trimmed || null;
-}
-
-function normalizeAttachmentDisplayName(
-  value: string | null | undefined,
-  fallback: string,
-) {
-  const trimmed = value?.trim() || '';
-  return trimmed || fallback;
 }
 
 function shouldLogThreadGuardDiagnostics() {
@@ -1153,155 +1091,6 @@ function areThreadMessageRowPropsEqual(
   );
 }
 
-const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
-  attachments,
-  imagePreviewCaption,
-  language,
-  onImagePreviewClick,
-}: ThreadMessageAttachmentsProps) {
-  const t = getChatClientTranslations(language);
-
-  if (!attachments.length) {
-    return null;
-  }
-
-  return (
-    <div className="message-attachments">
-      {attachments.map((attachment, index) => {
-        const attachmentKey = getRenderableAttachmentKey(attachment, index);
-        const attachmentSignedUrl = normalizeAttachmentSignedUrl(
-          attachment.signedUrl,
-        );
-
-        if (attachment.isImage) {
-          const previewCaption = imagePreviewCaption;
-          const previewAccessibleLabel = previewCaption ?? t.chat.photo;
-
-          if (!attachmentSignedUrl) {
-            return (
-              <div
-                key={attachmentKey}
-                className="message-photo-card message-photo-card-committed message-photo-card-unavailable"
-              >
-                <span
-                  aria-hidden="true"
-                  className="message-photo-card-visual message-photo-card-visual-unavailable"
-                />
-              </div>
-            );
-          }
-
-          return (
-            <button
-              key={attachmentKey}
-              aria-haspopup="dialog"
-              aria-label={t.chat.openPhotoPreviewAria(previewAccessibleLabel)}
-              className="message-photo-card message-photo-card-committed message-photo-card-button"
-              data-message-image-preview="true"
-              data-preview-caption={previewCaption ?? ''}
-              data-preview-url={attachmentSignedUrl}
-              onClick={onImagePreviewClick}
-              type="button"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                alt={previewAccessibleLabel}
-                className="message-photo-card-image"
-                loading="lazy"
-                src={attachmentSignedUrl}
-              />
-            </button>
-          );
-        }
-
-        const attachmentLabel = attachment.isVoiceMessage
-          ? t.chat.voiceMessage
-          : attachment.isAudio
-            ? t.chat.audio
-            : t.chat.file;
-        const attachmentName = normalizeAttachmentDisplayName(
-          attachment.fileName,
-          attachmentLabel,
-        );
-        const attachmentMeta = [
-          formatAttachmentSize(attachment.sizeBytes),
-          !attachmentSignedUrl ? t.chat.unavailableRightNow : null,
-        ]
-          .filter((value): value is string => Boolean(value))
-          .join(' · ');
-        const attachmentContent = (
-          <>
-            <span aria-hidden="true" className="message-attachment-file">
-              {attachment.isAudio ? t.chat.audio : t.chat.file}
-            </span>
-            <span className="message-attachment-copy">
-              <span className="message-attachment-head">
-                <span className="message-attachment-name">{attachmentName}</span>
-                <span className="message-attachment-kind">{attachmentLabel}</span>
-              </span>
-              {attachmentMeta ? (
-                <span className="message-attachment-meta">{attachmentMeta}</span>
-              ) : null}
-            </span>
-          </>
-        );
-
-        if (!attachmentSignedUrl) {
-          return (
-            <div
-              key={attachmentKey}
-              className="message-attachment-card message-attachment-card-unavailable"
-            >
-              {attachmentContent}
-            </div>
-          );
-        }
-
-        if (attachment.isAudio) {
-          return (
-            <div
-              key={attachmentKey}
-              className="message-attachment-card message-attachment-card-audio"
-            >
-              {attachmentContent}
-              <audio
-                className="message-attachment-audio"
-                controls
-                controlsList="nodownload noplaybackrate noremoteplayback"
-                playsInline
-                preload="metadata"
-                ref={configureInlineAudioElement}
-                src={attachmentSignedUrl}
-              />
-            </div>
-          );
-        }
-
-        return (
-          <a
-            key={attachmentKey}
-            className="message-attachment-card"
-            href={attachmentSignedUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {attachmentContent}
-          </a>
-        );
-      })}
-    </div>
-  );
-}, (previous, next) => {
-  return (
-    previous.imagePreviewCaption === next.imagePreviewCaption &&
-    previous.language === next.language &&
-    previous.onImagePreviewClick === next.onImagePreviewClick &&
-    areMessageAttachmentsEqual(previous.attachments, next.attachments)
-  );
-});
-
-ThreadMessageAttachments.displayName = 'ThreadMessageAttachments';
-
 function resolveMessageRowClassName(input: {
   isClusteredWithNext: boolean;
   isClusteredWithPrevious: boolean;
@@ -1583,6 +1372,10 @@ function ThreadMessageRowComponent({
     !isDeletedMessage &&
     !isMessageInEditMode &&
     !isMessageInDeleteMode;
+  const initialMessageReactions =
+    reactionsByMessage.get(message.id) ?? EMPTY_MESSAGE_REACTIONS;
+  const shouldRenderReactionGroups =
+    !isDeletedMessage && initialMessageReactions.length > 0;
   const currentMessageReplyTargetAttachmentKind =
     resolveReplyTargetAttachmentKind(messageAttachments);
   const messageRowIssues: string[] = [];
@@ -2196,6 +1989,76 @@ function ThreadMessageRowComponent({
       temporaryEncryptedResolutionFallback
     )
   ) : null;
+  const replyReferenceContent =
+    message.reply_to_message_id && !isDeletedMessage ? (
+      <button
+        className={
+          isOwnMessage
+            ? 'message-reply-reference message-reply-reference-own message-reply-reference-button'
+            : 'message-reply-reference message-reply-reference-button'
+        }
+        disabled={!repliedMessage}
+        onClick={handleReplyReferenceClick}
+        type="button"
+      >
+        <span aria-hidden="true" className="message-reply-accent" />
+        <div className="message-reply-copy">
+          <span className="message-reply-sender">
+            {!repliedMessage
+              ? t.chat.earlierMessage
+              : repliedMessage.deleted_at
+                ? t.chat.deletedMessage
+                : senderNames.get(repliedMessage.sender_id ?? '') ||
+                  t.chat.unknownUser}
+          </span>
+          <DmReplyTargetSnippet
+            attachmentFallbackLabel={t.chat.attachment}
+            audioFallbackLabel={t.chat.audio}
+            body={repliedMessage?.body ?? null}
+            conversationId={conversationId}
+            currentUserId={currentUserId}
+            debugRequestId={threadClientDiagnostics.debugRequestId}
+            deletedFallbackLabel={t.chat.messageDeleted}
+            emptyFallbackLabel={t.chat.emptyMessage}
+            encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
+            encryptedReferenceNote={null}
+            fileFallbackLabel={t.chat.file}
+            historicalEncryptedFallbackLabel={t.chat.olderEncryptedMessage}
+            loadedFallbackLabel={t.chat.earlierMessage}
+            messageId={message.id}
+            photoFallbackLabel={t.chat.photo}
+            surface="message-reply-reference"
+            targetAttachmentKind={replyTargetAttachmentKind}
+            targetDeleted={Boolean(repliedMessage?.deleted_at)}
+            targetIsEncrypted={Boolean(
+              repliedMessage && isEncryptedDmMessage(repliedMessage),
+            )}
+            targetIsLoaded={Boolean(repliedMessage)}
+            targetKind={repliedMessage?.kind ?? null}
+            targetMessageId={message.reply_to_message_id}
+            voiceFallbackLabel={t.chat.voiceMessage}
+          />
+        </div>
+      </button>
+    ) : null;
+  const editCancelHref = buildChatHref({
+    conversationId,
+    hash: `#message-${message.id}`,
+    spaceId: activeSpaceId,
+  });
+  const isEncryptedEditFallback =
+    activeEditMessageId === message.id &&
+    isOwnMessage &&
+    isEncryptedDmMessage(message);
+  const bubbleClassName = resolveMessageBubbleClassName({
+    hasReplyReference:
+      Boolean(message.reply_to_message_id) && !isDeletedMessage,
+    isClusteredWithNext,
+    isClusteredWithPrevious,
+    isOwnMessage,
+    shouldRenderCompactHistoricalUnavailableBubble,
+    shouldRenderCompactImageBubble,
+  });
 
   return (
     <article
@@ -2230,218 +2093,53 @@ function ThreadMessageRowComponent({
           onPointerUp={handleBubblePointerEnd}
         >
           {isQuickActionsOpen ? (
-            <div
-              ref={quickActionsSurfaceRef}
-              className={
-                isOwnMessage
-                  ? 'message-quick-actions message-quick-actions-own'
-                  : 'message-quick-actions'
-              }
-              data-placement={quickActionsPlacement}
-              data-message-quick-actions-surface="true"
-            >
-              <div className="message-quick-actions-primary">
-                <ThreadReactionPicker
-                  className="message-quick-actions-reactions"
-                  conversationId={conversationId}
-                  currentUserId={currentUserId}
-                  emojis={MESSAGE_QUICK_REACTIONS}
-                  initialReactions={
-                    reactionsByMessage.get(message.id) ?? EMPTY_MESSAGE_REACTIONS
-                  }
-                  isOwnMessage={isOwnMessage}
-                  messageId={message.id}
-                  onReactionSelected={closeQuickActions}
-                  showCounts={false}
-                />
-              </div>
-              <div className="message-quick-actions-secondary">
-                <button
-                  aria-label={t.chat.reply}
-                  className="message-quick-actions-action"
-                  onClick={handleReplyAction}
-                  title={t.chat.reply}
-                  type="button"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="message-quick-actions-action-icon"
-                  >
-                    ↩
-                  </span>
-                  <span className="message-quick-actions-action-label">
-                    {t.chat.reply}
-                  </span>
-                </button>
-              </div>
+            <div ref={quickActionsSurfaceRef}>
+              <ThreadMessageQuickActionsPanel
+                conversationId={conversationId}
+                currentUserId={currentUserId}
+                initialReactions={initialMessageReactions}
+                isOwnMessage={isOwnMessage}
+                messageId={message.id}
+                onReactionSelected={closeQuickActions}
+                onReplyAction={handleReplyAction}
+                placement={quickActionsPlacement}
+                replyLabel={t.chat.reply}
+              />
             </div>
           ) : null}
-          <div
-            className={resolveMessageBubbleClassName({
-              hasReplyReference:
-                Boolean(message.reply_to_message_id) && !isDeletedMessage,
-              isClusteredWithNext,
-              isClusteredWithPrevious,
-              isOwnMessage,
-              shouldRenderCompactHistoricalUnavailableBubble,
-              shouldRenderCompactImageBubble,
-            })}
-          >
-            {message.reply_to_message_id && !isDeletedMessage ? (
-              <button
-                className={
-                  isOwnMessage
-                    ? 'message-reply-reference message-reply-reference-own message-reply-reference-button'
-                    : 'message-reply-reference message-reply-reference-button'
-                }
-                disabled={!repliedMessage}
-                onClick={handleReplyReferenceClick}
-                type="button"
-              >
-                <span aria-hidden="true" className="message-reply-accent" />
-                <div className="message-reply-copy">
-                  <span className="message-reply-sender">
-                    {!repliedMessage
-                      ? t.chat.earlierMessage
-                      : repliedMessage.deleted_at
-                        ? t.chat.deletedMessage
-                        : senderNames.get(repliedMessage.sender_id ?? '') ||
-                          t.chat.unknownUser}
-                  </span>
-                  <DmReplyTargetSnippet
-                    attachmentFallbackLabel={t.chat.attachment}
-                    audioFallbackLabel={t.chat.audio}
-                    body={repliedMessage?.body ?? null}
-                    conversationId={conversationId}
-                    currentUserId={currentUserId}
-                    debugRequestId={threadClientDiagnostics.debugRequestId}
-                    deletedFallbackLabel={t.chat.messageDeleted}
-                    emptyFallbackLabel={t.chat.emptyMessage}
-                    encryptedFallbackLabel={t.chat.replyToEncryptedMessage}
-                    encryptedReferenceNote={null}
-                    fileFallbackLabel={t.chat.file}
-                    historicalEncryptedFallbackLabel={t.chat.olderEncryptedMessage}
-                    loadedFallbackLabel={t.chat.earlierMessage}
-                    messageId={message.id}
-                    photoFallbackLabel={t.chat.photo}
-                    surface="message-reply-reference"
-                    targetAttachmentKind={replyTargetAttachmentKind}
-                    targetDeleted={Boolean(repliedMessage?.deleted_at)}
-                    targetIsEncrypted={Boolean(
-                      repliedMessage && isEncryptedDmMessage(repliedMessage),
-                    )}
-                    targetIsLoaded={Boolean(repliedMessage)}
-                    targetKind={repliedMessage?.kind ?? null}
-                    targetMessageId={message.reply_to_message_id}
-                    voiceFallbackLabel={t.chat.voiceMessage}
-                  />
-                </div>
-              </button>
-            ) : null}
-            {isDeletedMessage ? (
-              <p className="message-deleted-text">{t.chat.messageDeleted}</p>
-            ) : isMessageInEditMode ? (
-              <ThreadInlineEditForm
-                cancelHref={buildChatHref({
-                  conversationId,
-                  hash: `#message-${message.id}`,
-                  spaceId: activeSpaceId,
-                })}
-                conversationId={conversationId}
-                emptyMessageLabel={t.chat.emptyMessage}
-                hasAttachments={messageAttachments.length > 0}
-                initialBody={
-                  isEncryptedDmMessage(message) ? '' : normalizedMessageBody ?? ''
-                }
-                labels={inlineEditLabels}
-                messageId={message.id}
-              />
-            ) : activeEditMessageId === message.id &&
-              isOwnMessage &&
-              isEncryptedDmMessage(message) ? (
-              <div className="message-edit-unavailable">
-                <p className="message-edit-unavailable-copy">
-                  {t.chat.encryptedEditUnavailable}
-                </p>
-                <div className="message-edit-actions">
-                  <Link
-                    className="pill message-edit-cancel"
-                    href={buildChatHref({
-                      conversationId,
-                      hash: `#message-${message.id}`,
-                      spaceId: activeSpaceId,
-                    })}
-                    prefetch={false}
-                  >
-                    {t.chat.cancel}
-                  </Link>
-                </div>
-              </div>
-            ) : shouldRenderEncryptedAttachmentComposite ? (
-              <div className="message-attachment-caption-stack">
-                <ThreadMessageAttachments
-                  attachments={nonVoiceAttachments}
-                  imagePreviewCaption={normalizedMessageBody}
-                  language={language}
-                  onImagePreviewClick={handleImageAttachmentPreview}
-                />
-                {encryptedMessageBodyContent}
-              </div>
-            ) : isEncryptedDmMessage(message) ? (
-              encryptedMessageBodyContent
-            ) : message.kind === 'voice' ? (
-              <div className="message-voice-stack">
-                <MemoizedThreadVoiceMessageBubble
-                  attachment={primaryVoiceAttachment}
-                  conversationId={conversationId}
-                  isOwnMessage={isOwnMessage}
-                  language={language}
-                  messageId={message.id}
-                  onRequestQuickActions={openQuickActions}
-                />
-                {normalizedMessageBody ? (
-                  <p className="message-body">{normalizedMessageBody}</p>
-                ) : null}
-              </div>
-            ) : normalizedMessageBody ? (
-              canInlineMessageMeta ? (
-                <div
-                  className={
-                    isOwnMessage
-                      ? 'message-inline-content message-inline-content-own'
-                      : 'message-inline-content'
-                  }
-                >
-                  <p className="message-body message-body-inline">
-                    {normalizedMessageBody}
-                  </p>
-                  <span
-                    className={
-                      isOwnMessage
-                        ? 'message-meta message-meta-own message-meta-inline'
-                        : 'message-meta message-meta-inline'
-                    }
-                  >
-                    {messageMetaContent}
-                  </span>
-                </div>
-              ) : (
-                <p className="message-body">{normalizedMessageBody}</p>
-              )
-            ) : !messageAttachments.length ? (
-              <p className="message-body">{t.chat.emptyMessage}</p>
-            ) : null}
-            {nonVoiceAttachments.length &&
-            !isDeletedMessage &&
-            !shouldRenderEncryptedAttachmentComposite ? (
-              <ThreadMessageAttachments
-                attachments={nonVoiceAttachments}
-                imagePreviewCaption={normalizedMessageBody}
-                language={language}
-                onImagePreviewClick={handleImageAttachmentPreview}
-              />
-            ) : null}
-          </div>
+          <ThreadMessageRowContent
+            bubbleClassName={bubbleClassName}
+            canInlineMessageMeta={canInlineMessageMeta}
+            conversationId={conversationId}
+            editCancelHref={editCancelHref}
+            emptyMessageLabel={t.chat.emptyMessage}
+            encryptedEditCancelHref={editCancelHref}
+            encryptedEditUnavailableLabel={t.chat.encryptedEditUnavailable}
+            encryptedMessageBodyContent={encryptedMessageBodyContent}
+            imagePreviewCaption={normalizedMessageBody}
+            inlineEditInitialBody={
+              isEncryptedDmMessage(message) ? '' : normalizedMessageBody ?? ''
+            }
+            inlineEditLabels={inlineEditLabels}
+            isDeletedMessage={isDeletedMessage}
+            isEncryptedEditFallback={isEncryptedEditFallback}
+            isMessageInEditMode={isMessageInEditMode}
+            isOwnMessage={isOwnMessage}
+            language={language}
+            message={message}
+            messageAttachments={messageAttachments}
+            messageDeletedLabel={t.chat.messageDeleted}
+            messageMetaContent={messageMetaContent}
+            nonVoiceAttachments={nonVoiceAttachments}
+            normalizedMessageBody={normalizedMessageBody}
+            onImagePreviewClick={handleImageAttachmentPreview}
+            onRequestQuickActions={openQuickActions}
+            primaryVoiceAttachment={primaryVoiceAttachment}
+            replyReferenceContent={replyReferenceContent}
+            shouldRenderEncryptedAttachmentComposite={
+              shouldRenderEncryptedAttachmentComposite
+            }
+          />
         </div>
         {!canInlineMessageMeta ? (
           <span
@@ -2451,14 +2149,12 @@ function ThreadMessageRowComponent({
           </span>
         ) : null}
 
-        {!isDeletedMessage ? (
+        {shouldRenderReactionGroups ? (
           <ThreadReactionGroups
             ariaLabel={t.chat.messageReactions}
             conversationId={conversationId}
             currentUserId={currentUserId}
-            initialReactions={
-              reactionsByMessage.get(message.id) ?? EMPTY_MESSAGE_REACTIONS
-            }
+            initialReactions={initialMessageReactions}
             isOwnMessage={isOwnMessage}
             messageId={message.id}
           />

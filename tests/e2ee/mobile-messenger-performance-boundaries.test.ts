@@ -109,8 +109,17 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
+  const messageListSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-history-message-list.tsx',
+  );
   const rowSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  );
+  const rowContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
+  );
+  const quickActionsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-quick-actions.tsx',
   );
   const composerSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-composer-runtime.tsx',
@@ -126,7 +135,7 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   assert.match(threadPageContentSource, /<ThreadPageDeferredEffects/);
   assert.match(
     viewportSource,
-    /from ['"]\.\/thread-message-row['"]/,
+    /from ['"]\.\/thread-history-message-list['"]/,
   );
   assert.match(
     viewportSource,
@@ -138,7 +147,7 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   );
   assert.match(
     viewportSource,
-    /from ['"]\.\/thread-history-render-list['"]/,
+    /from ['"]\.\/thread-viewport-deferred-effects['"]/,
   );
   assert.match(
     viewportSource,
@@ -146,15 +155,19 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   );
   assert.match(
     viewportSource,
-    /<ThreadHistoryRenderList/,
+    /<ThreadHistoryMessageList/,
+  );
+  assert.match(
+    messageListSource,
+    /from ['"]\.\/thread-history-render-list['"]/,
+  );
+  assert.match(
+    messageListSource,
+    /from ['"]\.\/thread-message-row['"]/,
   );
   assert.match(
     rowSource,
-    /const ThreadReactionPicker = dynamic\(/,
-  );
-  assert.match(
-    rowSource,
-    /const ThreadInlineEditForm = dynamic\(/,
+    /const ThreadMessageQuickActionsPanel = dynamic\(/,
   );
   assert.match(
     rowSource,
@@ -165,13 +178,23 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
     /const ThreadReactionGroups = dynamic\(/,
   );
   assert.match(
-    rowSource,
+    quickActionsSource,
+    /<ThreadReactionPicker/,
+  );
+  assert.match(
+    rowContentSource,
+    /const ThreadInlineEditForm = dynamic\(/,
+  );
+  assert.match(
+    rowContentSource,
     /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
     /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
+  assert.match(rowSource, /<ThreadMessageQuickActionsPanel/);
+  assert.match(rowContentSource, /<MemoizedThreadVoiceMessageBubble/);
   assert.match(
     composerSource,
     /const EncryptedDmComposerForm = dynamic\(/,

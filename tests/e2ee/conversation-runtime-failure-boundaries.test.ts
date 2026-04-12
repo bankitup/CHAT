@@ -101,8 +101,8 @@ test('voice playback runtime keeps scroll-stability-sensitive work outside the l
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
-  const rowSource = readWorkspaceFile(
-    'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  const rowContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
   );
   const globalsSource = readWorkspaceFile('app/globals.css');
 
@@ -128,15 +128,15 @@ test('voice playback runtime keeps scroll-stability-sensitive work outside the l
     /scrollIntoView|scrollTop\s*=|scrollTo\(/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
     /import\('\.\/thread-voice-message-bubble'\)/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
     /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
   assert.match(
-    rowSource,
+    rowContentSource,
     /className="message-voice-card message-voice-card-loading"/,
   );
   assert.match(
