@@ -100,6 +100,9 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   const liveInboxRowSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-conversation-live-row.tsx',
   );
+  const inboxRowContractCssSource = readWorkspaceFile(
+    'app/(app)/inbox/inbox-conversation-row-contract.module.css',
+  );
 
   assert.match(composerRuntimeSource, /function ComposerFormShellFallback\(/);
   assert.match(composerRuntimeSource, /className="composer-runtime-shell"/);
@@ -130,4 +133,36 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
 
   assert.match(staticInboxRowSource, /conversation-preview-placeholder/);
   assert.match(liveInboxRowSource, /conversation-preview-placeholder/);
+  assert.match(
+    staticInboxRowSource,
+    /from ['"]\.\/inbox-conversation-row-contract\.module\.css['"]/,
+  );
+  assert.match(
+    liveInboxRowSource,
+    /from ['"]\.\/inbox-conversation-row-contract\.module\.css['"]/,
+  );
+  assert.match(staticInboxRowSource, /styles\.row/);
+  assert.match(staticInboxRowSource, /styles\.link/);
+  assert.match(staticInboxRowSource, /styles\.titleRow/);
+  assert.match(staticInboxRowSource, /styles\.preview/);
+  assert.match(liveInboxRowSource, /styles\.row/);
+  assert.match(liveInboxRowSource, /styles\.link/);
+  assert.match(liveInboxRowSource, /styles\.titleRow/);
+  assert.match(liveInboxRowSource, /styles\.preview/);
+  assert.match(
+    inboxRowContractCssSource,
+    /\.row\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0,\s*1fr\)/,
+  );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.link\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0,\s*1fr\)[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.titleRow\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto/,
+  );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.preview\s*\{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
+  );
 });

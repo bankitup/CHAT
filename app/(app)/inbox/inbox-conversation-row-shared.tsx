@@ -26,10 +26,17 @@ type InboxConversationAvatarVisualProps = {
 };
 
 type InboxConversationTitleVisualProps = {
+  className?: string;
   hasUnread: boolean;
   isPrimaryChatsView: boolean;
   title: string;
 };
+
+export function joinClassNames(
+  ...values: Array<string | null | undefined | false>
+) {
+  return values.filter(Boolean).join(' ');
+}
 
 export function formatInboxTimestamp(
   value: string | null,
@@ -194,24 +201,31 @@ export const InboxConversationAvatarVisual = memo(
 
 export const InboxConversationTitleVisual = memo(
   function InboxConversationTitleVisual({
+    className,
     hasUnread,
     isPrimaryChatsView,
     title,
   }: InboxConversationTitleVisualProps) {
     return (
       <h3
-        className={
+        className={joinClassNames(
           hasUnread
             ? isPrimaryChatsView
               ? 'conversation-title conversation-title-unread conversation-title-dm'
               : 'conversation-title conversation-title-unread'
             : isPrimaryChatsView
               ? 'conversation-title conversation-title-dm'
-              : 'conversation-title'
-        }
+              : 'conversation-title',
+          className,
+        )}
       >
         {title}
       </h3>
     );
   },
+  (previous, next) =>
+    previous.className === next.className &&
+    previous.hasUnread === next.hasUnread &&
+    previous.isPrimaryChatsView === next.isPrimaryChatsView &&
+    previous.title === next.title,
 );
