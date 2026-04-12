@@ -42,6 +42,18 @@ test('shared shell and messenger globals keep reserved layout space for CLS-sens
   );
   assert.match(
     globalsSource,
+    /\.message-voice-card\s*\{[\s\S]*overflow-anchor:\s*none/,
+  );
+  assert.match(
+    globalsSource,
+    /\.message-voice-title\s*\{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
+  );
+  assert.match(
+    globalsSource,
+    /\.message-voice-duration\s*\{[\s\S]*flex:\s*0 0 6\.5rem[\s\S]*font-variant-numeric:\s*tabular-nums[\s\S]*min-width:\s*6\.5rem[\s\S]*text-align:\s*right/,
+  );
+  assert.match(
+    globalsSource,
     /\.chat-image-preview-shell\s*\{[\s\S]*overflow:\s*hidden/,
   );
   assert.match(
