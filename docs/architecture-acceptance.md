@@ -33,6 +33,8 @@ The current acceptance bar focuses on these boundaries:
    code
 9. Voice playback source selection stays honest about original-vs-derived
    sources and unsupported-device behavior
+10. Messenger mobile startup boundaries stay in place across shell, chat, and
+    inbox surfaces
 
 ## Shared Platform Seams Under Acceptance
 
@@ -96,6 +98,11 @@ Current acceptance tests:
   - derived playback candidates stay additive
   - device playability classification stays truthful
   - unsupported-device handling stays distinct from generic loading
+- [tests/e2ee/mobile-messenger-performance-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/mobile-messenger-performance-boundaries.test.ts)
+  verifies the current mobile Messenger startup boundaries:
+  - Messenger-only shell effects stay route/posture-gated
+  - chat-only secondary interactions remain dynamically loaded
+  - inbox create and realtime startup paths remain deferred
 
 Run them with:
 
@@ -135,6 +142,8 @@ Examples:
   sliding back under messaging ownership
 - if a thread-runtime boundary test fails, the Messenger thread route may be
   collapsing back into one oversized runtime file
+- if a mobile-performance boundary test fails, non-critical Messenger startup
+  work may be drifting back into first paint on shared, inbox, or chat routes
 
 ## Minimum Verification After Architecture Changes
 

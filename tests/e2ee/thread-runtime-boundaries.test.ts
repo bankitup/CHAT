@@ -31,7 +31,7 @@ test('thread viewport delegates voice runtime to the extracted voice bubble seam
 
   assert.match(
     viewportSource,
-    /from ['"]\.\/thread-voice-message-bubble['"]/,
+    /const MemoizedThreadVoiceMessageBubble = dynamic\(\(\) =>\s*import\('\.\/thread-voice-message-bubble'\)/,
   );
   assert.match(viewportSource, /<MemoizedThreadVoiceMessageBubble/);
   assert.match(
