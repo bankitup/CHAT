@@ -34,6 +34,18 @@ export type MessagingVoiceBlobPlaybackRisk = {
   reason: 'webkit-mobile-opus-container' | null;
 };
 
+export type MessagingVoiceCaptureMimeType =
+  | 'audio/mp4'
+  | 'audio/ogg;codecs=opus'
+  | 'audio/webm'
+  | 'audio/webm;codecs=opus';
+
+export type MessagingVoiceCaptureMimeResolution = {
+  mimePreferenceOrder: readonly MessagingVoiceCaptureMimeType[];
+  platform: 'other' | 'webkit-mobile';
+  selectedMimeType: MessagingVoiceCaptureMimeType | null;
+};
+
 export type MessagingVoiceMessageDraftRecord = {
   blobUrl: string | null;
   clientDraftId: string;
@@ -88,6 +100,41 @@ export type MessagingVoiceComposerRuntime = {
   getDraftSnapshot(conversationId: string): MessagingVoiceMessageDraftRecord[];
   subscribe(conversationId: string, listener: () => void): () => void;
 };
+
+const CHROMIUM_FRIENDLY_VOICE_CAPTURE_MIME_TYPES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4',
+  'audio/ogg;codecs=opus',
+] as const satisfies readonly MessagingVoiceCaptureMimeType[];
+
+const WEBKIT_FRIENDLY_VOICE_CAPTURE_MIME_TYPES = [
+  'audio/mp4',
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/ogg;codecs=opus',
+] as const satisfies readonly MessagingVoiceCaptureMimeType[];
+
+function resolveMessagingVoiceClientPlatform(input: {
+  maxTouchPoints?: number | null;
+  userAgent?: string | null;
+  vendor?: string | null;
+}) {
+  const normalizedUserAgent = input.userAgent?.trim().toLowerCase() || '';
+  const normalizedVendor = input.vendor?.trim().toLowerCase() || '';
+  const maxTouchPoints =
+    typeof input.maxTouchPoints === 'number' ? input.maxTouchPoints : 0;
+  const looksLikeAppleMobileBrowser =
+    /iphone|ipad|ipod/.test(normalizedUserAgent) ||
+    (/macintosh/.test(normalizedUserAgent) &&
+      normalizedVendor.includes('apple') &&
+      maxTouchPoints > 1);
+  const looksLikeWebKit = normalizedUserAgent.includes('applewebkit');
+
+  return looksLikeAppleMobileBrowser && looksLikeWebKit
+    ? 'webkit-mobile'
+    : 'other';
+}
 
 export function classifyMessagingVoiceDevicePlaybackSupport(input: {
   canPlayType: 'maybe' | 'no' | 'probably' | null;
@@ -155,6 +202,27 @@ function resolveMessagingVoiceFileExtension(fileName: string | null | undefined)
   return normalizedFileName.slice(extensionIndex);
 }
 
+export function resolveMessagingVoiceCaptureMimeType(input: {
+  isTypeSupported: (candidate: MessagingVoiceCaptureMimeType) => boolean;
+  maxTouchPoints?: number | null;
+  userAgent?: string | null;
+  vendor?: string | null;
+}): MessagingVoiceCaptureMimeResolution {
+  const platform = resolveMessagingVoiceClientPlatform(input);
+  const mimePreferenceOrder =
+    platform === 'webkit-mobile'
+      ? WEBKIT_FRIENDLY_VOICE_CAPTURE_MIME_TYPES
+      : CHROMIUM_FRIENDLY_VOICE_CAPTURE_MIME_TYPES;
+
+  return {
+    mimePreferenceOrder,
+    platform,
+    selectedMimeType:
+      mimePreferenceOrder.find((candidate) => input.isTypeSupported(candidate)) ??
+      null,
+  };
+}
+
 export function resolveMessagingVoiceBlobPlaybackRisk(input: {
   fileName: string | null;
   maxTouchPoints?: number | null;
@@ -163,22 +231,8 @@ export function resolveMessagingVoiceBlobPlaybackRisk(input: {
   vendor?: string | null;
 }): MessagingVoiceBlobPlaybackRisk {
   const normalizedMimeType = input.mimeType?.trim().toLowerCase() || null;
-  const normalizedUserAgent = input.userAgent?.trim().toLowerCase() || '';
-  const normalizedVendor = input.vendor?.trim().toLowerCase() || '';
   const fileExtension = resolveMessagingVoiceFileExtension(input.fileName);
-  const maxTouchPoints =
-    typeof input.maxTouchPoints === 'number' ? input.maxTouchPoints : 0;
-
-  const looksLikeAppleMobileBrowser =
-    /iphone|ipad|ipod/.test(normalizedUserAgent) ||
-    (/macintosh/.test(normalizedUserAgent) &&
-      normalizedVendor.includes('apple') &&
-      maxTouchPoints > 1);
-  const looksLikeWebKit = normalizedUserAgent.includes('applewebkit');
-  const platform =
-    looksLikeAppleMobileBrowser && looksLikeWebKit
-      ? 'webkit-mobile'
-      : 'other';
+  const platform = resolveMessagingVoiceClientPlatform(input);
   const looksLikeRiskyOpusContainer = Boolean(
     normalizedMimeType &&
       (normalizedMimeType.includes('webm') ||

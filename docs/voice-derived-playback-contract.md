@@ -35,6 +35,9 @@ Related documents:
 Today the repo works like this:
 
 1. The browser records a voice draft in its selected MIME/container.
+   - current policy is platform-aware:
+     - WebKit-mobile prefers `audio/mp4` first when supported
+     - Chromium-like environments keep the current WebM-first path
 2. Send persists one committed voice asset row.
 3. The committed asset stores:
    - `storage_bucket`

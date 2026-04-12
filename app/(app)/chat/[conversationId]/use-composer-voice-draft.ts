@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MessagingMessageContentMode } from '@/modules/messaging/media/message-metadata';
 import type { MessagingVoiceMessageDraftRecord } from '@/modules/messaging/media/voice';
 import type { MessagingVoiceCaptureState } from '@/modules/messaging/media/voice';
+import { resolveMessagingVoiceCaptureMimeType } from '@/modules/messaging/media/voice';
 import {
   deleteLocalMessagingVoiceDraft,
   getLocalMessagingVoiceDraft,
@@ -39,12 +40,6 @@ type UseComposerVoiceDraftResult = {
 };
 
 const UPDATE_TIMER_INTERVAL_MS = 200;
-const SUPPORTED_MIME_TYPES = [
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'audio/mp4',
-  'audio/ogg;codecs=opus',
-] as const;
 const voiceComposerDiagnosticsEnabled =
   process.env.NEXT_PUBLIC_CHAT_DEBUG_VOICE === '1';
 
@@ -97,13 +92,19 @@ function resolveSupportedMimeType() {
     typeof MediaRecorder === 'undefined' ||
     typeof MediaRecorder.isTypeSupported !== 'function'
   ) {
-    return null;
+    return {
+      mimePreferenceOrder: [] as const,
+      platform: 'other' as const,
+      selectedMimeType: null,
+    };
   }
 
-  return (
-    SUPPORTED_MIME_TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ??
-    null
-  );
+  return resolveMessagingVoiceCaptureMimeType({
+    isTypeSupported: (candidate) => MediaRecorder.isTypeSupported(candidate),
+    maxTouchPoints: navigator.maxTouchPoints,
+    userAgent: navigator.userAgent,
+    vendor: navigator.vendor,
+  });
 }
 
 function buildVoiceDraftFileName(createdAtIso: string, mimeType: string | null) {
@@ -221,10 +222,11 @@ export function useComposerVoiceDraft({
     const durationMs = startedAtRef.current
       ? Math.max(Date.now() - startedAtRef.current, 0)
       : elapsedMs;
+    const captureMimeResolution = resolveSupportedMimeType();
     const mimeType =
       mediaRecorderRef.current?.mimeType ||
       chunksRef.current[0]?.type ||
-      resolveSupportedMimeType();
+      captureMimeResolution.selectedMimeType;
 
     if (shouldDiscardOnStopRef.current) {
       shouldDiscardOnStopRef.current = false;
@@ -445,9 +447,11 @@ export function useComposerVoiceDraft({
         conversationId,
         reusedExistingPermission: effectivePermissionState === 'granted',
       });
-      const mimeType = resolveSupportedMimeType();
-      const mediaRecorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
+      const captureMimeResolution = resolveSupportedMimeType();
+      const mediaRecorder = captureMimeResolution.selectedMimeType
+        ? new MediaRecorder(stream, {
+            mimeType: captureMimeResolution.selectedMimeType,
+          })
         : new MediaRecorder(stream);
 
       chunksRef.current = [];
@@ -468,9 +472,13 @@ export function useComposerVoiceDraft({
       setCaptureState('recording');
       logVoiceComposerDiagnostics('entry:recording', {
         conversationId,
+        capturePlatform: captureMimeResolution.platform,
         mediaRecorderMimeType: mediaRecorder.mimeType || null,
-        mimePreferenceOrder: SUPPORTED_MIME_TYPES,
-        mimeType: mimeType ?? mediaRecorder.mimeType ?? null,
+        mimePreferenceOrder: captureMimeResolution.mimePreferenceOrder,
+        mimeType:
+          captureMimeResolution.selectedMimeType ??
+          mediaRecorder.mimeType ??
+          null,
       });
 
       timerRef.current = setInterval(() => {

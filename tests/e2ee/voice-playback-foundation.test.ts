@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { MessagingVoiceCaptureMimeType } from '@/modules/messaging/media/voice';
 
 const workspaceRoot = resolve(import.meta.dirname, '..', '..');
 
@@ -92,6 +93,7 @@ test('voice device playback classification stays truthful across supported, unkn
   const {
     classifyMessagingVoiceDevicePlaybackSupport,
     resolveMessagingVoiceBlobPlaybackRisk,
+    resolveMessagingVoiceCaptureMimeType,
     resolveMessagingVoicePlaybackSourcePreference,
   } = await importWorkspaceModule('src/modules/messaging/media/voice.ts');
 
@@ -168,6 +170,48 @@ test('voice device playback classification stays truthful across supported, unkn
       fileExtension: '.webm',
       platform: 'other',
       reason: null,
+    },
+  );
+
+  assert.deepEqual(
+    resolveMessagingVoiceCaptureMimeType({
+      isTypeSupported: (candidate: MessagingVoiceCaptureMimeType) =>
+        candidate === 'audio/mp4' || candidate === 'audio/webm;codecs=opus',
+      maxTouchPoints: 5,
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+      vendor: 'Apple Computer, Inc.',
+    }),
+    {
+      mimePreferenceOrder: [
+        'audio/mp4',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+      ],
+      platform: 'webkit-mobile',
+      selectedMimeType: 'audio/mp4',
+    },
+  );
+
+  assert.deepEqual(
+    resolveMessagingVoiceCaptureMimeType({
+      isTypeSupported: (candidate: MessagingVoiceCaptureMimeType) =>
+        candidate === 'audio/mp4' || candidate === 'audio/webm;codecs=opus',
+      maxTouchPoints: 0,
+      userAgent:
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      vendor: 'Google Inc.',
+    }),
+    {
+      mimePreferenceOrder: [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/ogg;codecs=opus',
+      ],
+      platform: 'other',
+      selectedMimeType: 'audio/webm;codecs=opus',
     },
   );
 });

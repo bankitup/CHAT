@@ -19,16 +19,25 @@ Follow-up architecture contract:
 - [voice-derived-playback-contract.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-derived-playback-contract.md)
 - [voice-cross-device-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/voice-cross-device-manual-matrix.md)
 
-## Current Capture Order
+## Current Capture Policy
 
-The current recorder MIME preference order in `use-composer-voice-draft.ts` is:
+The recorder MIME preference in `use-composer-voice-draft.ts` is now
+platform-aware:
 
-1. `audio/webm;codecs=opus`
-2. `audio/webm`
-3. `audio/mp4`
-4. `audio/ogg;codecs=opus`
+- WebKit-mobile environments prefer:
+  1. `audio/mp4`
+  2. `audio/webm;codecs=opus`
+  3. `audio/webm`
+  4. `audio/ogg;codecs=opus`
+- other environments keep the Chromium-friendly order:
+  1. `audio/webm;codecs=opus`
+  2. `audio/webm`
+  3. `audio/mp4`
+  4. `audio/ogg;codecs=opus`
 
-That means the current implementation will prefer WebM/Opus whenever the browser reports support.
+That means Apple/WebKit-style recording no longer blindly prefers WebM first
+when MP4 is available, while Chromium-like browsers keep the current WebM-first
+path.
 
 ## What Is Logged Now
 
@@ -95,7 +104,7 @@ That points to client runtime gating, owner state, or element lifecycle instead 
 
 Inference from the current code:
 
-- capture prefers WebM/Opus before MP4
+- capture used to prefer WebM/Opus before MP4 everywhere
 - mobile failure affects at least some messages, while desktop works
 - delivery routes already support authenticated content resolution and warmed blob playback
 
@@ -123,6 +132,10 @@ The current runtime now bypasses blob warming for risky combinations:
 For that path, the player now prefers direct transport playback first instead
 of defaulting to a warmed `blob:` URL. Desktop and other non-risky browser/media
 combinations still keep the existing warmed playback path.
+
+The current capture path now also reduces future risky uploads by preferring
+`audio/mp4` first on WebKit-mobile environments when the recorder reports that
+format as supported.
 
 ## Next Narrow Step After Proof
 
