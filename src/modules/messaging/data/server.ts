@@ -3804,6 +3804,29 @@ export async function deleteDirectConversationForUser(input: {
       throw new Error(assetLinkRowsError.message);
     }
 
+    const assetIds = Array.from(
+      new Set(
+        ((assetLinkRows ?? []) as Array<{
+          message_assets:
+            | {
+                id: string;
+                source: 'supabase-storage' | 'external-url';
+                storage_bucket?: string | null;
+                storage_object_path?: string | null;
+              }
+            | Array<{
+                id: string;
+                source: 'supabase-storage' | 'external-url';
+                storage_bucket?: string | null;
+                storage_object_path?: string | null;
+              }>
+            | null;
+        }>)
+          .map((row) => normalizeJoinedRecord(row.message_assets)?.id?.trim() || '')
+          .filter(Boolean),
+      ),
+    );
+
     const { error: attachmentsError } = await serviceSupabase
       .from('message_attachments')
       .delete()
@@ -3820,6 +3843,18 @@ export async function deleteDirectConversationForUser(input: {
 
     if (envelopesError && !isMissingRelationErrorMessage(envelopesError.message, 'message_e2ee_envelopes')) {
       throw new Error(envelopesError.message);
+    }
+
+    const { error: assetLinksDeleteError } = await serviceSupabase
+      .from('message_asset_links')
+      .delete()
+      .in('message_id', messageIds);
+
+    if (
+      assetLinksDeleteError &&
+      !isMissingRelationErrorMessage(assetLinksDeleteError.message, 'message_asset_links')
+    ) {
+      throw new Error(assetLinksDeleteError.message);
     }
 
     const { error: messagesError } = await serviceSupabase
@@ -3889,6 +3924,20 @@ export async function deleteDirectConversationForUser(input: {
       }
 
       await serviceSupabase.storage.from(bucket).remove(uniqueObjectPaths);
+    }
+
+    if (assetIds.length > 0) {
+      const { error: assetsDeleteError } = await serviceSupabase
+        .from('message_assets')
+        .delete()
+        .in('id', assetIds);
+
+      if (
+        assetsDeleteError &&
+        !isMissingRelationErrorMessage(assetsDeleteError.message, 'message_assets')
+      ) {
+        throw new Error(assetsDeleteError.message);
+      }
     }
   }
 
