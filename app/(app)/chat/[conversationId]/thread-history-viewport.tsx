@@ -73,10 +73,35 @@ const ThreadDeleteMessageConfirm = dynamic(() =>
   ),
 );
 
-const MemoizedThreadVoiceMessageBubble = dynamic(() =>
-  import('./thread-voice-message-bubble').then(
-    (mod) => mod.MemoizedThreadVoiceMessageBubble,
-  ),
+function ThreadVoiceMessageBubbleLoadingFallback() {
+  return (
+    <div
+      aria-hidden="true"
+      className="message-voice-card message-voice-card-loading"
+      data-message-voice-interactive="false"
+    >
+      <span className="message-voice-loading-play" />
+      <div className="message-voice-copy">
+        <div className="message-voice-head">
+          <span className="message-voice-loading-line message-voice-loading-line-title" />
+          <span className="message-voice-loading-line message-voice-loading-line-duration" />
+        </div>
+        <div className="message-voice-progress message-voice-progress-loading-shell">
+          <span className="message-voice-progress-bar message-voice-progress-bar-loading" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const MemoizedThreadVoiceMessageBubble = dynamic(
+  () =>
+    import('./thread-voice-message-bubble').then(
+      (mod) => mod.MemoizedThreadVoiceMessageBubble,
+    ),
+  {
+    loading: ThreadVoiceMessageBubbleLoadingFallback,
+  },
 );
 
 const ThreadReactionGroups = dynamic(() =>

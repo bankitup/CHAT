@@ -8,7 +8,7 @@ import {
   getDirectMessageDisplayName,
   getInboxConversationsStable,
   type InboxConversation,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/conversation-read-server';
 import { getInboxPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
 import type { InboxConversationLiveSummary } from '@/modules/messaging/realtime/inbox-summary-store';
 import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';

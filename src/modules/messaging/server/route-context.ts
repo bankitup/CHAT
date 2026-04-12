@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getConversationForUser } from '@/modules/messaging/data/server';
+import { getConversationForUser } from '@/modules/messaging/data/conversation-read-server';
 import {
   resolveSpaceAccessContract,
   resolveSpaceGovernanceRoleForRuntimeSpaceRole,

@@ -86,6 +86,16 @@
   --app-shell-context-max-width: 580px;
   --app-shell-bottom-nav-max-width: 580px;
   --app-shell-messenger-nav-max-width: 430px;
+  --app-bottom-nav-shell-min-height: calc(
+    var(--app-bottom-nav-link-min-height) + (14px * var(--app-zoom-space-scale))
+  );
+  --app-bottom-nav-shell-messenger-min-height: calc(
+    var(--app-bottom-nav-link-messenger-min-height) +
+      (16px * var(--app-zoom-space-scale))
+  );
+  --app-composer-runtime-min-height: calc(
+    var(--app-composer-shell-min-height) + (2px * var(--app-zoom-space-scale))
+  );
   --app-bottom-nav-reserve: calc(
     (84px * var(--app-zoom-space-scale)) + env(safe-area-inset-bottom)
   );
@@ -650,6 +660,8 @@ main {
   overscroll-behavior: none;
 }
 
+/* Platform shell foundation styles. Product-specific nav polish should move
+   out of this shared global block before broader visual work continues. */
 .app-shell {
   position: relative;
   width: 100%;
@@ -1056,6 +1068,7 @@ main {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
+  min-height: var(--app-bottom-nav-shell-min-height);
   padding: 7px;
   border: 1px solid rgba(221, 228, 238, 0.9);
   border-radius: 22px;
@@ -1069,6 +1082,7 @@ main {
 .app-bottom-nav-shell-messenger {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  min-height: var(--app-bottom-nav-shell-messenger-min-height);
   padding: 8px 10px;
   border-color: rgba(218, 226, 237, 0.82);
   border-radius: 999px;
@@ -1221,6 +1235,8 @@ main {
   font-weight: 600;
 }
 
+/* Messenger inbox surface styles. These are the first candidate blocks for a
+   future product-scoped stylesheet split away from app-wide globals. */
 .inbox-screen {
   gap: 16px;
   padding-bottom: 2px;
@@ -2452,6 +2468,10 @@ main {
   font-size: 0.84rem;
   line-height: 1.42;
   color: rgba(91, 100, 112, 0.76);
+}
+
+.conversation-preview-placeholder {
+  visibility: hidden;
 }
 
 .conversation-preview-unread {
@@ -6196,6 +6216,7 @@ main {
   align-items: center;
   justify-content: center;
   gap: 5px 8px;
+  min-height: 18px;
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -6329,10 +6350,15 @@ main {
   justify-content: center;
   gap: 5px;
   margin: 0;
+  min-height: 18px;
   color: rgba(91, 100, 112, 0.88);
   font-size: 0.76rem;
   font-weight: 600;
   line-height: 1.2;
+}
+
+.chat-presence-status[data-presence-active='false'] {
+  visibility: hidden;
 }
 
 .chat-presence-dot {
@@ -8397,6 +8423,10 @@ main {
     linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(225, 237, 255, 0.86));
 }
 
+.message-voice-card-loading {
+  pointer-events: none;
+}
+
 .message-voice-card-optimistic-pending {
   min-height: 58px;
   padding-top: 8px;
@@ -8469,6 +8499,17 @@ main {
   background: rgba(160, 170, 184, 0.56);
   box-shadow: none;
   cursor: default;
+}
+
+.message-voice-loading-play {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(31, 111, 235, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 10px 20px rgba(31, 111, 235, 0.1);
 }
 
 .message-voice-play-icon {
@@ -8561,12 +8602,32 @@ main {
   white-space: nowrap;
 }
 
+.message-voice-loading-line {
+  display: block;
+  border-radius: 999px;
+  background: rgba(201, 211, 223, 0.72);
+}
+
+.message-voice-loading-line-title {
+  width: min(100%, 8.2rem);
+  height: 12px;
+}
+
+.message-voice-loading-line-duration {
+  width: 2.4rem;
+  height: 11px;
+}
+
 .message-voice-progress {
   position: relative;
   overflow: hidden;
   height: 4px;
   border-radius: 999px;
   background: rgba(176, 188, 202, 0.26);
+}
+
+.message-voice-progress-loading-shell {
+  background: rgba(176, 188, 202, 0.2);
 }
 
 .message-voice-progress-bar {
@@ -9135,8 +9196,66 @@ main {
   line-height: 1.2;
 }
 
+/* Messenger chat surface styles. Keep layout reservation fixes here so the
+   route can continue slimming without reintroducing hydration shifts. */
 .composer-form {
   gap: var(--app-composer-form-gap);
+}
+
+.composer-runtime-shell {
+  min-height: var(--app-composer-runtime-min-height);
+}
+
+.composer-form-loading {
+  pointer-events: none;
+}
+
+.composer-input-shell-loading {
+  align-items: center;
+}
+
+.composer-loading-button {
+  display: inline-flex;
+  width: var(--app-composer-round-button-size);
+  min-width: var(--app-composer-round-button-size);
+  height: var(--app-composer-round-button-size);
+  min-height: var(--app-composer-round-button-size);
+  border-radius: 999px;
+  background: rgba(222, 229, 239, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 6px 14px rgba(17, 24, 39, 0.04);
+}
+
+.composer-loading-button-accent {
+  background: rgba(31, 111, 235, 0.18);
+}
+
+.composer-loading-button-muted {
+  background: rgba(226, 232, 240, 0.86);
+}
+
+.composer-typing-shell-loading {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+}
+
+.composer-loading-line {
+  display: block;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(229, 235, 243, 0.9), rgba(219, 227, 238, 0.72));
+}
+
+.composer-loading-line-primary {
+  width: min(100%, 17rem);
+  height: 14px;
+}
+
+.composer-loading-line-secondary {
+  width: min(100%, 10rem);
+  height: 11px;
 }
 
 .composer-input-shell {
@@ -10024,6 +10143,20 @@ main {
 
 .route-error-card-chat {
   margin-top: max(5.5rem, 20dvh);
+}
+
+.thread-body-rescue-shell {
+  display: grid;
+  min-height: 100%;
+  align-content: center;
+  padding: 0 16px 24px;
+}
+
+.thread-body-rescue-card {
+  width: min(100%, 32rem);
+  margin: 0 auto;
+  padding: 20px;
+  gap: 16px;
 }
 
 .route-error-copy {

@@ -16,7 +16,7 @@ import {
   getConversationParticipantIdentities,
   getConversationParticipants,
   getDirectMessageDisplayName,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/conversation-read-server';
 import {
   canAddParticipantsToGroupConversation,
   canEditGroupConversationIdentity,

@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageReactionGroup } from '@/modules/messaging/data/server';
+import type { MessageReactionGroup } from '@/modules/messaging/data/thread-read-server';
 import {
   applyThreadReactionMutationResult,
   reconcileThreadReactionOptimisticMutation,

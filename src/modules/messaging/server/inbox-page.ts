@@ -12,7 +12,7 @@ import {
   getInboxConversations,
   getInboxConversationsStable,
   type InboxConversation,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/conversation-read-server';
 import {
   loadArchivedConversationsForSsr,
   loadInboxConversationsForSsr,

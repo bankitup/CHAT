@@ -56,6 +56,9 @@ This is a manual sanity checklist, not a feature-expansion script.
   - open an existing conversation or create one through the normal flow
   - send a basic message
   - verify the thread loads and the inbox preview updates
+- if a known-problem conversation is available in the environment, confirm the
+  thread body now shows a contained recovery state with retry, back-to-chats,
+  and info escape paths instead of leaving the route dead or blank
 - open thread settings and confirm the route loads without breaking the chat
   shell
 - Confirm no KeepCozy route is required for this flow.

@@ -218,6 +218,12 @@ Use these as the minimum human checks after mobile-performance changes:
 For the broader stability matrix, see
 [manual-test-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/stability/manual-test-matrix.md).
 
+Current lightweight regression coverage for these startup and CLS-sensitive
+surfaces now also lives in:
+
+- [mobile-messenger-performance-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/mobile-messenger-performance-boundaries.test.ts)
+- [layout-stability-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/layout-stability-boundaries.test.ts)
+
 ## Likely CLS Sources
 
 ### 1. Chat header presence and status settlement

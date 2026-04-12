@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRequestViewer } from '@/lib/request-context/server';
+import { getAvailableUsers } from '@/modules/messaging/data/conversation-read-server';
 import {
-  getAvailableUsers,
   getExistingActiveDmPartnerUserIdsForCandidates,
 } from '@/modules/messaging/data/server';
 import { isSpaceMembersSchemaCacheErrorMessage } from '@/modules/spaces/server';

@@ -1,8 +1,8 @@
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { resolveConversationAttachmentContentTarget } from '@/modules/messaging/data/thread-read-server';
 import {
   assertConversationMembership,
-  resolveConversationAttachmentContentTarget,
 } from '@/modules/messaging/data/server';
 
 type ConversationAttachmentContentRouteContext = {

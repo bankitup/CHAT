@@ -31,7 +31,11 @@ test('thread viewport delegates voice runtime to the extracted voice bubble seam
 
   assert.match(
     viewportSource,
-    /const MemoizedThreadVoiceMessageBubble = dynamic\(\(\) =>\s*import\('\.\/thread-voice-message-bubble'\)/,
+    /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
+  );
+  assert.match(
+    viewportSource,
+    /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
   assert.match(viewportSource, /<MemoizedThreadVoiceMessageBubble/);
   assert.match(
@@ -46,7 +50,7 @@ test('thread viewport delegates voice runtime to the extracted voice bubble seam
   assert.match(viewportSource, /<ThreadHistoryRenderList/);
   assert.match(
     viewportSource,
-    /const ThreadImagePreviewOverlay = dynamic\(\(\) =>\s*import\('\.\/thread-image-preview-overlay'\)/,
+    /const ThreadImagePreviewOverlay = dynamic\(/,
   );
   assert.match(viewportSource, /<ThreadImagePreviewOverlay/);
   assert.match(

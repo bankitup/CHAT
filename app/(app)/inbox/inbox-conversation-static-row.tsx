@@ -59,6 +59,15 @@ export function InboxConversationStaticRow({
 }: InboxConversationStaticRowProps) {
   void currentUserId;
 
+  const previewClassName =
+    item.hasUnread
+      ? isPrimaryChatsView
+        ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
+        : 'muted conversation-preview conversation-preview-unread'
+      : isPrimaryChatsView
+        ? 'muted conversation-preview conversation-preview-dm'
+        : 'muted conversation-preview';
+
   const lastActivityAt = initialSummary.lastMessageAt ?? initialSummary.createdAt;
   const recencyLabel = formatInboxRecency(
     lastActivityAt,
@@ -207,20 +216,15 @@ export function InboxConversationStaticRow({
                 </div>
               </div>
               {item.preview ? (
+                <p className={previewClassName}>{item.preview}</p>
+              ) : (
                 <p
-                  className={
-                    item.hasUnread
-                      ? isPrimaryChatsView
-                        ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
-                        : 'muted conversation-preview conversation-preview-unread'
-                      : isPrimaryChatsView
-                        ? 'muted conversation-preview conversation-preview-dm'
-                        : 'muted conversation-preview'
-                  }
+                  aria-hidden="true"
+                  className={`${previewClassName} conversation-preview-placeholder`}
                 >
-                  {item.preview}
+                  {'\u00a0'}
                 </p>
-              ) : null}
+              )}
             </div>
 
             {item.metaLabels.length > 0 ? (

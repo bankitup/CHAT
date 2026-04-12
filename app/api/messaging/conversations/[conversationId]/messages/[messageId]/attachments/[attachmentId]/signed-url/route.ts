@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { resolveConversationAttachmentSignedUrl } from '@/modules/messaging/data/thread-read-server';
 import {
   assertConversationMembership,
-  resolveConversationAttachmentSignedUrl,
 } from '@/modules/messaging/data/server';
 import { NextResponse } from 'next/server';
 

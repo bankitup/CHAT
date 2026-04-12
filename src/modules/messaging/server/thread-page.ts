@@ -9,18 +9,20 @@ import {
 } from '@/modules/i18n';
 import { getRequestLanguage } from '@/modules/i18n/server';
 import {
-  CHAT_ATTACHMENT_HELP_TEXT,
   getAvailableUsers,
   getConversationDisplayName,
-  getConversationHistorySnapshot,
-  getConversationHistoryWindowSizeForMessageTargets,
   getConversationMemberReadStates,
   getConversationParticipants,
   getConversationReadState,
   getDirectMessageDisplayName,
+} from '@/modules/messaging/data/conversation-read-server';
+import {
+  getConversationHistorySnapshot,
+  getConversationHistoryWindowSizeForMessageTargets,
   getMessageSenderProfiles,
   type MessageSenderProfile,
-} from '@/modules/messaging/data/server';
+} from '@/modules/messaging/data/thread-read-server';
+import { CHAT_ATTACHMENT_HELP_TEXT } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import {
   canAddParticipantsToGroupConversation,

@@ -16,14 +16,15 @@ export function ConversationPresenceStatus({
   const t = getChatClientTranslations(language);
   const isOtherParticipantPresent = useIsOtherParticipantPresent();
 
-  if (!isOtherParticipantPresent) {
-    return null;
-  }
-
   return (
-    <p className="chat-presence-status" aria-live="polite">
+    <p
+      aria-hidden={!isOtherParticipantPresent}
+      aria-live={isOtherParticipantPresent ? 'polite' : undefined}
+      className="chat-presence-status"
+      data-presence-active={isOtherParticipantPresent ? 'true' : 'false'}
+    >
       <span className="chat-presence-dot" aria-hidden="true" />
-      <span>{t.chat.activeNow}</span>
+      <span>{isOtherParticipantPresent ? t.chat.activeNow : '\u00a0'}</span>
     </p>
   );
 }
