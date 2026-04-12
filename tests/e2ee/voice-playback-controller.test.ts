@@ -193,6 +193,10 @@ test('voice playback lifecycle ownership stays isolated in the extracted control
   );
   assert.match(runtimeHookSource, /const handleAudioPlaying = useCallback\(/);
   assert.match(runtimeHookSource, /const togglePlaybackUnsafe = useCallback\(/);
+  assert.match(
+    runtimeHookSource,
+    /shouldRenderAudioElement:\s*Boolean\(attachment\)/,
+  );
 
   assert.match(
     bubbleSource,

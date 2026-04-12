@@ -8428,6 +8428,7 @@ main {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
+  position: relative;
   min-height: 62px;
   contain: paint;
   overflow-anchor: none;
@@ -8746,13 +8747,18 @@ main {
 /* Keep the backing audio element mounted but not display:none so mobile media
    playback stays inline instead of briefly surfacing a native layer. */
 .message-voice-audio {
-  width: 0;
-  height: 0;
-  min-width: 0;
-  min-height: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 1px;
+  height: 1px;
+  min-width: 1px;
+  min-height: 1px;
   opacity: 0;
   pointer-events: none;
   overflow: hidden;
+  clip-path: inset(50%);
 }
 
 @keyframes message-voice-progress-loading {

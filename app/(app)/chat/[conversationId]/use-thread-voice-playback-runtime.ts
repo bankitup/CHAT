@@ -1800,9 +1800,7 @@ export function useThreadVoicePlaybackRuntime({
     playbackState,
     progressMs,
     resolvedDurationMs,
-    shouldRenderAudioElement:
-      Boolean(effectiveVoicePlaybackSourceUrl) ||
-      hasRecoverableAttachmentStorageLocator,
+    shouldRenderAudioElement: Boolean(attachment),
     togglePlayback,
     voiceRuntimeModel,
   };
