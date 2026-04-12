@@ -103,6 +103,9 @@ test('inbox route defers create flow, realtime startup, and warm-nav work until 
   const inboxContentSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-filterable-content.tsx',
   );
+  const inboxCreateRuntimeSource = readWorkspaceFile(
+    'app/(app)/inbox/inbox-create-sheet-runtime.tsx',
+  );
   const inboxDeferredEffectsSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-page-deferred-effects.tsx',
   );
@@ -114,24 +117,48 @@ test('inbox route defers create flow, realtime startup, and warm-nav work until 
   assert.match(inboxPageSource, /<InboxPageDeferredEffects/);
 
   assert.match(
-    inboxContentSource,
+    inboxCreateRuntimeSource,
     /const NewChatSheet = dynamic\(/,
   );
   assert.match(
     inboxContentSource,
-    /function useDeferredInboxLiveSummariesEnabled\(\)/,
+    /const DeferredInboxConversationSectionsLive = dynamic\(/,
   );
   assert.match(
     inboxContentSource,
-    /const EMPTY_CONVERSATION_SUMMARY_SUBSCRIBE = \(\) => \(\) => undefined;/,
+    /const DeferredInboxCreateSheetRuntime = dynamic\(/,
   );
   assert.match(
     inboxContentSource,
-    /areLiveSummariesEnabled\s*\?\s*subscribeToInboxSummaryRevision\s*:\s*EMPTY_CONVERSATION_SUMMARY_SUBSCRIBE/,
+    /from ['"]\.\/use-deferred-inbox-runtime-ready['"]/,
   );
   assert.match(
     inboxContentSource,
-    /isCreateSheetOpen[\s\S]*availableDmUserEntries\.filter/,
+    /from ['"]\.\/inbox-conversation-sections-static['"]/,
+  );
+  assert.match(
+    inboxContentSource,
+    /useDeferredInboxRuntimeReady\(/,
+  );
+  assert.match(
+    inboxContentSource,
+    /<DeferredInboxConversationSectionsLive/,
+  );
+  assert.match(
+    inboxContentSource,
+    /<InboxConversationSectionsStatic/,
+  );
+  assert.match(
+    inboxContentSource,
+    /<DeferredInboxCreateSheetRuntime/,
+  );
+  assert.doesNotMatch(
+    inboxContentSource,
+    /subscribeToInboxSummaryRevision|getInboxSummaryRevisionSnapshot|useSyncExternalStore/,
+  );
+  assert.doesNotMatch(
+    inboxContentSource,
+    /createDerivedConversationItemsMemoizer|deriveConversationItemFromLiveState/,
   );
   assert.match(
     inboxDeferredEffectsSource,

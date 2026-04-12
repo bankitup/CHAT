@@ -1,61 +1,42 @@
 'use client';
 
 import Link from 'next/link';
-import { memo, useSyncExternalStore } from 'react';
-import { getInboxDisplayPreviewText } from '@/modules/messaging/e2ee/inbox-policy';
-import type { InboxPreviewDisplayMode } from '@/modules/messaging/inbox/preferences';
 import {
-  getInboxConversationSummarySnapshot,
-  subscribeToInboxConversationSummary,
-  type InboxConversationLiveSummary,
-} from '@/modules/messaging/realtime/inbox-summary-store';
-import { EncryptedDmInboxPreview } from './encrypted-dm-inbox-preview';
-import {
-  areInboxMetaLabelsEqual,
-  areInboxParticipantListsEqual,
   formatInboxRecency,
   formatInboxTimestamp,
   formatInboxUnreadBadgeCount,
   InboxConversationAvatarVisual,
   InboxConversationTitleVisual,
+  type InboxConversationRowMetaLabel,
+  type InboxConversationRowParticipant,
 } from './inbox-conversation-row-shared';
 
-type InboxConversationLiveRowProps = {
+type InboxConversationStaticRowProps = {
   activeSpaceId: string | null;
   currentUserId: string;
-  initialSummary: InboxConversationLiveSummary;
-  isPrimaryChatsView: boolean;
+  initialSummary: {
+    conversationId: string;
+    createdAt: string | null;
+    hiddenAt: string | null;
+    lastMessageAt: string | null;
+    unreadCount: number;
+  };
   isArchivedView: boolean;
-  previewMode: InboxPreviewDisplayMode;
+  isPrimaryChatsView: boolean;
   item: {
     conversationId: string;
     groupAvatarPath: string | null;
+    hasUnread: boolean;
     isGroupConversation: boolean;
-    metaLabels: Array<{
-      label: string;
-      tone: 'default' | 'archived';
-    }>;
-    participants: Array<{
-      userId: string;
-      displayName: string | null;
-      avatarPath?: string | null;
-    }>;
+    metaLabels: InboxConversationRowMetaLabel[];
+    participants: InboxConversationRowParticipant[];
+    preview: string | null;
     title: string;
   };
   language: 'en' | 'ru';
   labels: {
-    audio: string;
-    attachment: string;
-    deletedMessage: string;
-    encryptedMessage: string;
-    file: string;
-    group: string;
-    image: string;
-    newMessage: string;
-    newEncryptedMessage: string;
     noActivityYet: string;
     unreadAria: string;
-    voiceMessage: string;
     yesterday: string;
   };
   restoreAction?: ((formData: FormData) => void | Promise<void>) | null;
@@ -63,86 +44,22 @@ type InboxConversationLiveRowProps = {
   shouldPrefetch?: boolean;
 };
 
-function areInboxConversationSummariesEqual(
-  previous: InboxConversationLiveSummary,
-  next: InboxConversationLiveSummary,
-) {
-  return (
-    previous.conversationId === next.conversationId &&
-    previous.createdAt === next.createdAt &&
-    previous.hiddenAt === next.hiddenAt &&
-    previous.lastMessageAt === next.lastMessageAt &&
-    previous.lastReadAt === next.lastReadAt &&
-    previous.lastReadMessageSeq === next.lastReadMessageSeq &&
-    previous.latestMessageAttachmentKind === next.latestMessageAttachmentKind &&
-    previous.latestMessageBody === next.latestMessageBody &&
-    previous.latestMessageContentMode === next.latestMessageContentMode &&
-    previous.latestMessageDeletedAt === next.latestMessageDeletedAt &&
-    previous.latestMessageId === next.latestMessageId &&
-    previous.latestMessageKind === next.latestMessageKind &&
-    previous.latestMessageSenderId === next.latestMessageSenderId &&
-    previous.latestMessageSeq === next.latestMessageSeq &&
-    previous.removed === next.removed &&
-    previous.unreadCount === next.unreadCount
-  );
-}
-
-function InboxConversationLiveRowComponent({
+export function InboxConversationStaticRow({
   activeSpaceId,
   currentUserId,
   initialSummary,
   isArchivedView,
   isPrimaryChatsView,
-  previewMode,
   item,
   language,
   labels,
   restoreAction,
   restoreLabel,
   shouldPrefetch = false,
-}: InboxConversationLiveRowProps) {
-  const liveSummary = useSyncExternalStore(
-    (listener) =>
-      subscribeToInboxConversationSummary(item.conversationId, listener),
-    () => getInboxConversationSummarySnapshot(item.conversationId, initialSummary),
-    () => initialSummary,
-  );
+}: InboxConversationStaticRowProps) {
+  void currentUserId;
 
-  if (liveSummary.removed) {
-    return null;
-  }
-
-  const isHidden = Boolean(liveSummary.hiddenAt);
-
-  if (isArchivedView ? !isHidden : isHidden) {
-    return null;
-  }
-
-  const preview = getInboxDisplayPreviewText(
-    {
-      lastMessageAt: liveSummary.lastMessageAt,
-      latestMessageAttachmentKind: liveSummary.latestMessageAttachmentKind,
-      latestMessageBody: liveSummary.latestMessageBody,
-      latestMessageContentMode: liveSummary.latestMessageContentMode,
-      latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
-      latestMessageKind: liveSummary.latestMessageKind,
-      unreadCount: liveSummary.unreadCount,
-    },
-    {
-      audio: labels.audio,
-      attachment: labels.attachment,
-      deletedMessage: labels.deletedMessage,
-      encryptedMessage: labels.encryptedMessage,
-      file: labels.file,
-      image: labels.image,
-      newMessage: labels.newMessage,
-      newEncryptedMessage: labels.newEncryptedMessage,
-      voiceMessage: labels.voiceMessage,
-    },
-    previewMode,
-  );
-  const hasUnread = liveSummary.unreadCount > 0;
-  const lastActivityAt = liveSummary.lastMessageAt ?? liveSummary.createdAt;
+  const lastActivityAt = initialSummary.lastMessageAt ?? initialSummary.createdAt;
   const recencyLabel = formatInboxRecency(
     lastActivityAt,
     language,
@@ -153,7 +70,7 @@ function InboxConversationLiveRowComponent({
     language,
     labels.noActivityYet,
   );
-  const unreadBadgeCount = formatInboxUnreadBadgeCount(liveSummary.unreadCount);
+  const unreadBadgeCount = formatInboxUnreadBadgeCount(initialSummary.unreadCount);
   const chatHref =
     activeSpaceId?.trim()
       ? `/chat/${item.conversationId}?space=${encodeURIComponent(activeSpaceId)}`
@@ -181,7 +98,7 @@ function InboxConversationLiveRowComponent({
   return (
     <article
       className={
-        hasUnread
+        item.hasUnread
           ? isPrimaryChatsView
             ? 'conversation-card conversation-card-unread conversation-card-minimal conversation-card-dm'
             : 'conversation-card conversation-card-unread conversation-card-minimal'
@@ -215,7 +132,7 @@ function InboxConversationLiveRowComponent({
               event.metaKey ||
               event.ctrlKey ||
               event.shiftKey ||
-            event.altKey
+              event.altKey
             ) {
               logNavigationDiagnostics('row:navigation-bypassed', {
                 conversationId: item.conversationId,
@@ -264,14 +181,14 @@ function InboxConversationLiveRowComponent({
                 }
               >
                 <InboxConversationTitleVisual
-                  hasUnread={hasUnread}
+                  hasUnread={item.hasUnread}
                   isPrimaryChatsView={isPrimaryChatsView}
                   title={item.title}
                 />
                 <div className="conversation-title-meta">
                   <span
                     className={
-                      hasUnread
+                      item.hasUnread
                         ? 'conversation-recency conversation-recency-unread'
                         : 'conversation-recency'
                     }
@@ -279,20 +196,20 @@ function InboxConversationLiveRowComponent({
                   >
                     {recencyLabel}
                   </span>
-                  {hasUnread && unreadBadgeCount ? (
+                  {item.hasUnread && unreadBadgeCount ? (
                     <span
-                      className="conversation-unread-badge"
                       aria-label={labels.unreadAria}
+                      className="conversation-unread-badge"
                     >
                       {unreadBadgeCount}
                     </span>
                   ) : null}
                 </div>
               </div>
-              {preview ? (
-                <EncryptedDmInboxPreview
+              {item.preview ? (
+                <p
                   className={
-                    hasUnread
+                    item.hasUnread
                       ? isPrimaryChatsView
                         ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
                         : 'muted conversation-preview conversation-preview-unread'
@@ -300,13 +217,9 @@ function InboxConversationLiveRowComponent({
                         ? 'muted conversation-preview conversation-preview-dm'
                         : 'muted conversation-preview'
                   }
-                  conversationId={item.conversationId}
-                  currentUserId={currentUserId}
-                  fallbackPreview={preview}
-                  latestMessageContentMode={liveSummary.latestMessageContentMode}
-                  latestMessageDeletedAt={liveSummary.latestMessageDeletedAt}
-                  latestMessageId={liveSummary.latestMessageId}
-                />
+                >
+                  {item.preview}
+                </p>
               ) : null}
             </div>
 
@@ -352,23 +265,3 @@ function InboxConversationLiveRowComponent({
     </article>
   );
 }
-
-export const InboxConversationLiveRow = memo(
-  InboxConversationLiveRowComponent,
-  (previous, next) =>
-    previous.activeSpaceId === next.activeSpaceId &&
-    previous.currentUserId === next.currentUserId &&
-    areInboxConversationSummariesEqual(previous.initialSummary, next.initialSummary) &&
-    previous.isArchivedView === next.isArchivedView &&
-    previous.isPrimaryChatsView === next.isPrimaryChatsView &&
-    previous.item.conversationId === next.item.conversationId &&
-    previous.item.groupAvatarPath === next.item.groupAvatarPath &&
-    previous.item.isGroupConversation === next.item.isGroupConversation &&
-    previous.item.title === next.item.title &&
-    areInboxMetaLabelsEqual(previous.item.metaLabels, next.item.metaLabels) &&
-    areInboxParticipantListsEqual(previous.item.participants, next.item.participants) &&
-    previous.language === next.language &&
-    previous.labels === next.labels &&
-    previous.restoreAction === next.restoreAction &&
-    previous.restoreLabel === next.restoreLabel,
-);

@@ -8,54 +8,42 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type TouchEvent,
 } from 'react';
 import {
   getInboxClientTranslations,
   type AppLanguage,
 } from '@/modules/i18n/client';
-import {
-  getInboxDisplayPreviewText,
-  getSearchableConversationPreview,
-} from '@/modules/messaging/e2ee/inbox-policy';
-import {
-  getInboxConversationSummarySnapshot,
-  getInboxSummaryRevisionSnapshot,
-  subscribeToInboxSummaryRevision,
-  type InboxConversationLiveSummary,
-} from '@/modules/messaging/realtime/inbox-summary-store';
-import { requestInboxManualRefresh } from '@/modules/messaging/realtime/inbox-manual-refresh';
+import { getSearchableConversationPreview } from '@/modules/messaging/e2ee/inbox-policy';
 import {
   resolveInboxInitialFilter,
-  type InboxPreviewDisplayMode,
   type InboxPrimaryFilter,
   type InboxSectionPreferences,
 } from '@/modules/messaging/inbox/preferences';
-import { resolvePublicIdentityLabel } from '@/modules/profile/ui/identity-label';
-import { InboxConversationLiveRow } from './inbox-conversation-live-row';
+import { requestInboxManualRefresh } from '@/modules/messaging/realtime/inbox-manual-refresh';
+import type { InboxConversationLiveSummary } from '@/modules/messaging/realtime/inbox-summary-store';
 import type { NewChatMode } from './new-chat-sheet';
+import { InboxConversationSectionsStatic } from './inbox-conversation-sections-static';
+import { useDeferredInboxRuntimeReady } from './use-deferred-inbox-runtime-ready';
 
-const NewChatSheet = dynamic(
-  () => import('./new-chat-sheet').then((mod) => mod.NewChatSheet),
-  {
-    loading: () => (
-      <section
-        aria-modal="true"
-        className="card stack inbox-create-sheet"
-        role="dialog"
-      >
-        <div aria-hidden="true" className="inbox-create-sheet-handle" />
-        <div className="stack inbox-create-loading-state" aria-live="polite">
-          <span aria-hidden="true" className="message-status-spinner" />
-        </div>
-      </section>
+const DeferredInboxConversationSectionsLive = dynamic(
+  () =>
+    import('./inbox-conversation-sections-live').then(
+      (mod) => mod.InboxConversationSectionsLive,
     ),
-  },
+  { ssr: false },
+);
+
+const DeferredInboxCreateSheetRuntime = dynamic(
+  () =>
+    import('./inbox-create-sheet-runtime').then(
+      (mod) => mod.InboxCreateSheetRuntime,
+    ),
+  { ssr: false },
 );
 
 type InboxFilter = InboxPrimaryFilter;
-type InboxView = 'main' | 'archived';
+type InboxView = 'archived' | 'main';
 
 type ConversationListItem = {
   conversationId: string;
@@ -86,28 +74,6 @@ type AvailableUserEntry = {
   userId: string;
 };
 
-type CreateChatTargetUserPayload = {
-  avatarPath?: string | null;
-  displayName: string | null;
-  emailLocalPart?: string | null;
-  statusEmoji?: string | null;
-  statusText?: string | null;
-  userId: string;
-  username?: string | null;
-};
-
-type CreateChatTargetsResponse = {
-  existingDmPartnerUserIds: string[];
-  users: CreateChatTargetUserPayload[];
-};
-
-type CreateChatTargetsState = {
-  availableDmUserEntries: AvailableUserEntry[];
-  availableUserEntries: AvailableUserEntry[];
-  errorMessage: string | null;
-  status: 'idle' | 'seeded' | 'loading' | 'ready' | 'error';
-};
-
 type FilterBucket = {
   hasEncryptedDmSearchLimit: boolean;
   itemsByFilter: Record<InboxFilter, ConversationListItem[]>;
@@ -121,174 +87,35 @@ type OrganizedConversationSection = {
   label: string | null;
 };
 
-type InboxPresentationLabels = {
-  audio: string;
-  attachment: string;
-  deletedMessage: string;
-  encryptedMessage: string;
-  file: string;
-  group: string;
-  image: string;
-  newMessage: string;
-  newEncryptedMessage: string;
-  noActivityYet: string;
-  unreadAria: string;
-  voiceMessage: string;
-  yesterday: string;
-};
-
-type DerivedConversationSummarySnapshot = Pick<
-  InboxConversationLiveSummary,
-  | 'conversationId'
-  | 'createdAt'
-  | 'hiddenAt'
-  | 'lastMessageAt'
-  | 'latestMessageAttachmentKind'
-  | 'latestMessageBody'
-  | 'latestMessageContentMode'
-  | 'latestMessageDeletedAt'
-  | 'latestMessageKind'
-  | 'removed'
-  | 'unreadCount'
->;
-
-type DerivedConversationCacheEntry = {
-  baseItem: ConversationListItem;
-  derivedItem: ConversationListItem | null;
-  summary: DerivedConversationSummarySnapshot;
-};
-
-const EMPTY_LIVE_SUMMARY: InboxConversationLiveSummary = {
-  conversationId: '',
-  createdAt: null,
-  hiddenAt: null,
-  lastMessageAt: null,
-  lastReadAt: null,
-  lastReadMessageSeq: null,
-  latestMessageAttachmentKind: null,
-  latestMessageBody: null,
-  latestMessageContentMode: null,
-  latestMessageDeletedAt: null,
-  latestMessageId: null,
-  latestMessageKind: null,
-  latestMessageSenderId: null,
-  latestMessageSeq: null,
-  unreadCount: 0,
-};
-
 type InboxFilterableContentProps = {
   activeSpaceId: string;
   activeSpaceName: string | null;
+  archivedConversationItems: ConversationListItem[];
+  archivedSummaries: InboxConversationLiveSummary[];
   availableDmUserEntries: AvailableUserEntry[];
   availableUserEntries: AvailableUserEntry[];
   canManageMembers: boolean;
   createOpen: boolean;
   createTargetsLoaded: boolean;
-  initialCreateMode: NewChatMode;
-  isMessengerSpace: boolean;
   currentUserId: string;
+  initialCreateMode: NewChatMode;
   initialFilter: InboxFilter;
   initialView: InboxView;
+  isMessengerSpace: boolean;
   language: AppLanguage;
   mainConversationItems: ConversationListItem[];
   mainSummaries: InboxConversationLiveSummary[];
   preferences: InboxSectionPreferences;
   queryValue: string;
   restoreAction: ((formData: FormData) => void | Promise<void>) | null;
-  archivedConversationItems: ConversationListItem[];
-  archivedSummaries: InboxConversationLiveSummary[];
 };
 
 const INBOX_PULL_REFRESH_MAX_OFFSET = 92;
 const INBOX_PULL_REFRESH_HOLD_OFFSET = 58;
 const INBOX_PULL_REFRESH_THRESHOLD = 72;
-const HOT_CHAT_ROUTE_PREFETCH_LIMIT = 6;
-const EMPTY_CONVERSATION_SUMMARY_SUBSCRIBE = () => () => undefined;
-const INBOX_LIVE_SUMMARY_IDLE_TIMEOUT_MS = 1200;
-
-function useDeferredInboxLiveSummariesEnabled() {
-  const [isEnabled, setIsEnabled] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    let frameId: number | null = null;
-    let idleId: number | null = null;
-    let timeoutId: number | null = null;
-    const idleWindow = window as Window & {
-      cancelIdleCallback?: (handle: number) => void;
-      requestIdleCallback?: (
-        callback: IdleRequestCallback,
-        options?: IdleRequestOptions,
-      ) => number;
-    };
-
-    const markReady = () => {
-      if (!cancelled) {
-        setIsEnabled(true);
-      }
-    };
-
-    frameId = window.requestAnimationFrame(() => {
-      if (typeof idleWindow.requestIdleCallback === 'function') {
-        idleId = idleWindow.requestIdleCallback(markReady, {
-          timeout: INBOX_LIVE_SUMMARY_IDLE_TIMEOUT_MS,
-        });
-        return;
-      }
-
-      timeoutId = window.setTimeout(markReady, 180);
-    });
-
-    return () => {
-      cancelled = true;
-
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-
-      if (
-        idleId !== null &&
-        typeof idleWindow.cancelIdleCallback === 'function'
-      ) {
-        idleWindow.cancelIdleCallback(idleId);
-      }
-
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, []);
-
-  return isEnabled;
-}
 
 function normalizeSearchTerm(value: string) {
   return value.trim().toLowerCase();
-}
-
-function buildAvailableUserEntry(
-  user: CreateChatTargetUserPayload,
-  unknownUserLabel: string,
-) {
-  return {
-    avatarPath: user.avatarPath ?? null,
-    displayName: user.displayName ?? null,
-    label: resolvePublicIdentityLabel(user, unknownUserLabel),
-    statusEmoji: user.statusEmoji ?? null,
-    statusText: user.statusText ?? null,
-    userId: user.userId,
-  } satisfies AvailableUserEntry;
-}
-
-function resolveCreateChatTargetsStatus(input: {
-  availableUserEntries: AvailableUserEntry[];
-  createTargetsLoaded: boolean;
-}) {
-  if (input.createTargetsLoaded) {
-    return 'ready' as const;
-  }
-
-  return input.availableUserEntries.length > 0 ? 'seeded' as const : 'idle' as const;
 }
 
 function buildInboxHref({
@@ -414,173 +241,6 @@ function buildFilterBucket(input: {
   } satisfies FilterBucket;
 }
 
-function getDerivedConversationSummarySnapshot(
-  conversationId: string,
-  liveSummariesByConversationId: Map<string, InboxConversationLiveSummary>,
-) {
-  const liveSummary =
-    liveSummariesByConversationId.get(conversationId) ?? EMPTY_LIVE_SUMMARY;
-
-  return {
-    conversationId,
-    createdAt: liveSummary.createdAt,
-    hiddenAt: liveSummary.hiddenAt,
-    lastMessageAt: liveSummary.lastMessageAt,
-    latestMessageAttachmentKind: liveSummary.latestMessageAttachmentKind,
-    latestMessageBody: liveSummary.latestMessageBody,
-    latestMessageContentMode: liveSummary.latestMessageContentMode,
-    latestMessageDeletedAt: liveSummary.latestMessageDeletedAt,
-    latestMessageKind: liveSummary.latestMessageKind,
-    removed: liveSummary.removed,
-    unreadCount: liveSummary.unreadCount,
-  } satisfies DerivedConversationSummarySnapshot;
-}
-
-function areDerivedConversationSummariesEqual(
-  left: DerivedConversationSummarySnapshot | null,
-  right: DerivedConversationSummarySnapshot | null,
-) {
-  if (left === right) {
-    return true;
-  }
-
-  if (!left || !right) {
-    return false;
-  }
-
-  return (
-    left.conversationId === right.conversationId &&
-    left.createdAt === right.createdAt &&
-    left.hiddenAt === right.hiddenAt &&
-    left.lastMessageAt === right.lastMessageAt &&
-    left.latestMessageAttachmentKind === right.latestMessageAttachmentKind &&
-    left.latestMessageBody === right.latestMessageBody &&
-    left.latestMessageContentMode === right.latestMessageContentMode &&
-    left.latestMessageDeletedAt === right.latestMessageDeletedAt &&
-    left.latestMessageKind === right.latestMessageKind &&
-    left.removed === right.removed &&
-    left.unreadCount === right.unreadCount
-  );
-}
-
-function deriveConversationItemFromLiveState(input: {
-  item: ConversationListItem;
-  labels: InboxPresentationLabels;
-  previewMode: InboxPreviewDisplayMode;
-  summary: DerivedConversationSummarySnapshot;
-  visibility: InboxView;
-}) {
-  if (input.summary.removed) {
-    return null;
-  }
-
-  const isHidden = Boolean(input.summary.hiddenAt);
-
-  if (input.visibility === 'main' ? isHidden : !isHidden) {
-    return null;
-  }
-
-  return {
-    ...input.item,
-    hasUnread: input.summary.unreadCount > 0,
-    latestMessageContentMode: input.summary.latestMessageContentMode,
-    preview: getInboxDisplayPreviewText(
-      {
-        lastMessageAt: input.summary.lastMessageAt,
-        latestMessageAttachmentKind: input.summary.latestMessageAttachmentKind,
-        latestMessageBody: input.summary.latestMessageBody,
-        latestMessageContentMode: input.summary.latestMessageContentMode,
-        latestMessageDeletedAt: input.summary.latestMessageDeletedAt,
-        latestMessageKind: input.summary.latestMessageKind,
-        unreadCount: input.summary.unreadCount,
-      },
-      {
-        audio: input.labels.audio,
-        attachment: input.labels.attachment,
-        deletedMessage: input.labels.deletedMessage,
-        encryptedMessage: input.labels.encryptedMessage,
-        file: input.labels.file,
-        image: input.labels.image,
-        newMessage: input.labels.newMessage,
-        newEncryptedMessage: input.labels.newEncryptedMessage,
-        voiceMessage: input.labels.voiceMessage,
-      },
-      input.previewMode,
-    ),
-  } satisfies ConversationListItem;
-}
-
-function createDerivedConversationItemsMemoizer() {
-  let previousItemsRef: ConversationListItem[] | null = null;
-  let previousLabelsRef: InboxPresentationLabels | null = null;
-  let previousResult: ConversationListItem[] = [];
-  let previousCacheByConversationId = new Map<string, DerivedConversationCacheEntry>();
-
-  return (input: {
-    items: ConversationListItem[];
-    labels: InboxPresentationLabels;
-    liveSummariesByConversationId: Map<string, InboxConversationLiveSummary>;
-    previewMode: InboxPreviewDisplayMode;
-    visibility: InboxView;
-  }) => {
-    const nextCache = new Map<string, DerivedConversationCacheEntry>();
-    const nextItems: ConversationListItem[] = [];
-    let changed =
-      previousItemsRef !== input.items || previousLabelsRef !== input.labels;
-
-    for (const item of input.items) {
-      const summary = getDerivedConversationSummarySnapshot(
-        item.conversationId,
-        input.liveSummariesByConversationId,
-      );
-      const previousEntry = previousCacheByConversationId.get(item.conversationId);
-      const derivedItem =
-        previousEntry &&
-        previousEntry.baseItem === item &&
-        areDerivedConversationSummariesEqual(previousEntry.summary, summary)
-          ? previousEntry.derivedItem
-          : deriveConversationItemFromLiveState({
-        item,
-        labels: input.labels,
-        previewMode: input.previewMode,
-        summary,
-        visibility: input.visibility,
-      });
-
-      if (previousEntry?.derivedItem !== derivedItem) {
-        changed = true;
-      }
-
-      nextCache.set(item.conversationId, {
-        baseItem: item,
-        derivedItem,
-        summary,
-      });
-
-      if (derivedItem) {
-        nextItems.push(derivedItem);
-      }
-    }
-
-    if (!changed && nextItems.length === previousResult.length) {
-      const isSameOrder = nextItems.every(
-        (item, index) => item === previousResult[index],
-      );
-
-      if (isSameOrder) {
-        previousCacheByConversationId = nextCache;
-        return previousResult;
-      }
-    }
-
-    previousItemsRef = input.items;
-    previousLabelsRef = input.labels;
-    previousCacheByConversationId = nextCache;
-    previousResult = nextItems;
-    return nextItems;
-  };
-}
-
 function partitionConversationItemsByKind(items: ConversationListItem[]) {
   const directMessages: ConversationListItem[] = [];
   const groups: ConversationListItem[] = [];
@@ -640,30 +300,30 @@ function buildOrganizedConversationSectionsByFilter(input: {
 
     const orderedSections: OrganizedConversationSection[] =
       input.preferences.showPersonalChatsFirst
-      ? [
-          {
-            items: partitionedItems.directMessages,
-            key: 'dm',
-            label: input.t.inbox.filters.dm,
-          },
-          {
-            items: partitionedItems.groups,
-            key: 'groups',
-            label: input.t.inbox.filters.groups,
-          },
-        ]
-      : [
-          {
-            items: partitionedItems.groups,
-            key: 'groups',
-            label: input.t.inbox.filters.groups,
-          },
-          {
-            items: partitionedItems.directMessages,
-            key: 'dm',
-            label: input.t.inbox.filters.dm,
-          },
-        ];
+        ? [
+            {
+              items: partitionedItems.directMessages,
+              key: 'dm',
+              label: input.t.inbox.filters.dm,
+            },
+            {
+              items: partitionedItems.groups,
+              key: 'groups',
+              label: input.t.inbox.filters.groups,
+            },
+          ]
+        : [
+            {
+              items: partitionedItems.groups,
+              key: 'groups',
+              label: input.t.inbox.filters.groups,
+            },
+            {
+              items: partitionedItems.directMessages,
+              key: 'dm',
+              label: input.t.inbox.filters.dm,
+            },
+          ];
 
     sectionsByFilter[filter] = orderedSections.filter(
       (section) => section.items.length > 0,
@@ -683,11 +343,11 @@ export function InboxFilterableContent({
   canManageMembers,
   createOpen,
   createTargetsLoaded,
-  initialCreateMode,
-  isMessengerSpace,
   currentUserId,
+  initialCreateMode,
   initialFilter,
   initialView,
+  isMessengerSpace,
   language,
   mainConversationItems,
   mainSummaries,
@@ -696,34 +356,22 @@ export function InboxFilterableContent({
   restoreAction,
 }: InboxFilterableContentProps) {
   const t = useMemo(() => getInboxClientTranslations(language), [language]);
-  const areLiveSummariesEnabled = useDeferredInboxLiveSummariesEnabled();
-  const deriveConversationItemsMemoized = useMemo(
-    () => createDerivedConversationItemsMemoizer(),
-    [],
-  );
+  const isDeferredInboxRuntimeReady = useDeferredInboxRuntimeReady({
+    fallbackDelayMs: 140,
+    idleTimeoutMs: 1200,
+  });
   const searchTerm = normalizeSearchTerm(queryValue);
   const [activeFilter, setActiveFilter] = useState<InboxFilter>(initialFilter);
   const [activeView, setActiveView] = useState<InboxView>(initialView);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(createOpen);
   const [createSheetMode, setCreateSheetMode] =
     useState<NewChatMode>(initialCreateMode);
-  const [createChatTargetsState, setCreateChatTargetsState] =
-    useState<CreateChatTargetsState>(() => ({
-      availableDmUserEntries,
-      availableUserEntries,
-      errorMessage: null,
-      status: resolveCreateChatTargetsStatus({
-        availableUserEntries,
-        createTargetsLoaded,
-      }),
-    }));
   const [pullRefreshOffset, setPullRefreshOffset] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
-  const createTargetsAbortRef = useRef<AbortController | null>(null);
   const touchGestureRef = useRef<{
+    dragging: boolean;
     pointerX: number;
     pointerY: number;
-    dragging: boolean;
   } | null>(null);
   const visibleFilters = useMemo(
     () => preferences.visibleFilters,
@@ -751,31 +399,15 @@ export function InboxFilterableContent({
   }, [initialCreateMode]);
 
   useEffect(() => {
-    setCreateChatTargetsState({
-      availableDmUserEntries,
-      availableUserEntries,
-      errorMessage: null,
-      status: resolveCreateChatTargetsStatus({
-        availableUserEntries,
-        createTargetsLoaded,
-      }),
-    });
-  }, [availableDmUserEntries, availableUserEntries, createTargetsLoaded]);
+    const resolvedFilter = resolveInboxInitialFilter(activeFilter, preferences);
+
+    if (resolvedFilter !== activeFilter) {
+      setActiveFilter(resolvedFilter);
+    }
+  }, [activeFilter, preferences]);
 
   const openCreateSheet = useCallback((mode: NewChatMode) => {
     setCreateSheetMode(mode);
-    setCreateChatTargetsState((currentState) =>
-      currentState.status === 'error'
-        ? {
-            ...currentState,
-            errorMessage: null,
-            status: resolveCreateChatTargetsStatus({
-              availableUserEntries: currentState.availableUserEntries,
-              createTargetsLoaded: false,
-            }),
-          }
-        : currentState,
-    );
     setIsCreateSheetOpen(true);
   }, []);
 
@@ -783,108 +415,32 @@ export function InboxFilterableContent({
     setIsCreateSheetOpen(false);
   }, []);
 
-  const retryCreateTargetsLoad = useCallback(() => {
-    setCreateChatTargetsState((currentState) =>
-      currentState.status === 'loading'
-        ? currentState
-        : {
-            ...currentState,
-            errorMessage: null,
-            status: resolveCreateChatTargetsStatus({
-              availableUserEntries: currentState.availableUserEntries,
-              createTargetsLoaded: false,
-            }),
-          },
-    );
-  }, []);
-
-  const loadCreateChatTargets = useCallback(async () => {
-    if (
-      createChatTargetsState.status === 'loading' ||
-      createChatTargetsState.status === 'ready'
-    ) {
+  useEffect(() => {
+    if (typeof window === 'undefined') {
       return;
     }
 
-    createTargetsAbortRef.current?.abort();
-    const controller = new AbortController();
-    createTargetsAbortRef.current = controller;
+    const nextHref = buildInboxHref({
+      create: isCreateSheetOpen,
+      createMode: isCreateSheetOpen ? createSheetMode : undefined,
+      filter: activeFilter,
+      query: queryValue,
+      spaceId: activeSpaceId,
+      view: activeView,
+    });
 
-    setCreateChatTargetsState((currentState) => ({
-      ...currentState,
-      errorMessage: null,
-      status: 'loading',
-    }));
-
-    try {
-      const response = await fetch(
-        `/api/messaging/inbox/create-targets?space=${encodeURIComponent(activeSpaceId)}`,
-        {
-          cache: 'no-store',
-          signal: controller.signal,
-        },
-      );
-      const payload = (await response
-        .json()
-        .catch(() => null)) as (CreateChatTargetsResponse & {
-        error?: string;
-      }) | null;
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.error?.trim() || t.inbox.create.loadingCandidatesFailed,
-        );
-      }
-
-      const availableUserEntriesNext = Array.isArray(payload?.users)
-        ? payload.users.map((user) =>
-            buildAvailableUserEntry(user, t.chat.unknownUser),
-          )
-        : [];
-      const existingDmPartnerUserIds = Array.isArray(
-        payload?.existingDmPartnerUserIds,
-      )
-        ? payload.existingDmPartnerUserIds
-        : [];
-      const existingDmPartnerUserIdsSet = new Set(existingDmPartnerUserIds);
-      const availableDmUserEntriesNext = availableUserEntriesNext.filter(
-        (availableUser) =>
-          !existingDmPartnerUserIdsSet.has(availableUser.userId),
-      );
-
-      if (createTargetsAbortRef.current !== controller) {
-        return;
-      }
-
-      setCreateChatTargetsState({
-        availableDmUserEntries: availableDmUserEntriesNext,
-        availableUserEntries: availableUserEntriesNext,
-        errorMessage: null,
-        status: 'ready',
-      });
-    } catch (error) {
-      if (controller.signal.aborted || createTargetsAbortRef.current !== controller) {
-        return;
-      }
-
-      setCreateChatTargetsState((currentState) => ({
-        ...currentState,
-        errorMessage:
-          error instanceof Error && error.message.trim()
-            ? error.message
-            : t.inbox.create.loadingCandidatesFailed,
-        status: 'error',
-      }));
-    } finally {
-      if (createTargetsAbortRef.current === controller) {
-        createTargetsAbortRef.current = null;
-      }
+    if (window.location.pathname + window.location.search === nextHref) {
+      return;
     }
+
+    window.history.replaceState(window.history.state, '', nextHref);
   }, [
+    activeFilter,
     activeSpaceId,
-    createChatTargetsState.status,
-    t.chat.unknownUser,
-    t.inbox.create.loadingCandidatesFailed,
+    activeView,
+    createSheetMode,
+    isCreateSheetOpen,
+    queryValue,
   ]);
 
   const getInboxScrollTop = () => {
@@ -984,123 +540,6 @@ export function InboxFilterableContent({
     }
   };
 
-  useEffect(() => {
-    const resolvedFilter = resolveInboxInitialFilter(activeFilter, preferences);
-
-    if (resolvedFilter !== activeFilter) {
-      setActiveFilter(resolvedFilter);
-    }
-  }, [activeFilter, preferences]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const nextHref = buildInboxHref({
-      create: isCreateSheetOpen,
-      createMode: isCreateSheetOpen ? createSheetMode : undefined,
-      filter: activeFilter,
-      query: queryValue,
-      spaceId: activeSpaceId,
-      view: activeView,
-    });
-
-    if (window.location.pathname + window.location.search === nextHref) {
-      return;
-    }
-
-    window.history.replaceState(window.history.state, '', nextHref);
-  }, [
-    activeFilter,
-    activeSpaceId,
-    activeView,
-    createSheetMode,
-    isCreateSheetOpen,
-    queryValue,
-  ]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined' || !isCreateSheetOpen) {
-      return;
-    }
-
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-    };
-  }, [isCreateSheetOpen]);
-
-  useEffect(() => {
-    if (!isCreateSheetOpen || typeof window === 'undefined') {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeCreateSheet();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [closeCreateSheet, isCreateSheetOpen]);
-
-  useEffect(() => {
-    if (!isCreateSheetOpen) {
-      createTargetsAbortRef.current?.abort();
-      createTargetsAbortRef.current = null;
-      return;
-    }
-
-    if (
-      createChatTargetsState.status !== 'idle' &&
-      createChatTargetsState.status !== 'seeded'
-    ) {
-      return;
-    }
-
-    // Open the sheet first, then hydrate heavy candidate data after the first
-    // paint so the modal never waits on space-member or existing-DM lookups.
-    void loadCreateChatTargets();
-  }, [createChatTargetsState.status, isCreateSheetOpen, loadCreateChatTargets]);
-
-  useEffect(() => {
-    return () => {
-      createTargetsAbortRef.current?.abort();
-      createTargetsAbortRef.current = null;
-    };
-  }, []);
-
-  const availableDmUserEntriesFiltered = useMemo(
-    () =>
-      !isCreateSheetOpen
-        ? []
-        : createChatTargetsState.availableDmUserEntries.filter((availableUser) => {
-            if (!searchTerm) {
-              return true;
-            }
-
-            return availableUser.label.toLowerCase().includes(searchTerm);
-          }),
-    [createChatTargetsState.availableDmUserEntries, isCreateSheetOpen, searchTerm],
-  );
-
-  const availableUserEntriesFiltered = useMemo(
-    () =>
-      !isCreateSheetOpen
-        ? []
-        : createChatTargetsState.availableUserEntries.filter((availableUser) => {
-            if (!searchTerm) {
-              return true;
-            }
-
-            return availableUser.label.toLowerCase().includes(searchTerm);
-          }),
-    [createChatTargetsState.availableUserEntries, isCreateSheetOpen, searchTerm],
-  );
   const visibleConversationItems =
     activeView === 'archived' ? archivedConversationItems : mainConversationItems;
   const visibleConversationSummaries =
@@ -1114,13 +553,6 @@ export function InboxFilterableContent({
         ] as const),
       ),
     [visibleConversationSummaries],
-  );
-  const inboxSummaryRevision = useSyncExternalStore(
-    areLiveSummariesEnabled
-      ? subscribeToInboxSummaryRevision
-      : EMPTY_CONVERSATION_SUMMARY_SUBSCRIBE,
-    getInboxSummaryRevisionSnapshot,
-    getInboxSummaryRevisionSnapshot,
   );
   const rowLabels = useMemo(
     () => ({
@@ -1140,54 +572,14 @@ export function InboxFilterableContent({
     }),
     [t],
   );
-  const liveSummariesByConversationId = useMemo(() => {
-    if (!areLiveSummariesEnabled) {
-      return visibleSummariesByConversationId;
-    }
-
-    // Tie the visible snapshot map to store revision changes without forcing
-    // inactive archived/main lists to rebuild on every live inbox update.
-    void inboxSummaryRevision;
-    const nextMap = new Map<string, InboxConversationLiveSummary>();
-    for (const [conversationId, fallbackSummary] of visibleSummariesByConversationId) {
-      nextMap.set(
-        conversationId,
-        getInboxConversationSummarySnapshot(conversationId, fallbackSummary),
-      );
-    }
-
-    return nextMap;
-  }, [
-    areLiveSummariesEnabled,
-    inboxSummaryRevision,
-    visibleSummariesByConversationId,
-  ]);
-  const derivedConversationItems = useMemo(
-    () =>
-      deriveConversationItemsMemoized({
-        items: visibleConversationItems,
-        labels: rowLabels,
-        liveSummariesByConversationId,
-        previewMode: preferences.previewMode,
-        visibility: activeView,
-      }),
-    [
-      activeView,
-      deriveConversationItemsMemoized,
-      liveSummariesByConversationId,
-      preferences.previewMode,
-      rowLabels,
-      visibleConversationItems,
-    ],
-  );
   const activeBuckets = useMemo(
     () =>
       buildFilterBucket({
-        items: derivedConversationItems,
+        items: visibleConversationItems,
         searchTerm,
         t,
       }),
-    [derivedConversationItems, searchTerm, t],
+    [searchTerm, t, visibleConversationItems],
   );
   const organizedConversationSectionsByFilter = useMemo(
     () =>
@@ -1209,10 +601,10 @@ export function InboxFilterableContent({
   const filteredConversationItems = activeBuckets.itemsByFilter[activeFilter];
   const organizedConversationSections =
     organizedConversationSectionsByFilter[activeFilter];
-  const activeConversationSourceCount = derivedConversationItems.length;
+  const activeConversationSourceCount = visibleConversationItems.length;
   const archivedConversationCount =
     activeView === 'archived'
-      ? derivedConversationItems.length
+      ? visibleConversationItems.length
       : archivedConversationItems.length;
   const messengerFreshSpaceEmpty =
     isMessengerSpace &&
@@ -1235,8 +627,7 @@ export function InboxFilterableContent({
     view: activeView,
   });
   const messengerFreshBody =
-    createChatTargetsState.status !== 'ready' ||
-    createChatTargetsState.availableUserEntries.length > 0
+    !createTargetsLoaded || availableUserEntries.length > 0
       ? t.inbox.messengerFreshBody
       : canManageMembers
         ? t.inbox.messengerFreshAdminBody
@@ -1245,6 +636,18 @@ export function InboxFilterableContent({
   const searchPlaceholder = isDmFilter
     ? t.inbox.searchDmPlaceholder
     : t.inbox.searchPlaceholder;
+  const searchScopedAvailableUserCount = useMemo(
+    () => {
+      if (!searchTerm) {
+        return availableUserEntries.length;
+      }
+
+      return availableUserEntries.filter((availableUser) =>
+        availableUser.label.toLowerCase().includes(searchTerm),
+      ).length;
+    },
+    [availableUserEntries, searchTerm],
+  );
   const searchScopeSummary = useMemo(() => {
     if (!searchTerm) {
       return null;
@@ -1254,15 +657,15 @@ export function InboxFilterableContent({
       filteredConversationItems.length > 0
         ? t.inbox.searchResultChat(filteredConversationItems.length)
         : null,
-      availableUserEntriesFiltered.length > 0
-        ? t.inbox.searchResultPerson(availableUserEntriesFiltered.length)
+      searchScopedAvailableUserCount > 0
+        ? t.inbox.searchResultPerson(searchScopedAvailableUserCount)
         : null,
     ].filter(Boolean);
 
     return parts.length > 0 ? parts.join(' · ') : t.inbox.searchSummaryNone;
   }, [
-    availableUserEntriesFiltered.length,
     filteredConversationItems.length,
+    searchScopedAvailableUserCount,
     searchTerm,
     t,
   ]);
@@ -1323,300 +726,232 @@ export function InboxFilterableContent({
               : undefined,
         }}
       >
-      <section
-        className={
-          isPrimaryChatsView
-            ? 'card inbox-home-shell inbox-home-shell-dm stack'
-            : 'card inbox-home-shell stack'
-        }
-      >
-        <div
+        <section
           className={
             isPrimaryChatsView
-              ? 'inbox-topbar inbox-topbar-compact inbox-topbar-compact-dm'
-              : 'inbox-topbar inbox-topbar-compact'
-          }
-        >
-          <form
-            action="/inbox"
-            className={
-              isPrimaryChatsView
-                ? 'inbox-search-form inbox-search-form-minimal inbox-search-form-topbar inbox-search-form-dm'
-                : 'inbox-search-form inbox-search-form-minimal inbox-search-form-topbar'
-            }
-            aria-label={searchAria}
-            role="search"
-          >
-            <label
-              className={
-                isPrimaryChatsView
-                  ? 'field inbox-search-field inbox-search-shell inbox-search-shell-dm'
-                  : 'field inbox-search-field inbox-search-shell'
-              }
-            >
-              <span className="sr-only">{searchAria}</span>
-              {isPrimaryChatsView ? null : (
-                <span
-                  aria-hidden="true"
-                  className="inbox-search-icon"
-                >
-                  ⌕
-                </span>
-              )}
-              <input
-                className={
-                  isPrimaryChatsView
-                    ? 'input inbox-search-input inbox-search-input-dm'
-                    : 'input inbox-search-input'
-                }
-                defaultValue={queryValue}
-                enterKeyHint="search"
-                name="q"
-                placeholder={searchPlaceholder}
-                type="search"
-              />
-            </label>
-            {activeFilter !== 'all' ? (
-              <input name="filter" type="hidden" value={activeFilter} />
-            ) : null}
-            <input name="space" type="hidden" value={activeSpaceId} />
-            {activeView === 'archived' ? (
-              <input name="view" type="hidden" value="archived" />
-            ) : null}
-          </form>
-
-          <div className="inbox-topbar-actions">
-            <Link
-              aria-label={t.inbox.settingsAria}
-              className="inbox-settings-trigger inbox-topbar-action-button"
-              href={`/inbox/settings?space=${encodeURIComponent(activeSpaceId)}`}
-            >
-              <span aria-hidden="true" className="inbox-topbar-action-icon">
-                ⚙
-              </span>
-            </Link>
-            <button
-              aria-haspopup="dialog"
-              aria-label={t.inbox.createAria}
-              className="inbox-compose-trigger inbox-topbar-action-button"
-              onClick={() => openCreateSheet('dm')}
-              type="button"
-            >
-              <span aria-hidden="true" className="inbox-topbar-action-icon">
-                +
-              </span>
-            </button>
-          </div>
-        </div>
-
-        <div
-          className={
-            isPrimaryChatsView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
+              ? 'card inbox-home-shell inbox-home-shell-dm stack'
+              : 'card inbox-home-shell stack'
           }
         >
           <div
             className={
               isPrimaryChatsView
-                ? 'inbox-filter-row inbox-filter-row-dm'
-                : 'inbox-filter-row'
+                ? 'inbox-topbar inbox-topbar-compact inbox-topbar-compact-dm'
+                : 'inbox-topbar inbox-topbar-compact'
             }
-            role="tablist"
-            aria-label={t.inbox.filtersAria}
           >
-            {visibleFilters.includes('all') ? (
-              <button
-                aria-selected={activeFilter === 'all'}
-                className={
-                  activeFilter === 'all'
-                    ? 'inbox-filter-pill inbox-filter-pill-active'
-                    : 'inbox-filter-pill'
-                }
-                onClick={() => setActiveFilter('all')}
-                role="tab"
-                type="button"
-              >
-                {t.inbox.filters.all}
-              </button>
-            ) : null}
-            {visibleFilters.includes('dm') ? (
-              <button
-                aria-selected={activeFilter === 'dm'}
-                className={
-                  activeFilter === 'dm'
-                    ? 'inbox-filter-pill inbox-filter-pill-active'
-                    : 'inbox-filter-pill'
-                }
-                onClick={() => setActiveFilter('dm')}
-                role="tab"
-                type="button"
-              >
-                {t.inbox.filters.dm}
-              </button>
-            ) : null}
-            {visibleFilters.includes('groups') ? (
-              <button
-                aria-selected={activeFilter === 'groups'}
-                className={
-                  activeFilter === 'groups'
-                    ? 'inbox-filter-pill inbox-filter-pill-active'
-                    : 'inbox-filter-pill'
-                }
-                onClick={() => setActiveFilter('groups')}
-                role="tab"
-                type="button"
-              >
-                {t.inbox.filters.groups}
-              </button>
-            ) : null}
-            {(archivedConversationCount > 0 || activeView === 'archived') ? (
-              <button
-                className={
-                  activeView === 'archived'
-                    ? 'inbox-filter-pill inbox-filter-pill-active'
-                    : 'inbox-filter-pill'
-                }
-                onClick={() =>
-                  setActiveView((currentView) =>
-                    currentView === 'archived' ? 'main' : 'archived',
-                  )
-                }
-                type="button"
-              >
-                {activeView === 'archived'
-                  ? t.inbox.filters.inbox
-                  : `${t.inbox.filters.archived}${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
-              </button>
-            ) : null}
-          </div>
-
-          {searchTerm ? (
-            <div
+            <form
+              action="/inbox"
+              aria-label={searchAria}
               className={
                 isPrimaryChatsView
-                  ? 'inbox-search-meta inbox-search-meta-dm'
-                  : 'inbox-search-meta'
+                  ? 'inbox-search-form inbox-search-form-minimal inbox-search-form-topbar inbox-search-form-dm'
+                  : 'inbox-search-form inbox-search-form-minimal inbox-search-form-topbar'
               }
+              role="search"
             >
-              <div
+              <label
                 className={
                   isPrimaryChatsView
-                    ? 'stack inbox-search-copy inbox-search-copy-dm'
-                    : 'stack inbox-search-copy'
+                    ? 'field inbox-search-field inbox-search-shell inbox-search-shell-dm'
+                    : 'field inbox-search-field inbox-search-shell'
                 }
               >
-                <p className="muted inbox-search-scope">{searchScopeSummary}</p>
-                {activeBuckets.hasEncryptedDmSearchLimit ? (
-                  <p className="muted inbox-search-note">
-                    {t.inbox.searchEncryptedNote}
-                  </p>
-                ) : null}
-              </div>
-              <div className="inbox-search-meta-actions">
-                <Link
-                  className="inbox-search-clear"
-                  href={clearSearchHref}
-                >
-                  {t.inbox.clear}
-                </Link>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </section>
+                <span className="sr-only">{searchAria}</span>
+                {isPrimaryChatsView ? null : (
+                  <span aria-hidden="true" className="inbox-search-icon">
+                    ⌕
+                  </span>
+                )}
+                <input
+                  className={
+                    isPrimaryChatsView
+                      ? 'input inbox-search-input inbox-search-input-dm'
+                      : 'input inbox-search-input'
+                  }
+                  defaultValue={queryValue}
+                  enterKeyHint="search"
+                  name="q"
+                  placeholder={searchPlaceholder}
+                  type="search"
+                />
+              </label>
+              {activeFilter !== 'all' ? (
+                <input name="filter" type="hidden" value={activeFilter} />
+              ) : null}
+              <input name="space" type="hidden" value={activeSpaceId} />
+              {activeView === 'archived' ? (
+                <input name="view" type="hidden" value="archived" />
+              ) : null}
+            </form>
 
-      {activeView === 'archived' ? (
-        <section className="card stack inbox-archived-note">
-          <div className="stack inbox-archived-note-main">
-            <span className="inbox-empty-eyebrow">{t.inbox.filters.archived}</span>
-            <p className="muted inbox-archived-note-copy">
-              {t.inbox.archivedNote}
-            </p>
-          </div>
-          <Link className="pill inbox-archived-note-action" href={mainInboxHref}>
-            {t.inbox.filters.inbox}
-          </Link>
-        </section>
-      ) : null}
-
-      {messengerFreshSpaceEmpty ? (
-        <section className="card stack empty-card inbox-empty-state inbox-empty-state-messenger">
-          <div className="stack inbox-empty-copy">
-            <span className="inbox-empty-eyebrow">{t.inbox.filters.inbox}</span>
-            <h2 className="card-title">{t.inbox.messengerFreshTitle}</h2>
-            <p className="muted">{messengerFreshBody}</p>
-            {activeSpaceName ? (
-              <div className="keepcozy-meta-row">
-                <span className="keepcozy-meta-pill">
-                  {t.settings.currentSpaceLabel}: {activeSpaceName}
+            <div className="inbox-topbar-actions">
+              <Link
+                aria-label={t.inbox.settingsAria}
+                className="inbox-settings-trigger inbox-topbar-action-button"
+                href={`/inbox/settings?space=${encodeURIComponent(activeSpaceId)}`}
+              >
+                <span aria-hidden="true" className="inbox-topbar-action-icon">
+                  ⚙
                 </span>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="inbox-empty-actions">
-            {createChatTargetsState.status !== 'ready' ||
-            createChatTargetsState.availableDmUserEntries.length > 0 ? (
+              </Link>
               <button
-                className="button"
+                aria-haspopup="dialog"
+                aria-label={t.inbox.createAria}
+                className="inbox-compose-trigger inbox-topbar-action-button"
                 onClick={() => openCreateSheet('dm')}
                 type="button"
               >
-                {t.inbox.create.createDm}
+                <span aria-hidden="true" className="inbox-topbar-action-icon">
+                  +
+                </span>
               </button>
-            ) : (
-              null
-            )}
-            {createChatTargetsState.status !== 'ready' ||
-            createChatTargetsState.availableUserEntries.length > 0 ? (
-              <button
-                className="button button-secondary"
-                onClick={() => openCreateSheet('group')}
-                type="button"
-              >
-                {t.inbox.create.createGroup}
-              </button>
-            ) : (
-              null
-            )}
-            {manageMembersHref ? (
-              <Link className="pill" href={manageMembersHref}>
-                {t.spaces.manageMembersAction}
-              </Link>
-            ) : null}
-            <Link
-              className="pill"
-              href={`/spaces?space=${encodeURIComponent(activeSpaceId)}`}
+            </div>
+          </div>
+
+          <div
+            className={
+              isPrimaryChatsView ? 'stack inbox-toolbar inbox-toolbar-dm' : 'stack inbox-toolbar'
+            }
+          >
+            <div
+              aria-label={t.inbox.filtersAria}
+              className={
+                isPrimaryChatsView
+                  ? 'inbox-filter-row inbox-filter-row-dm'
+                  : 'inbox-filter-row'
+              }
+              role="tablist"
             >
-              {t.settings.chooseAnotherSpace}
-            </Link>
+              {visibleFilters.includes('all') ? (
+                <button
+                  aria-selected={activeFilter === 'all'}
+                  className={
+                    activeFilter === 'all'
+                      ? 'inbox-filter-pill inbox-filter-pill-active'
+                      : 'inbox-filter-pill'
+                  }
+                  onClick={() => setActiveFilter('all')}
+                  role="tab"
+                  type="button"
+                >
+                  {t.inbox.filters.all}
+                </button>
+              ) : null}
+              {visibleFilters.includes('dm') ? (
+                <button
+                  aria-selected={activeFilter === 'dm'}
+                  className={
+                    activeFilter === 'dm'
+                      ? 'inbox-filter-pill inbox-filter-pill-active'
+                      : 'inbox-filter-pill'
+                  }
+                  onClick={() => setActiveFilter('dm')}
+                  role="tab"
+                  type="button"
+                >
+                  {t.inbox.filters.dm}
+                </button>
+              ) : null}
+              {visibleFilters.includes('groups') ? (
+                <button
+                  aria-selected={activeFilter === 'groups'}
+                  className={
+                    activeFilter === 'groups'
+                      ? 'inbox-filter-pill inbox-filter-pill-active'
+                      : 'inbox-filter-pill'
+                  }
+                  onClick={() => setActiveFilter('groups')}
+                  role="tab"
+                  type="button"
+                >
+                  {t.inbox.filters.groups}
+                </button>
+              ) : null}
+              {archivedConversationCount > 0 || activeView === 'archived' ? (
+                <button
+                  className={
+                    activeView === 'archived'
+                      ? 'inbox-filter-pill inbox-filter-pill-active'
+                      : 'inbox-filter-pill'
+                  }
+                  onClick={() =>
+                    setActiveView((currentView) =>
+                      currentView === 'archived' ? 'main' : 'archived',
+                    )
+                  }
+                  type="button"
+                >
+                  {activeView === 'archived'
+                    ? t.inbox.filters.inbox
+                    : `${t.inbox.filters.archived}${archivedConversationCount > 0 ? ` (${archivedConversationCount})` : ''}`}
+                </button>
+              ) : null}
+            </div>
+
+            {searchTerm ? (
+              <div
+                className={
+                  isPrimaryChatsView
+                    ? 'inbox-search-meta inbox-search-meta-dm'
+                    : 'inbox-search-meta'
+                }
+              >
+                <div
+                  className={
+                    isPrimaryChatsView
+                      ? 'stack inbox-search-copy inbox-search-copy-dm'
+                      : 'stack inbox-search-copy'
+                  }
+                >
+                  <p className="muted inbox-search-scope">{searchScopeSummary}</p>
+                  {activeBuckets.hasEncryptedDmSearchLimit ? (
+                    <p className="muted inbox-search-note">
+                      {t.inbox.searchEncryptedNote}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="inbox-search-meta-actions">
+                  <Link className="inbox-search-clear" href={clearSearchHref}>
+                    {t.inbox.clear}
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
-      ) : activeConversationSourceCount === 0 ? (
-        <section className="card stack empty-card inbox-empty-state">
-          <div className="stack inbox-empty-copy">
-            <span className="inbox-empty-eyebrow">
-              {activeView === 'archived'
-                ? t.inbox.filters.archived
-                : t.inbox.filters.inbox}
-            </span>
-            <h2 className="card-title">
-              {activeView === 'archived'
-                ? t.inbox.emptyArchivedTitle
-                : t.inbox.emptyMainTitle}
-            </h2>
-            <p className="muted">
-              {activeView === 'archived'
-                ? t.inbox.emptyArchivedBody
-                : t.inbox.emptyMainBody}
-            </p>
-          </div>
-          <div className="inbox-empty-actions">
-            {activeView === 'archived' ? (
-              <Link className="button button-secondary" href={mainInboxHref}>
-                {t.inbox.filters.inbox}
-              </Link>
-            ) : (
-              <>
+
+        {activeView === 'archived' ? (
+          <section className="card stack inbox-archived-note">
+            <div className="stack inbox-archived-note-main">
+              <span className="inbox-empty-eyebrow">{t.inbox.filters.archived}</span>
+              <p className="muted inbox-archived-note-copy">
+                {t.inbox.archivedNote}
+              </p>
+            </div>
+            <Link className="pill inbox-archived-note-action" href={mainInboxHref}>
+              {t.inbox.filters.inbox}
+            </Link>
+          </section>
+        ) : null}
+
+        {messengerFreshSpaceEmpty ? (
+          <section className="card stack empty-card inbox-empty-state inbox-empty-state-messenger">
+            <div className="stack inbox-empty-copy">
+              <span className="inbox-empty-eyebrow">{t.inbox.filters.inbox}</span>
+              <h2 className="card-title">{t.inbox.messengerFreshTitle}</h2>
+              <p className="muted">{messengerFreshBody}</p>
+              {activeSpaceName ? (
+                <div className="keepcozy-meta-row">
+                  <span className="keepcozy-meta-pill">
+                    {t.settings.currentSpaceLabel}: {activeSpaceName}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="inbox-empty-actions">
+              {!createTargetsLoaded || availableDmUserEntries.length > 0 ? (
                 <button
                   className="button"
                   onClick={() => openCreateSheet('dm')}
@@ -1624,6 +959,8 @@ export function InboxFilterableContent({
                 >
                   {t.inbox.create.createDm}
                 </button>
+              ) : null}
+              {!createTargetsLoaded || availableUserEntries.length > 0 ? (
                 <button
                   className="button button-secondary"
                   onClick={() => openCreateSheet('group')}
@@ -1631,140 +968,159 @@ export function InboxFilterableContent({
                 >
                   {t.inbox.create.createGroup}
                 </button>
-              </>
-            )}
-          </div>
-        </section>
-      ) : filteredConversationItems.length === 0 ? (
-        <section className="card stack empty-card inbox-empty-state">
-          <div className="stack inbox-empty-copy">
-            <span className="inbox-empty-eyebrow">
-              {activeView === 'archived'
-                ? t.inbox.filters.archived
-                : t.inbox.filters.inbox}
-            </span>
-            <h2 className="card-title">
-              {activeView === 'archived'
-                ? t.inbox.emptyArchivedSearchTitle
-                : t.inbox.emptySearchTitle}
-            </h2>
-            <p className="muted">{t.inbox.emptySearchBody}</p>
-          </div>
-          <div className="inbox-empty-actions">
-            <Link className="pill" href={clearSearchHref}>
-              {t.inbox.clear}
-            </Link>
-          </div>
-        </section>
-      ) : (
-        <section
-          className={
-            isPrimaryChatsView
-              ? [
-                  'stack',
-                  'conversation-list',
-                  'conversation-list-minimal',
-                  'conversation-list-dm',
-                  preferences.density === 'compact'
-                    ? 'conversation-list-density-compact'
-                    : 'conversation-list-density-comfortable',
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-              : [
-                  'stack',
-                  'conversation-list',
-                  'conversation-list-minimal',
-                  preferences.density === 'compact'
-                    ? 'conversation-list-density-compact'
-                    : 'conversation-list-density-comfortable',
-                ]
-                  .filter(Boolean)
-                  .join(' ')
-          }
-        >
-          {organizedConversationSections.map((section) => (
-            <div
-              key={section.key}
-              className={
-                section.label ? 'stack conversation-list-section' : 'stack'
-              }
-            >
-              {section.label ? (
-                <p className="conversation-list-section-label">{section.label}</p>
               ) : null}
-              {section.items.map((conversation, index) => (
-                <InboxConversationLiveRow
-                  key={conversation.conversationId}
-                  activeSpaceId={activeSpaceId}
-                  currentUserId={currentUserId}
-                  initialSummary={
-                    visibleSummariesByConversationId.get(conversation.conversationId) ?? {
-                      conversationId: conversation.conversationId,
-                      createdAt: null,
-                      hiddenAt: null,
-                      lastMessageAt: null,
-                      lastReadAt: null,
-                      lastReadMessageSeq: null,
-                      latestMessageAttachmentKind: null,
-                      latestMessageBody: null,
-                      latestMessageContentMode: null,
-                      latestMessageDeletedAt: null,
-                      latestMessageId: null,
-                      latestMessageKind: null,
-                      latestMessageSenderId: null,
-                      latestMessageSeq: null,
-                      unreadCount: 0,
-                    }
-                  }
-                  isArchivedView={activeView === 'archived'}
-                  isPrimaryChatsView={isPrimaryChatsView}
-                  item={conversation}
-                  language={language}
-                  labels={rowLabels}
-                  previewMode={preferences.previewMode}
-                  restoreAction={activeView === 'archived' ? restoreAction : null}
-                  restoreLabel={activeView === 'archived' ? t.inbox.restore : undefined}
-                  shouldPrefetch={
-                    activeView !== 'archived' && index < HOT_CHAT_ROUTE_PREFETCH_LIMIT
-                  }
-                />
-              ))}
+              {manageMembersHref ? (
+                <Link className="pill" href={manageMembersHref}>
+                  {t.spaces.manageMembersAction}
+                </Link>
+              ) : null}
+              <Link
+                className="pill"
+                href={`/spaces?space=${encodeURIComponent(activeSpaceId)}`}
+              >
+                {t.settings.chooseAnotherSpace}
+              </Link>
             </div>
-          ))}
-        </section>
-      )}
+          </section>
+        ) : activeConversationSourceCount === 0 ? (
+          <section className="card stack empty-card inbox-empty-state">
+            <div className="stack inbox-empty-copy">
+              <span className="inbox-empty-eyebrow">
+                {activeView === 'archived'
+                  ? t.inbox.filters.archived
+                  : t.inbox.filters.inbox}
+              </span>
+              <h2 className="card-title">
+                {activeView === 'archived'
+                  ? t.inbox.emptyArchivedTitle
+                  : t.inbox.emptyMainTitle}
+              </h2>
+              <p className="muted">
+                {activeView === 'archived'
+                  ? t.inbox.emptyArchivedBody
+                  : t.inbox.emptyMainBody}
+              </p>
+            </div>
+            <div className="inbox-empty-actions">
+              {activeView === 'archived' ? (
+                <Link className="button button-secondary" href={mainInboxHref}>
+                  {t.inbox.filters.inbox}
+                </Link>
+              ) : (
+                <>
+                  <button
+                    className="button"
+                    onClick={() => openCreateSheet('dm')}
+                    type="button"
+                  >
+                    {t.inbox.create.createDm}
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => openCreateSheet('group')}
+                    type="button"
+                  >
+                    {t.inbox.create.createGroup}
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
+        ) : filteredConversationItems.length === 0 ? (
+          <section className="card stack empty-card inbox-empty-state">
+            <div className="stack inbox-empty-copy">
+              <span className="inbox-empty-eyebrow">
+                {activeView === 'archived'
+                  ? t.inbox.filters.archived
+                  : t.inbox.filters.inbox}
+              </span>
+              <h2 className="card-title">
+                {activeView === 'archived'
+                  ? t.inbox.emptyArchivedSearchTitle
+                  : t.inbox.emptySearchTitle}
+              </h2>
+              <p className="muted">{t.inbox.emptySearchBody}</p>
+            </div>
+            <div className="inbox-empty-actions">
+              <Link className="pill" href={clearSearchHref}>
+                {t.inbox.clear}
+              </Link>
+            </div>
+          </section>
+        ) : (
+          <section
+            className={
+              isPrimaryChatsView
+                ? [
+                    'stack',
+                    'conversation-list',
+                    'conversation-list-minimal',
+                    'conversation-list-dm',
+                    preferences.density === 'compact'
+                      ? 'conversation-list-density-compact'
+                      : 'conversation-list-density-comfortable',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                : [
+                    'stack',
+                    'conversation-list',
+                    'conversation-list-minimal',
+                    preferences.density === 'compact'
+                      ? 'conversation-list-density-compact'
+                      : 'conversation-list-density-comfortable',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+            }
+          >
+            {isDeferredInboxRuntimeReady ? (
+              <DeferredInboxConversationSectionsLive
+                activeSpaceId={activeSpaceId}
+                currentUserId={currentUserId}
+                isArchivedView={activeView === 'archived'}
+                isPrimaryChatsView={isPrimaryChatsView}
+                language={language}
+                labels={rowLabels}
+                previewMode={preferences.previewMode}
+                restoreAction={restoreAction}
+                restoreLabel={t.inbox.restore}
+                sections={organizedConversationSections}
+                visibleSummariesByConversationId={visibleSummariesByConversationId}
+              />
+            ) : (
+              <InboxConversationSectionsStatic
+                activeSpaceId={activeSpaceId}
+                currentUserId={currentUserId}
+                isArchivedView={activeView === 'archived'}
+                isPrimaryChatsView={isPrimaryChatsView}
+                language={language}
+                labels={rowLabels}
+                restoreAction={restoreAction}
+                restoreLabel={t.inbox.restore}
+                sections={organizedConversationSections}
+                shouldPrefetch
+                visibleSummariesByConversationId={visibleSummariesByConversationId}
+              />
+            )}
+          </section>
+        )}
       </div>
 
       {isCreateSheetOpen ? (
-        <section className="inbox-create-overlay" aria-label="Create chat">
-          <button
-            aria-label="Close create chat"
-            className="inbox-create-backdrop"
-            onClick={closeCreateSheet}
-            type="button"
-          />
-
-          <NewChatSheet
-            availableDmUsers={availableDmUserEntriesFiltered}
-            availableGroupUsers={availableUserEntriesFiltered}
-            hasAnyDmUsers={createChatTargetsState.availableDmUserEntries.length > 0}
-            hasAnyUsers={createChatTargetsState.availableUserEntries.length > 0}
-            initialMode={createSheetMode}
-            isCandidatesLoading={createChatTargetsState.status === 'loading'}
-            language={language}
-            loadCandidatesError={
-              createChatTargetsState.status === 'error'
-                ? createChatTargetsState.errorMessage
-                : null
-            }
-            manageMembersHref={manageMembersHref}
-            onClose={closeCreateSheet}
-            onModeChange={setCreateSheetMode}
-            onRetryLoadCandidates={retryCreateTargetsLoad}
-            spaceId={activeSpaceId}
-          />
-        </section>
+        <DeferredInboxCreateSheetRuntime
+          activeSpaceId={activeSpaceId}
+          createTargetsLoaded={createTargetsLoaded}
+          initialAvailableDmUserEntries={availableDmUserEntries}
+          initialAvailableUserEntries={availableUserEntries}
+          isOpen={isCreateSheetOpen}
+          language={language}
+          manageMembersHref={manageMembersHref}
+          mode={createSheetMode}
+          onClose={closeCreateSheet}
+          onModeChange={setCreateSheetMode}
+          searchTerm={searchTerm}
+        />
       ) : null}
     </div>
   );
