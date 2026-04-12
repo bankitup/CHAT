@@ -77,6 +77,28 @@ Document and then standardize:
 - what always requires authoritative refetch
 - how thread and inbox stay consistent after message, read, edit, delete, and reaction changes
 
+### P1. Postgres Changes Still Own Too Much Of The Hot Message Path
+
+**Why it matters**
+
+Broadcast is already a better fit for low-latency committed-message hints, but the current repo still lets `postgres_changes` carry too much of the hot-path message insert behavior. That creates duplicate work and keeps the architecture farther from the intended scalable shape.
+
+**Evidence**
+- `src/modules/messaging/realtime/active-chat-sync.tsx`
+- `src/modules/messaging/realtime/inbox-sync.tsx`
+- `src/modules/messaging/realtime/live-refresh.ts`
+
+**Recommended cleanup priority**
+
+Second wave.
+
+**Likely fix direction**
+
+Keep server truth authoritative, but move toward:
+- broadcast-first hot insert hints
+- Postgres Changes as authoritative patch/backstop
+- explicit catch-up from server reads instead of duplicate transport-driven syncs
+
 ### P1. Deferred Realtime Mounting Creates A Freshness Gap At Route Entry
 
 **Why it matters**

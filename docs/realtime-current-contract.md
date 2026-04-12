@@ -23,6 +23,11 @@ Today the repository uses a hybrid contract:
 - realtime events act as hints, patch triggers, and catch-up triggers
 - route re-entry often heals stale state because it re-establishes server truth
 
+Delivery mode today is also hybrid:
+- Broadcast is already used for committed-message hints and typing
+- Presence is separate
+- Postgres Changes still carries much of the authoritative patch and backstop role
+
 In practice, this means the app behaves more like:
 
 `SSR truth -> local store -> opportunistic realtime hint -> targeted server catch-up`
@@ -50,6 +55,7 @@ than:
 - local committed-message events
 - local patch updates for message body/edit/delete changes
 - targeted topology sync requests
+- `message-committed` broadcast hints now act as the preferred hot-path trigger before the duplicate `messages INSERT` Postgres path
 
 **Current contract**
 - Realtime can insert, patch, or request catch-up.
