@@ -57,7 +57,12 @@ test('extracted voice bubble owns playback-source wiring and voice diagnostics',
     voiceBubbleSource,
     /from ['"]\.\/thread-voice-diagnostics['"]/,
   );
+  assert.match(
+    voiceBubbleSource,
+    /from ['"]\.\/thread-voice-playback-controller['"]/,
+  );
   assert.match(voiceBubbleSource, /export const MemoizedThreadVoiceMessageBubble = memo\(/);
+  assert.doesNotMatch(voiceBubbleSource, /const activeThreadVoicePlayback:/);
 });
 
 test('thread runtime split stays within the first-pass size boundaries', () => {

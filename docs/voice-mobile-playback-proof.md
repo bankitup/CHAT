@@ -137,6 +137,11 @@ The current capture path now also reduces future risky uploads by preferring
 `audio/mp4` first on WebKit-mobile environments when the recorder reports that
 format as supported.
 
+The current playback controller also now treats a newly claimed owner as
+`starting` until playback actually settles. That reduces a mobile-specific race
+where transient pause events during source assignment or `load()` could tear
+down ownership before the audio element reached a stable playing state.
+
 ## Next Narrow Step After Proof
 
 Once mobile logs confirm the failing stage:
@@ -144,6 +149,9 @@ Once mobile logs confirm the failing stage:
 - If `canPlayType` rejects WebM-like MIME on mobile, the next step is a capture compatibility fix, not a transport rewrite.
 - If source preparation fails before playability is checked, the next step is transport/content-route debugging.
 - If playability looks fine but playback still stalls, the next step is hidden-audio lifecycle/runtime debugging in `thread-voice-message-bubble.tsx`.
+- If playback still flickers between play and pause on mobile after source
+  selection succeeds, inspect the proof logs around
+  `audio-pause-ignored-during-start` before widening the fix.
 
 ## Current Runtime Guard
 
