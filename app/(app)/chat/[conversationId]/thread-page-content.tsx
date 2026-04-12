@@ -33,6 +33,7 @@ import {
   DmThreadPresenceScope,
 } from './dm-thread-client-diagnostics';
 import { DmChatDeleteConfirmForm } from './dm-chat-delete-confirm-form';
+import { ThreadBodyRescueBoundary } from './thread-body-rescue-boundary';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
 import { GroupChatSettingsForm } from './group-chat-settings-form';
 import { ThreadPageDeferredEffects } from './thread-page-deferred-effects';
@@ -312,23 +313,33 @@ export function ThreadPageContent({
 
         <section className="chat-main">
           <section className="message-thread" id="message-thread-scroll">
-            <ThreadHistoryViewport
-              activeDeleteMessageId={activeDeleteMessageId}
-              activeEditMessageId={activeEditMessageId}
+            <ThreadBodyRescueBoundary
               activeSpaceId={activeSpaceId}
               conversationId={conversationId}
-              conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
-              currentReadMessageSeq={readState.lastReadMessageSeq}
-              currentUserId={currentUserId}
-              initialSnapshot={threadHistorySnapshot}
-              language={language}
-              latestVisibleMessageSeq={latestVisibleMessageSeq}
-              otherParticipantReadSeq={
-                otherParticipantReadState?.lastReadMessageSeq ?? null
-              }
-              otherParticipantUserId={otherParticipantUserId}
+              settingsHref={withSpaceParam(
+                `/chat/${conversationId}/settings`,
+                activeSpaceId,
+              )}
               threadClientDiagnostics={threadClientDiagnostics}
-            />
+            >
+              <ThreadHistoryViewport
+                activeDeleteMessageId={activeDeleteMessageId}
+                activeEditMessageId={activeEditMessageId}
+                activeSpaceId={activeSpaceId}
+                conversationId={conversationId}
+                conversationKind={conversation.kind === 'group' ? 'group' : 'dm'}
+                currentReadMessageSeq={readState.lastReadMessageSeq}
+                currentUserId={currentUserId}
+                initialSnapshot={threadHistorySnapshot}
+                language={language}
+                latestVisibleMessageSeq={latestVisibleMessageSeq}
+                otherParticipantReadSeq={
+                  otherParticipantReadState?.lastReadMessageSeq ?? null
+                }
+                otherParticipantUserId={otherParticipantUserId}
+                threadClientDiagnostics={threadClientDiagnostics}
+              />
+            </ThreadBodyRescueBoundary>
           </section>
 
           <ThreadComposerRuntime

@@ -40,6 +40,8 @@ The current acceptance bar focuses on these boundaries:
 12. CLS-sensitive shell, chat, and inbox layout reservations stay in place
 13. `src/modules/messaging/data/server.ts` stays in compatibility-facade
     territory instead of regrowing as the main read hub
+14. A broken conversation body stays contained behind a local rescue boundary
+    instead of trapping the user inside a dead chat route
 
 ## Shared Platform Seams Under Acceptance
 
@@ -125,6 +127,11 @@ Current acceptance tests:
   - the facade continues re-exporting narrowed read seams
   - product/server loaders keep preferring `conversation-read-server.ts` and
     `thread-read-server.ts` for reads
+- [tests/e2ee/chat-thread-rescue-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/chat-thread-rescue-boundaries.test.ts)
+  verifies the current broken-conversation containment seam:
+  - thread history stays wrapped in a contained rescue boundary
+  - the rescue state keeps retry, back-to-chats, and info escape paths local
+    to the conversation body
 
 Run them with:
 

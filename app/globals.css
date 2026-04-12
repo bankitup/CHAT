@@ -10145,6 +10145,20 @@ main {
   margin-top: max(5.5rem, 20dvh);
 }
 
+.thread-body-rescue-shell {
+  display: grid;
+  min-height: 100%;
+  align-content: center;
+  padding: 0 16px 24px;
+}
+
+.thread-body-rescue-card {
+  width: min(100%, 32rem);
+  margin: 0 auto;
+  padding: 20px;
+  gap: 16px;
+}
+
 .route-error-copy {
   gap: 8px;
 }
