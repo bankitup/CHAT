@@ -139,7 +139,7 @@ Later, mostly as discipline and documentation.
 
 **Likely fix direction**
 
-Keep these channels explicitly classified as hints in docs and architecture acceptance rules.
+Keep these channels explicitly classified as hints in docs and architecture acceptance rules, and keep them cleared on disconnect/background so stale auxiliary state does not masquerade as message truth.
 
 ### P2. Realtime Documentation In The Module Itself Is Out Of Date
 

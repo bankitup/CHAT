@@ -102,6 +102,7 @@ than:
 **Current contract**
 - Presence and typing are live hints only.
 - They are not durable truth and should not be treated as authoritative state.
+- They should not promote message delivery status, drive inbox summary truth, or trigger authoritative catch-up.
 
 ## What Mounts Where
 
