@@ -39,6 +39,7 @@ The practical user-facing outcome is that a person can open a healthy DM thread 
 - history unavailable on this device
 - device-retired-or-mismatched
 - same-user-new-device-history-gap
+- policy-blocked history when product policy intentionally withholds that path
 
 Security truth:
 
@@ -115,6 +116,20 @@ Practical product stance:
 
 This is the product-reality choice, not a cryptography-purity choice.
 
+## Practical next-step call
+
+For the current Messenger MVP, make one concrete product decision and hold to it:
+
+- keep the current strict DM E2EE path as an explicit gated lane
+- do not make it the default trust promise for ordinary daily direct messages yet
+- treat continuity and recovery as the release gate for promoting it into the main paid-user path
+
+In practice that means:
+
+- product, support, and rollout docs should describe the current strict path as limited and device-bound
+- monetized daily-use messaging should not quietly inherit these history semantics by default
+- promotion from gated lane to default lane should require continuity proof, not only crypto correctness
+
 ## What “soften or de-scope” should mean
 
 For the current MVP, the safer product path is:
@@ -123,6 +138,7 @@ For the current MVP, the safer product path is:
 - keep strict encrypted DMs behind explicit rollout gating
 - avoid making the strict path the primary expectation for all paying/daily users
 - keep product copy and support posture honest that current encrypted DM continuity is device-bound and limited
+- revisit the default-path decision only after the team can demonstrate continuity behavior that feels boring and dependable in normal daily use
 
 This does not require abandoning E2EE.
 It means not making the current history semantics the default promise before continuity work exists.
