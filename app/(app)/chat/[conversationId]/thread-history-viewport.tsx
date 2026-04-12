@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   memo,
   useCallback,
@@ -16,9 +17,9 @@ import { createPortal } from 'react-dom';
 import {
   formatPersonFallbackLabel,
   getLocaleForLanguage,
-  getTranslations,
+  getChatClientTranslations,
   type AppLanguage,
-} from '@/modules/i18n';
+} from '@/modules/i18n/client';
 import type { StoredDmE2eeEnvelope } from '@/modules/messaging/contract/dm-e2ee';
 import { persistCurrentDmE2eeDeviceCookie } from '@/modules/messaging/e2ee/current-device-cookie';
 import { ensureDmE2eeDeviceRegistered } from '@/modules/messaging/e2ee/device-registration';
@@ -54,17 +55,33 @@ import { MarkConversationRead } from './mark-conversation-read';
 import { MessageStatusIndicator } from './message-status-indicator';
 import { OptimisticThreadMessages } from './optimistic-thread-messages';
 import { ProgressiveHistoryLoader } from './progressive-history-loader';
-import { ThreadDeleteMessageConfirm } from './thread-delete-message-confirm';
 import { ThreadEditedIndicator } from './thread-edited-indicator';
-import { ThreadInlineEditForm } from './thread-inline-edit-form';
 import { emitThreadLocalReplyTargetSelection } from './thread-local-reply-target';
 import { ThreadReactionGroups } from './thread-reaction-groups';
-import { ThreadReactionPicker } from './thread-reaction-picker';
 import { resolveThreadScrollTarget } from './thread-scroll';
 import { logVoiceThreadProof } from './thread-voice-diagnostics';
-import { MemoizedThreadVoiceMessageBubble } from './thread-voice-message-bubble';
 import { configureInlineAudioElement } from './voice-playback-source';
 import type { MessagingVoicePlaybackVariantRecord } from '@/modules/messaging/media/message-assets';
+
+const ThreadReactionPicker = dynamic(() =>
+  import('./thread-reaction-picker').then((mod) => mod.ThreadReactionPicker),
+);
+
+const ThreadInlineEditForm = dynamic(() =>
+  import('./thread-inline-edit-form').then((mod) => mod.ThreadInlineEditForm),
+);
+
+const ThreadDeleteMessageConfirm = dynamic(() =>
+  import('./thread-delete-message-confirm').then(
+    (mod) => mod.ThreadDeleteMessageConfirm,
+  ),
+);
+
+const MemoizedThreadVoiceMessageBubble = dynamic(() =>
+  import('./thread-voice-message-bubble').then(
+    (mod) => mod.MemoizedThreadVoiceMessageBubble,
+  ),
+);
 
 type ConversationMessageRow = {
   body: string | null;
@@ -1084,7 +1101,7 @@ const ThreadMessageAttachments = memo(function ThreadMessageAttachments({
   language,
   onImagePreviewClick,
 }: ThreadMessageAttachmentsProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
 
   if (!attachments.length) {
     return null;
@@ -2546,7 +2563,7 @@ function ThreadMessageRowComponent({
   senderNames,
   threadClientDiagnostics,
 }: ThreadMessageRowProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const quickActionsContainerRef = useRef<HTMLDivElement | null>(null);
   const quickActionsSurfaceRef = useRef<HTMLDivElement | null>(null);
   const replyTargetHighlightTimeoutRef = useRef<ReturnType<
@@ -3721,7 +3738,7 @@ export function ThreadHistoryViewport({
   otherParticipantUserId,
   threadClientDiagnostics,
 }: ThreadHistoryViewportProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const clientRuntimeDiagnosticsEnabled =
     typeof window !== 'undefined' &&
     (process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_THREAD_CLIENT === '1' ||

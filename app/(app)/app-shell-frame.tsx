@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getShellClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
 import { WarmNavRouteObserver } from '@/modules/messaging/performance/warm-nav-client';
 import { ChatUnreadBadgeSync } from '@/modules/messaging/push/chat-unread-badge-sync';
@@ -103,7 +106,7 @@ export function AppShellFrame({
 }: AppShellFrameProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const t = getTranslations(language);
+  const t = getShellClientTranslations(language);
   const isChatRoute = pathname.startsWith('/chat/');
   const isInboxRoute = pathname.startsWith('/inbox');
   const isChatSettingsRoute =

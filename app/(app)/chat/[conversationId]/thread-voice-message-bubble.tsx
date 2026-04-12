@@ -10,7 +10,10 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import type { MessagingVoicePlaybackState } from '@/modules/messaging/media';
 import {
   configureInlineAudioElement,
@@ -467,7 +470,7 @@ function resolveVoiceMessageRuntimeModel(input: {
 function getVoiceMessageBaseStateLabel(input: {
   reason: string;
   state: VoiceMessageRenderState;
-  t: ReturnType<typeof getTranslations>;
+  t: ReturnType<typeof getChatClientTranslations>;
 }) {
   if (
     input.state === 'failed' &&
@@ -493,7 +496,7 @@ function getVoiceMessageBaseStateLabel(input: {
 function resolveVoiceMessageRendererModel(input: {
   playbackState: MessagingVoicePlaybackState;
   runtimeModel: VoiceMessageRuntimeModel;
-  t: ReturnType<typeof getTranslations>;
+  t: ReturnType<typeof getChatClientTranslations>;
 }): VoiceMessageRendererModel {
   const { interactionAvailability, reason, state } = input.runtimeModel;
   const isReady = state === 'ready';
@@ -605,7 +608,7 @@ function ThreadVoiceMessageBubble({
   onRequestQuickActions,
   stageHint = null,
 }: ThreadVoiceMessageBubbleProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const attachmentTransportSourceUrl = normalizeAttachmentSignedUrl(
     attachment?.signedUrl,
   );

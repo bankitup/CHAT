@@ -1,7 +1,11 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import {
   DmReplyTargetSnippet,
   type ReplyTargetAttachmentKind,
@@ -11,9 +15,7 @@ import {
   DmThreadComposerFallback,
   type DmThreadClientDiagnostics,
 } from './dm-thread-client-diagnostics';
-import { EncryptedDmComposerForm } from './encrypted-dm-composer-form';
 import { JumpToLatestButton } from './jump-to-latest-button';
-import { PlaintextChatComposerForm } from './plaintext-chat-composer-form';
 import { TypingIndicator } from './typing-indicator';
 import {
   clearReplyTargetFromCurrentUrl,
@@ -21,6 +23,18 @@ import {
   subscribeToThreadLocalReplyTargetSelection,
   type ThreadLocalReplyTarget,
 } from './thread-local-reply-target';
+
+const EncryptedDmComposerForm = dynamic(() =>
+  import('./encrypted-dm-composer-form').then(
+    (mod) => mod.EncryptedDmComposerForm,
+  ),
+);
+
+const PlaintextChatComposerForm = dynamic(() =>
+  import('./plaintext-chat-composer-form').then(
+    (mod) => mod.PlaintextChatComposerForm,
+  ),
+);
 
 type MentionParticipant = {
   label: string;
@@ -77,7 +91,7 @@ export function ThreadComposerRuntime({
   recipientUserId,
   threadClientDiagnostics,
 }: ThreadComposerRuntimeProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const [activeReplyTarget, setActiveReplyTarget] =
     useState<ThreadLocalReplyTarget | null>(initialReplyTarget);
 

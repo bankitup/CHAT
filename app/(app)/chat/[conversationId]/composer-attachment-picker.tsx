@@ -1,6 +1,9 @@
 'use client';
 
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -94,7 +97,7 @@ export function ComposerAttachmentPicker({
   language,
   onSelectionChange,
 }: ComposerAttachmentPickerProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const pickerModeRef = useRef<AttachmentPickerMode>('file');

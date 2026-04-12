@@ -1,7 +1,9 @@
 'use client';
 
-import type { AppLanguage } from '@/modules/i18n';
-import { getTranslations } from '@/modules/i18n';
+import {
+  getChatClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 import type { MessagingVoiceCaptureState } from '@/modules/messaging/media/voice';
 import type { MessagingVoiceMessageDraftRecord } from '@/modules/messaging/media/voice';
 
@@ -50,7 +52,7 @@ export function ComposerVoiceDraftPanel({
   onSend,
   onStop,
 }: ComposerVoiceDraftPanelProps) {
-  const t = getTranslations(language);
+  const t = getChatClientTranslations(language);
   const shouldRender =
     captureState === 'requesting-permission' ||
     captureState === 'recording' ||

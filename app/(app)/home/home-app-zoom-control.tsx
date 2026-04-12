@@ -15,7 +15,10 @@ import {
   applyAppZoomModeToDocument,
   type AppZoomMode,
 } from '@/modules/ui-preferences/app-zoom';
-import { getTranslations, type AppLanguage } from '@/modules/i18n';
+import {
+  getZoomSwitcherClientTranslations,
+  type AppLanguage,
+} from '@/modules/i18n/client';
 
 type HomeAppZoomControlProps = {
   compact?: boolean;
@@ -37,7 +40,7 @@ const HOME_ZOOM_PANEL_WIDTH_PX = 352;
 
 function resolveZoomModeLabel(input: {
   mode: AppZoomMode;
-  t: ReturnType<typeof getTranslations>;
+  t: ReturnType<typeof getZoomSwitcherClientTranslations>;
 }) {
   switch (input.mode) {
     case 'larger':
@@ -52,7 +55,7 @@ function resolveZoomModeLabel(input: {
 
 function resolveZoomModeHint(input: {
   mode: AppZoomMode;
-  t: ReturnType<typeof getTranslations>;
+  t: ReturnType<typeof getZoomSwitcherClientTranslations>;
 }) {
   switch (input.mode) {
     case 'larger':
@@ -83,7 +86,7 @@ export function HomeAppZoomControl({
   language,
 }: HomeAppZoomControlProps) {
   const router = useRouter();
-  const t = getTranslations(language);
+  const t = getZoomSwitcherClientTranslations(language);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const savedZoomModeRef = useRef<AppZoomMode>(initialZoomMode);
