@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { getTranslations, type AppLanguage } from '@/modules/i18n';
 import { DmE2eeAuthenticatedBoundary } from '@/modules/messaging/e2ee/local-state-boundary';
 import { WarmNavRouteObserver } from '@/modules/messaging/performance/warm-nav-client';
@@ -22,6 +22,78 @@ type AppShellFrameProps = {
   userId: string;
 };
 
+function DeferredMessengerShellEffects({
+  includePresenceSync,
+  syncKey,
+}: {
+  includePresenceSync: boolean;
+  syncKey: string;
+}) {
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let animationFrameId: number | null = null;
+    let idleCallbackId: number | null = null;
+    let timeoutId: number | null = null;
+    const idleWindow = window as Window & {
+      cancelIdleCallback?: (handle: number) => void;
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number;
+    };
+
+    const markReady = () => {
+      if (!cancelled) {
+        setIsReady(true);
+      }
+    };
+
+    animationFrameId = window.requestAnimationFrame(() => {
+      if (typeof idleWindow.requestIdleCallback === 'function') {
+        idleCallbackId = idleWindow.requestIdleCallback(markReady, {
+          timeout: 1200,
+        });
+        return;
+      }
+
+      timeoutId = window.setTimeout(markReady, 120);
+    });
+
+    return () => {
+      cancelled = true;
+
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+
+      if (
+        idleCallbackId !== null &&
+        typeof idleWindow.cancelIdleCallback === 'function'
+      ) {
+        idleWindow.cancelIdleCallback(idleCallbackId);
+      }
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  if (!isReady) {
+    return null;
+  }
+
+  return (
+    <>
+      <ChatUnreadBadgeSync syncKey={syncKey} />
+      {includePresenceSync ? <PushSubscriptionPresenceSync /> : null}
+      <WarmNavRouteObserver />
+    </>
+  );
+}
+
 export function AppShellFrame({
   children,
   dmE2eeEnabled,
@@ -33,6 +105,7 @@ export function AppShellFrame({
   const searchParams = useSearchParams();
   const t = getTranslations(language);
   const isChatRoute = pathname.startsWith('/chat/');
+  const isInboxRoute = pathname.startsWith('/inbox');
   const isChatSettingsRoute =
     pathname.startsWith('/chat/') && pathname.endsWith('/settings');
   const activeSpaceId = searchParams.get('space');
@@ -46,6 +119,11 @@ export function AppShellFrame({
   });
   const badgeSyncKey = `${pathname}?${searchParams.toString()}`;
   const isMessengerShell = shellState.bottomNavProductPosture === 'messenger';
+  const isMessengerSurface = shellState.routeProductSurface === 'messenger';
+  const shouldMountDmBoundary =
+    dmE2eeEnabled && (isChatRoute || isInboxRoute);
+  const shouldMountImmediatePresenceSync = isMessengerSurface && isChatRoute;
+  const shouldMountDeferredMessengerEffects = isMessengerSurface;
   const getNavItemLabel = (key: (typeof shellState.navItems)[number]['key']) => {
     switch (key) {
       case 'activity':
@@ -110,10 +188,16 @@ export function AppShellFrame({
       data-shell-product-posture={shellState.activeProductPosture ?? 'platform'}
       data-space-theme={shellState.activeSpaceTheme}
     >
-      <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
-      <ChatUnreadBadgeSync syncKey={badgeSyncKey} />
-      <PushSubscriptionPresenceSync />
-      <WarmNavRouteObserver />
+      {shouldMountDmBoundary ? (
+        <DmE2eeAuthenticatedBoundary enabled={dmE2eeEnabled} userId={userId} />
+      ) : null}
+      {shouldMountImmediatePresenceSync ? <PushSubscriptionPresenceSync /> : null}
+      {shouldMountDeferredMessengerEffects ? (
+        <DeferredMessengerShellEffects
+          includePresenceSync={!shouldMountImmediatePresenceSync}
+          syncKey={badgeSyncKey}
+        />
+      ) : null}
       <div className="stack app-shell-content">{children}</div>
 
       {shellState.showBottomNav ? (
