@@ -78,6 +78,28 @@ function normalizeCreateMode(value: string | undefined): MessengerCreateMode {
   return value === 'group' ? 'group' : 'dm';
 }
 
+function countSearchScopedAvailableUsers(
+  users: Array<{
+    displayName: string | null;
+    label: string;
+    statusText?: string | null;
+  }>,
+  searchTerm: string,
+) {
+  if (!searchTerm) {
+    return users.length;
+  }
+
+  return users.filter((user) => {
+    const haystack = [user.label, user.displayName, user.statusText]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(searchTerm);
+  }).length;
+}
+
 export async function loadMessengerInboxPageData(query: MessengerInboxPageQuery) {
   const diagnosticsEnabled = process.env.CHAT_DEBUG_INBOX_SSR === '1';
   const diagnosticsLabel = '[inbox-ssr]';
@@ -109,6 +131,7 @@ export async function loadMessengerInboxPageData(query: MessengerInboxPageQuery)
     getInboxSectionPreferences(),
   ]);
   const activeFilter = resolveInboxInitialFilter(query.filter, inboxPreferences);
+  const normalizedSearchTerm = query.q?.trim().toLowerCase() ?? '';
 
   if (!user) {
     logDiagnostics('no-user');
@@ -334,6 +357,10 @@ export async function loadMessengerInboxPageData(query: MessengerInboxPageQuery)
   const availableDmUserEntries = availableUserEntries.filter(
     (availableUser) => !visibleExistingDmPartnerUserIds.has(availableUser.userId),
   );
+  const searchScopedAvailableUserCount = countSearchScopedAvailableUsers(
+    availableUserEntries,
+    normalizedSearchTerm,
+  );
 
   const buildConversationItems = (input: InboxConversation[]) =>
     input.map((conversation) => {
@@ -434,17 +461,20 @@ export async function loadMessengerInboxPageData(query: MessengerInboxPageQuery)
     allConversationIds,
     archivedConversationItems,
     archivedSummaries,
-    availableDmUserEntries,
-    availableUserEntries,
+    availableDmUserCount: availableDmUserEntries.length,
+    availableUserCount: availableUserEntries.length,
     canManageMembers,
     dmE2eeEnabled,
     initialCreateMode,
+    initialCreateDmUserEntries: isCreateOpen ? availableDmUserEntries : [],
+    initialCreateUserEntries: isCreateOpen ? availableUserEntries : [],
     inboxPreferences: inboxPreferences as InboxSectionPreferences,
     isCreateOpen,
     isMessengerProductSpace,
     language,
     mainConversationItems,
     mainSummaries,
+    searchScopedAvailableUserCount,
     userId: user.id,
     visibleError,
     warmNavRouteKey,

@@ -53,13 +53,15 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         activeSpaceName={data.activeSpaceName}
         archivedConversationItems={data.archivedConversationItems}
         archivedSummaries={data.archivedSummaries}
-        availableDmUserEntries={data.availableDmUserEntries}
-        availableUserEntries={data.availableUserEntries}
+        availableDmUserCount={data.availableDmUserCount}
+        availableUserCount={data.availableUserCount}
         canManageMembers={data.canManageMembers}
         createOpen={data.isCreateOpen}
         createTargetsLoaded={false}
         currentUserId={data.userId}
+        initialCreateDmUserEntries={data.initialCreateDmUserEntries}
         initialCreateMode={data.initialCreateMode}
+        initialCreateUserEntries={data.initialCreateUserEntries}
         initialFilter={data.activeFilter}
         initialView={data.activeView}
         isMessengerSpace={data.isMessengerProductSpace}
@@ -69,6 +71,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         preferences={data.inboxPreferences}
         queryValue={query.q ?? ''}
         restoreAction={restoreConversationAction}
+        searchScopedAvailableUserCount={data.searchScopedAvailableUserCount}
       />
     </section>
   );
