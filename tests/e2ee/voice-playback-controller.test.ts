@@ -1,0 +1,149 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const workspaceRoot = resolve(import.meta.dirname, '..', '..');
+
+async function importWorkspaceModule(relativePath: string) {
+  return import(pathToFileURL(resolve(workspaceRoot, relativePath)).href);
+}
+
+function createFakeAudio() {
+  const audio = {
+    pauseCallCount: 0,
+    pause() {
+      audio.pauseCallCount += 1;
+    },
+  };
+
+  return audio as unknown as HTMLAudioElement & { pauseCallCount: number };
+}
+
+async function resetVoicePlaybackController() {
+  const controller = await importWorkspaceModule(
+    'app/(app)/chat/[conversationId]/thread-voice-playback-controller.ts',
+  );
+  const snapshot = controller.getActiveThreadVoicePlaybackSnapshot();
+
+  if (snapshot.audio && snapshot.messageId) {
+    controller.releaseActiveThreadVoicePlayback(
+      snapshot.messageId,
+      snapshot.audio,
+      snapshot.ownerVersion,
+    );
+  }
+
+  controller.setActiveThreadVoicePlaybackIntent(null);
+  return controller;
+}
+
+test('voice playback controller keeps starting ownership distinct until playback is confirmed', async () => {
+  const controller = await resetVoicePlaybackController();
+  const audio = createFakeAudio();
+  const ownerVersion = controller.claimActiveThreadVoicePlayback(
+    'message-starting',
+    audio,
+  );
+
+  assert.deepEqual(
+    controller.resolveActiveThreadVoicePlaybackOwnership({
+      audio,
+      messageId: 'message-starting',
+    }),
+    {
+      ownerVersion,
+      status: 'starting-owner',
+    },
+  );
+  assert.equal(
+    controller.shouldIgnoreActiveThreadVoicePlaybackPause({
+      audio,
+      messageId: 'message-starting',
+      ownerVersion,
+    }),
+    true,
+  );
+
+  controller.markActiveThreadVoicePlaybackPlaying(
+    'message-starting',
+    audio,
+    ownerVersion,
+  );
+
+  assert.deepEqual(
+    controller.resolveActiveThreadVoicePlaybackOwnership({
+      audio,
+      messageId: 'message-starting',
+    }),
+    {
+      ownerVersion,
+      status: 'active-owner',
+    },
+  );
+  assert.equal(
+    controller.shouldIgnoreActiveThreadVoicePlaybackPause({
+      audio,
+      messageId: 'message-starting',
+      ownerVersion,
+    }),
+    false,
+  );
+
+  controller.releaseActiveThreadVoicePlayback(
+    'message-starting',
+    audio,
+    ownerVersion,
+  );
+});
+
+test('voice playback controller pauses the previous audio when a new owner is claimed', async () => {
+  const controller = await resetVoicePlaybackController();
+  const firstAudio = createFakeAudio();
+  const secondAudio = createFakeAudio();
+  const firstOwnerVersion = controller.claimActiveThreadVoicePlayback(
+    'message-one',
+    firstAudio,
+  );
+
+  controller.markActiveThreadVoicePlaybackPlaying(
+    'message-one',
+    firstAudio,
+    firstOwnerVersion,
+  );
+
+  const secondOwnerVersion = controller.claimActiveThreadVoicePlayback(
+    'message-two',
+    secondAudio,
+  );
+
+  assert.equal(firstAudio.pauseCallCount, 1);
+  assert.deepEqual(
+    controller.resolveActiveThreadVoicePlaybackOwnership({
+      audio: secondAudio,
+      messageId: 'message-two',
+    }),
+    {
+      ownerVersion: secondOwnerVersion,
+      status: 'starting-owner',
+    },
+  );
+  assert.deepEqual(
+    controller.resolveActiveThreadVoicePlaybackOwnership({
+      audio: firstAudio,
+      messageId: 'message-one',
+    }),
+    {
+      ownerMessageId: 'message-two',
+      ownerPhase: 'starting',
+      ownerVersion: secondOwnerVersion,
+      status: 'other-owner',
+    },
+  );
+
+  controller.releaseActiveThreadVoicePlayback(
+    'message-two',
+    secondAudio,
+    secondOwnerVersion,
+  );
+});
