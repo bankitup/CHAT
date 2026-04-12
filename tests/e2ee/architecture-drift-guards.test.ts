@@ -27,6 +27,10 @@ test('shared platform and shell seams stay free of product-route and product-dom
   const spacesModelSource = readWorkspaceFile('src/modules/spaces/model.ts');
   const spacesPostureSource = readWorkspaceFile('src/modules/spaces/posture.ts');
   const spacesShellSource = readWorkspaceFile('src/modules/spaces/shell.ts');
+  const appShellStateSource = readWorkspaceFile('src/modules/app-shell/state.ts');
+  const appShellSpacePostureSource = readWorkspaceFile(
+    'src/modules/app-shell/space-posture.ts',
+  );
 
   for (const source of [
     layoutSource,
@@ -37,6 +41,8 @@ test('shared platform and shell seams stay free of product-route and product-dom
     spacesModelSource,
     spacesPostureSource,
     spacesShellSource,
+    appShellStateSource,
+    appShellSpacePostureSource,
   ]) {
     assert.doesNotMatch(source, PRODUCT_ROUTE_IMPORT_PATTERN);
     assert.doesNotMatch(source, /from ['"]@\/modules\/keepcozy\//);
@@ -124,7 +130,11 @@ test('key mixed ownership files stay within lean guard size caps until cleanup w
   assert.ok(readWorkspaceLineCount('app/(app)/activity/page.tsx') <= 1100);
   assert.ok(readWorkspaceLineCount('src/modules/spaces/model.ts') <= 175);
   assert.ok(readWorkspaceLineCount('src/modules/spaces/posture.ts') <= 140);
-  assert.ok(readWorkspaceLineCount('src/modules/spaces/shell.ts') <= 240);
+  assert.ok(readWorkspaceLineCount('src/modules/spaces/shell.ts') <= 40);
+  assert.ok(readWorkspaceLineCount('src/modules/app-shell/state.ts') <= 220);
+  assert.ok(
+    readWorkspaceLineCount('src/modules/app-shell/space-posture.ts') <= 60,
+  );
   assert.ok(readWorkspaceLineCount('src/modules/profile/server.ts') <= 24);
   assert.ok(
     readWorkspaceLineCount('src/modules/messaging/ui/user-facing-errors.ts') <=

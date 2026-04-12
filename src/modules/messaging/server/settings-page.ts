@@ -13,7 +13,7 @@ import {
   isSpaceMembersSchemaCacheErrorMessage,
   resolveActiveSpaceForUser,
 } from '@/modules/spaces/server';
-import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
+import { resolveSpaceProductPosture } from '@/modules/app-shell/space-posture';
 
 export type MessengerSettingsPageQuery = {
   error?: string;

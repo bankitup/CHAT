@@ -115,18 +115,9 @@ export type SpaceThemeSource =
   | 'space_theme_column'
   | 'default_dark';
 
-export type SpaceProfileDefaultShellRoute = '/inbox' | '/home';
-
-export function getDefaultShellRouteForSpaceProfile(
-  profile: SpaceProfile,
-): SpaceProfileDefaultShellRoute {
-  return profile === 'keepcozy_ops' ? '/home' : '/inbox';
-}
-
 export type ResolvedSpaceProfile = {
   profile: SpaceProfile;
   source: SpaceProfileSource;
-  defaultShellRoute: SpaceProfileDefaultShellRoute;
 };
 
 export type ResolvedSpaceTheme = {

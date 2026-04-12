@@ -7,6 +7,11 @@ import {
   isAbsoluteAvatarUrl,
 } from '@/modules/messaging/avatar-delivery';
 import {
+  getDefaultShellRouteForSpaceProfile,
+  resolveSpaceProfileShellHref,
+  type SpaceProfileDefaultShellRoute,
+} from '@/modules/app-shell/space-posture';
+import {
   resolveSpaceGovernanceRoleForRuntimeSpaceRole,
   resolveSuperAdminGovernanceForUser,
 } from './governance';
@@ -18,7 +23,6 @@ import type {
   ResolvedSpaceGovernanceRole,
   ResolvedSpaceGovernanceState,
   SpaceProfile,
-  SpaceProfileDefaultShellRoute,
   SpaceProfileSource,
   SpaceTheme,
   SpaceThemeSource,
@@ -27,7 +31,6 @@ import type {
 } from './model';
 import {
   resolveSpaceProfileForSpace,
-  resolveSpaceProfileShellHref,
   resolveSpaceThemeForSpace,
 } from './posture';
 import { normalizeSpaceProfile, normalizeSpaceTheme } from './model';
@@ -46,7 +49,6 @@ export {
   LEGACY_KEEP_COZY_TEST_SPACE_NAME,
   isLegacyKeepCozyTestSpaceName,
   resolveSpaceProfileForSpace,
-  resolveSpaceProfileShellHref,
   resolveSpaceThemeForSpace,
 } from './posture';
 
@@ -585,7 +587,9 @@ export async function getUserSpaces(
         ...space,
         access,
         canManageMembers: access.platform.governance.canManageMembers,
-        defaultShellRoute: profileResolution.defaultShellRoute,
+        defaultShellRoute: getDefaultShellRouteForSpaceProfile(
+          profileResolution.profile,
+        ),
         governanceRole: access.platform.governance.governanceRole,
         governanceRoleSource: access.platform.governance.governanceRoleSource,
         profile: profileResolution.profile,
@@ -650,7 +654,6 @@ export async function resolveActiveSpaceForUser(input: {
   const activeSpaceAccess = activeSpace?.access ?? null;
   const activeSpaceProfile = activeSpace
     ? ({
-        defaultShellRoute: activeSpace.defaultShellRoute,
         profile: activeSpace.profile,
         source: activeSpace.profileSource,
       } satisfies ResolvedSpaceProfile)

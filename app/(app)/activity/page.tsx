@@ -12,7 +12,7 @@ import {
   getKeepCozyActivityData,
   isKeepCozyPrimaryTestHomeName,
 } from '@/modules/keepcozy/server';
-import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
+import { resolveSpaceProductPosture } from '@/modules/app-shell/space-posture';
 import { withSpaceParam } from '@/modules/spaces/url';
 import { ActivityConversationLiveItem } from './activity-conversation-live-item';
 import { MessengerSurfaceRuntimeEffects } from '../messenger-surface-runtime-effects';

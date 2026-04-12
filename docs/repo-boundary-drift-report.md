@@ -25,8 +25,8 @@ Cleanup priority uses:
 
 | Rank | Drift item | Evidence paths | Severity | Why it matters | Cleanup priority |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Product posture is still encoded inside shared `spaces` foundation | `src/modules/spaces/model.ts`, `src/modules/spaces/posture.ts`, `src/modules/spaces/shell.ts`, `app/(app)/layout.tsx` | High | The platform space model still directly carries product profiles like `messenger_full` and `keepcozy_ops`, plus legacy `TEST` behavior and shell defaults. That makes platform membership/access seams carry product identity. | Now |
-| 2 | Shared shell still owns product nav behavior and posture decisions | `app/(app)/app-shell-frame.tsx`, `src/modules/spaces/shell.ts` | High | Messenger runtime effects have moved lower into route-local seams, but the shared shell still decides Messenger/KeepCozy nav posture and product-facing shell behavior. Ownership still sits one layer too high. | Now |
+| 1 | Product posture is still encoded inside shared `spaces` profile compatibility | `src/modules/spaces/model.ts`, `src/modules/spaces/posture.ts`, `app/(app)/layout.tsx` | High | The platform space model still directly carries product profiles like `messenger_full` and `keepcozy_ops`, plus legacy `TEST` behavior. That still makes platform-adjacent profile resolution carry product identity. | Now |
+| 2 | Shared shell still owns product nav behavior and posture decisions | `app/(app)/app-shell-frame.tsx`, `src/modules/app-shell/state.ts`, `src/modules/app-shell/space-posture.ts` | High | Messenger runtime effects have moved lower into route-local seams, and shell posture is no longer owned by `spaces`, but the shared shell still decides Messenger/KeepCozy nav posture and product-facing shell behavior. Ownership still sits one layer too high. | Now |
 | 3 | `/home` and `/activity` remain mixed-product routes | `app/(app)/home/page.tsx`, `app/(app)/activity/page.tsx` | High | These routes still branch between product experiences or product posture inside a single surface. That makes refactors, metrics, and product ownership harder to reason about. | Now |
 | 4 | Shared settings/profile surface still routes through Messenger ownership | `app/(app)/settings/page.tsx`, `src/modules/messaging/server/settings-page.ts`, `src/modules/profile/server.ts`, `src/modules/messaging/data/profiles-server.ts` | High | Shared profile/settings behavior is active across products, but the loader and persistence chain still depend on Messenger/messaging ownership. This keeps profile foundation from becoming truly platform-owned. | Next |
 | 5 | Shared error/support behavior still lives under `messaging/ui` | `src/modules/messaging/ui/user-facing-errors.ts`, reused from `app/(app)/home/actions.ts`, `app/(app)/issues/actions.ts`, `app/(app)/tasks/actions.ts`, `app/(app)/spaces/actions.ts`, `app/(app)/inbox/actions.ts` | Medium | The behavior is already broader than Messenger, but the namespace still teaches the wrong ownership model. This encourages accidental Messenger gravity in shared and KeepCozy code. | Next |
@@ -40,7 +40,8 @@ Cleanup priority uses:
 Main evidence:
 
 - `app/(app)/app-shell-frame.tsx`
-- `src/modules/spaces/shell.ts`
+- `src/modules/app-shell/state.ts`
+- `src/modules/app-shell/space-posture.ts`
 - `app/(app)/layout.tsx`
 
 Why it matters:
@@ -133,7 +134,8 @@ Start by reducing product identity inside:
 
 - `src/modules/spaces/model.ts`
 - `src/modules/spaces/posture.ts`
-- `src/modules/spaces/shell.ts`
+- `src/modules/app-shell/state.ts`
+- `src/modules/app-shell/space-posture.ts`
 
 This is the highest-value doctrine cleanup because it affects shell behavior,
 route posture, and future product admission.

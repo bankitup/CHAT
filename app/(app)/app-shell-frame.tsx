@@ -11,7 +11,7 @@ import {
   resolveActiveAppShellSpace,
   resolveAppShellState,
   type AppShellSpaceSummary,
-} from '@/modules/spaces/shell';
+} from '@/modules/app-shell/state';
 
 type AppShellFrameProps = {
   children: ReactNode;

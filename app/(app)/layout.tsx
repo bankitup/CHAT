@@ -5,10 +5,7 @@ import {
   getUserSpaces,
   isSpaceMembersSchemaCacheErrorMessage,
 } from '@/modules/spaces/server';
-import {
-  resolveSpaceProductPosture,
-  type AppShellSpaceSummary,
-} from '@/modules/spaces/shell';
+import { type AppShellSpaceSummary } from '@/modules/app-shell/state';
 import { AppShellFrame } from './app-shell-frame';
 
 export default async function AppLayout({
@@ -40,11 +37,9 @@ export default async function AppLayout({
   }
 
   const appShellSpaces: AppShellSpaceSummary[] = spaces.map((space) => ({
-    defaultShellRoute: space.defaultShellRoute,
     id: space.id,
     name: space.name,
     profile: space.profile,
-    productPosture: resolveSpaceProductPosture(space.profile),
     theme: space.theme,
   }));
 

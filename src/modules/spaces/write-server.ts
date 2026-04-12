@@ -3,9 +3,9 @@ import 'server-only';
 import type { User } from '@supabase/supabase-js';
 import { requireRequestViewer } from '@/lib/request-context/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
+import { getDefaultShellRouteForSpaceProfile } from '@/modules/app-shell/space-posture';
 import { resolveSuperAdminGovernanceForUser } from './governance';
 import {
-  getDefaultShellRouteForSpaceProfile,
   normalizeSpaceProfile,
   normalizeSpaceTheme,
   type SpaceProfile,

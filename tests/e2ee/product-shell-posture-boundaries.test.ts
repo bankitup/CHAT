@@ -10,23 +10,39 @@ function readWorkspaceFile(relativePath: string) {
 }
 
 test('shell posture resolver keeps Messenger and KeepCozy nav contracts distinct', () => {
-  const shellSource = readWorkspaceFile('src/modules/spaces/shell.ts');
+  const shellStateSource = readWorkspaceFile('src/modules/app-shell/state.ts');
+  const shellPostureSource = readWorkspaceFile(
+    'src/modules/app-shell/space-posture.ts',
+  );
+  const spacesShellSource = readWorkspaceFile('src/modules/spaces/shell.ts');
 
   assert.match(
-    shellSource,
+    shellPostureSource,
     /export type AppProductPosture = 'messenger' \| 'keepcozy'/,
   );
   assert.match(
-    shellSource,
-    /if \(isMessengerProductPosture\(input\.activeSpace\.productPosture\)\)/,
+    shellStateSource,
+    /const activeProductPosture = input\.activeSpace[\s\S]*resolveSpaceProductPosture\(input\.activeSpace\.profile\)/,
   );
   assert.match(
-    shellSource,
+    shellStateSource,
+    /if \(isMessengerProductPosture\(activeProductPosture\)\)/,
+  );
+  assert.match(
+    shellStateSource,
     /key: 'home'[\s\S]*key: 'chats'[\s\S]*key: 'activity'/,
   );
   assert.match(
-    shellSource,
+    shellStateSource,
     /key: 'home'[\s\S]*key: 'rooms'[\s\S]*key: 'issues'[\s\S]*key: 'tasks'[\s\S]*key: 'activity'/,
+  );
+  assert.match(
+    spacesShellSource,
+    /from ['"]\.\.\/app-shell\/state['"]/,
+  );
+  assert.match(
+    spacesShellSource,
+    /from ['"]\.\.\/app-shell\/space-posture['"]/,
   );
 });
 
@@ -36,6 +52,8 @@ test('route groups resolve product posture from shared shell helpers instead of 
     'src/modules/messaging/server/inbox-page.ts',
   );
   const homePageSource = readWorkspaceFile('app/(app)/home/page.tsx');
+  const activityPageSource = readWorkspaceFile('app/(app)/activity/page.tsx');
+  const layoutSource = readWorkspaceFile('app/(app)/layout.tsx');
 
   assert.match(
     inboxPageSource,
@@ -46,6 +64,18 @@ test('route groups resolve product posture from shared shell helpers instead of 
     /productAccess\.messenger\.isPrimaryProfile/,
   );
   assert.match(homePageSource, /resolveSpaceProductPosture\(activeSpace\.profile\)/);
+  assert.match(
+    homePageSource,
+    /from ['"]@\/modules\/app-shell\/space-posture['"]/,
+  );
+  assert.match(
+    activityPageSource,
+    /from ['"]@\/modules\/app-shell\/space-posture['"]/,
+  );
+  assert.match(
+    layoutSource,
+    /from ['"]@\/modules\/app-shell\/state['"]/,
+  );
   assert.doesNotMatch(
     inboxLoaderSource,
     /profile === 'messenger_full'|profile === 'keepcozy_ops'/,

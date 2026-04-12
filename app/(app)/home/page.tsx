@@ -39,7 +39,7 @@ import {
   resolveSpaceGovernanceRoleForRuntimeSpaceRole,
   resolveV1TestSpaceFallback,
 } from '@/modules/spaces/server';
-import { resolveSpaceProductPosture } from '@/modules/spaces/shell';
+import { resolveSpaceProductPosture } from '@/modules/app-shell/space-posture';
 import {
   getKeepCozyPrimaryTestFlowHints,
   getKeepCozyHomeDashboardData,
