@@ -87,6 +87,21 @@ Fast architecture-drift review checks for shared or mixed seams live in
   - voice playback runtime
   - image attachment preview
 
+### 4c. Realtime Recovery
+
+- When the branch touches Messenger live ownership, reconnect behavior, or
+  catch-up logic, run the focused realtime rows in
+  [manual-test-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/stability/manual-test-matrix.md):
+  - thread live update arrival
+  - inbox summary live update arrival
+  - thread background -> foreground recovery
+  - inbox background -> foreground recovery
+  - reconnect recovery
+- Confirm the mounted route heals in place. Do not accept "leave and re-enter
+  the route" as the primary recovery mechanism.
+- Confirm presence/typing still look helpful, but do not become the reason the
+  thread or inbox appears fresh.
+
 ### 5. KeepCozy Flow Still Working
 
 - In a KeepCozy-profile space:
@@ -125,6 +140,8 @@ The check passes when:
 - governance/membership gates still behave consistently across both products
 - messaging remains reusable capability instead of dragging KeepCozy through
   Messenger shell internals
+- realtime recovery remains route-scoped and stronger in place than route
+  re-entry
 
 ## Escalate If
 

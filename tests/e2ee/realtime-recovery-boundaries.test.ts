@@ -9,6 +9,68 @@ function readWorkspaceFile(relativePath: string) {
   return readFileSync(resolve(workspaceRoot, relativePath), 'utf8');
 }
 
+test('Messenger realtime subscriptions stay route-scoped instead of mounting from the shared shell', () => {
+  const appShellFrameSource = readWorkspaceFile(
+    'app/(app)/app-shell-frame.tsx',
+  );
+  const threadPageContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-page-content.tsx',
+  );
+  const threadRouteRuntimeEffectsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-route-runtime-effects.tsx',
+  );
+  const threadPageDeferredEffectsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-page-deferred-effects.tsx',
+  );
+  const inboxPageSource = readWorkspaceFile('app/(app)/inbox/page.tsx');
+  const inboxRouteRuntimeEffectsSource = readWorkspaceFile(
+    'app/(app)/inbox/inbox-route-runtime-effects.tsx',
+  );
+  const inboxPageDeferredEffectsSource = readWorkspaceFile(
+    'app/(app)/inbox/inbox-page-deferred-effects.tsx',
+  );
+  const activityRouteRuntimeEffectsSource = readWorkspaceFile(
+    'app/(app)/activity/activity-route-runtime-effects.tsx',
+  );
+
+  assert.doesNotMatch(
+    appShellFrameSource,
+    /ActiveChatRealtimeSync|InboxRealtimeSync|PushSubscriptionPresenceSync|ChatUnreadBadgeSync|WarmNavRouteObserver|DmE2eeAuthenticatedBoundary/,
+  );
+
+  assert.match(threadPageContentSource, /<ThreadRouteRuntimeEffects/);
+  assert.match(threadPageContentSource, /<ThreadPageDeferredEffects/);
+  assert.match(
+    threadRouteRuntimeEffectsSource,
+    /const PushSubscriptionPresenceSync = dynamic/,
+  );
+  assert.match(
+    threadPageDeferredEffectsSource,
+    /const DeferredActiveChatRealtimeSync = dynamic/,
+  );
+  assert.match(
+    threadPageDeferredEffectsSource,
+    /const DeferredThreadLiveStateHydrator = dynamic/,
+  );
+
+  assert.match(inboxPageSource, /<InboxRouteRuntimeEffects/);
+  assert.match(inboxPageSource, /<InboxPageDeferredEffects/);
+  assert.match(
+    inboxRouteRuntimeEffectsSource,
+    /const PushSubscriptionPresenceSync = dynamic/,
+  );
+  assert.match(
+    inboxPageDeferredEffectsSource,
+    /const DeferredInboxRealtimeSync = dynamic/,
+  );
+
+  assert.match(activityRouteRuntimeEffectsSource, /<InboxRealtimeSync/);
+  assert.doesNotMatch(
+    activityRouteRuntimeEffectsSource,
+    /ActiveChatRealtimeSync/,
+  );
+});
+
 test('thread reconnect recovery requests both after-seq catch-up and authoritative latest-window reconciliation', () => {
   const activeChatSyncSource = readWorkspaceFile(
     'src/modules/messaging/realtime/active-chat-sync.tsx',
@@ -61,6 +123,37 @@ test('thread reconnect recovery requests both after-seq catch-up and authoritati
   assert.match(
     viewportSource,
     /input\.mode === 'authoritative-latest-window'\s*\?\s*'refresh-base'\s*:\s*'sync-topology'/,
+  );
+});
+
+test('background to foreground recovery stays explicit for both thread and inbox routes', () => {
+  const activeChatSyncSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/active-chat-sync.tsx',
+  );
+  const inboxSyncSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/inbox-sync.tsx',
+  );
+
+  assert.match(
+    activeChatSyncSource,
+    /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/,
+  );
+  assert.match(
+    activeChatSyncSource,
+    /requestTopologySync\(\{\s*newerThanLatest: true,\s*reason: 'visibility-visible',\s*\}\);/,
+  );
+  assert.match(
+    activeChatSyncSource,
+    /requestAuthoritativeLatestWindowSync\('visibility-visible'\);/,
+  );
+
+  assert.match(
+    inboxSyncSource,
+    /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /void syncTrackedConversationSummaries\('visibility-visible'\);/,
   );
 });
 
@@ -125,6 +218,9 @@ test('thread and inbox live surfaces keep summary catch-up narrower and more ind
   const activeChatSyncSource = readWorkspaceFile(
     'src/modules/messaging/realtime/active-chat-sync.tsx',
   );
+  const threadLiveStateStoreSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/thread-live-state-store.ts',
+  );
 
   assert.match(
     inboxSummaryStoreSource,
@@ -163,8 +259,20 @@ test('thread and inbox live surfaces keep summary catch-up narrower and more ind
     /summary-refresh-suppressed:conversation-already-projected/,
   );
   assert.doesNotMatch(
+    inboxSyncSource,
+    /thread-live-state-store|thread-message-patch-store|emitThreadHistorySyncRequest|emitThreadHistoryLiveMessage/,
+  );
+  assert.doesNotMatch(
     activeChatSyncSource,
-    /inbox-summary-store/,
+    /inbox-summary-store|patchInboxConversationSummary|syncConversationSummary/,
+  );
+  assert.doesNotMatch(
+    threadLiveStateStoreSource,
+    /inbox-summary-store|patchInboxConversationSummary|syncConversationSummary/,
+  );
+  assert.doesNotMatch(
+    inboxSummaryStoreSource,
+    /thread-live-state-store|thread-message-patch-store|emitThreadHistorySyncRequest/,
   );
 });
 
@@ -180,6 +288,9 @@ test('presence and typing stay auxiliary and do not drive message truth or catch
   );
   const liveOutgoingStatusSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/live-outgoing-message-status.tsx',
+  );
+  const pushPresenceSyncSource = readWorkspaceFile(
+    'src/modules/messaging/push/presence-sync.tsx',
   );
 
   assert.doesNotMatch(
@@ -223,6 +334,19 @@ test('presence and typing stay auxiliary and do not drive message truth or catch
   assert.match(
     typingIndicatorSource,
     /status === 'CHANNEL_ERROR'[\s\S]*status === 'TIMED_OUT'[\s\S]*status === 'CLOSED'/,
+  );
+
+  assert.doesNotMatch(
+    pushPresenceSyncSource,
+    /emitThreadHistorySyncRequest|patchInboxConversationSummary|router\.refresh|syncTrackedConversationSummaries|thread-live-state-store|inbox-summary-store/,
+  );
+  assert.match(
+    pushPresenceSyncSource,
+    /window\.addEventListener\('pagehide', handlePageHide\)/,
+  );
+  assert.match(
+    pushPresenceSyncSource,
+    /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/,
   );
 
   assert.doesNotMatch(

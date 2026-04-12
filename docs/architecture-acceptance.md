@@ -58,6 +58,8 @@ The current acceptance bar focuses on these boundaries:
 21. Route-scoped Messenger i18n and CSS boundaries stay in place so heavy
     client routes do not drift back to broad shared dictionaries or global
     Messenger style tax
+22. Messenger realtime ownership stays route-scoped, catch-up stays
+    authoritative, and presence/typing stay auxiliary to message truth
 
 ## Shared Platform Seams Under Acceptance
 
@@ -186,6 +188,14 @@ Current acceptance tests:
     regrowing inside `app/globals.css`
   - current hot files stay under lightweight size caps so performance and
     ownership cleanup does not silently erode
+- [tests/e2ee/realtime-recovery-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/realtime-recovery-boundaries.test.ts)
+  verifies the current realtime recovery contract:
+  - Messenger realtime mounts stay route-scoped instead of drifting back into
+    the shared shell
+  - thread and inbox keep explicit background/reconnect catch-up paths
+  - thread live state and inbox summary state stay separated
+  - presence and typing stay auxiliary instead of influencing message truth or
+    authoritative recovery
 
 Run them with:
 
@@ -229,6 +239,9 @@ Examples:
   work may be drifting back into first paint on shared, inbox, or chat routes
 - if a global-weight boundary test fails, heavy routes may be regressing back
   toward broad shared i18n or global Messenger CSS tax
+- if a realtime-recovery boundary test fails, Messenger live ownership may be
+  drifting back into the shared shell, reconnect healing may be weakening, or
+  auxiliary presence/typing state may be leaking back into core message truth
 - if a conversation-runtime failure boundary test fails, a single bad
   conversation row, voice interaction, or mobile attachment preview may be
   widening back into a thread-wide failure
