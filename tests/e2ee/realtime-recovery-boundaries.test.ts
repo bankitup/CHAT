@@ -87,3 +87,56 @@ test('inbox reconnect recovery adds explicit resubscribe catch-up', () => {
     /void syncTrackedConversationSummaries\('realtime-resubscribe'\);/,
   );
 });
+
+test('thread and inbox live surfaces keep summary catch-up narrower and more independent', () => {
+  const inboxSyncSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/inbox-sync.tsx',
+  );
+  const inboxSummaryStoreSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/inbox-summary-store.ts',
+  );
+  const activeChatSyncSource = readWorkspaceFile(
+    'src/modules/messaging/realtime/active-chat-sync.tsx',
+  );
+
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectMessageId\(/,
+  );
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectLatestMessageRecord\(/,
+  );
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectMembershipRecord\(/,
+  );
+  assert.match(
+    inboxSummaryStoreSource,
+    /export function doesInboxConversationSummaryReflectConversationRecord\(/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:local-already-projected/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:broadcast-already-projected/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:message-update-nonlatest/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:membership-already-projected/,
+  );
+  assert.match(
+    inboxSyncSource,
+    /summary-refresh-suppressed:conversation-already-projected/,
+  );
+  assert.doesNotMatch(
+    activeChatSyncSource,
+    /inbox-summary-store/,
+  );
+});
