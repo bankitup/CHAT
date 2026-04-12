@@ -24,20 +24,18 @@ test('messenger thread route composes the slim page seam instead of owning full 
   assert.doesNotMatch(pageSource, /ThreadHistoryViewport|ThreadComposerRuntime|GuardedServerActionForm/);
 });
 
-test('thread viewport delegates voice runtime to the extracted voice bubble seam', () => {
+test('thread viewport delegates row rendering and secondary runtime to extracted seams', () => {
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
+  );
+  const rowSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row.tsx',
   );
 
   assert.match(
     viewportSource,
-    /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
+    /from ['"]\.\/thread-message-row['"]/,
   );
-  assert.match(
-    viewportSource,
-    /function ThreadVoiceMessageBubbleLoadingFallback\(/,
-  );
-  assert.match(viewportSource, /<MemoizedThreadVoiceMessageBubble/);
   assert.match(
     viewportSource,
     /from ['"]\.\/thread-viewport-deferred-effects['"]/,
@@ -54,12 +52,35 @@ test('thread viewport delegates voice runtime to the extracted voice bubble seam
   );
   assert.match(viewportSource, /<ThreadImagePreviewOverlay/);
   assert.match(
-    viewportSource,
-    /import \{ configureInlineAudioElement \} from ['"]\.\/voice-playback-source['"]/,
+    rowSource,
+    /const ThreadReactionPicker = dynamic\(/,
   );
+  assert.match(
+    rowSource,
+    /const ThreadInlineEditForm = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /const ThreadDeleteMessageConfirm = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /const ThreadReactionGroups = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /function ThreadVoiceMessageBubbleLoadingFallback\(/,
+  );
+  assert.match(rowSource, /<MemoizedThreadVoiceMessageBubble/);
+  assert.match(rowSource, /surface="thread-message-row"/);
+  assert.match(rowSource, /data-thread-message-row-fallback="true"/);
   assert.doesNotMatch(
     viewportSource,
-    /function ThreadVoiceMessageBubble\(/,
+    /const MemoizedThreadVoiceMessageBubble = dynamic\(|const ThreadReactionPicker = dynamic\(|const ThreadInlineEditForm = dynamic\(|const ThreadDeleteMessageConfirm = dynamic\(/,
   );
 });
 
@@ -109,6 +130,9 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
+  const rowSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  );
   const voiceBubbleSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-voice-message-bubble.tsx',
   );
@@ -118,7 +142,8 @@ test('thread runtime split stays within the first-pass size boundaries', () => {
 
   assert.ok(chatPageSource.split('\n').length <= 80);
   assert.ok(threadPageContentSource.split('\n').length <= 1000);
-  assert.ok(viewportSource.split('\n').length <= 5550);
+  assert.ok(viewportSource.split('\n').length <= 3600);
+  assert.ok(rowSource.split('\n').length <= 2700);
   assert.ok(voiceBubbleSource.split('\n').length <= 800);
   assert.ok(voiceRuntimeHookSource.split('\n').length <= 1900);
 });

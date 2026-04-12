@@ -36,6 +36,9 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
+  const rowSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  );
   const composerSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-composer-runtime.tsx',
   );
@@ -50,31 +53,11 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   assert.match(threadPageContentSource, /<ThreadPageDeferredEffects/);
   assert.match(
     viewportSource,
-    /const ThreadReactionPicker = dynamic\(/,
-  );
-  assert.match(
-    viewportSource,
-    /const ThreadInlineEditForm = dynamic\(/,
-  );
-  assert.match(
-    viewportSource,
-    /const ThreadDeleteMessageConfirm = dynamic\(/,
-  );
-  assert.match(
-    viewportSource,
-    /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
-  );
-  assert.match(
-    viewportSource,
-    /const ThreadReactionGroups = dynamic\(/,
+    /from ['"]\.\/thread-message-row['"]/,
   );
   assert.match(
     viewportSource,
     /const ThreadImagePreviewOverlay = dynamic\(/,
-  );
-  assert.match(
-    viewportSource,
-    /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
   assert.match(
     viewportSource,
@@ -84,8 +67,38 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
     viewportSource,
     /from ['"]\.\/thread-history-render-list['"]/,
   );
-  assert.match(viewportSource, /<ThreadViewportDeferredEffects/);
-  assert.match(viewportSource, /<ThreadHistoryRenderList/);
+  assert.match(
+    viewportSource,
+    /<ThreadViewportDeferredEffects/,
+  );
+  assert.match(
+    viewportSource,
+    /<ThreadHistoryRenderList/,
+  );
+  assert.match(
+    rowSource,
+    /const ThreadReactionPicker = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /const ThreadInlineEditForm = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /const ThreadDeleteMessageConfirm = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /const ThreadReactionGroups = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
+  );
+  assert.match(
+    rowSource,
+    /function ThreadVoiceMessageBubbleLoadingFallback\(/,
+  );
   assert.match(
     composerSource,
     /const EncryptedDmComposerForm = dynamic\(/,
