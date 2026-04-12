@@ -8,6 +8,9 @@ products.
 
 This is a manual sanity checklist, not a feature-expansion script.
 
+Focused conversation-runtime recovery checks also live in
+[conversation-runtime-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/conversation-runtime-manual-matrix.md).
+
 ## Preconditions
 
 - valid login credentials exist
@@ -71,6 +74,15 @@ This is a manual sanity checklist, not a feature-expansion script.
     render normally
   - if a voice message is already present in the environment, confirm the voice
     row still renders and local playback controls still appear where expected
+
+### 4b. Conversation Runtime Recovery
+
+- Run the focused matrix in
+  [conversation-runtime-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/conversation-runtime-manual-matrix.md)
+  when the branch touches:
+  - broken thread recovery
+  - voice playback runtime
+  - image attachment preview
 
 ### 5. KeepCozy Flow Still Working
 
