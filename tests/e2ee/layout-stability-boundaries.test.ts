@@ -11,6 +11,9 @@ function readWorkspaceFile(relativePath: string) {
 
 test('shared shell and messenger globals keep reserved layout space for CLS-sensitive surfaces', () => {
   const globalsSource = readWorkspaceFile('app/globals.css');
+  const messengerRouteCssSource = readWorkspaceFile(
+    'app/(app)/messenger-route.css',
+  );
 
   assert.match(globalsSource, /--app-bottom-nav-shell-min-height:/);
   assert.match(globalsSource, /--app-bottom-nav-shell-messenger-min-height:/);
@@ -21,59 +24,59 @@ test('shared shell and messenger globals keep reserved layout space for CLS-sens
     /\.app-bottom-nav-shell-messenger\s*\{[\s\S]*min-height:\s*var\(--app-bottom-nav-shell-messenger-min-height\)/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.composer-runtime-shell\s*\{[\s\S]*min-height:\s*var\(--app-composer-runtime-min-height\)/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-header-meta\s*\{[\s\S]*min-height:\s*18px/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-presence-status\s*\{[\s\S]*min-height:\s*18px/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.conversation-preview-placeholder\s*\{[\s\S]*visibility:\s*hidden/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.message-voice-card-loading/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.message-voice-card\s*\{[\s\S]*overflow-anchor:\s*none/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.message-voice-card\s*\{[\s\S]*position:\s*relative/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.message-voice-title\s*\{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.message-voice-duration\s*\{[\s\S]*flex:\s*0 0 6\.5rem[\s\S]*font-variant-numeric:\s*tabular-nums[\s\S]*min-width:\s*6\.5rem[\s\S]*text-align:\s*right/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.message-voice-audio\s*\{[\s\S]*position:\s*absolute[\s\S]*clip-path:\s*inset\(50%\)/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-shell\s*\{[\s\S]*overflow:\s*hidden/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-stage\s*\{[\s\S]*height:\s*100%[\s\S]*min-width:\s*0[\s\S]*min-height:\s*0/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-frame\s*\{[\s\S]*max-height:\s*100%[\s\S]*min-width:\s*0[\s\S]*min-height:\s*0/,
   );
   assert.match(
-    globalsSource,
+    messengerRouteCssSource,
     /\.chat-image-preview-image\s*\{[\s\S]*width:\s*100%[\s\S]*max-width:\s*100%[\s\S]*height:\s*auto[\s\S]*object-fit:\s*contain/,
   );
 });
