@@ -30,6 +30,9 @@ test('shared authenticated shell gates Messenger-only startup effects behind rou
 });
 
 test('chat route keeps heavy secondary interaction paths behind on-demand boundaries', () => {
+  const threadPageContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-page-content.tsx',
+  );
   const viewportSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-history-viewport.tsx',
   );
@@ -40,6 +43,11 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
     'app/(app)/chat/[conversationId]/dm-thread-client-diagnostics.tsx',
   );
 
+  assert.match(
+    threadPageContentSource,
+    /from ['"]\.\/thread-page-deferred-effects['"]/,
+  );
+  assert.match(threadPageContentSource, /<ThreadPageDeferredEffects/);
   assert.match(
     viewportSource,
     /const ThreadReactionPicker = dynamic\(\(\) =>\s*import\('\.\/thread-reaction-picker'\)/,
@@ -56,6 +64,24 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
     viewportSource,
     /const MemoizedThreadVoiceMessageBubble = dynamic\(\(\) =>\s*import\('\.\/thread-voice-message-bubble'\)/,
   );
+  assert.match(
+    viewportSource,
+    /const ThreadReactionGroups = dynamic\(\(\) =>\s*import\('\.\/thread-reaction-groups'\)/,
+  );
+  assert.match(
+    viewportSource,
+    /const ThreadImagePreviewOverlay = dynamic\(\(\) =>\s*import\('\.\/thread-image-preview-overlay'\)/,
+  );
+  assert.match(
+    viewportSource,
+    /from ['"]\.\/thread-viewport-deferred-effects['"]/,
+  );
+  assert.match(
+    viewportSource,
+    /from ['"]\.\/thread-history-render-list['"]/,
+  );
+  assert.match(viewportSource, /<ThreadViewportDeferredEffects/);
+  assert.match(viewportSource, /<ThreadHistoryRenderList/);
   assert.match(
     composerSource,
     /const EncryptedDmComposerForm = dynamic\(\(\) =>\s*import\('\.\/encrypted-dm-composer-form'\)/,

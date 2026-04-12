@@ -9,10 +9,6 @@ import {
   CHAT_ATTACHMENT_ACCEPT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
 } from '@/modules/messaging/data/server';
-import { ActiveChatRealtimeSync } from '@/modules/messaging/realtime/active-chat-sync';
-import {
-  WarmNavReadyProbe,
-} from '@/modules/messaging/performance/warm-nav-client';
 import { loadMessengerThreadPageData } from '@/modules/messaging/server/thread-page';
 import { withSpaceParam } from '@/modules/spaces/url';
 import {
@@ -32,7 +28,6 @@ import {
 } from './actions';
 import { ConversationPresenceStatus } from './conversation-presence-status';
 import { ChatHeaderAvatarPreviewTrigger } from './chat-header-avatar-preview-trigger';
-import { ComposerKeyboardOffset } from './composer-keyboard-offset';
 import {
   DmThreadClientSubtree,
   DmThreadPresenceScope,
@@ -40,9 +35,9 @@ import {
 import { DmChatDeleteConfirmForm } from './dm-chat-delete-confirm-form';
 import { DmThreadHydrationProbe } from './dm-thread-hydration-probe';
 import { GroupChatSettingsForm } from './group-chat-settings-form';
+import { ThreadPageDeferredEffects } from './thread-page-deferred-effects';
 import { ThreadComposerRuntime } from './thread-composer-runtime';
 import { ThreadHistoryViewport } from './thread-history-viewport';
-import { ThreadLiveStateHydrator } from '@/modules/messaging/realtime/thread-live-state-store';
 import { GuardedServerActionForm } from '../../guarded-server-action-form';
 import { PendingSubmitButton } from '../../pending-submit-button';
 
@@ -208,53 +203,20 @@ export function ThreadPageContent({
           renderedEmptyState={messages.length === 0}
         />
       ) : null}
-      <WarmNavReadyProbe
-        details={{
-          isSettingsOpen,
-          kind: conversation.kind,
-          messageCount: messages.length,
-          spaceId: activeSpaceId,
-        }}
-        routeKey={warmNavRouteKey}
-        routePath={`/chat/${conversationId}`}
-        surface="chat"
-      />
-      {conversation.kind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          surface="active-chat-realtime-sync"
-        >
-          <ActiveChatRealtimeSync
-            conversationId={conversationId}
-            currentUserId={currentUserId}
-            messageIds={messageIds}
-          />
-        </DmThreadClientSubtree>
-      ) : (
-        <ActiveChatRealtimeSync
-          conversationId={conversationId}
-          currentUserId={currentUserId}
-          messageIds={messageIds}
-        />
-      )}
-      <ThreadLiveStateHydrator
+      <ThreadPageDeferredEffects
+        activeSpaceId={activeSpaceId}
         conversationId={conversationId}
+        conversationKind={conversation.kind === 'dm' ? 'dm' : 'group'}
         currentUserReadSeq={readState.lastReadMessageSeq}
+        currentUserId={currentUserId}
+        isSettingsOpen={isSettingsOpen}
+        messageCount={messages.length}
+        messageIds={messageIds}
         otherParticipantReadSeq={otherParticipantReadState?.lastReadMessageSeq ?? null}
         reactionsByMessage={reactionsByMessageEntries}
+        threadClientDiagnostics={threadClientDiagnostics}
+        warmNavRouteKey={warmNavRouteKey}
       />
-      {conversation.kind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          surface="composer-keyboard-offset"
-        >
-          <ComposerKeyboardOffset />
-        </DmThreadClientSubtree>
-      ) : (
-        <ComposerKeyboardOffset />
-      )}
 
       <DmThreadPresenceScope
         conversationId={conversationId}
