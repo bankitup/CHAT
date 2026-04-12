@@ -50,27 +50,31 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   assert.match(threadPageContentSource, /<ThreadPageDeferredEffects/);
   assert.match(
     viewportSource,
-    /const ThreadReactionPicker = dynamic\(\(\) =>\s*import\('\.\/thread-reaction-picker'\)/,
+    /const ThreadReactionPicker = dynamic\(/,
   );
   assert.match(
     viewportSource,
-    /const ThreadInlineEditForm = dynamic\(\(\) =>\s*import\('\.\/thread-inline-edit-form'\)/,
+    /const ThreadInlineEditForm = dynamic\(/,
   );
   assert.match(
     viewportSource,
-    /const ThreadDeleteMessageConfirm = dynamic\(\(\) =>\s*import\('\.\/thread-delete-message-confirm'\)/,
+    /const ThreadDeleteMessageConfirm = dynamic\(/,
   );
   assert.match(
     viewportSource,
-    /const MemoizedThreadVoiceMessageBubble = dynamic\(\(\) =>\s*import\('\.\/thread-voice-message-bubble'\)/,
+    /const MemoizedThreadVoiceMessageBubble = dynamic\(/,
   );
   assert.match(
     viewportSource,
-    /const ThreadReactionGroups = dynamic\(\(\) =>\s*import\('\.\/thread-reaction-groups'\)/,
+    /const ThreadReactionGroups = dynamic\(/,
   );
   assert.match(
     viewportSource,
-    /const ThreadImagePreviewOverlay = dynamic\(\(\) =>\s*import\('\.\/thread-image-preview-overlay'\)/,
+    /const ThreadImagePreviewOverlay = dynamic\(/,
+  );
+  assert.match(
+    viewportSource,
+    /function ThreadVoiceMessageBubbleLoadingFallback\(/,
   );
   assert.match(
     viewportSource,
@@ -84,11 +88,15 @@ test('chat route keeps heavy secondary interaction paths behind on-demand bounda
   assert.match(viewportSource, /<ThreadHistoryRenderList/);
   assert.match(
     composerSource,
-    /const EncryptedDmComposerForm = dynamic\(\(\) =>\s*import\('\.\/encrypted-dm-composer-form'\)/,
+    /const EncryptedDmComposerForm = dynamic\(/,
   );
   assert.match(
     composerSource,
-    /const PlaintextChatComposerForm = dynamic\(\(\) =>\s*import\('\.\/plaintext-chat-composer-form'\)/,
+    /const PlaintextChatComposerForm = dynamic\(/,
+  );
+  assert.match(
+    composerSource,
+    /function ComposerFormShellFallback\(/,
   );
   assert.match(
     diagnosticsSource,

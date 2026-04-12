@@ -24,16 +24,39 @@ import {
   type ThreadLocalReplyTarget,
 } from './thread-local-reply-target';
 
-const EncryptedDmComposerForm = dynamic(() =>
-  import('./encrypted-dm-composer-form').then(
-    (mod) => mod.EncryptedDmComposerForm,
-  ),
+function ComposerFormShellFallback() {
+  return (
+    <div aria-hidden="true" className="stack composer-form composer-form-loading">
+      <div className="composer-input-shell composer-input-shell-loading">
+        <span className="composer-loading-button composer-loading-button-muted" />
+        <div className="composer-typing-shell composer-typing-shell-loading">
+          <span className="composer-loading-line composer-loading-line-primary" />
+          <span className="composer-loading-line composer-loading-line-secondary" />
+        </div>
+        <span className="composer-loading-button composer-loading-button-accent" />
+      </div>
+    </div>
+  );
+}
+
+const EncryptedDmComposerForm = dynamic(
+  () =>
+    import('./encrypted-dm-composer-form').then(
+      (mod) => mod.EncryptedDmComposerForm,
+    ),
+  {
+    loading: ComposerFormShellFallback,
+  },
 );
 
-const PlaintextChatComposerForm = dynamic(() =>
-  import('./plaintext-chat-composer-form').then(
-    (mod) => mod.PlaintextChatComposerForm,
-  ),
+const PlaintextChatComposerForm = dynamic(
+  () =>
+    import('./plaintext-chat-composer-form').then(
+      (mod) => mod.PlaintextChatComposerForm,
+    ),
+  {
+    loading: ComposerFormShellFallback,
+  },
 );
 
 type MentionParticipant = {
@@ -219,19 +242,39 @@ export function ThreadComposerRuntime({
           </button>
         </div>
       ) : null}
-      {conversationKind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          fallback={
-            <DmThreadComposerFallback
-              copy={t.chat.encryptionNeedsRefresh}
-              reloadLabel={t.chat.reloadConversation}
+      <div className="composer-runtime-shell">
+        {conversationKind === 'dm' ? (
+          <DmThreadClientSubtree
+            conversationId={conversationId}
+            {...threadClientDiagnostics}
+            fallback={
+              <DmThreadComposerFallback
+                copy={t.chat.encryptionNeedsRefresh}
+                reloadLabel={t.chat.reloadConversation}
+              />
+            }
+            surface="encrypted-dm-composer-form"
+          >
+            <EncryptedDmComposerForm
+              accept={accept}
+              attachmentHelpText={attachmentHelpText}
+              attachmentMaxSizeBytes={attachmentMaxSizeBytes}
+              attachmentMaxSizeLabel={attachmentMaxSizeLabel}
+              conversationId={conversationId}
+              currentUserId={currentUserId}
+              currentUserLabel={currentUserLabel}
+              encryptedDmEnabled={encryptedDmEnabled}
+              language={language}
+              mentionParticipants={mentionParticipants}
+              mentionSuggestionsLabel={mentionSuggestionsLabel}
+              messagePlaceholder={messagePlaceholder}
+              onReplyTargetConsumed={handleReplyTargetConsumed}
+              recipientUserId={recipientUserId}
+              replyToMessageId={activeReplyTarget?.id ?? null}
             />
-          }
-          surface="encrypted-dm-composer-form"
-        >
-          <EncryptedDmComposerForm
+          </DmThreadClientSubtree>
+        ) : (
+          <PlaintextChatComposerForm
             accept={accept}
             attachmentHelpText={attachmentHelpText}
             attachmentMaxSizeBytes={attachmentMaxSizeBytes}
@@ -239,33 +282,15 @@ export function ThreadComposerRuntime({
             conversationId={conversationId}
             currentUserId={currentUserId}
             currentUserLabel={currentUserLabel}
-            encryptedDmEnabled={encryptedDmEnabled}
             language={language}
             mentionParticipants={mentionParticipants}
             mentionSuggestionsLabel={mentionSuggestionsLabel}
             messagePlaceholder={messagePlaceholder}
             onReplyTargetConsumed={handleReplyTargetConsumed}
-            recipientUserId={recipientUserId}
             replyToMessageId={activeReplyTarget?.id ?? null}
           />
-        </DmThreadClientSubtree>
-      ) : (
-        <PlaintextChatComposerForm
-          accept={accept}
-          attachmentHelpText={attachmentHelpText}
-          attachmentMaxSizeBytes={attachmentMaxSizeBytes}
-          attachmentMaxSizeLabel={attachmentMaxSizeLabel}
-          conversationId={conversationId}
-          currentUserId={currentUserId}
-          currentUserLabel={currentUserLabel}
-          language={language}
-          mentionParticipants={mentionParticipants}
-          mentionSuggestionsLabel={mentionSuggestionsLabel}
-          messagePlaceholder={messagePlaceholder}
-          onReplyTargetConsumed={handleReplyTargetConsumed}
-          replyToMessageId={activeReplyTarget?.id ?? null}
-        />
-      )}
+        )}
+      </div>
     </section>
   );
 }

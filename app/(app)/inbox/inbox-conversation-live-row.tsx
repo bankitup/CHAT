@@ -142,6 +142,14 @@ function InboxConversationLiveRowComponent({
     previewMode,
   );
   const hasUnread = liveSummary.unreadCount > 0;
+  const previewClassName =
+    hasUnread
+      ? isPrimaryChatsView
+        ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
+        : 'muted conversation-preview conversation-preview-unread'
+      : isPrimaryChatsView
+        ? 'muted conversation-preview conversation-preview-dm'
+        : 'muted conversation-preview';
   const lastActivityAt = liveSummary.lastMessageAt ?? liveSummary.createdAt;
   const recencyLabel = formatInboxRecency(
     lastActivityAt,
@@ -291,15 +299,7 @@ function InboxConversationLiveRowComponent({
               </div>
               {preview ? (
                 <EncryptedDmInboxPreview
-                  className={
-                    hasUnread
-                      ? isPrimaryChatsView
-                        ? 'muted conversation-preview conversation-preview-unread conversation-preview-dm'
-                        : 'muted conversation-preview conversation-preview-unread'
-                      : isPrimaryChatsView
-                        ? 'muted conversation-preview conversation-preview-dm'
-                        : 'muted conversation-preview'
-                  }
+                  className={previewClassName}
                   conversationId={item.conversationId}
                   currentUserId={currentUserId}
                   fallbackPreview={preview}
@@ -307,7 +307,14 @@ function InboxConversationLiveRowComponent({
                   latestMessageDeletedAt={liveSummary.latestMessageDeletedAt}
                   latestMessageId={liveSummary.latestMessageId}
                 />
-              ) : null}
+              ) : (
+                <p
+                  aria-hidden="true"
+                  className={`${previewClassName} conversation-preview-placeholder`}
+                >
+                  {'\u00a0'}
+                </p>
+              )}
             </div>
 
             {item.metaLabels.length > 0 ? (
