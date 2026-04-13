@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { OptimisticThreadMessages } from './optimistic-thread-messages';
 import type { DmThreadClientDiagnostics } from './dm-thread-client-diagnostics';
 import { DmThreadClientSubtree } from './dm-thread-client-diagnostics';
 import { useDeferredChatRuntimeReady } from './use-deferred-chat-runtime-ready';
@@ -15,14 +16,6 @@ const DeferredProgressiveHistoryLoader = dynamic(
   () =>
     import('./progressive-history-loader').then(
       (mod) => mod.ProgressiveHistoryLoader,
-    ),
-  { ssr: false },
-);
-
-const DeferredOptimisticThreadMessages = dynamic(
-  () =>
-    import('./optimistic-thread-messages').then(
-      (mod) => mod.OptimisticThreadMessages,
     ),
   { ssr: false },
 );
@@ -84,8 +77,29 @@ export function ThreadViewportDeferredEffects({
     idleTimeoutMs: 900,
   });
 
+  const optimisticThreadMessagesNode =
+    conversationKind === 'dm' ? (
+      <DmThreadClientSubtree
+        conversationId={conversationId}
+        {...threadClientDiagnostics}
+        surface="optimistic-thread-messages"
+      >
+        <OptimisticThreadMessages
+          confirmedClientIds={confirmedClientIds}
+          conversationId={conversationId}
+          labels={labels}
+        />
+      </DmThreadClientSubtree>
+    ) : (
+      <OptimisticThreadMessages
+        confirmedClientIds={confirmedClientIds}
+        conversationId={conversationId}
+        labels={labels}
+      />
+    );
+
   if (!isReady) {
-    return null;
+    return optimisticThreadMessagesNode;
   }
 
   const resolvedLatestVisibleMessageSeq =
@@ -143,25 +157,7 @@ export function ThreadViewportDeferredEffects({
           targetId="message-thread-scroll"
         />
       )}
-      {conversationKind === 'dm' ? (
-        <DmThreadClientSubtree
-          conversationId={conversationId}
-          {...threadClientDiagnostics}
-          surface="optimistic-thread-messages"
-        >
-          <DeferredOptimisticThreadMessages
-            confirmedClientIds={confirmedClientIds}
-            conversationId={conversationId}
-            labels={labels}
-          />
-        </DmThreadClientSubtree>
-      ) : (
-        <DeferredOptimisticThreadMessages
-          confirmedClientIds={confirmedClientIds}
-          conversationId={conversationId}
-          labels={labels}
-        />
-      )}
+      {optimisticThreadMessagesNode}
       {conversationKind === 'dm' ? (
         <DmThreadClientSubtree
           conversationId={conversationId}

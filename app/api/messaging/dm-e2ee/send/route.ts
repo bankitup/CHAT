@@ -13,7 +13,7 @@ import {
   sendEncryptedDmTextMessage,
 } from '@/modules/messaging/data/server';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
-import { sendChatPushNotifications } from '@/modules/messaging/push/server';
+import { scheduleChatPushNotificationsAfterResponse } from '@/modules/messaging/push/server';
 
 function logDmE2eeSendRouteDiagnostics(
   stage: string,
@@ -54,6 +54,21 @@ function extractSendDebugState(error: unknown): DmE2eeSendDebugState {
     sendSelectedRecipientDeviceRowId:
       details.sendSelectedRecipientDeviceRowId ?? null,
   };
+}
+
+function scheduleDmE2eePushAfterResponse(
+  input: Parameters<typeof scheduleChatPushNotificationsAfterResponse>[0],
+) {
+  scheduleChatPushNotificationsAfterResponse(input, {
+    onError: (pushError) => {
+      logDmE2eeSendRouteDiagnostics('push:error', {
+        message:
+          pushError instanceof Error
+            ? pushError.message
+            : 'Unable to send encrypted DM push.',
+      });
+    },
+  });
 }
 
 function parseEnvelopeInserts(rawValue: string): DmE2eeEnvelopeInsert[] {
@@ -194,28 +209,18 @@ export async function POST(request: Request) {
         senderDeviceRecordId,
         senderId: user.id,
       });
-
-      try {
-        await sendChatPushNotifications({
-          attachmentPreviewKind: resolveInboxAttachmentPreviewKind(
-            attachment.type,
-            attachment.name,
-          ),
-          body: null,
-          contentMode: 'dm_e2ee_v1',
-          conversationId,
-          messageId: result.messageId,
-          messageKind: 'attachment',
-          senderId: user.id,
-        });
-      } catch (pushError) {
-        logDmE2eeSendRouteDiagnostics('push:error', {
-          message:
-            pushError instanceof Error
-              ? pushError.message
-              : 'Unable to send encrypted DM push.',
-        });
-      }
+      scheduleDmE2eePushAfterResponse({
+        attachmentPreviewKind: resolveInboxAttachmentPreviewKind(
+          attachment.type,
+          attachment.name,
+        ),
+        body: null,
+        contentMode: 'dm_e2ee_v1',
+        conversationId,
+        messageId: result.messageId,
+        messageKind: 'attachment',
+        senderId: user.id,
+      });
 
       logDmE2eeSendRouteDiagnostics('send:ok', {
         transport: 'multipart-attachment',
@@ -228,24 +233,14 @@ export async function POST(request: Request) {
       ...input,
       senderId: user.id,
     });
-
-    try {
-      await sendChatPushNotifications({
-        body: null,
-        contentMode: 'dm_e2ee_v1',
-        conversationId: input.conversationId,
-        messageId: result.messageId,
-        messageKind: 'text',
-        senderId: user.id,
-      });
-    } catch (pushError) {
-      logDmE2eeSendRouteDiagnostics('push:error', {
-        message:
-          pushError instanceof Error
-            ? pushError.message
-            : 'Unable to send encrypted DM push.',
-      });
-    }
+    scheduleDmE2eePushAfterResponse({
+      body: null,
+      contentMode: 'dm_e2ee_v1',
+      conversationId: input.conversationId,
+      messageId: result.messageId,
+      messageKind: 'text',
+      senderId: user.id,
+    });
 
     logDmE2eeSendRouteDiagnostics('send:ok', {
       transport: 'json-text',
