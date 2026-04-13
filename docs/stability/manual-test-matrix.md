@@ -19,6 +19,30 @@ Focused conversation-runtime recovery verification lives in:
 
 - [conversation-runtime-manual-matrix.md](/Users/danya/IOS%20-%20Apps/CHAT/docs/conversation-runtime-manual-matrix.md)
 
+## Messenger UX Quick Pass
+
+Run this short pass when a branch touches Messenger send flow, voice playback,
+inbox presentation, or chat layout:
+
+- Text send:
+  - open a Messenger thread
+  - send one short text message
+  - confirm first tap acknowledges immediately, the row settles cleanly, and no
+    temporary unavailable state flashes during the normal path
+- Voice send + replay:
+  - record and send one voice note
+  - replay it after completion
+  - confirm progress starts from zero, replay resets cleanly, and pause/resume
+    does not leave the row looking partially started
+- Inbox mobile open:
+  - open `/inbox` on a narrow mobile viewport
+  - confirm rows feel like light list items, not heavy boxed cards, and
+    avatar/title/preview/time stay attached in one row
+- Chat header alignment:
+  - open `/chat/[conversationId]` on the same viewport
+  - confirm the title is visually centered between the back button and avatar
+    and the header does not feel offset
+
 ## Matrix
 
 | Area | Scenario | Steps | Expected result | Evidence to watch |
@@ -27,11 +51,11 @@ Focused conversation-runtime recovery verification lives in:
 | Inbox | Create group | Open inbox, group mode, select members, enter title, submit | Pending state appears immediately, one group opens, no duplicate tap behavior | `/app/(app)/inbox/actions.ts`, `/src/modules/messaging/data/server.ts#createConversationWithMembers` |
 | Spaces | Create governed space | Open `/spaces/new`, fill name/profile/admins/members, submit once | Immediate pending state, one space is created, error remains truthful if any identifier is invalid | `/app/(app)/spaces/actions.ts`, `/src/modules/spaces/write-server.ts#createGovernedSpace` |
 | Spaces | Add governed members/admins | Open `/spaces/members`, add members/admins, submit | Immediate pending state, member/admin changes persist once, no duplicate inserts/promotions | `/app/(app)/spaces/actions.ts`, `/src/modules/spaces/write-server.ts#addMembersToGovernedSpace` |
-| Chat send | Group text send | Type short text and send | Optimistic message appears immediately, committed message replaces it cleanly, read state advances | `/app/(app)/chat/[conversationId]/plaintext-chat-composer-form.tsx`, `/app/(app)/chat/[conversationId]/actions.ts#sendMessageMutationAction` |
+| Chat send | Group text send | Type short text and send | Optimistic message appears immediately, committed message replaces it cleanly, read state advances, and the row does not flash through temporary unavailable UI | `/app/(app)/chat/[conversationId]/plaintext-chat-composer-form.tsx`, `/app/(app)/chat/[conversationId]/actions.ts#sendMessageMutationAction` |
 | Chat send | Group photo send from library | Pick gallery image and send | Immediate optimistic shell, no dead tap, committed image appears once, preview opens | `/app/(app)/chat/[conversationId]/composer-attachment-picker.tsx`, `/src/modules/messaging/data/server.ts#sendMessageWithAttachment` |
 | Chat send | Group camera capture send | Use camera mode, take photo, send | Same as gallery path, no inflated pending shell, no duplicate send | same as above |
 | Chat send | Group file send | Pick non-image file and send | Immediate pending state, final attachment row appears once, no duplicate message shell | same as above |
-| Chat send | Voice send | Record voice note, send, tap replay, pause, resume | Send acknowledges immediately, replay works, repeated taps do not destabilize page | voice runtime files under `/app/(app)/chat/[conversationId]` |
+| Chat send | Voice send | Record voice note, send, tap replay, pause, resume | Send acknowledges immediately, progress starts from zero, replay resets cleanly, and repeated taps do not destabilize page | voice runtime files under `/app/(app)/chat/[conversationId]` |
 | Chat send | Voice cross-device matrix | Run the dedicated desktop/mobile matrix for Chrome, Safari, and Android Chrome where available | Playback either succeeds or lands in explicit unsupported/failed state; it must not masquerade as generic loading | `/docs/voice-cross-device-manual-matrix.md`, `/docs/voice-mobile-playback-proof.md` |
 | Encrypted DM | Text send | In DM, type text, send | Local ack appears immediately, one committed encrypted message appears, no duplicate row | `/app/(app)/chat/[conversationId]/encrypted-dm-composer-form.tsx`, `/app/api/messaging/dm-e2ee/send/route.ts` |
 | Encrypted DM | Text + attachment send | In DM, attach photo or file and type text, send | One optimistic row, one committed row, no split-send behavior | same as above plus `/src/modules/messaging/data/server.ts#sendEncryptedDmMessageWithAttachment` |
@@ -49,7 +73,8 @@ Focused conversation-runtime recovery verification lives in:
 | Realtime | Thread background -> foreground recovery | Open thread, background tab for >15 seconds, send updates elsewhere, foreground again | Mounted thread catches up in place through explicit recovery, not only after leaving and re-entering the route | `/src/modules/messaging/realtime/active-chat-sync.tsx`, `/app/(app)/chat/[conversationId]/use-thread-history-sync-runtime.ts` |
 | Realtime | Inbox background -> foreground recovery | Open inbox, background tab for >15 seconds, send updates elsewhere, foreground again | Tracked conversation summaries refresh in place and do not require route re-entry to look current | `/src/modules/messaging/realtime/inbox-sync.tsx` |
 | Realtime | Reconnect recovery | With inbox or thread open, force websocket disconnect/reconnect if possible, then send updates elsewhere | One explicit reconnect catch-up path runs; stale state heals without broad shell refresh or manual navigation | `/src/modules/messaging/realtime/active-chat-sync.tsx`, `/src/modules/messaging/realtime/inbox-sync.tsx`, `/docs/realtime-current-contract.md` |
-| Layout | Inbox row layout | Open `/inbox` on a narrow mobile viewport with a mix of read/unread rows and at least one longer title or preview | Each row remains one coherent conversation card: avatar left, primary copy centered, time/unread/meta compact, preview contained in the content column | `/app/(app)/inbox/inbox-conversation-live-row.tsx`, `/app/(app)/inbox/inbox-conversation-static-row.tsx`, `/app/(app)/inbox/inbox-conversation-row-contract.module.css` |
+| Layout | Inbox row layout | Open `/inbox` on a narrow mobile viewport with a mix of read/unread rows and at least one longer title or preview | Each row remains one coherent conversation item: avatar left, primary copy centered, time/unread/meta compact, preview contained in the content column, and no heavy boxed-card regression | `/app/(app)/inbox/inbox-conversation-live-row.tsx`, `/app/(app)/inbox/inbox-conversation-static-row.tsx`, `/app/(app)/inbox/inbox-conversation-row-contract.module.css` |
+| Layout | Chat header alignment | Open `/chat/[conversationId]` on a narrow mobile viewport and compare the title against the back button and avatar rails | The participant title reads as visually centered, not offset by hidden spacing, and the header still feels balanced while preserving the existing style | `/app/(app)/chat/[conversationId]/thread-page-content.tsx`, `/app/(app)/messenger-route.css` |
 | Layout | Chat header/body/composer structure | Open `/chat/[conversationId]` on a narrow mobile viewport, then scroll and focus the composer | Header card, message thread, and composer remain distinct stacked layers; header/meta do not collapse, composer does not drift off-canvas | `/app/(app)/chat/[conversationId]/thread-page-content.tsx`, `/app/(app)/messenger-route.css`, `/app/globals.css` |
 | Layout | Composer shell integrity | In `/chat/[conversationId]`, focus the composer, open attachment picker, close it, and verify idle state again | Attachment button, text field, voice button, and send button stay inside one shell; no raw native file input appears; controls do not fall into vertical stacking | `/app/(app)/chat/[conversationId]/plaintext-chat-composer-form.tsx`, `/app/(app)/chat/[conversationId]/encrypted-dm-composer-form.tsx`, `/app/(app)/chat/[conversationId]/composer-attachment-picker.tsx`, `/app/(app)/chat/[conversationId]/composer-shell-contract.module.css` |
 | Layout | Settings alignment | Open `/settings` on a narrow mobile viewport, then enter profile edit mode and status edit mode | Profile/status top rows wrap cleanly when needed, action buttons stay aligned, and the space-summary button does not overlap the copy block | `/app/(app)/settings/page.tsx`, `/app/(app)/settings/profile-settings-form.tsx`, `/app/(app)/settings/profile-status-form.tsx`, `/app/globals.css` |

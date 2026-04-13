@@ -147,6 +147,33 @@ test('encrypted DM body renders dedicated historical-unavailable UI instead of f
   );
 });
 
+test('encrypted DM body starts in temporary loading and only falls into unavailable through guarded resolution paths', () => {
+  const encryptedBodySource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/encrypted-dm-message-body.tsx',
+  );
+
+  assert.match(
+    encryptedBodySource,
+    /setPlaintext\(null\);\s*setIsUnavailable\(false\);\s*setFailureKind\('unavailable'\);\s*setDiagnosticCode\('temporary-loading'\);/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /setDmThreadVisibleMessageState\(\{[\s\S]*diagnosticCode:\s*'temporary-loading'[\s\S]*plaintext:\s*null[\s\S]*\}\);/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /const temporaryResolvingGraceRemainingMs = plaintext\?\.trim\(\)\s*\?\s*null\s*:\s*getEncryptedDmTemporaryResolvingGraceRemainingMs\(/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /const shouldPreferTemporaryResolvingState =[\s\S]*temporaryResolvingGraceRemainingMs !== null;/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /const resolveUnavailable = \([\s\S]*setIsUnavailable\(true\);[\s\S]*setDiagnosticCode\(nextDiagnosticCode\);/,
+  );
+});
+
 test('encrypted send surfaces recipient readiness problems as explicit blocked state', () => {
   const message = getEncryptedDmComposerErrorMessage({
     code: 'dm_e2ee_recipient_device_missing',
