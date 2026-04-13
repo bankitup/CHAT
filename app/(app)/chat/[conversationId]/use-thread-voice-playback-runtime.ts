@@ -374,6 +374,23 @@ export function useThreadVoicePlaybackRuntime({
     'missing',
   );
 
+  const resetPlaybackProgress = useCallback(
+    (audio?: HTMLAudioElement | null) => {
+      if (audio) {
+        try {
+          if (Number.isFinite(audio.currentTime) && audio.currentTime > 0) {
+            audio.currentTime = 0;
+          }
+        } catch {
+          // Ignore browsers that disallow seeking during source settlement.
+        }
+      }
+
+      setProgressMs(0);
+    },
+    [],
+  );
+
   const handleAudioRef = useCallback((audio: HTMLAudioElement | null) => {
     audioRef.current = audio;
     configureInlineAudioElement(audio);
@@ -733,11 +750,13 @@ export function useThreadVoicePlaybackRuntime({
     setPreferredDevicePlaybackSourceId(null);
     clearPendingPlaybackIntent();
     setPlaybackFailed(false);
+    resetPlaybackProgress(audioRef.current);
   }, [
     attachment?.durationMs,
     attachment?.id,
     cachedDurationMs,
     clearPendingPlaybackIntent,
+    resetPlaybackProgress,
     voicePlaybackSourceSignature,
   ]);
 
@@ -767,7 +786,7 @@ export function useThreadVoicePlaybackRuntime({
       });
       setPlaybackState((current) =>
         current === 'buffering'
-          ? audio.currentTime > 0
+          ? progressMs > 0
             ? 'paused'
             : 'idle'
           : current,
@@ -779,6 +798,7 @@ export function useThreadVoicePlaybackRuntime({
   }, [
     effectiveVoicePlaybackSourceUrl,
     effectiveVoiceTransportSourceUrl,
+    progressMs,
     rememberVoicePlaybackCacheEntry,
     resolvedDurationMs,
     shouldHydratePreparedVoicePlayback,
@@ -802,9 +822,14 @@ export function useThreadVoicePlaybackRuntime({
         return current;
       }
 
-      return audio.currentTime > 0 ? 'paused' : 'idle';
+      return progressMs > 0 ? 'paused' : 'idle';
     });
-  }, [effectiveVoicePlaybackSourceUrl, hasPendingPlaybackIntent, voiceState]);
+  }, [
+    effectiveVoicePlaybackSourceUrl,
+    hasPendingPlaybackIntent,
+    progressMs,
+    voiceState,
+  ]);
 
   const preparePlaybackSource = useCallback(async () => {
     const activePlaybackSource = activeVoicePlaybackSourceRef.current;
@@ -961,6 +986,10 @@ export function useThreadVoicePlaybackRuntime({
 
       const ownerVersion = claimActiveThreadVoicePlayback(messageId, audio);
       claimedPlaybackOwnerVersionRef.current = ownerVersion;
+
+      if (playbackState === 'ended' || audio.ended) {
+        resetPlaybackProgress(audio);
+      }
 
       if (audio.getAttribute('src') !== nextPlaybackSource) {
         audio.setAttribute('src', nextPlaybackSource);
@@ -1126,7 +1155,9 @@ export function useThreadVoicePlaybackRuntime({
       devicePlaybackSupport.mediaCapabilitiesSupported,
       devicePlaybackSupport.status,
       messageId,
+      playbackState,
       releaseClaimedPlaybackOwner,
+      resetPlaybackProgress,
       storedVoiceMimeType,
       voiceFileExtension,
     ],
@@ -1218,7 +1249,7 @@ export function useThreadVoicePlaybackRuntime({
         claimedPlaybackOwnerVersionRef.current = null;
       }
 
-      setProgressMs(0);
+      resetPlaybackProgress(audio);
       setPlaybackState((current) => (current === 'failed' ? current : 'idle'));
       return;
     }
@@ -1231,6 +1262,7 @@ export function useThreadVoicePlaybackRuntime({
     effectiveVoicePlaybackSourceUrl,
     messageId,
     releaseClaimedPlaybackOwner,
+    resetPlaybackProgress,
   ]);
 
   useEffect(() => {
@@ -1494,7 +1526,7 @@ export function useThreadVoicePlaybackRuntime({
         playbackState === 'buffering' &&
         audio.paused
       ) {
-        setPlaybackState(audio.currentTime > 0 ? 'paused' : 'idle');
+        setPlaybackState(progressMs > 0 ? 'paused' : 'idle');
       }
     },
     [
@@ -1502,6 +1534,7 @@ export function useThreadVoicePlaybackRuntime({
       hasPendingPlaybackIntent,
       messageId,
       playbackState,
+      progressMs,
       rememberVoicePlaybackCacheEntry,
       resolvedDurationMs,
       storedVoiceMimeType,
@@ -1514,12 +1547,11 @@ export function useThreadVoicePlaybackRuntime({
       const audio = event.currentTarget;
 
       releaseClaimedPlaybackOwner(audio);
-      audio.currentTime = 0;
-      setProgressMs(0);
+      resetPlaybackProgress(audio);
       clearPendingPlaybackIntent();
       setPlaybackState('ended');
     },
-    [clearPendingPlaybackIntent, releaseClaimedPlaybackOwner],
+    [clearPendingPlaybackIntent, releaseClaimedPlaybackOwner, resetPlaybackProgress],
   );
 
   const handleAudioError = useCallback(
@@ -1551,8 +1583,7 @@ export function useThreadVoicePlaybackRuntime({
       });
       releaseClaimedPlaybackOwner(audio);
       audio.pause();
-      audio.currentTime = 0;
-      setProgressMs(0);
+      resetPlaybackProgress(audio);
 
       const currentTransportSourceUrl = effectiveVoiceTransportSourceUrlRef.current;
       const activePlaybackSource = activeVoicePlaybackSourceRef.current;
@@ -1585,6 +1616,7 @@ export function useThreadVoicePlaybackRuntime({
       devicePlaybackSupport.status,
       messageId,
       releaseClaimedPlaybackOwner,
+      resetPlaybackProgress,
       storedVoiceMimeType,
       voiceFileExtension,
     ],
@@ -1656,9 +1688,14 @@ export function useThreadVoicePlaybackRuntime({
         return;
       }
 
-      setPlaybackState(audio.currentTime > 0 ? 'paused' : 'idle');
+      setPlaybackState(progressMs > 0 ? 'paused' : 'idle');
     },
-    [clearPendingPlaybackIntent, messageId, releaseClaimedPlaybackOwner],
+    [
+      clearPendingPlaybackIntent,
+      messageId,
+      progressMs,
+      releaseClaimedPlaybackOwner,
+    ],
   );
 
   const handleAudioPlaying = useCallback(
@@ -1738,7 +1775,7 @@ export function useThreadVoicePlaybackRuntime({
 
   const handleAudioTimeUpdate = useCallback(
     (event: SyntheticEvent<HTMLAudioElement>) => {
-      setProgressMs(event.currentTarget.currentTime * 1000);
+      setProgressMs(Math.max(0, event.currentTarget.currentTime * 1000));
     },
     [],
   );
