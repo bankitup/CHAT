@@ -16,6 +16,9 @@ test('inbox rows keep a coherent avatar, content, title-meta, and preview struct
   const liveInboxRowSource = readWorkspaceFile(
     'app/(app)/inbox/inbox-conversation-live-row.tsx',
   );
+  const inboxRowContractCssSource = readWorkspaceFile(
+    'app/(app)/inbox/inbox-conversation-row-contract.module.css',
+  );
 
   for (const source of [staticInboxRowSource, liveInboxRowSource]) {
     assert.match(
@@ -51,6 +54,19 @@ test('inbox rows keep a coherent avatar, content, title-meta, and preview struct
       /className=\{joinClassNames\([\s\S]*styles\.preview/,
     );
   }
+
+  assert.match(
+    inboxRowContractCssSource,
+    /\.card\s*\{[\s\S]*border-bottom:\s*1px solid rgba\(221,\s*226,\s*232,\s*0\.72\)[\s\S]*background:\s*transparent[\s\S]*box-shadow:\s*none/,
+  );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.link\s*\{[\s\S]*padding:\s*9px 2px[\s\S]*border-radius:\s*18px[\s\S]*background:\s*transparent/,
+  );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.linkUnread\s*\{[\s\S]*linear-gradient\(180deg,\s*rgba\(250,\s*252,\s*255,\s*0\.94\),\s*rgba\(246,\s*249,\s*255,\s*0\.82\)\)[\s\S]*box-shadow:\s*inset 2px 0 0 rgba\(31,\s*111,\s*235,\s*0\.24\)/,
+  );
 });
 
 test('chat route keeps the mobile shell split between header, message thread, and composer', () => {
