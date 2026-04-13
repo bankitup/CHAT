@@ -184,6 +184,33 @@ test('thread hot-path message inserts prefer local or broadcast hints before dup
   );
 });
 
+test('plaintext sends hand off a committed thread row locally instead of waiting only for later sync', () => {
+  const actionsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/actions.ts',
+  );
+  const composerSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/plaintext-chat-composer-form.tsx',
+  );
+
+  assert.match(actionsSource, /getCommittedThreadMessageForMutation/);
+  assert.match(actionsSource, /getConversationMessages\(/);
+  assert.match(
+    actionsSource,
+    /const committedMessagePromise = attachment[\s\S]*getCommittedThreadMessageForMutation/,
+  );
+  assert.match(actionsSource, /committedMessage,/);
+
+  assert.match(composerSource, /emitThreadHistoryLiveMessage/);
+  assert.match(
+    composerSource,
+    /if \(result\.data\.committedMessage\) \{[\s\S]*emitThreadHistoryLiveMessage\(/,
+  );
+  assert.match(
+    composerSource,
+    /reason:\s*'message-local-committed'/,
+  );
+});
+
 test('inbox reconnect recovery adds explicit resubscribe catch-up', () => {
   const inboxSyncSource = readWorkspaceFile(
     'src/modules/messaging/realtime/inbox-sync.tsx',
