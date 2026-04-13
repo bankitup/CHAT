@@ -6,6 +6,7 @@ import {
 } from '@/modules/i18n/client-chat';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import styles from './composer-shell-contract.module.css';
 
 type ComposerAttachmentPickerProps = {
   accept: string;
@@ -17,6 +18,10 @@ type ComposerAttachmentPickerProps = {
 };
 
 type AttachmentPickerMode = 'camera' | 'file' | 'gallery';
+
+function joinClassNames(values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
+}
 
 function formatFileSize(value: number) {
   if (value < 1024 * 1024) {
@@ -178,7 +183,10 @@ export function ComposerAttachmentPicker({
   return (
     <>
       {selectedFile ? (
-        <div className="attachment-selected-card" aria-live="polite">
+        <div
+          className={joinClassNames([styles.selectedCard, 'attachment-selected-card'])}
+          aria-live="polite"
+        >
           {previewUrl ? (
             <span
               aria-hidden="true"
@@ -206,7 +214,10 @@ export function ComposerAttachmentPicker({
         </div>
       ) : null}
 
-      <details className="attachment-entry-details" ref={detailsRef}>
+      <details
+        className={joinClassNames([styles.attachmentDetails, 'attachment-entry-details'])}
+        ref={detailsRef}
+      >
         <summary
           className={
             hasSelectedFile
@@ -248,8 +259,11 @@ export function ComposerAttachmentPicker({
       <input
         ref={inputRef}
         accept={accept}
-        className="attachment-native-input"
+        aria-hidden="true"
+        className={joinClassNames([styles.nativeInput, 'attachment-native-input'])}
         name="attachment"
+        style={{ display: 'none' }}
+        tabIndex={-1}
         type="file"
         onChange={(event) => {
           const pickerMode = pickerModeRef.current;
@@ -303,7 +317,15 @@ export function ComposerAttachmentPicker({
       />
 
       {errorMessage ? (
-        <p className="attachment-helper attachment-helper-error">{errorMessage}</p>
+        <p
+          className={joinClassNames([
+            styles.helper,
+            'attachment-helper',
+            'attachment-helper-error',
+          ])}
+        >
+          {errorMessage}
+        </p>
       ) : null}
     </>
   );

@@ -64,6 +64,21 @@ test('chat route keeps the mobile shell split between header, message thread, an
   const threadMessageRowContentSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
   );
+  const plaintextComposerSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/plaintext-chat-composer-form.tsx',
+  );
+  const encryptedComposerSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/encrypted-dm-composer-form.tsx',
+  );
+  const attachmentPickerSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/composer-attachment-picker.tsx',
+  );
+  const threadComposerRuntimeSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-composer-runtime.tsx',
+  );
+  const composerContractCssSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/composer-shell-contract.module.css',
+  );
   const messengerRouteCssSource = readWorkspaceFile(
     'app/(app)/messenger-route.css',
   );
@@ -119,6 +134,68 @@ test('chat route keeps the mobile shell split between header, message thread, an
   assert.doesNotMatch(
     threadMessageRowSource,
     /!\s*canInlineMessageMeta\s*\?\s*\(\s*<span[\s\S]*message-meta message-meta-own/,
+  );
+  for (const source of [plaintextComposerSource, encryptedComposerSource]) {
+    assert.match(
+      source,
+      /from ['"]\.\/composer-shell-contract\.module\.css['"]/,
+    );
+    assert.match(
+      source,
+      /className=\{joinClassNames\(\[styles\.form,\s*'stack',\s*'composer-form'\]\)\}/,
+    );
+    assert.match(
+      source,
+      /className=\{joinClassNames\(\[styles\.inputShell,\s*'composer-input-shell'\]\)\}/,
+    );
+    assert.match(
+      source,
+      /className=\{joinClassNames\(\[styles\.field,\s*'field',\s*'composer-input-field'\]\)\}/,
+    );
+    assert.match(
+      source,
+      /className=\{joinClassNames\(\[styles\.actions,\s*'composer-action-cluster'\]\)\}/,
+    );
+  }
+  assert.match(
+    attachmentPickerSource,
+    /from ['"]\.\/composer-shell-contract\.module\.css['"]/,
+  );
+  assert.match(
+    attachmentPickerSource,
+    /styles\.attachmentDetails/,
+  );
+  assert.match(
+    attachmentPickerSource,
+    /styles\.selectedCard/,
+  );
+  assert.match(
+    attachmentPickerSource,
+    /styles\.nativeInput/,
+  );
+  assert.match(
+    attachmentPickerSource,
+    /style=\{\{\s*display:\s*'none'\s*\}\}/,
+  );
+  assert.match(
+    attachmentPickerSource,
+    /tabIndex=\{-1\}/,
+  );
+  assert.match(
+    threadComposerRuntimeSource,
+    /from ['"]\.\/composer-shell-contract\.module\.css['"]/,
+  );
+  assert.match(
+    threadComposerRuntimeSource,
+    /composer-runtime-shell \$\{styles\.runtimeShell\}/,
+  );
+  assert.match(
+    composerContractCssSource,
+    /\.inputShell\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0,\s*1fr\) auto/,
+  );
+  assert.match(
+    composerContractCssSource,
+    /\.nativeInput\s*\{[\s\S]*display:\s*none !important/,
   );
 });
 

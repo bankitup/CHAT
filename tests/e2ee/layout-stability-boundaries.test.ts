@@ -117,7 +117,14 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   );
 
   assert.match(composerRuntimeSource, /function ComposerFormShellFallback\(/);
-  assert.match(composerRuntimeSource, /className="composer-runtime-shell"/);
+  assert.match(
+    composerRuntimeSource,
+    /from ['"]\.\/composer-shell-contract\.module\.css['"]/,
+  );
+  assert.match(
+    composerRuntimeSource,
+    /composer-runtime-shell \$\{styles\.runtimeShell\}/,
+  );
   assert.match(composerRuntimeSource, /loading:\s*ComposerFormShellFallback/);
 
   assert.match(

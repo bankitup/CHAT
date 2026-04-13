@@ -23,11 +23,17 @@ import {
   subscribeToThreadLocalReplyTargetSelection,
   type ThreadLocalReplyTarget,
 } from './thread-local-reply-target';
+import styles from './composer-shell-contract.module.css';
 
 function ComposerFormShellFallback() {
   return (
-    <div aria-hidden="true" className="stack composer-form composer-form-loading">
-      <div className="composer-input-shell composer-input-shell-loading">
+    <div
+      aria-hidden="true"
+      className={`stack composer-form composer-form-loading ${styles.form}`}
+    >
+      <div
+        className={`composer-input-shell composer-input-shell-loading ${styles.inputShell} ${styles.inputShellLoading}`}
+      >
         <span className="composer-loading-button composer-loading-button-muted" />
         <div className="composer-typing-shell composer-typing-shell-loading">
           <span className="composer-loading-line composer-loading-line-primary" />
@@ -242,7 +248,7 @@ export function ThreadComposerRuntime({
           </button>
         </div>
       ) : null}
-      <div className="composer-runtime-shell">
+      <div className={`composer-runtime-shell ${styles.runtimeShell}`}>
         {conversationKind === 'dm' ? (
           <DmThreadClientSubtree
             conversationId={conversationId}
