@@ -23,6 +23,10 @@ import {
   type InboxConversationSummarySnapshot,
 } from '@/modules/messaging/data/conversation-read-server';
 import {
+  getConversationMessages,
+  type ConversationMessage as ThreadConversationMessage,
+} from '@/modules/messaging/data/thread-read-server';
+import {
   CHAT_ATTACHMENT_HELP_TEXT,
   CHAT_ATTACHMENT_MAX_SIZE_BYTES,
   isSupportedChatAttachmentType,
@@ -312,6 +316,7 @@ export type ChatConversationSummaryMutationPayload =
 
 export type SendMessageMutationPayload = {
   clientId: string | null;
+  committedMessage: ThreadConversationMessage | null;
   conversationId: string;
   lastReadMessageSeq: number | null;
   messageId: string;
@@ -377,6 +382,21 @@ function mutationError(
     }),
     ok: false,
   };
+}
+
+async function getCommittedThreadMessageForMutation(input: {
+  conversationId: string;
+  messageId: string;
+}) {
+  try {
+    const snapshot = await getConversationMessages(input.conversationId, {
+      messageIds: [input.messageId],
+    });
+
+    return snapshot.messages[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function sendMessageMutationAction(
@@ -510,12 +530,21 @@ export async function sendMessageMutationAction(
           senderId: user.id,
         });
 
-    const readResult = await markConversationRead({
-      conversationId,
-      userId: user.id,
-      lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
-    });
-    const summary = await getConversationSummaryForUser(conversationId, user.id);
+    const committedMessagePromise = attachment
+      ? Promise.resolve<ThreadConversationMessage | null>(null)
+      : getCommittedThreadMessageForMutation({
+          conversationId,
+          messageId: messageResult.messageId,
+        });
+    const [readResult, summary, committedMessage] = await Promise.all([
+      markConversationRead({
+        conversationId,
+        userId: user.id,
+        lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
+      }),
+      getConversationSummaryForUser(conversationId, user.id),
+      committedMessagePromise,
+    ]);
     keepChatPushOnResponseTail({
       attachmentPreviewKind: attachment
         ? isSupportedVoiceAttachmentType(attachment.type)
@@ -541,6 +570,7 @@ export async function sendMessageMutationAction(
 
     return mutationOk({
       clientId: messageResult.clientId ?? null,
+      committedMessage,
       conversationId,
       lastReadMessageSeq: readResult.lastReadMessageSeq,
       messageId: messageResult.messageId,

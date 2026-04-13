@@ -227,3 +227,26 @@ test('voice playback lifecycle ownership stays isolated in the extracted control
     /thread-voice-playback-controller/,
   );
 });
+
+test('voice playback runtime resets partial progress on replay, source loss, and ended transitions', () => {
+  const runtimeHookSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-thread-voice-playback-runtime.ts',
+  );
+
+  assert.match(
+    runtimeHookSource,
+    /const resetPlaybackProgress = useCallback\([\s\S]*audio\.currentTime = 0;[\s\S]*setProgressMs\(0\);/,
+  );
+  assert.match(
+    runtimeHookSource,
+    /if \(playbackState === 'ended' \|\| audio\.ended\) \{[\s\S]*resetPlaybackProgress\(audio\);/,
+  );
+  assert.match(
+    runtimeHookSource,
+    /if \(!effectiveVoicePlaybackSourceUrl\) \{[\s\S]*resetPlaybackProgress\(audio\);[\s\S]*setPlaybackState\(\(current\) => \(current === 'failed' \? current : 'idle'\)\);/,
+  );
+  assert.match(
+    runtimeHookSource,
+    /const handleAudioEnded = useCallback\([\s\S]*resetPlaybackProgress\(audio\);[\s\S]*setPlaybackState\('ended'\);/,
+  );
+});

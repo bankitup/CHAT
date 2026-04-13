@@ -142,6 +142,31 @@ Fast architecture-drift review checks for shared or mixed seams live in
 - Confirm presence/typing still look helpful, but do not become the reason the
   thread or inbox appears fresh.
 
+### 4e. Messenger UX Quick Pass
+
+- In a Messenger thread, send one short text message and confirm:
+  - first tap shows immediate acknowledgment
+  - the optimistic row settles into a committed row without a visible dead gap
+  - the message does not flash through an "unavailable" state during normal
+    send/load
+- In the same thread, record and send one voice note, then replay it and
+  confirm:
+  - progress starts from zero instead of looking partially filled before real
+    playback
+  - replay after end starts cleanly
+  - pause/resume does not leave the row looking half-loaded
+- On a narrow mobile-width viewport, open
+  [inbox/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/inbox/page.tsx)
+  and confirm:
+  - rows still read as light list items instead of heavy isolated cards
+  - avatar, title, preview, and time/meta stay in one coherent row
+- On the same viewport, open
+  [page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/chat/[conversationId]/page.tsx)
+  and confirm:
+  - the participant title looks visually centered between the back button and
+    avatar
+  - the header feels balanced rather than offset by a hidden spacer
+
 ### 5. KeepCozy Flow Still Working
 
 - In a KeepCozy-profile space:

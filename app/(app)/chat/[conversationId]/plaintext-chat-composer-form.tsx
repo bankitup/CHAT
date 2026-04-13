@@ -7,7 +7,10 @@ import {
   LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
   type OptimisticThreadRetryPayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
-import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
+import {
+  emitThreadHistoryLiveMessage,
+  emitThreadHistorySyncRequest,
+} from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
 import {
   getChatClientTranslations,
@@ -194,6 +197,13 @@ export function PlaintextChatComposerForm({
         isCurrentUser: true,
         lastReadMessageSeq: result.data.lastReadMessageSeq,
       });
+      if (result.data.committedMessage) {
+        emitThreadHistoryLiveMessage({
+          conversationId,
+          message: result.data.committedMessage,
+          reason: 'message-local-committed',
+        });
+      }
       emitThreadHistorySyncRequest({
         conversationId,
         messageIds: [result.data.messageId],

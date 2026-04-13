@@ -184,6 +184,57 @@ test('thread hot-path message inserts prefer local or broadcast hints before dup
   );
 });
 
+test('plaintext sends hand off a committed thread row locally instead of waiting only for later sync', () => {
+  const actionsSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/actions.ts',
+  );
+  const composerSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/plaintext-chat-composer-form.tsx',
+  );
+  const outgoingQueueSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/use-conversation-outgoing-queue.ts',
+  );
+
+  assert.match(actionsSource, /getCommittedThreadMessageForMutation/);
+  assert.match(actionsSource, /getConversationMessages\(/);
+  assert.match(
+    actionsSource,
+    /const committedMessagePromise = attachment[\s\S]*getCommittedThreadMessageForMutation/,
+  );
+  assert.match(actionsSource, /committedMessage,/);
+
+  assert.match(
+    outgoingQueueSource,
+    /emitLifecycleUpdate\(queuedItem, 'local_pending'\);/,
+  );
+  assert.match(
+    outgoingQueueSource,
+    /emitLifecycleUpdate\(nextItem, 'sending'\);/,
+  );
+  assert.match(
+    outgoingQueueSource,
+    /await processItemRef\.current\(nextItem\);\s*emitLifecycleUpdate\(nextItem, 'sent'\);/,
+  );
+  assert.match(
+    outgoingQueueSource,
+    /emitLifecycleUpdate\(nextItem, 'failed', errorMessage\);/,
+  );
+
+  assert.match(composerSource, /emitThreadHistoryLiveMessage/);
+  assert.match(
+    composerSource,
+    /if \(result\.data\.committedMessage\) \{[\s\S]*emitThreadHistoryLiveMessage\(/,
+  );
+  assert.match(
+    composerSource,
+    /reason:\s*'message-local-committed'/,
+  );
+  assert.match(
+    composerSource,
+    /emitThreadHistoryLiveMessage\([\s\S]*reason:\s*'message-local-committed'[\s\S]*emitThreadHistorySyncRequest\(/,
+  );
+});
+
 test('inbox reconnect recovery adds explicit resubscribe catch-up', () => {
   const inboxSyncSource = readWorkspaceFile(
     'src/modules/messaging/realtime/inbox-sync.tsx',

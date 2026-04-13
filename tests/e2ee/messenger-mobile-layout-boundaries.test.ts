@@ -67,6 +67,18 @@ test('inbox rows keep a coherent avatar, content, title-meta, and preview struct
     inboxRowContractCssSource,
     /\.linkUnread\s*\{[\s\S]*linear-gradient\(180deg,\s*rgba\(250,\s*252,\s*255,\s*0\.94\),\s*rgba\(246,\s*249,\s*255,\s*0\.82\)\)[\s\S]*box-shadow:\s*inset 2px 0 0 rgba\(31,\s*111,\s*235,\s*0\.24\)/,
   );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.row\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0,\s*1fr\)[\s\S]*min-height:\s*58px/,
+  );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.title\s*\{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
+  );
+  assert.match(
+    inboxRowContractCssSource,
+    /\.footerMeta\s*\{[\s\S]*display:\s*inline-flex[\s\S]*flex-wrap:\s*wrap/,
+  );
 });
 
 test('chat route keeps the mobile shell split between header, message thread, and composer', () => {
@@ -137,11 +149,27 @@ test('chat route keeps the mobile shell split between header, message thread, an
   );
   assert.match(
     messengerRouteCssSource,
+    /\.chat-header-main-link\s*\{[\s\S]*text-align:\s*center/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.chat-header-copy\s*\{[\s\S]*width:\s*100%[\s\S]*justify-items:\s*center/,
+  );
+  assert.match(
+    messengerRouteCssSource,
     /\.chat-header-avatar-slot\s*\{[\s\S]*justify-content:\s*center[\s\S]*width:\s*100%/,
   );
   assert.match(
     messengerRouteCssSource,
     /\.chat-header-back\s*\{[\s\S]*justify-self:\s*center/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.chat-header-card \.conversation-screen-title\s*\{[\s\S]*text-align:\s*center/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.chat-header-title-with-status\s*\{[\s\S]*margin-inline:\s*auto/,
   );
   assert.match(
     messengerRouteCssSource,
