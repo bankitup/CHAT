@@ -92,6 +92,9 @@ test('chat route keeps the mobile shell split between header, message thread, an
   const threadMessageRowContentSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
   );
+  const optimisticThreadMessagesSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/optimistic-thread-messages.tsx',
+  );
   const plaintextComposerSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/plaintext-chat-composer-form.tsx',
   );
@@ -188,6 +191,22 @@ test('chat route keeps the mobile shell split between header, message thread, an
     /\.message-bubble-stack\s*\{[\s\S]*display:\s*grid[\s\S]*width:\s*fit-content[\s\S]*max-width:\s*100%/,
   );
   assert.match(
+    optimisticThreadMessagesSource,
+    /const pendingBanner = isPending \? \([\s\S]*className="message-pending-banner"[\s\S]*pendingStatusLabel/,
+  );
+  assert.match(
+    optimisticThreadMessagesSource,
+    /const pendingProgress = isPending \? \([\s\S]*className="message-pending-progress"[\s\S]*pendingProgressScale/,
+  );
+  assert.match(
+    optimisticThreadMessagesSource,
+    /message-row-optimistic-pending/,
+  );
+  assert.match(
+    optimisticThreadMessagesSource,
+    /message-bubble-optimistic-pending/,
+  );
+  assert.match(
     messengerRouteCssSource,
     /\.message-row\s*\{[\s\S]*width:\s*100%[\s\S]*display:\s*flex[\s\S]*min-width:\s*0/,
   );
@@ -202,6 +221,18 @@ test('chat route keeps the mobile shell split between header, message thread, an
   assert.match(
     messengerRouteCssSource,
     /\.message-voice-stack\s*\{[\s\S]*display:\s*grid[\s\S]*gap:\s*7px[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-pending-banner\s*\{[\s\S]*display:\s*inline-flex[\s\S]*border-radius:\s*999px[\s\S]*box-shadow:/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-pending-progress\s*\{[\s\S]*height:\s*6px[\s\S]*border-radius:\s*999px/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-status-pending-stack\s*\{[\s\S]*padding:\s*2px 8px[\s\S]*border-radius:\s*999px/,
   );
   assert.doesNotMatch(
     threadMessageRowSource,

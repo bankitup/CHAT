@@ -37,6 +37,10 @@ type OptimisticThreadMessagesProps = {
   };
 };
 
+function joinClassNames(values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
+}
+
 function formatOptimisticTimestamp(createdAt: string, fallbackLabel: string) {
   const timestamp = new Date(createdAt);
 
@@ -354,38 +358,73 @@ export function OptimisticThreadMessages({
             : isQueued
               ? labels.queued
               : labels.sending;
+        const pendingStage = isQueued ? 'queued' : 'sending';
+        const pendingProgressScale = isQueued ? 0.34 : 0.72;
         const voiceProgressScale = isFailed ? 0.28 : isQueued ? 0.2 : 0.58;
         const voiceIconState = isFailed ? 'error' : isPending ? 'loading' : 'play';
+        const pendingBanner = isPending ? (
+          <div className="message-pending-banner" data-pending-stage={pendingStage}>
+            <span aria-hidden="true" className="message-pending-banner-dot" />
+            <span className="message-pending-banner-label">{pendingStatusLabel}</span>
+          </div>
+        ) : null;
+        const pendingProgress = isPending ? (
+          <div
+            aria-hidden="true"
+            className="message-pending-progress"
+            data-pending-stage={pendingStage}
+          >
+            <span
+              className="message-pending-progress-bar"
+              style={{
+                transform: `scaleX(${pendingProgressScale})`,
+              }}
+            />
+          </div>
+        ) : null;
 
         return (
           <article
             key={item.clientId}
-            className={
+            className={joinClassNames([
+              'message-row',
+              'message-row-own',
+              'message-row-optimistic',
+              isPending && 'message-row-optimistic-pending',
               isVoiceMessage
-                ? 'message-row message-row-own message-row-optimistic message-row-optimistic-voice'
+                ? 'message-row-optimistic-voice'
                 : isImageAttachment
-                  ? 'message-row message-row-own message-row-optimistic message-row-optimistic-media'
-                : 'message-row message-row-own message-row-optimistic'
-            }
+                  ? 'message-row-optimistic-media'
+                  : null,
+            ])}
           >
             <div
-              className={
-                isFailed
-                  ? 'message-card message-card-own message-card-optimistic message-card-failed'
-                  : 'message-card message-card-own message-card-optimistic'
-              }
+              className={joinClassNames([
+                'message-card',
+                'message-card-own',
+                'message-card-optimistic',
+                isPending && 'message-card-optimistic-pending',
+                isFailed && 'message-card-failed',
+              ])}
             >
               <div
-                className={
-                  isFailed
-                    ? 'message-bubble message-bubble-own message-bubble-optimistic message-bubble-failed'
-                    : isImageAttachment
-                      ? 'message-bubble message-bubble-own message-bubble-optimistic message-bubble-optimistic-media'
-                    : 'message-bubble message-bubble-own message-bubble-optimistic'
-                }
+                className={joinClassNames([
+                  'message-bubble',
+                  'message-bubble-own',
+                  'message-bubble-optimistic',
+                  isPending && 'message-bubble-optimistic-pending',
+                  isFailed && 'message-bubble-failed',
+                  isImageAttachment && 'message-bubble-optimistic-media',
+                ])}
               >
                 {isVoiceMessage ? (
-                  <div className="message-voice-stack">
+                  <div
+                    className={joinClassNames([
+                      'message-voice-stack',
+                      isPending && 'message-voice-stack-pending',
+                    ])}
+                  >
+                    {pendingBanner}
                     <div
                       className={
                         isPending
@@ -458,9 +497,11 @@ export function OptimisticThreadMessages({
                         ) : null}
                       </div>
                     </div>
+                    {pendingProgress}
                   </div>
                 ) : isImageAttachment && item.attachment ? (
                   <div className="message-attachment-caption-stack">
+                    {pendingBanner}
                     <OptimisticImageAttachmentCard
                       fallbackLabel={labels.photo}
                       file={item.attachment}
@@ -468,9 +509,11 @@ export function OptimisticThreadMessages({
                     {shouldRenderAttachmentCaption ? (
                       <p className="message-body">{normalizedBody}</p>
                     ) : null}
+                    {pendingProgress}
                   </div>
                 ) : isGenericAttachment && item.attachment ? (
                   <div className="message-attachment-caption-stack">
+                    {pendingBanner}
                     <OptimisticFileAttachmentCard
                       fallbackLabel={labels.attachment}
                       file={item.attachment}
@@ -478,9 +521,14 @@ export function OptimisticThreadMessages({
                     {shouldRenderAttachmentCaption ? (
                       <p className="message-body">{normalizedBody}</p>
                     ) : null}
+                    {pendingProgress}
                   </div>
                 ) : (
-                  <p className="message-body">{messagePreview}</p>
+                  <div className="message-optimistic-body-stack">
+                    {pendingBanner}
+                    <p className="message-body">{messagePreview}</p>
+                    {pendingProgress}
+                  </div>
                 )}
               </div>
               <div

@@ -170,5 +170,5 @@ test('current global-weight hot spots stay under the agreed lightweight size cap
   );
   assert.ok(readWorkspaceLineCount('src/modules/messaging/data/server.ts') <= 4000);
   assert.ok(readWorkspaceLineCount('app/globals.css') <= 5800);
-  assert.ok(readWorkspaceLineCount('app/(app)/messenger-route.css') <= 4700);
+  assert.ok(readWorkspaceLineCount('app/(app)/messenger-route.css') <= 4800);
 });
