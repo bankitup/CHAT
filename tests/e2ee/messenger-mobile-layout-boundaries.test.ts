@@ -58,6 +58,12 @@ test('chat route keeps the mobile shell split between header, message thread, an
   const threadPageContentSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-page-content.tsx',
   );
+  const threadMessageRowSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row.tsx',
+  );
+  const threadMessageRowContentSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/thread-message-row-content.tsx',
+  );
   const messengerRouteCssSource = readWorkspaceFile(
     'app/(app)/messenger-route.css',
   );
@@ -93,6 +99,26 @@ test('chat route keeps the mobile shell split between header, message thread, an
   assert.match(
     messengerRouteCssSource,
     /@keyframes composer-voice-pulse\s*\{[\s\S]*100%\s*\{[\s\S]*box-shadow:\s*0 0 0 0 rgba\(180,\s*35,\s*24,\s*0\)[\s\S]*\}\s*\}\s*@keyframes chat-typing-pulse\s*\{/,
+  );
+  assert.match(
+    threadMessageRowContentSource,
+    /className=\{\s*isOwnMessage\s*\?\s*'message-bubble-stack message-bubble-stack-own'\s*:\s*'message-bubble-stack'\s*\}/,
+  );
+  assert.match(
+    threadMessageRowContentSource,
+    /message-meta message-meta-own message-meta-attached/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-bubble-stack\s*\{[\s\S]*display:\s*grid[\s\S]*width:\s*fit-content[\s\S]*max-width:\s*100%/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-meta-attached\s*\{[\s\S]*max-width:\s*100%/,
+  );
+  assert.doesNotMatch(
+    threadMessageRowSource,
+    /!\s*canInlineMessageMeta\s*\?\s*\(\s*<span[\s\S]*message-meta message-meta-own/,
   );
 });
 

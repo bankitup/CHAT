@@ -2141,14 +2141,6 @@ function ThreadMessageRowComponent({
             }
           />
         </div>
-        {!canInlineMessageMeta ? (
-          <span
-            className={isOwnMessage ? 'message-meta message-meta-own' : 'message-meta'}
-          >
-            {messageMetaContent}
-          </span>
-        ) : null}
-
         {shouldRenderReactionGroups ? (
           <ThreadReactionGroups
             ariaLabel={t.chat.messageReactions}

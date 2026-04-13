@@ -1787,6 +1787,19 @@
   margin-left: auto;
 }
 
+.message-bubble-stack {
+  display: grid;
+  gap: 3px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.message-bubble-stack-own {
+  margin-left: auto;
+  justify-items: end;
+}
+
 .message-quick-actions {
   --message-quick-actions-offset: 6px;
   position: absolute;
@@ -2107,6 +2120,12 @@
   align-self: flex-end;
   gap: 4px;
   color: rgba(91, 100, 112, 0.52);
+}
+
+.message-meta-attached {
+  min-width: 0;
+  max-width: 100%;
+  padding-inline: 2px;
 }
 
 .message-meta-optimistic {
