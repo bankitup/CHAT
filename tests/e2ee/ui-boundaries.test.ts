@@ -6,6 +6,7 @@ import {
   classifyEncryptedDmFailure,
   getEncryptedDmBodyRenderState,
   getEncryptedDmComposerErrorMessage,
+  getEncryptedDmTemporaryResolvingGraceRemainingMs,
 } from '../../src/modules/messaging/e2ee/ui-policy.ts';
 
 const workspaceRoot = resolve(import.meta.dirname, '..', '..');
@@ -83,6 +84,27 @@ test('encrypted DM policy-blocked history stays distinct from generic unavailabl
   assert.equal(state.debugBucket, 'policy-blocked-history');
 });
 
+test('recent missing-envelope encrypted DM states keep a short resolving grace instead of dropping into unavailable immediately', () => {
+  const remainingGraceMs = getEncryptedDmTemporaryResolvingGraceRemainingMs({
+    diagnosticCode: 'missing-envelope',
+    failureKind: 'unavailable',
+    messageCreatedAt: new Date(Date.now() - 800).toISOString(),
+  });
+
+  assert.equal(typeof remainingGraceMs, 'number');
+  assert.ok((remainingGraceMs ?? 0) > 0);
+});
+
+test('older encrypted history gaps do not keep pretending to be temporarily resolving', () => {
+  const remainingGraceMs = getEncryptedDmTemporaryResolvingGraceRemainingMs({
+    diagnosticCode: 'device-retired-or-mismatched',
+    failureKind: 'unavailable',
+    messageCreatedAt: new Date(Date.now() - 8_000).toISOString(),
+  });
+
+  assert.equal(remainingGraceMs, null);
+});
+
 test('encrypted DM body renders dedicated historical-unavailable UI instead of falling back to generic body text', () => {
   const encryptedBodySource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/encrypted-dm-message-body.tsx',
@@ -107,6 +129,22 @@ test('encrypted DM body renders dedicated historical-unavailable UI instead of f
   );
   assert.match(encryptedBodySource, /<EncryptedHistoryUnavailableState/);
   assert.match(encryptedBodySource, /\{renderState\.showRetryAction \? \(/);
+  assert.match(
+    encryptedBodySource,
+    /const \[, setTemporaryResolvingGraceVersion\] = useState\(0\);/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /getEncryptedDmTemporaryResolvingGraceRemainingMs\(/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /const shouldPreferTemporaryResolvingState =[\s\S]*temporaryResolvingGraceRemainingMs !== null;/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /preferTemporaryResolvingState:\s*shouldPreferTemporaryResolvingState/,
+  );
 });
 
 test('encrypted send surfaces recipient readiness problems as explicit blocked state', () => {

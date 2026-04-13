@@ -31,6 +31,8 @@ export type EncryptedDmDiagnosticCode =
   | 'decrypt-failed'
   | 'stale-cached-failure-state';
 
+const ENCRYPTED_DM_TEMPORARY_RESOLVING_GRACE_MS = 2400;
+
 export type EncryptedDmServerHistoryHint = {
   code: 'envelope-present' | 'missing-envelope' | 'policy-blocked-history';
   committedHistoryState: EncryptedDmCommittedHistoryState;
@@ -144,6 +146,53 @@ function shouldTreatEncryptedDmAsTemporarilyResolving(input: {
     default:
       return false;
   }
+}
+
+function parseEncryptedDmMessageCreatedAt(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+export function getEncryptedDmTemporaryResolvingGraceRemainingMs(input: {
+  diagnosticCode: EncryptedDmDiagnosticCode;
+  failureKind: EncryptedDmFailureKind;
+  messageCreatedAt: string | null;
+  now?: number;
+  preferTemporaryResolvingState?: boolean;
+}) {
+  if (input.preferTemporaryResolvingState) {
+    return null;
+  }
+
+  if (input.failureKind === 'device-setup') {
+    return null;
+  }
+
+  switch (input.diagnosticCode) {
+    case 'missing-envelope':
+    case 'same-user-new-device-history-gap':
+    case 'device-retired-or-mismatched':
+    case 'local-device-record-missing':
+    case 'stale-cached-failure-state':
+      break;
+    default:
+      return null;
+  }
+
+  const createdAtMs = parseEncryptedDmMessageCreatedAt(input.messageCreatedAt);
+
+  if (createdAtMs === null) {
+    return null;
+  }
+
+  const ageMs = Math.max((input.now ?? Date.now()) - createdAtMs, 0);
+  const remainingMs = ENCRYPTED_DM_TEMPORARY_RESOLVING_GRACE_MS - ageMs;
+
+  return remainingMs > 0 ? remainingMs : null;
 }
 
 export function classifyEncryptedDmFailureDiagnostic(
