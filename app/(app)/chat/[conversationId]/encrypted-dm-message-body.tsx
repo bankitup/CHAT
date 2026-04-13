@@ -13,6 +13,7 @@ import {
   classifyEncryptedDmFailure,
   classifyEncryptedDmFailureDiagnostic,
   getEncryptedDmFailureKindForDiagnostic,
+  getEncryptedDmRecentTransientResolvingGraceRemainingMs,
   getEncryptedDmBodyRenderState,
   getEncryptedDmTemporaryResolvingGraceRemainingMs,
   type EncryptedDmDiagnosticCode,
@@ -104,6 +105,14 @@ export function EncryptedDmMessageBody({
   const [diagnosticCode, setDiagnosticCode] =
     useState<EncryptedDmDiagnosticCode>('temporary-loading');
   const [, setTemporaryResolvingGraceVersion] = useState(0);
+  const [, setRecentTransientResolvingGraceVersion] = useState(0);
+  const [recentTransientFailureState, setRecentTransientFailureState] = useState<{
+    diagnosticCode: EncryptedDmDiagnosticCode | null;
+    observedAt: number | null;
+  }>({
+    diagnosticCode: null,
+    observedAt: null,
+  });
   const [retryNonce, setRetryNonce] = useState(0);
   const previousFailureCodeRef =
     useRef<EncryptedDmDiagnosticCode | null>(null);
@@ -118,8 +127,21 @@ export function EncryptedDmMessageBody({
         messageCreatedAt,
         preferTemporaryResolvingState,
       });
+  const recentTransientResolvingGraceRemainingMs = plaintext?.trim()
+    ? null
+    : getEncryptedDmRecentTransientResolvingGraceRemainingMs({
+        diagnosticCode,
+        failureKind,
+        messageCreatedAt,
+        transientObservedAt:
+          recentTransientFailureState.diagnosticCode === diagnosticCode
+            ? recentTransientFailureState.observedAt
+            : null,
+      });
   const shouldPreferTemporaryResolvingState =
-    preferTemporaryResolvingState || temporaryResolvingGraceRemainingMs !== null;
+    preferTemporaryResolvingState ||
+    temporaryResolvingGraceRemainingMs !== null ||
+    recentTransientResolvingGraceRemainingMs !== null;
 
   const normalizeString = (value: unknown) =>
     typeof value === 'string' ? value.trim() : '';
@@ -141,6 +163,10 @@ export function EncryptedDmMessageBody({
 
     void (async () => {
       previousFailureCodeRef.current = null;
+      setRecentTransientFailureState({
+        diagnosticCode: null,
+        observedAt: null,
+      });
       setPlaintext(null);
       setIsUnavailable(false);
       setFailureKind('unavailable');
@@ -209,6 +235,11 @@ export function EncryptedDmMessageBody({
             ...details,
           });
         }
+
+        setRecentTransientFailureState({
+          diagnosticCode: nextDiagnosticCode,
+          observedAt: Date.now(),
+        });
 
         if (!cancelled) {
           setPlaintext(null);
@@ -380,6 +411,11 @@ export function EncryptedDmMessageBody({
           setDiagnosticCode('temporary-loading');
         }
 
+        setRecentTransientFailureState({
+          diagnosticCode: null,
+          observedAt: null,
+        });
+
         setDmThreadVisibleMessageState({
           conversationId,
           diagnosticCode: null,
@@ -475,6 +511,20 @@ export function EncryptedDmMessageBody({
       window.clearTimeout(timeoutId);
     };
   }, [temporaryResolvingGraceRemainingMs]);
+
+  useEffect(() => {
+    if (recentTransientResolvingGraceRemainingMs === null) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setRecentTransientResolvingGraceVersion((currentVersion) => currentVersion + 1);
+    }, recentTransientResolvingGraceRemainingMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [recentTransientResolvingGraceRemainingMs]);
 
   const renderState = getEncryptedDmBodyRenderState({
     plaintext,

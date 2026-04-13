@@ -6,6 +6,7 @@ import {
   classifyEncryptedDmFailure,
   getEncryptedDmBodyRenderState,
   getEncryptedDmComposerErrorMessage,
+  getEncryptedDmRecentTransientResolvingGraceRemainingMs,
   getEncryptedDmTemporaryResolvingGraceRemainingMs,
 } from '../../src/modules/messaging/e2ee/ui-policy.ts';
 
@@ -105,6 +106,33 @@ test('older encrypted history gaps do not keep pretending to be temporarily reso
   assert.equal(remainingGraceMs, null);
 });
 
+test('recent transient encrypted failures keep a short resolving grace from first detection, even after the created-at grace has expired', () => {
+  const now = Date.now();
+  const remainingGraceMs = getEncryptedDmRecentTransientResolvingGraceRemainingMs({
+    diagnosticCode: 'missing-envelope',
+    failureKind: 'unavailable',
+    messageCreatedAt: new Date(now - 3_200).toISOString(),
+    now,
+    transientObservedAt: now,
+  });
+
+  assert.equal(typeof remainingGraceMs, 'number');
+  assert.ok((remainingGraceMs ?? 0) > 0);
+});
+
+test('old encrypted history gaps do not gain a fresh resolving grace just because they were re-observed', () => {
+  const now = Date.now();
+  const remainingGraceMs = getEncryptedDmRecentTransientResolvingGraceRemainingMs({
+    diagnosticCode: 'device-retired-or-mismatched',
+    failureKind: 'unavailable',
+    messageCreatedAt: new Date(now - 60_000).toISOString(),
+    now,
+    transientObservedAt: now,
+  });
+
+  assert.equal(remainingGraceMs, null);
+});
+
 test('encrypted DM body renders dedicated historical-unavailable UI instead of falling back to generic body text', () => {
   const encryptedBodySource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/encrypted-dm-message-body.tsx',
@@ -139,7 +167,15 @@ test('encrypted DM body renders dedicated historical-unavailable UI instead of f
   );
   assert.match(
     encryptedBodySource,
-    /const shouldPreferTemporaryResolvingState =[\s\S]*temporaryResolvingGraceRemainingMs !== null;/,
+    /const shouldPreferTemporaryResolvingState =[\s\S]*temporaryResolvingGraceRemainingMs !== null[\s\S]*recentTransientResolvingGraceRemainingMs !== null;/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /getEncryptedDmRecentTransientResolvingGraceRemainingMs\(/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /const recentTransientResolvingGraceRemainingMs = plaintext\?\.trim\(\)/,
   );
   assert.match(
     encryptedBodySource,
@@ -166,7 +202,15 @@ test('encrypted DM body starts in temporary loading and only falls into unavaila
   );
   assert.match(
     encryptedBodySource,
-    /const shouldPreferTemporaryResolvingState =[\s\S]*temporaryResolvingGraceRemainingMs !== null;/,
+    /setRecentTransientFailureState\(\{[\s\S]*diagnosticCode:\s*nextDiagnosticCode[\s\S]*observedAt:\s*Date\.now\(\)/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /setRecentTransientFailureState\(\{[\s\S]*diagnosticCode:\s*null[\s\S]*observedAt:\s*null[\s\S]*\}\);/,
+  );
+  assert.match(
+    encryptedBodySource,
+    /const shouldPreferTemporaryResolvingState =[\s\S]*temporaryResolvingGraceRemainingMs !== null[\s\S]*recentTransientResolvingGraceRemainingMs !== null;/,
   );
   assert.match(
     encryptedBodySource,

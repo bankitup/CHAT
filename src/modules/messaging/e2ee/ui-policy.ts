@@ -32,6 +32,8 @@ export type EncryptedDmDiagnosticCode =
   | 'stale-cached-failure-state';
 
 const ENCRYPTED_DM_TEMPORARY_RESOLVING_GRACE_MS = 2400;
+const ENCRYPTED_DM_RECENT_TRANSIENT_RESOLVING_GRACE_MS = 1800;
+const ENCRYPTED_DM_RECENT_TRANSIENT_MESSAGE_WINDOW_MS = 12000;
 
 export type EncryptedDmServerHistoryHint = {
   code: 'envelope-present' | 'missing-envelope' | 'policy-blocked-history';
@@ -122,15 +124,10 @@ export function getEncryptedDmDebugBucket(
   }
 }
 
-function shouldTreatEncryptedDmAsTemporarilyResolving(input: {
+function isEncryptedDmTemporaryResolvingCandidate(input: {
   diagnosticCode: EncryptedDmDiagnosticCode;
   failureKind: EncryptedDmFailureKind;
-  preferTemporaryResolvingState: boolean;
 }) {
-  if (!input.preferTemporaryResolvingState) {
-    return false;
-  }
-
   if (input.failureKind === 'device-setup') {
     return false;
   }
@@ -146,6 +143,18 @@ function shouldTreatEncryptedDmAsTemporarilyResolving(input: {
     default:
       return false;
   }
+}
+
+function shouldTreatEncryptedDmAsTemporarilyResolving(input: {
+  diagnosticCode: EncryptedDmDiagnosticCode;
+  failureKind: EncryptedDmFailureKind;
+  preferTemporaryResolvingState: boolean;
+}) {
+  if (!input.preferTemporaryResolvingState) {
+    return false;
+  }
+
+  return isEncryptedDmTemporaryResolvingCandidate(input);
 }
 
 function parseEncryptedDmMessageCreatedAt(value: string | null | undefined) {
@@ -172,15 +181,13 @@ export function getEncryptedDmTemporaryResolvingGraceRemainingMs(input: {
     return null;
   }
 
-  switch (input.diagnosticCode) {
-    case 'missing-envelope':
-    case 'same-user-new-device-history-gap':
-    case 'device-retired-or-mismatched':
-    case 'local-device-record-missing':
-    case 'stale-cached-failure-state':
-      break;
-    default:
-      return null;
+  if (
+    !isEncryptedDmTemporaryResolvingCandidate({
+      diagnosticCode: input.diagnosticCode,
+      failureKind: input.failureKind,
+    })
+  ) {
+    return null;
   }
 
   const createdAtMs = parseEncryptedDmMessageCreatedAt(input.messageCreatedAt);
@@ -191,6 +198,47 @@ export function getEncryptedDmTemporaryResolvingGraceRemainingMs(input: {
 
   const ageMs = Math.max((input.now ?? Date.now()) - createdAtMs, 0);
   const remainingMs = ENCRYPTED_DM_TEMPORARY_RESOLVING_GRACE_MS - ageMs;
+
+  return remainingMs > 0 ? remainingMs : null;
+}
+
+export function getEncryptedDmRecentTransientResolvingGraceRemainingMs(input: {
+  diagnosticCode: EncryptedDmDiagnosticCode;
+  failureKind: EncryptedDmFailureKind;
+  messageCreatedAt: string | null;
+  now?: number;
+  transientObservedAt: number | null;
+}) {
+  if (input.transientObservedAt === null) {
+    return null;
+  }
+
+  if (
+    !isEncryptedDmTemporaryResolvingCandidate({
+      diagnosticCode: input.diagnosticCode,
+      failureKind: input.failureKind,
+    })
+  ) {
+    return null;
+  }
+
+  const createdAtMs = parseEncryptedDmMessageCreatedAt(input.messageCreatedAt);
+
+  if (createdAtMs === null) {
+    return null;
+  }
+
+  const now = input.now ?? Date.now();
+  const ageMs = Math.max(now - createdAtMs, 0);
+
+  if (ageMs > ENCRYPTED_DM_RECENT_TRANSIENT_MESSAGE_WINDOW_MS) {
+    return null;
+  }
+
+  const remainingMs =
+    input.transientObservedAt +
+    ENCRYPTED_DM_RECENT_TRANSIENT_RESOLVING_GRACE_MS -
+    now;
 
   return remainingMs > 0 ? remainingMs : null;
 }
