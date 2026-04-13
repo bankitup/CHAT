@@ -112,6 +112,10 @@ test('chat route keeps the mobile shell split between header, message thread, an
     /\.attachment-native-input\s*\{[\s\S]*display:\s*none[\s\S]*\}/,
   );
   assert.match(
+    threadPageContentSource,
+    /chat-header-shell[\s\S]*chat-header-back[\s\S]*chat-header-main-link[\s\S]*chat-header-avatar-slot/,
+  );
+  assert.match(
     messengerRouteCssSource,
     /@keyframes composer-voice-pulse\s*\{[\s\S]*100%\s*\{[\s\S]*box-shadow:\s*0 0 0 0 rgba\(180,\s*35,\s*24,\s*0\)[\s\S]*\}\s*\}\s*@keyframes chat-typing-pulse\s*\{/,
   );
@@ -151,6 +155,14 @@ test('chat route keeps the mobile shell split between header, message thread, an
     assert.match(
       source,
       /from ['"]\.\/composer-shell-contract\.module\.css['"]/,
+    );
+    assert.match(
+      source,
+      /<div className=\{joinClassNames\(\[styles\.inputShell,\s*'composer-input-shell'\]\)\}>[\s\S]*<ComposerAttachmentPicker[\s\S]*<label[\s\S]*composer-input-field[\s\S]*<div[\s\S]*composer-action-cluster/,
+    );
+    assert.match(
+      source,
+      /<ComposerAttachmentPicker[\s\S]*className="button button-secondary composer-button composer-button-mic"[\s\S]*aria-label=\{t\.chat\.sendMessage\}[\s\S]*type="submit"/,
     );
     assert.match(
       source,
@@ -215,6 +227,36 @@ test('chat route keeps the mobile shell split between header, message thread, an
   );
 });
 
+test('bottom nav keeps a compact mobile shell with bounded links and labels', () => {
+  const appShellFrameSource = readWorkspaceFile('app/(app)/app-shell-frame.tsx');
+  const globalsSource = readWorkspaceFile('app/globals.css');
+
+  assert.match(
+    appShellFrameSource,
+    /<nav[\s\S]*className=\{[\s\S]*'app-bottom-nav app-bottom-nav-messenger'[\s\S]*<div[\s\S]*'app-bottom-nav-shell app-bottom-nav-shell-messenger'[\s\S]*<Link[\s\S]*<span className="app-bottom-nav-label">/,
+  );
+  assert.match(
+    globalsSource,
+    /\.app-bottom-nav\s*\{[\s\S]*width:\s*min\(calc\(100% - 16px\),\s*var\(--app-shell-bottom-nav-max-width\)\)/,
+  );
+  assert.match(
+    globalsSource,
+    /\.app-bottom-nav-shell\s*\{[\s\S]*width:\s*100%[\s\S]*box-sizing:\s*border-box/,
+  );
+  assert.match(
+    globalsSource,
+    /\.app-bottom-nav-shell-messenger\s*\{[\s\S]*width:\s*100%[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    globalsSource,
+    /\.app-bottom-nav-link\s*\{[\s\S]*width:\s*100%[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    globalsSource,
+    /\.app-bottom-nav-label\s*\{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
+  );
+});
+
 test('settings surface keeps stacked shell structure and editable top-row alignment seams', () => {
   const settingsPageSource = readWorkspaceFile('app/(app)/settings/page.tsx');
   const profileSettingsFormSource = readWorkspaceFile(
@@ -260,5 +302,9 @@ test('settings surface keeps stacked shell structure and editable top-row alignm
   assert.match(
     globalsSource,
     /\.settings-capability-value\s*\{[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%[\s\S]*overflow-wrap:\s*anywhere/,
+  );
+  assert.match(
+    globalsSource,
+    /\.settings-bottom-actions\s*\{[\s\S]*position:\s*sticky[\s\S]*min-width:\s*0/,
   );
 });
