@@ -58,6 +58,9 @@ test('chat route keeps the mobile shell split between header, message thread, an
   const threadPageContentSource = readWorkspaceFile(
     'app/(app)/chat/[conversationId]/thread-page-content.tsx',
   );
+  const messengerRouteCssSource = readWorkspaceFile(
+    'app/(app)/messenger-route.css',
+  );
 
   assert.match(
     appShellFrameSource,
@@ -78,6 +81,18 @@ test('chat route keeps the mobile shell split between header, message thread, an
   assert.match(
     threadPageContentSource,
     /<section className="stack chat-screen">[\s\S]*<section className="stack chat-header-stack" id="chat-header-shell">[\s\S]*<section className="chat-main">[\s\S]*<section className="message-thread" id="message-thread-scroll">[\s\S]*<ThreadComposerRuntime/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.route-loading-inbox-time\s*\{[\s\S]*width:\s*34px[\s\S]*min-height:\s*12px[\s\S]*border-radius:\s*999px[\s\S]*\}\s*\.chat-header-stack\s*\{/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.attachment-native-input\s*\{[\s\S]*display:\s*none[\s\S]*\}/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /@keyframes composer-voice-pulse\s*\{[\s\S]*100%\s*\{[\s\S]*box-shadow:\s*0 0 0 0 rgba\(180,\s*35,\s*24,\s*0\)[\s\S]*\}\s*\}\s*@keyframes chat-typing-pulse\s*\{/,
   );
 });
 
