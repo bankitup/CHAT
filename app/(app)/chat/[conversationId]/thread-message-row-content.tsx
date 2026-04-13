@@ -308,98 +308,117 @@ export function ThreadMessageRowContent({
   shouldRenderEncryptedAttachmentComposite,
 }: ThreadMessageRowContentProps) {
   return (
-    <div className={bubbleClassName}>
-      {replyReferenceContent}
-      {isDeletedMessage ? (
-        <p className="message-deleted-text">{messageDeletedLabel}</p>
-      ) : isMessageInEditMode ? (
-        <ThreadInlineEditForm
-          cancelHref={editCancelHref}
-          conversationId={conversationId}
-          emptyMessageLabel={emptyMessageLabel}
-          hasAttachments={messageAttachments.length > 0}
-          initialBody={inlineEditInitialBody}
-          labels={inlineEditLabels}
-          messageId={message.id}
-        />
-      ) : isEncryptedEditFallback ? (
-        <div className="message-edit-unavailable">
-          <p className="message-edit-unavailable-copy">
-            {encryptedEditUnavailableLabel}
-          </p>
-          <div className="message-edit-actions">
-            <Link
-              className="pill message-edit-cancel"
-              href={encryptedEditCancelHref}
-              prefetch={false}
-            >
-              {inlineEditLabels.cancel}
-            </Link>
+    <div
+      className={
+        isOwnMessage
+          ? 'message-bubble-stack message-bubble-stack-own'
+          : 'message-bubble-stack'
+      }
+    >
+      <div className={bubbleClassName}>
+        {replyReferenceContent}
+        {isDeletedMessage ? (
+          <p className="message-deleted-text">{messageDeletedLabel}</p>
+        ) : isMessageInEditMode ? (
+          <ThreadInlineEditForm
+            cancelHref={editCancelHref}
+            conversationId={conversationId}
+            emptyMessageLabel={emptyMessageLabel}
+            hasAttachments={messageAttachments.length > 0}
+            initialBody={inlineEditInitialBody}
+            labels={inlineEditLabels}
+            messageId={message.id}
+          />
+        ) : isEncryptedEditFallback ? (
+          <div className="message-edit-unavailable">
+            <p className="message-edit-unavailable-copy">
+              {encryptedEditUnavailableLabel}
+            </p>
+            <div className="message-edit-actions">
+              <Link
+                className="pill message-edit-cancel"
+                href={encryptedEditCancelHref}
+                prefetch={false}
+              >
+                {inlineEditLabels.cancel}
+              </Link>
+            </div>
           </div>
-        </div>
-      ) : shouldRenderEncryptedAttachmentComposite ? (
-        <div className="message-attachment-caption-stack">
+        ) : shouldRenderEncryptedAttachmentComposite ? (
+          <div className="message-attachment-caption-stack">
+            <ThreadMessageAttachments
+              attachments={nonVoiceAttachments}
+              imagePreviewCaption={normalizedMessageBody}
+              language={language}
+              onImagePreviewClick={onImagePreviewClick}
+            />
+            {encryptedMessageBodyContent}
+          </div>
+        ) : encryptedMessageBodyContent ? (
+          encryptedMessageBodyContent
+        ) : message.kind === 'voice' ? (
+          <div className="message-voice-stack">
+            <MemoizedThreadVoiceMessageBubble
+              attachment={primaryVoiceAttachment}
+              conversationId={conversationId}
+              isOwnMessage={isOwnMessage}
+              language={language}
+              messageId={message.id}
+              onRequestQuickActions={onRequestQuickActions}
+            />
+            {normalizedMessageBody ? (
+              <p className="message-body">{normalizedMessageBody}</p>
+            ) : null}
+          </div>
+        ) : normalizedMessageBody ? (
+          canInlineMessageMeta ? (
+            <div
+              className={
+                isOwnMessage
+                  ? 'message-inline-content message-inline-content-own'
+                  : 'message-inline-content'
+              }
+            >
+              <p className="message-body message-body-inline">
+                {normalizedMessageBody}
+              </p>
+              <span
+                className={
+                  isOwnMessage
+                    ? 'message-meta message-meta-own message-meta-inline'
+                    : 'message-meta message-meta-inline'
+                }
+              >
+                {messageMetaContent}
+              </span>
+            </div>
+          ) : (
+            <p className="message-body">{normalizedMessageBody}</p>
+          )
+        ) : !messageAttachments.length ? (
+          <p className="message-body">{emptyMessageLabel}</p>
+        ) : null}
+        {nonVoiceAttachments.length &&
+        !isDeletedMessage &&
+        !shouldRenderEncryptedAttachmentComposite ? (
           <ThreadMessageAttachments
             attachments={nonVoiceAttachments}
-            imagePreviewCaption={normalizedMessageBody}
+            imagePreviewCaption={imagePreviewCaption}
             language={language}
             onImagePreviewClick={onImagePreviewClick}
           />
-          {encryptedMessageBodyContent}
-        </div>
-      ) : encryptedMessageBodyContent ? (
-        encryptedMessageBodyContent
-      ) : message.kind === 'voice' ? (
-        <div className="message-voice-stack">
-          <MemoizedThreadVoiceMessageBubble
-            attachment={primaryVoiceAttachment}
-            conversationId={conversationId}
-            isOwnMessage={isOwnMessage}
-            language={language}
-            messageId={message.id}
-            onRequestQuickActions={onRequestQuickActions}
-          />
-          {normalizedMessageBody ? (
-            <p className="message-body">{normalizedMessageBody}</p>
-          ) : null}
-        </div>
-      ) : normalizedMessageBody ? (
-        canInlineMessageMeta ? (
-          <div
-            className={
-              isOwnMessage
-                ? 'message-inline-content message-inline-content-own'
-                : 'message-inline-content'
-            }
-          >
-            <p className="message-body message-body-inline">
-              {normalizedMessageBody}
-            </p>
-            <span
-              className={
-                isOwnMessage
-                  ? 'message-meta message-meta-own message-meta-inline'
-                  : 'message-meta message-meta-inline'
-              }
-            >
-              {messageMetaContent}
-            </span>
-          </div>
-        ) : (
-          <p className="message-body">{normalizedMessageBody}</p>
-        )
-      ) : !messageAttachments.length ? (
-        <p className="message-body">{emptyMessageLabel}</p>
-      ) : null}
-      {nonVoiceAttachments.length &&
-      !isDeletedMessage &&
-      !shouldRenderEncryptedAttachmentComposite ? (
-        <ThreadMessageAttachments
-          attachments={nonVoiceAttachments}
-          imagePreviewCaption={imagePreviewCaption}
-          language={language}
-          onImagePreviewClick={onImagePreviewClick}
-        />
+        ) : null}
+      </div>
+      {!canInlineMessageMeta ? (
+        <span
+          className={
+            isOwnMessage
+              ? 'message-meta message-meta-own message-meta-attached'
+              : 'message-meta message-meta-attached'
+          }
+        >
+          {messageMetaContent}
+        </span>
       ) : null}
     </div>
   );

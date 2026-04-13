@@ -1,0 +1,64 @@
+.form {
+  width: 100%;
+  min-width: 0;
+}
+
+.runtimeShell {
+  width: 100%;
+  min-width: 0;
+}
+
+.inputShell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.inputShellLoading {
+  align-items: center;
+}
+
+.field {
+  display: flex;
+  align-items: flex-end;
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  position: relative;
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  align-self: end;
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+.attachmentDetails {
+  position: relative;
+  align-self: end;
+  flex: 0 0 auto;
+}
+
+.selectedCard {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
+.helper {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.nativeInput {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

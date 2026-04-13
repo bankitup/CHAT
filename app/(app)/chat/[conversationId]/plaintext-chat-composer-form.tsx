@@ -18,6 +18,7 @@ import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media
 import { ComposerAttachmentPicker } from './composer-attachment-picker';
 import { ComposerTypingTextarea } from './composer-typing-textarea';
 import { ComposerVoiceDraftPanel } from './composer-voice-draft-panel';
+import styles from './composer-shell-contract.module.css';
 import { sendMessageMutationAction } from './actions';
 import { clearReplyTargetFromCurrentUrl } from './thread-local-reply-target';
 import { useComposerVoiceDraft } from './use-composer-voice-draft';
@@ -57,6 +58,10 @@ type PlaintextChatComposerFormProps = {
 };
 
 const COMPOSER_SEND_GUARD_MS = 320;
+
+function joinClassNames(values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
+}
 
 function getComposerAttachmentLabel(input: {
   attachment: File | null;
@@ -374,7 +379,7 @@ export function PlaintextChatComposerForm({
   return (
     <form
       ref={formRef}
-      className="stack composer-form"
+      className={joinClassNames([styles.form, 'stack', 'composer-form'])}
       onChange={syncSendReadiness}
       onInput={syncSendReadiness}
       onSubmit={async (event) => {
@@ -477,7 +482,7 @@ export function PlaintextChatComposerForm({
         }}
         onStop={voiceDraft.stopRecording}
       />
-      <div className="composer-input-shell">
+      <div className={joinClassNames([styles.inputShell, 'composer-input-shell'])}>
         <ComposerAttachmentPicker
           key={`attachment-${composerResetKey}`}
           accept={accept}
@@ -488,7 +493,9 @@ export function PlaintextChatComposerForm({
           onSelectionChange={syncSendReadiness}
         />
 
-        <label className="field composer-input-field">
+        <label
+          className={joinClassNames([styles.field, 'field', 'composer-input-field'])}
+        >
           <span className="sr-only">{messagePlaceholder}</span>
           <ComposerTypingTextarea
             key={`textarea-${composerResetKey}-${replyToMessageId ?? 'none'}`}
@@ -505,7 +512,9 @@ export function PlaintextChatComposerForm({
           />
         </label>
 
-        <div className="composer-action-cluster">
+        <div
+          className={joinClassNames([styles.actions, 'composer-action-cluster'])}
+        >
           <button
             aria-label={t.chat.microphone}
             className="button button-secondary composer-button composer-button-mic"

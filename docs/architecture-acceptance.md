@@ -61,7 +61,7 @@ The current acceptance bar focuses on these boundaries:
 22. Messenger realtime ownership stays route-scoped, catch-up stays
     authoritative, and presence/typing stay auxiliary to message truth
 23. Core Messenger mobile row/card layouts stay structurally intact across
-    inbox, chat, settings, and shell fit checks
+    inbox, chat, composer, settings, and bottom-nav shell fit checks
 
 ## Shared Platform Seams Under Acceptance
 
@@ -145,9 +145,13 @@ Current acceptance tests:
   verifies the current Messenger mobile layout structure:
   - inbox rows keep avatar/content/title-meta/preview composition instead of
     falling into broken stacking
-  - the chat route keeps header, message thread, and composer as distinct shell
-    layers
+  - the chat route keeps header, message thread, composer, and attached
+    per-message metadata inside one coherent mobile shell
+  - composer controls stay attached to one shell and keep native file inputs
+    hidden behind the intended UI
   - settings keeps its stacked shell and editable top-row alignment seams
+  - Messenger bottom-nav keeps a bounded shell with non-wrapping labels on
+    narrow widths
 - [tests/e2ee/messaging-data-facade-boundaries.test.ts](/Users/danya/IOS%20-%20Apps/CHAT/tests/e2ee/messaging-data-facade-boundaries.test.ts)
   verifies the current messaging data split:
   - `server.ts` stays under the current reduced size cap

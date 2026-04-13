@@ -85,12 +85,29 @@ Fast architecture-drift review checks for shared or mixed seams live in
   - header card
   - message body/thread
   - composer area
+- In the same thread, confirm the composer still behaves like one unified
+  product control:
+  - attachment entry stays inside the shell instead of appearing as a loose
+    browser control
+  - voice button stays attached to the action cluster
+  - send button stays attached to the same cluster
+  - no raw native file input is visible by default
+- Confirm message rows still read as one attached unit:
+  - message body and attachments stay visually attached
+  - timestamp and status/checkmarks stay attached to the correct message block
+  - voice rows stay inside the same message-column contract instead of
+    floating as separate cards
 - Open
   [settings/page.tsx](/Users/danya/IOS%20-%20Apps/CHAT/app/(app)/settings/page.tsx)
   and confirm:
   - profile top row stays aligned
   - status top row stays aligned
   - space-summary action button does not overlap or squeeze the content column
+- With Messenger shell navigation visible, confirm the bottom nav still fits as
+  one compact mobile control:
+  - shell stays centered and within the viewport width
+  - labels remain truncated instead of wrapping into taller broken pills
+  - active Messenger nav state does not distort adjacent tabs
 
 ### 4b. Thread Runtime Sanity
 
