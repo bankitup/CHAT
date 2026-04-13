@@ -133,6 +133,18 @@ test('chat route keeps the mobile shell split between header, message thread, an
   );
   assert.match(
     messengerRouteCssSource,
+    /\.chat-header-main-link\s*\{[\s\S]*display:\s*grid[\s\S]*align-content:\s*center[\s\S]*min-height:\s*var\(--app-chat-header-avatar-size\)/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.chat-header-avatar-slot\s*\{[\s\S]*justify-content:\s*center[\s\S]*width:\s*100%/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.chat-header-back\s*\{[\s\S]*justify-self:\s*center/,
+  );
+  assert.match(
+    messengerRouteCssSource,
     /@keyframes composer-voice-pulse\s*\{[\s\S]*100%\s*\{[\s\S]*box-shadow:\s*0 0 0 0 rgba\(180,\s*35,\s*24,\s*0\)[\s\S]*\}\s*\}\s*@keyframes chat-typing-pulse\s*\{/,
   );
   assert.match(
