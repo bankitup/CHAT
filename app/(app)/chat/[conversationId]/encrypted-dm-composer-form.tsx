@@ -35,7 +35,10 @@ import {
   LOCAL_OPTIMISTIC_MESSAGE_RETRY_EVENT,
   type OptimisticThreadRetryPayload,
 } from '@/modules/messaging/realtime/optimistic-thread';
-import { emitThreadHistorySyncRequest } from '@/modules/messaging/realtime/thread-history-sync-events';
+import {
+  emitThreadHistoryLiveMessage,
+  emitThreadHistorySyncRequest,
+} from '@/modules/messaging/realtime/thread-history-sync-events';
 import { patchThreadConversationReadState } from '@/modules/messaging/realtime/thread-live-state-store';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { resolveMessagingAssetKindFromMimeType } from '@/modules/messaging/media/message-assets';
@@ -101,6 +104,21 @@ type EncryptedDmDebugFailureDetails = {
 } & DmE2eeBootstrapDebugState &
   DmE2eeRecipientReadinessDebugState &
   DmE2eeSendDebugState;
+
+type EncryptedCommittedThreadMessage =
+  Parameters<typeof emitThreadHistoryLiveMessage>[0]['message'];
+
+type EncryptedSendSummary =
+  Parameters<typeof patchInboxConversationSummary>[0];
+
+type EncryptedDmSendSuccessPayload = {
+  clientId?: string | null;
+  committedMessage?: EncryptedCommittedThreadMessage | null;
+  lastReadMessageSeq?: number | null;
+  messageId?: string | null;
+  summary?: EncryptedSendSummary | null;
+  timestamp?: string | null;
+};
 
 type EncryptedDmComposerFormProps = {
   accept: string;
@@ -507,7 +525,10 @@ async function readEncryptedDmSendResponse(response: Response) {
 
   return payload as {
     clientId?: string | null;
+    committedMessage?: EncryptedCommittedThreadMessage | null;
+    lastReadMessageSeq?: number | null;
     messageId?: string | null;
+    summary?: EncryptedSendSummary | null;
     timestamp?: string | null;
   };
 }
@@ -931,11 +952,7 @@ export function EncryptedDmComposerForm({
       submit: (payload: {
         envelopes: DmE2eeEnvelopeInsert[];
         senderDeviceRecordId: string;
-      }) => Promise<{
-        clientId?: string | null;
-        messageId?: string | null;
-        timestamp?: string | null;
-      }>;
+      }) => Promise<EncryptedDmSendSuccessPayload>;
     }) => {
       let retriedAfterRepublish = false;
       let retriedAfterBundleRefresh = false;
@@ -1118,6 +1135,16 @@ export function EncryptedDmComposerForm({
           },
         });
 
+        if (sendResult.summary) {
+          patchInboxConversationSummary(sendResult.summary);
+        }
+
+        patchThreadConversationReadState({
+          conversationId,
+          isCurrentUser: true,
+          lastReadMessageSeq: sendResult.lastReadMessageSeq ?? null,
+        });
+
         await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
           clientId: item.clientId,
           conversationId,
@@ -1151,6 +1178,24 @@ export function EncryptedDmComposerForm({
             envelopes,
           }),
       });
+
+      if (sendResult.summary) {
+        patchInboxConversationSummary(sendResult.summary);
+      }
+
+      patchThreadConversationReadState({
+        conversationId,
+        isCurrentUser: true,
+        lastReadMessageSeq: sendResult.lastReadMessageSeq ?? null,
+      });
+
+      if (sendResult.committedMessage) {
+        emitThreadHistoryLiveMessage({
+          conversationId,
+          message: sendResult.committedMessage,
+          reason: 'message-local-committed',
+        });
+      }
 
       await broadcastMessageCommitted(`chat-sync:${conversationId}`, {
         clientId: item.clientId,

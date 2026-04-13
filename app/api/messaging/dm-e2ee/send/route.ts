@@ -6,12 +6,15 @@ import type {
   DmE2eeSendDebugState,
   DmE2eeSendRequest,
 } from '@/modules/messaging/contract/dm-e2ee';
+import { markConversationRead } from '@/modules/messaging/data/conversation-lifecycle-server';
+import { getConversationSummaryForUser } from '@/modules/messaging/data/conversation-read-server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import {
   isDmE2eeOperationError,
   sendEncryptedDmMessageWithAttachment,
   sendEncryptedDmTextMessage,
 } from '@/modules/messaging/data/server';
+import { getConversationMessages } from '@/modules/messaging/data/thread-read-server';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
 import { scheduleChatPushNotificationsAfterResponse } from '@/modules/messaging/push/server';
 
@@ -134,6 +137,21 @@ function parseEnvelopeInserts(rawValue: string): DmE2eeEnvelopeInsert[] {
   }
 }
 
+async function getCommittedThreadMessageForEncryptedSend(input: {
+  conversationId: string;
+  messageId: string;
+}) {
+  try {
+    const snapshot = await getConversationMessages(input.conversationId, {
+      messageIds: [input.messageId],
+    });
+
+    return snapshot.messages[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -209,6 +227,14 @@ export async function POST(request: Request) {
         senderDeviceRecordId,
         senderId: user.id,
       });
+      const [readResult, summary] = await Promise.all([
+        markConversationRead({
+          conversationId,
+          userId: user.id,
+          lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
+        }),
+        getConversationSummaryForUser(conversationId, user.id),
+      ]);
       scheduleDmE2eePushAfterResponse({
         attachmentPreviewKind: resolveInboxAttachmentPreviewKind(
           attachment.type,
@@ -225,7 +251,12 @@ export async function POST(request: Request) {
       logDmE2eeSendRouteDiagnostics('send:ok', {
         transport: 'multipart-attachment',
       });
-      return NextResponse.json(result);
+      return NextResponse.json({
+        ...result,
+        committedMessage: null,
+        lastReadMessageSeq: readResult.lastReadMessageSeq,
+        summary,
+      });
     }
 
     const input = (await request.json()) as DmE2eeSendRequest;
@@ -233,6 +264,18 @@ export async function POST(request: Request) {
       ...input,
       senderId: user.id,
     });
+    const [readResult, summary, committedMessage] = await Promise.all([
+      markConversationRead({
+        conversationId: input.conversationId,
+        userId: user.id,
+        lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
+      }),
+      getConversationSummaryForUser(input.conversationId, user.id),
+      getCommittedThreadMessageForEncryptedSend({
+        conversationId: input.conversationId,
+        messageId: result.messageId,
+      }),
+    ]);
     scheduleDmE2eePushAfterResponse({
       body: null,
       contentMode: 'dm_e2ee_v1',
@@ -245,7 +288,12 @@ export async function POST(request: Request) {
     logDmE2eeSendRouteDiagnostics('send:ok', {
       transport: 'json-text',
     });
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      committedMessage,
+      lastReadMessageSeq: readResult.lastReadMessageSeq,
+      summary,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Unable to send encrypted DM.';

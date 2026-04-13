@@ -235,6 +235,49 @@ test('plaintext sends hand off a committed thread row locally instead of waiting
   );
 });
 
+test('encrypted sends patch local summary/read state and hand off committed text rows before later sync', () => {
+  const encryptedComposerSource = readWorkspaceFile(
+    'app/(app)/chat/[conversationId]/encrypted-dm-composer-form.tsx',
+  );
+  const encryptedSendRouteSource = readWorkspaceFile(
+    'app/api/messaging/dm-e2ee/send/route.ts',
+  );
+
+  assert.match(
+    encryptedSendRouteSource,
+    /async function getCommittedThreadMessageForEncryptedSend\(/,
+  );
+  assert.match(
+    encryptedSendRouteSource,
+    /markConversationRead\(\{[\s\S]*lastReadMessageSeq:\s*Number\.MAX_SAFE_INTEGER/,
+  );
+  assert.match(
+    encryptedSendRouteSource,
+    /getConversationSummaryForUser\(/,
+  );
+  assert.match(
+    encryptedSendRouteSource,
+    /committedMessage,\s*lastReadMessageSeq:\s*readResult\.lastReadMessageSeq,\s*summary,/,
+  );
+
+  assert.match(
+    encryptedComposerSource,
+    /if \(sendResult\.summary\) \{[\s\S]*patchInboxConversationSummary\(sendResult\.summary\);/,
+  );
+  assert.match(
+    encryptedComposerSource,
+    /patchThreadConversationReadState\(\{[\s\S]*lastReadMessageSeq:\s*sendResult\.lastReadMessageSeq \?\? null,/,
+  );
+  assert.match(
+    encryptedComposerSource,
+    /if \(sendResult\.committedMessage\) \{[\s\S]*emitThreadHistoryLiveMessage\(/,
+  );
+  assert.match(
+    encryptedComposerSource,
+    /emitThreadHistoryLiveMessage\([\s\S]*reason:\s*'message-local-committed'[\s\S]*await broadcastMessageCommitted/,
+  );
+});
+
 test('inbox reconnect recovery adds explicit resubscribe catch-up', () => {
   const inboxSyncSource = readWorkspaceFile(
     'src/modules/messaging/realtime/inbox-sync.tsx',
