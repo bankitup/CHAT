@@ -117,6 +117,7 @@ export function InboxConversationStaticRow({
             ? 'conversation-card conversation-card-minimal conversation-card-dm'
             : 'conversation-card conversation-card-minimal',
         styles.card,
+        item.hasUnread ? styles.cardUnread : null,
       )}
     >
       <div
@@ -140,6 +141,7 @@ export function InboxConversationStaticRow({
               : 'conversation-row-link',
             styles.link,
             isPrimaryChatsView ? styles.linkDm : null,
+            item.hasUnread ? styles.linkUnread : null,
           )}
           href={chatHref}
           onClick={(event) => {

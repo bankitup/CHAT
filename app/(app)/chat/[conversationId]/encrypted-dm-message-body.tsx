@@ -14,6 +14,7 @@ import {
   classifyEncryptedDmFailureDiagnostic,
   getEncryptedDmFailureKindForDiagnostic,
   getEncryptedDmBodyRenderState,
+  getEncryptedDmTemporaryResolvingGraceRemainingMs,
   type EncryptedDmDiagnosticCode,
   type EncryptedDmFailureKind,
   type EncryptedDmServerHistoryHint,
@@ -102,12 +103,23 @@ export function EncryptedDmMessageBody({
   const [failureKind, setFailureKind] = useState<EncryptedDmFailureKind>('unavailable');
   const [diagnosticCode, setDiagnosticCode] =
     useState<EncryptedDmDiagnosticCode>('temporary-loading');
+  const [, setTemporaryResolvingGraceVersion] = useState(0);
   const [retryNonce, setRetryNonce] = useState(0);
   const previousFailureCodeRef =
     useRef<EncryptedDmDiagnosticCode | null>(null);
   const diagnosticsEnabled =
     typeof window !== 'undefined' &&
     process.env.NEXT_PUBLIC_CHAT_DEBUG_DM_E2EE_BOOTSTRAP === '1';
+  const temporaryResolvingGraceRemainingMs = plaintext?.trim()
+    ? null
+    : getEncryptedDmTemporaryResolvingGraceRemainingMs({
+        diagnosticCode,
+        failureKind,
+        messageCreatedAt,
+        preferTemporaryResolvingState,
+      });
+  const shouldPreferTemporaryResolvingState =
+    preferTemporaryResolvingState || temporaryResolvingGraceRemainingMs !== null;
 
   const normalizeString = (value: unknown) =>
     typeof value === 'string' ? value.trim() : '';
@@ -450,13 +462,27 @@ export function EncryptedDmMessageBody({
     currentUserId,
   ]);
 
+  useEffect(() => {
+    if (temporaryResolvingGraceRemainingMs === null) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setTemporaryResolvingGraceVersion((currentVersion) => currentVersion + 1);
+    }, temporaryResolvingGraceRemainingMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [temporaryResolvingGraceRemainingMs]);
+
   const renderState = getEncryptedDmBodyRenderState({
     plaintext,
     isUnavailable,
     failureKind,
     diagnosticCode,
     fallbackLabel,
-    preferTemporaryResolvingState,
+    preferTemporaryResolvingState: shouldPreferTemporaryResolvingState,
     setupUnavailableLabel,
     unavailableLabel,
   });

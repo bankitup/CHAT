@@ -193,6 +193,19 @@ test('voice playback lifecycle ownership stays isolated in the extracted control
   );
   assert.match(runtimeHookSource, /const handleAudioPlaying = useCallback\(/);
   assert.match(runtimeHookSource, /const togglePlaybackUnsafe = useCallback\(/);
+  assert.match(runtimeHookSource, /const resetPlaybackProgress = useCallback\(/);
+  assert.match(
+    runtimeHookSource,
+    /if \(playbackState === 'ended' \|\| audio\.ended\) \{[\s\S]*?resetPlaybackProgress\(audio\);/,
+  );
+  assert.match(
+    runtimeHookSource,
+    /setPlaybackState\(progressMs > 0 \? 'paused' : 'idle'\)/,
+  );
+  assert.doesNotMatch(
+    runtimeHookSource,
+    /setPlaybackState\(audio\.currentTime > 0 \? 'paused' : 'idle'\)/,
+  );
   assert.match(
     runtimeHookSource,
     /shouldRenderAudioElement:\s*Boolean\(attachment\)/,

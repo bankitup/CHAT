@@ -1,6 +1,20 @@
 .card {
   display: block;
   min-width: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(221, 226, 232, 0.72);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.card:last-child {
+  border-bottom: 0;
+}
+
+.cardUnread {
+  border-bottom-color: rgba(31, 111, 235, 0.14);
 }
 
 .row {
@@ -35,16 +49,53 @@
   width: 100%;
   min-width: 0;
   grid-column: 1 / -1;
-  padding: 4px 0;
+  padding: 9px 2px;
   color: inherit;
   position: relative;
   z-index: 1;
+  border-radius: 18px;
+  background: transparent;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .linkDm {
   gap: 15px;
-  padding: 6px 0;
+  padding: 11px 2px 10px;
+  border-radius: 20px;
+}
+
+.link:hover {
+  background: rgba(246, 248, 252, 0.78);
+}
+
+.link:active {
+  background: rgba(241, 245, 251, 0.96);
+}
+
+.link:focus-visible {
+  outline: none;
+  background: rgba(243, 247, 252, 0.94);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.14);
+}
+
+.linkUnread {
+  background:
+    linear-gradient(180deg, rgba(250, 252, 255, 0.94), rgba(246, 249, 255, 0.82));
+  box-shadow: inset 2px 0 0 rgba(31, 111, 235, 0.24);
+}
+
+.linkUnread:hover {
+  background:
+    linear-gradient(180deg, rgba(251, 253, 255, 0.98), rgba(247, 250, 255, 0.88));
+}
+
+.linkUnread:active {
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 1), rgba(242, 247, 255, 0.94));
 }
 
 .avatarSlot {

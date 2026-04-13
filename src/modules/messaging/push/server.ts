@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { after } from 'next/server';
 import webpush from 'web-push';
 import { getRequestSupabaseServerClient } from '@/lib/request-context/server';
 import { createSupabaseServiceRoleClient } from '@/lib/supabase/service';
@@ -1911,4 +1912,19 @@ export async function sendChatPushNotifications(
     failedCount,
     skippedReason: null,
   };
+}
+
+export function scheduleChatPushNotificationsAfterResponse(
+  input: ChatPushSendInput,
+  options?: {
+    onError?: (error: unknown) => void;
+  },
+) {
+  after(async () => {
+    try {
+      await sendChatPushNotifications(input);
+    } catch (error) {
+      options?.onError?.(error);
+    }
+  });
 }

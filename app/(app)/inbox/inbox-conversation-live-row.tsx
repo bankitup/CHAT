@@ -199,6 +199,7 @@ function InboxConversationLiveRowComponent({
             ? 'conversation-card conversation-card-minimal conversation-card-dm'
             : 'conversation-card conversation-card-minimal',
         styles.card,
+        hasUnread ? styles.cardUnread : null,
       )}
     >
       <div
@@ -222,6 +223,7 @@ function InboxConversationLiveRowComponent({
               : 'conversation-row-link',
             styles.link,
             isPrimaryChatsView ? styles.linkDm : null,
+            hasUnread ? styles.linkUnread : null,
           )}
           href={chatHref}
           onClick={(event) => {

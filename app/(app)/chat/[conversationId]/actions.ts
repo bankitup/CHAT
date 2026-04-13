@@ -49,7 +49,7 @@ import {
 } from '@/modules/messaging/data/server';
 import { isDmE2eeEnabledForUser } from '@/modules/messaging/e2ee/rollout';
 import { resolveInboxAttachmentPreviewKind } from '@/modules/messaging/inbox/preview-kind';
-import { sendChatPushNotifications } from '@/modules/messaging/push/server';
+import { scheduleChatPushNotificationsAfterResponse } from '@/modules/messaging/push/server';
 import {
   logControlledUiError,
   sanitizeUserFacingErrorMessage,
@@ -58,6 +58,45 @@ import { withSpaceParam } from '@/modules/spaces/url';
 
 function readSpaceId(formData: FormData) {
   return String(formData.get('spaceId') ?? '').trim() || null;
+}
+
+function keepChatPushOnResponseTail(input: {
+  attachmentPreviewKind?: Parameters<
+    typeof scheduleChatPushNotificationsAfterResponse
+  >[0]['attachmentPreviewKind'];
+  body?: string | null;
+  contentMode: 'plaintext' | 'dm_e2ee_v1';
+  conversationId: string;
+  messageId: string;
+  messageKind: 'text' | 'attachment' | 'voice';
+  senderId: string;
+  spaceId?: string | null;
+  surface: string;
+}) {
+  scheduleChatPushNotificationsAfterResponse(
+    {
+      attachmentPreviewKind: input.attachmentPreviewKind ?? null,
+      body: input.body ?? null,
+      contentMode: input.contentMode,
+      conversationId: input.conversationId,
+      messageId: input.messageId,
+      messageKind: input.messageKind,
+      senderId: input.senderId,
+      spaceId: input.spaceId ?? null,
+    },
+    {
+      onError: (pushError) => {
+        logControlledUiError({
+          fallback: 'Unable to send chat push notification right now.',
+          rawMessage:
+            pushError instanceof Error
+              ? pushError.message
+              : 'Unable to send chat push notification right now.',
+          surface: input.surface,
+        });
+      },
+    },
+  );
 }
 
 function readSettingsReturnTarget(formData: FormData) {
@@ -477,39 +516,28 @@ export async function sendMessageMutationAction(
       lastReadMessageSeq: Number.MAX_SAFE_INTEGER,
     });
     const summary = await getConversationSummaryForUser(conversationId, user.id);
-
-    try {
-      await sendChatPushNotifications({
-        attachmentPreviewKind: attachment
-          ? isSupportedVoiceAttachmentType(attachment.type)
-            ? null
-            : resolveInboxAttachmentPreviewKind(
-                attachment.type,
-                attachment.name,
-              )
-          : null,
-        body: body || null,
-        contentMode: 'plaintext',
-        conversationId,
-        messageId: messageResult.messageId,
-        messageKind: attachment
-          ? attachment.type.startsWith('audio/')
-            ? 'voice'
-            : 'attachment'
-          : 'text',
-        senderId: user.id,
-        spaceId: conversation.spaceId ?? null,
-      });
-    } catch (pushError) {
-      logControlledUiError({
-        fallback: 'Unable to send chat push notification right now.',
-        rawMessage:
-          pushError instanceof Error
-            ? pushError.message
-            : 'Unable to send chat push notification right now.',
-        surface: 'chat:push-after-send',
-      });
-    }
+    keepChatPushOnResponseTail({
+      attachmentPreviewKind: attachment
+        ? isSupportedVoiceAttachmentType(attachment.type)
+          ? null
+          : resolveInboxAttachmentPreviewKind(
+              attachment.type,
+              attachment.name,
+            )
+        : null,
+      body: body || null,
+      contentMode: 'plaintext',
+      conversationId,
+      messageId: messageResult.messageId,
+      messageKind: attachment
+        ? attachment.type.startsWith('audio/')
+          ? 'voice'
+          : 'attachment'
+        : 'text',
+      senderId: user.id,
+      spaceId: conversation.spaceId ?? null,
+      surface: 'chat:push-after-send',
+    });
 
     return mutationOk({
       clientId: messageResult.clientId ?? null,
