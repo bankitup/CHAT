@@ -1068,8 +1068,10 @@ main {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
+  width: 100%;
   min-width: 0;
   min-height: var(--app-bottom-nav-shell-min-height);
+  box-sizing: border-box;
   padding: 7px;
   border: 1px solid rgba(221, 228, 238, 0.9);
   border-radius: 22px;
@@ -1083,8 +1085,10 @@ main {
 .app-bottom-nav-shell-messenger {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+  width: 100%;
   min-width: 0;
   min-height: var(--app-bottom-nav-shell-messenger-min-height);
+  box-sizing: border-box;
   padding: 8px 10px;
   border-color: rgba(218, 226, 237, 0.82);
   border-radius: 999px;
@@ -1101,6 +1105,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   min-width: 0;
   min-height: var(--app-bottom-nav-link-min-height);
   padding: var(--app-bottom-nav-link-pad-y) var(--app-bottom-nav-link-pad-x);
@@ -1397,6 +1402,16 @@ main {
   .settings-space-switch {
     width: 100%;
   }
+
+  .settings-capability-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .settings-capability-value {
+    width: 100%;
+    text-align: left;
+  }
 }
 
 .user-card,
@@ -1553,6 +1568,7 @@ main {
 .settings-main-content {
   gap: 12px;
   min-height: 0;
+  min-width: 0;
   padding-bottom: calc(18px + 132px + var(--safe-area-bottom-pad));
 }
 
@@ -1561,6 +1577,7 @@ main {
   bottom: calc(8px + env(safe-area-inset-bottom));
   z-index: 3;
   margin-top: auto;
+  min-width: 0;
   padding-top: 10px;
 }
 
@@ -2490,6 +2507,7 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .settings-space-copy {
@@ -2515,6 +2533,7 @@ main {
 
 .settings-space-switch {
   flex-shrink: 0;
+  max-width: 100%;
   min-height: 38px;
   white-space: nowrap;
 }
@@ -3858,6 +3877,7 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  min-width: 0;
   padding: 8px 9px;
   border: 1px solid rgba(221, 228, 238, 0.88);
   border-radius: 15px;
@@ -3875,6 +3895,9 @@ main {
   color: var(--foreground);
   font-size: 0.8rem;
   font-weight: 700;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   text-transform: capitalize;
   text-align: right;
 }

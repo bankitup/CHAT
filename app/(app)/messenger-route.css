@@ -1630,6 +1630,7 @@
 .message-row {
   width: 100%;
   display: flex;
+  min-width: 0;
 }
 
 .message-row + .message-row {
@@ -1671,6 +1672,8 @@
   gap: 3px;
   width: min(100%, 350px);
   flex: 0 0 min(100%, 350px);
+  min-width: 0;
+  max-width: 100%;
   padding: 0;
 }
 
@@ -1781,6 +1784,7 @@
   position: relative;
   width: fit-content;
   max-width: min(100%, 38rem);
+  min-width: 0;
 }
 
 .message-bubble-shell-own {
@@ -2322,11 +2326,13 @@
 .message-voice-stack {
   display: grid;
   gap: 7px;
+  min-width: 0;
 }
 
 .message-attachment-caption-stack {
   display: grid;
   gap: 7px;
+  min-width: 0;
 }
 
 .message-attachment-caption-stack .message-attachments {
@@ -3378,6 +3384,7 @@
   position: relative;
   z-index: 2;
   flex: 0 0 auto;
+  min-width: max-content;
   pointer-events: auto;
 }
 
@@ -4126,6 +4133,9 @@
 .conversation-card {
   display: block;
   position: relative;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: rgba(255, 255, 255, 0.38);
   border: 1px solid transparent;
   border-bottom: 1px solid rgba(221, 226, 232, 0.62);
@@ -4194,6 +4204,8 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
   gap: 13px;
+  width: 100%;
+  min-width: 0;
   min-height: 58px;
 }
 
@@ -4211,6 +4223,7 @@
   padding: 4px 0;
   color: inherit;
   width: 100%;
+  box-sizing: border-box;
   grid-column: 1 / -1;
   position: relative;
   z-index: 1;
@@ -4261,6 +4274,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
   flex: 0 0 auto;
 }
 

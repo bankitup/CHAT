@@ -18,14 +18,17 @@ test('shared shell and messenger globals keep reserved layout space for CLS-sens
   assert.match(globalsSource, /--app-bottom-nav-shell-min-height:/);
   assert.match(globalsSource, /--app-bottom-nav-shell-messenger-min-height:/);
   assert.match(globalsSource, /--app-composer-runtime-min-height:/);
-  assert.match(globalsSource, /\.app-bottom-nav-shell\s*\{[\s\S]*min-height:\s*var\(--app-bottom-nav-shell-min-height\)/);
   assert.match(
     globalsSource,
-    /\.app-bottom-nav-shell-messenger\s*\{[\s\S]*min-height:\s*var\(--app-bottom-nav-shell-messenger-min-height\)/,
+    /\.app-bottom-nav-shell\s*\{[\s\S]*width:\s*100%[\s\S]*min-height:\s*var\(--app-bottom-nav-shell-min-height\)[\s\S]*box-sizing:\s*border-box/,
   );
   assert.match(
     globalsSource,
-    /\.app-bottom-nav-link\s*\{[\s\S]*min-width:\s*0/,
+    /\.app-bottom-nav-shell-messenger\s*\{[\s\S]*width:\s*100%[\s\S]*min-height:\s*var\(--app-bottom-nav-shell-messenger-min-height\)[\s\S]*box-sizing:\s*border-box/,
+  );
+  assert.match(
+    globalsSource,
+    /\.app-bottom-nav-link\s*\{[\s\S]*width:\s*100%[\s\S]*min-width:\s*0/,
   );
   assert.match(
     globalsSource,
@@ -190,6 +193,26 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   );
   assert.match(
     messengerRouteCssSource,
+    /\.message-row\s*\{[\s\S]*width:\s*100%[\s\S]*display:\s*flex[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-card\s*\{[\s\S]*width:\s*min\(100%,\s*350px\)[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-bubble-shell\s*\{[\s\S]*width:\s*fit-content[\s\S]*max-width:\s*min\(100%,\s*38rem\)[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-voice-stack\s*\{[\s\S]*display:\s*grid[\s\S]*gap:\s*7px[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-attachment-caption-stack\s*\{[\s\S]*display:\s*grid[\s\S]*gap:\s*7px[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    messengerRouteCssSource,
     /\.chat-header-shell\s*\{[\s\S]*min-width:\s*0[\s\S]*width:\s*100%/,
   );
   assert.match(
@@ -199,5 +222,9 @@ test('chat and inbox components keep explicit reserved-shell fallbacks instead o
   assert.match(
     globalsSource,
     /@media \(max-width:\s*520px\)\s*\{[\s\S]*\.profile-inline-top-row,[\s\S]*\.profile-status-top-row[\s\S]*flex-wrap:\s*wrap/,
+  );
+  assert.match(
+    globalsSource,
+    /@media \(max-width:\s*640px\)\s*\{[\s\S]*\.settings-space-summary[\s\S]*flex-direction:\s*column[\s\S]*\.settings-capability-row[\s\S]*flex-wrap:\s*wrap[\s\S]*align-items:\s*flex-start[\s\S]*\.settings-capability-value[\s\S]*width:\s*100%[\s\S]*text-align:\s*left/,
   );
 });

@@ -129,7 +129,19 @@ test('chat route keeps the mobile shell split between header, message thread, an
   );
   assert.match(
     messengerRouteCssSource,
+    /\.message-row\s*\{[\s\S]*width:\s*100%[\s\S]*display:\s*flex[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-card\s*\{[\s\S]*width:\s*min\(100%,\s*350px\)[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%/,
+  );
+  assert.match(
+    messengerRouteCssSource,
     /\.message-meta-attached\s*\{[\s\S]*max-width:\s*100%/,
+  );
+  assert.match(
+    messengerRouteCssSource,
+    /\.message-voice-stack\s*\{[\s\S]*display:\s*grid[\s\S]*gap:\s*7px[\s\S]*min-width:\s*0/,
   );
   assert.doesNotMatch(
     threadMessageRowSource,
@@ -197,6 +209,10 @@ test('chat route keeps the mobile shell split between header, message thread, an
     composerContractCssSource,
     /\.nativeInput\s*\{[\s\S]*display:\s*none !important/,
   );
+  assert.match(
+    messengerRouteCssSource,
+    /\.composer-action-cluster\s*\{[\s\S]*display:\s*inline-flex[\s\S]*min-width:\s*max-content/,
+  );
 });
 
 test('settings surface keeps stacked shell structure and editable top-row alignment seams', () => {
@@ -231,5 +247,18 @@ test('settings surface keeps stacked shell structure and editable top-row alignm
   assert.match(
     profileStatusFormSource,
     /<div className="profile-status-top-row">[\s\S]*<div className="profile-inline-actions profile-inline-actions-top-row">/,
+  );
+  const globalsSource = readWorkspaceFile('app/globals.css');
+  assert.match(
+    globalsSource,
+    /\.settings-space-summary\s*\{[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    globalsSource,
+    /\.settings-capability-row\s*\{[\s\S]*min-width:\s*0/,
+  );
+  assert.match(
+    globalsSource,
+    /\.settings-capability-value\s*\{[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%[\s\S]*overflow-wrap:\s*anywhere/,
   );
 });
